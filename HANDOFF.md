@@ -70,11 +70,12 @@ Key paths: `src/fedmaq/phase1_env/` … `phase4_benchmark/`, `.cursor/project/ba
 
 | Done                                                                   | Pending                                         |
 | ---------------------------------------------------------------------- | ----------------------------------------------- |
-| Folder layout, `.cursor/` rules/skills, `paper_registry.md` (complete) | LlamaIndex + Chroma ingest                      |
-| Docling + Marker convert pipeline, QA, `meta.yaml`, CLI                | OpenRouter summarize workflow, approve commands |
+| Folder layout, `.cursor/` rules/skills, `paper_registry.md` (complete) | OpenRouter summarize workflow, approve commands |
+| Docling + Marker convert pipeline, QA, `meta.yaml`, CLI                |                                                 |
 | `fedmaq-lit convert` / `ingest --convert-only`, unit tests             |                                                 |
 | Smoke-tested on `hinton-2015-distillation`, `li-2020-fedprox`          |                                                 |
 | Batch conversion CLI (`--all` flag) and registration of all 29 papers  |                                                 |
+| LlamaIndex + Chroma ingest with Qwen3-4B                               |                                                 |
 
 Stack: Docling primary, Marker GPU fallback → `markdown/{slug}/` → Qwen3-4B → Chroma → query/summarize.
 
@@ -125,14 +126,14 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | P   | Task                                                       | Repo        | Status                  |
 | --- | ---------------------------------------------------------- | ----------- | ----------------------- |
 | 1   | Implement PDF convert (Docling + Marker QA)                | literature  | [x]                     |
-| 2   | LlamaIndex + Chroma ingest with Qwen3-4B                   | literature  | [ ]                     |
+| 2   | LlamaIndex + Chroma ingest with Qwen3-4B                   | literature  | [x]                     |
 | 3   | `fedmaq-lit` summarize + approve + OpenRouter              | literature  | [ ]                     |
 | 4   | Phase 1 FL environment (data partition, bandwidth, Flower) | experiments | [ ]                     |
 | 5   | FedAvg baseline in `src/fedmaq/baselines/`                 | experiments | [ ]                     |
 | 6   | WandB + Hydra ingest utilities                             | analyses    | [ ]                     |
 | 7   | Manuscript `.cursor/` stub                                 | manuscript  | [ ] (blocked: template) |
 
-**Current focus:** P2 — LlamaIndex + Chroma ingest with Qwen3-4B (`fedmaq-literature`).
+**Current focus:** P3 — `fedmaq-lit` summarize + approve + OpenRouter (`fedmaq-literature`).
 
 ---
 
@@ -180,13 +181,22 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 Reverse chronological. Agents append one entry per session when using `agent-handoff` skill.
 
+### 2026-06-22 — Literature RAG Ingestion Pipeline with ChromaDB
+
+- Implemented LlamaIndex IngestionPipeline with ChromaVectorStore persisting to `storage/chroma`.
+- Configured Qwen3-4B embedding model support with automated CUDA detection and `torch.float16` data type initialization.
+- Added explicit CUDA 13.2 wheels for `torch` and `torchvision` to `pyproject.toml` tool configuration to ensure `uv` builds a GPU-capable environment.
+- Implemented smart CLI skipping: PDF-to-Markdown conversion is now skipped automatically if the paper is already marked ready and the converted markdown file exists.
+- Added `--device` flag to explicitly target CPU or GPU and added a fail-safe that warns and aborts if CUDA is missing when trying to run heavy GPU models.
+- Added unit tests in `tests/test_ingest.py` verifying document formatting, metadata parsing, and Chroma database deduplication.
+
 ### 2026-06-21 — Literature paper registration and batch conversion
 
 - Registered all 16 unmatched PDFs under `papers/` in `paper_registry.md` using derived slugs, labels, and tags.
 - Fixed existing mismatched PDF labels (e.g. `liu-2023-adagq`, `jimenez-2024-non-iid-survey`, `qin-2025-kd-survey`) to enable correct matching and resolution.
 - Updated `cli.py` to support batch conversion of all pending papers via a new `--all` command flag.
 - Created `tests/test_cli.py` to test the new batch-convert CLI argument parser features.
-- Executed the batch-convert job (`fedmaq-lit convert --all`) which is currently running in the background and has successfully converted the first target papers (e.g., `li-2020-fedprox`).
+- Completed the batch-convert job and successfully reattempted and converted the failed `richter-2024-electric-load` paper, marking all 29 papers as `ready` in the registry.
 - Analyzed KaTeX parsing/rendering errors in Docling outputs (layout boundary overlaps, transformer generation loop collapses, multiline bracket mismatches) and decided to ignore them because they do not impact downstream RAG or LLM comprehension.
 
 ### 2026-06-21 — Literature math cleanup and lint exclusion
