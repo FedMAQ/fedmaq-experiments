@@ -4,9 +4,9 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Field                  | Value                                                                            |
 | ---------------------- | -------------------------------------------------------------------------------- |
-| **Last updated**       | 2026-06-22                                                                       |
-| **Last session focus** | Implement CLI summarize, approve, and query commands with OpenRouter integration |
-| **Active repo**        | fedmaq-literature                                                                |
+| **Last updated**       | 2026-06-23                                                                       |
+| **Last session focus** | Configure sequential manuscript Gantt Chart and initialize `.cursor` rules stubs |
+| **Active repo**        | fedmaq-manuscript                                                                |
 | **Blockers**           | None                                                                             |
 
 ---
@@ -95,9 +95,13 @@ Stack: Docling primary, Marker GPU fallback → `markdown/{slug}/` → Qwen3-4B 
 | `.agents/` → `.cursor/`, metadata aligned to FedMAQ | Slide content updates for vision-FL framing |
 | `slide_registry.md` paths fixed                     |                                             |
 
-### fedmaq-manuscript — [Deferred]
+### fedmaq-manuscript — [Active]
 
-Awaiting LaTeX template. Stub README only.
+| Done                                                           | Pending                                          |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| LaTeX template integrated with Chapters 1--4                   | Draft final Chapters 5 and 6                     |
+| Granular, non-overlapping Gantt Chart of Activities configured | Incorporate proposal panel feedback post-defense |
+| `.cursor/` rules configured (`thesis-context`, `latex_rules`)  |                                                  |
 
 ---
 
@@ -149,7 +153,7 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 5   | FedAvg baseline in `src/fedmaq/baselines/`                 | experiments | [ ]                     |
 | 6   | WandB + Hydra ingest utilities                             | analyses    | [ ]                     |
 | 7   | Manuscript `.cursor/` stub                                 | manuscript  | [ ] (blocked: template) |
-| 8   | Review & approve remaining 10 draft summaries (remediate)  | literature  | [ ]                     |
+| 8   | Review & approve remaining 10 draft summaries (remediate)  | literature  | [x]                     |
 | 9   | Compile/synthesize summaries into thematic syntheses       | literature  | [ ]                     |
 
 > [!TIP]
@@ -201,7 +205,14 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 10. Changelog
 
-Reverse chronological. Agents append one entry per session when using `agent-handoff` skill.
+### 2026-06-23 — Manuscript Gantt Chart Refinement and Cursor rules initialization
+
+- Re-designed the calendar of activities in `fedmaq-manuscript`'s `chapter_4.tex` to be strictly sequential and non-overlapping.
+- Extended the schedule to April 2027 to de-risk baseline implementation and benchmarking under a 15-unit coursework load.
+- Completely excluded December 2026 from active research, indicating coursework finals and holidays, and added a justifying text paragraph.
+- Configured `.cursor/rules/` stubs in the `fedmaq-manuscript` repository (`thesis-context.mdc`, `latex_rules.mdc`, and `repo-preferences.mdc`).
+- Swapped slides preparation and proposal defense/revision rows to match an April 2027 defense timeline.
+- Verified successful LaTeX compilation using `pdflatex main.tex`.
 
 ### 2026-06-23 — Sequential Ingestion Refactoring, Math formatting fixes, and Automated Summary Review
 
