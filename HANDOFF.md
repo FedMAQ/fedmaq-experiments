@@ -88,12 +88,13 @@ Stack: Docling primary, Marker GPU fallback → `markdown/{slug}/` → Qwen3-4B 
 | `data/` layout + README, plot style stub, sample notebook | WandB/Hydra ingest implementations      |
 | `.cursor/` rules, skills, `figure_registry.md`            | Real ablation + thesis figure notebooks |
 
-### fedmaq-presentations — [Migration complete]
+### fedmaq-presentations — [Complete]
 
-| Done                                                | Pending                                     |
-| --------------------------------------------------- | ------------------------------------------- |
-| `.agents/` → `.cursor/`, metadata aligned to FedMAQ | Slide content updates for vision-FL framing |
-| `slide_registry.md` paths fixed                     |                                             |
+| Done                                                 | Pending |
+| ---------------------------------------------------- | ------- |
+| `.agents/` → `.cursor/`, metadata aligned to FedMAQ  | None    |
+| `slide_registry.md` paths fixed                      |         |
+| Slide content updates for vision-FL framing (y3t3w7) |         |
 
 ### fedmaq-manuscript — [Active]
 
@@ -204,6 +205,14 @@ Create `.env` locally (gitignored); document new vars here when added.
 ---
 
 ## 10. Changelog
+
+### 2026-06-23 — Y3T3W7 slide deck finalization and presentation styling rules update
+
+- Finalized the Beamer slide deck for progress update `y3t3w7` under `updates/y3t3w7/main.tex`.
+- Pivoted slide content from IoT smart campus energy forecasting to classical Federated Learning (image classification) and the FedMAQ architecture.
+- Integrated SOTA comparison tables, evaluation stack blocks, experimental setups, and manuscript progress checklists.
+- Configured margins globally to `1.2cm` in `preamble/packages.tex`, updated documentclass font size from `10pt` to `11pt` in all slide drivers, and updated `.cursor/rules/beamer_rules.mdc` to document this new standard.
+- Verified successful LaTeX compilation using `latexmk` with zero overfull horizontal boxes or errors.
 
 ### 2026-06-23 — Manuscript Gantt Chart Refinement and Cursor rules initialization
 
