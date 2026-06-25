@@ -1,3 +1,9 @@
+# Project-specific paths
+data/
+.data_partitions/
+outputs/
+multirun/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
