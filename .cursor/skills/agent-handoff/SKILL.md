@@ -1,15 +1,15 @@
 ---
 name: agent-handoff
 description: >-
-  Updates fedmaq-experiments/HANDOFF.md and produces a copy-paste handoff message
-  for the next Cursor agent session. Use when ending a work session, preparing
+  Updates fedmaq-experiments/HANDOFF.md and indicates whether to hand off to
+  another agent for clean context. Use when ending a work session, preparing
   handoff, handing off to a new agent, or when the user says "handoff" or
   "update handoff".
 ---
 
 # Agent Handoff
 
-End-of-session workflow for the FedMAQ multi-repo workspace. Keeps [HANDOFF.md](../../HANDOFF.md) current and gives the user a ready-to-paste message for the next chat.
+End-of-session workflow for the FedMAQ multi-repo workspace. Keeps [HANDOFF.md](../../HANDOFF.md) current and indicates if a new agent session is recommended for clean context.
 
 ## When to run
 
@@ -49,69 +49,24 @@ Edit [HANDOFF.md](../../HANDOFF.md):
 - Do not remove locked decisions (Section 3) unless user explicitly changed them.
 - If scope changed, update Section 3 or 5 and note in changelog.
 
-### 3. Emit handoff message
+### 3. Recommend Handoff
 
-Output a single markdown code block for the user to paste into the **next** agent chat. Use this structure exactly:
-
-```markdown
-## FedMAQ workspace handoff
-
-**Read first:** [HANDOFF.md](fedmaq-experiments/HANDOFF.md) (multi-root: open all fedmaq-\* repos)
-
-**Thesis:** FedMAQ — communication-efficient FL via multi-adaptive quantization + server-side KD (vision classification: CIFAR/MNIST/FMNIST/FEMNIST).
-
-**Last session ({DATE}):** {LAST_SESSION_FOCUS}
-
-**Next task:** {NEXT_TASK}
-
-**Primary repo:** `{REPO}`
-
-**Read before coding:**
-
-- `fedmaq-experiments/.cursor/rules/` (domain)
-- `{REPO}/AGENTS.md`
-- `{REPO}/.cursor/skills/` if relevant
-
-**Constraints:** {CONSTRAINTS_OR_NONE}
-
-**Do not:** parse PDFs in chat; auto-approve literature drafts; duplicate domain rules outside experiments.
-```
-
-Fill all `{PLACEHOLDERS}` with real content.
+Indicate clearly in your final response whether you recommend handing off to another agent session to obtain clean context. 
+- **Recommend Handoff** if:
+  - You have completed a major task/implementation phase.
+  - The conversation context has grown long/complex (which might cause slower processing or context limits).
+  - The active repo or focus is changing significantly.
+- **Do Not Recommend Handoff** if:
+  - Only small incremental edits or minor follow-ups remain.
+  - The current context is still clean and relevant.
 
 ### 4. Confirm to user
 
-After updating the file and emitting the message, tell the user:
+After updating the file, tell the user:
 
 1. `HANDOFF.md` was updated (mention sections touched).
-2. They can copy the handoff block into a new chat.
+2. Your recommendation on whether they should hand off to a new agent session for clean context.
 3. Optional: commit HANDOFF.md with their other changes.
-
-## Example handoff message (illustrative)
-
-```markdown
-## FedMAQ workspace handoff
-
-**Read first:** [HANDOFF.md](fedmaq-experiments/HANDOFF.md) (multi-root: open all fedmaq-\* repos)
-
-**Thesis:** FedMAQ — communication-efficient FL via multi-adaptive quantization + server-side KD (vision classification: CIFAR/MNIST/FMNIST/FEMNIST).
-
-**Last session (2026-06-18):** Literature PDF conversion scaffold
-
-**Next task:** Wire Marker GPU fallback when QA confidence < threshold
-
-**Primary repo:** `fedmaq-literature`
-
-**Read before coding:**
-
-- `fedmaq-experiments/.cursor/rules/`
-- `fedmaq-literature/AGENTS.md`
-- `fedmaq-literature/.cursor/skills/ingest-paper/`
-
-**Constraints:** Serialize GPU jobs; RTX 5060 8GB — no concurrent convert + Qwen3-4B embed.
-
-**Do not:** parse PDFs in chat; auto-approve literature drafts; duplicate domain rules outside experiments.
-```
 
 ## Related files
 

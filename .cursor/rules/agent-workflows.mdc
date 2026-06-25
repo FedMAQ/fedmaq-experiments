@@ -11,4 +11,4 @@ alwaysApply: true
 
 Use **context7** MCP for Flower, Hydra, PyTorch API lookups.
 
-Before ending a session, run **agent-handoff** skill to update [HANDOFF.md](../../HANDOFF.md) and produce a handoff message for the next chat.
+Before ending a session, run **agent-handoff** skill to update [HANDOFF.md](../../HANDOFF.md) and indicate whether to hand off to another agent for clean context.
