@@ -1,7 +1,25 @@
-# Default hyperparameters (see .cursor/rules/hyperparameters.mdc)
+# General experimental hyperparameters (aligned with chapter_4.tex)
+num_clients: 10
 batch_size: 64
 local_epochs: 5
 learning_rate: 0.01
-weight_decay: 0.99
-client_fraction: 0.1
-total_rounds: 100
+rho: 0.99               # Weight Decay / Momentum
+client_fraction: 0.1    # Fraction per round (10%)
+total_rounds: 100       # R (100 - 500 rounds)
+num_public_samples: 500 # Server public slice size
+
+# Bandwidth and Compute heterogeneity settings
+heterogeneity:
+  bandwidth:
+    min_mbps: 5.0
+    max_mbps: 20.0
+  compute:
+    min_samples_per_sec: 100.0
+    max_samples_per_sec: 500.0
+
+# Telemetry settings
+telemetry:
+  wandb_enabled: false   # Set to true to log to WandB online
+  project: "fedmaq-experiments"
+  mode: "offline"        # "online" or "offline"
+  run_name: null
