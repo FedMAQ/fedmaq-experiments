@@ -51,7 +51,8 @@ Edit [HANDOFF.md](../../HANDOFF.md):
 
 ### 3. Recommend Handoff
 
-Indicate clearly in your final response whether you recommend handing off to another agent session to obtain clean context. 
+Indicate clearly in your final response whether you recommend handing off to another agent session to obtain clean context.
+
 - **Recommend Handoff** if:
   - You have completed a major task/implementation phase.
   - The conversation context has grown long/complex (which might cause slower processing or context limits).
