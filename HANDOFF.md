@@ -2,12 +2,12 @@
 
 Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
 
-| Field                  | Value                                                                            |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| **Last updated**       | 2026-06-23                                                                       |
-| **Last session focus** | Configure sequential manuscript Gantt Chart and initialize `.cursor` rules stubs |
-| **Active repo**        | fedmaq-manuscript                                                                |
-| **Blockers**           | None                                                                             |
+| Field                  | Value                                      |
+| ---------------------- | ------------------------------------------ |
+| **Last updated**       | 2026-06-25                                 |
+| **Last session focus** | Narrow down baselines to 8 SOTA algorithms |
+| **Active repo**        | fedmaq-experiments                         |
+| **Blockers**           | None                                       |
 
 ---
 
@@ -17,7 +17,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 2. Read this file end-to-end, then the **active task** in [Section 6](#6-implementation-queue).
 3. Load domain rules from [`fedmaq-experiments/.cursor/rules/`](.cursor/rules/) (canonical thesis context).
 4. Work in **one primary repo** per task; use sibling `AGENTS.md` for entrypoints.
-5. Before ending a session, run the **`agent-handoff` skill** (`.cursor/skills/agent-handoff/`) to update this file and emit a handoff message.
+5. Before ending a session, run the **`agent-handoff` skill** (`.cursor/skills/agent-handoff/`) to update this file and recommend whether to hand off for clean context.
 
 **Candidate:** Christian Joseph Bunyi | **Institution:** De La Salle University | **Advisor:** Fritz Flores
 
@@ -56,13 +56,15 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 4. Per-repo status
 
-### fedmaq-experiments — [Scaffold complete]
+### fedmaq-experiments — [Phase 1 Env Complete]
 
 | Done                                                           | Pending                                         |
 | -------------------------------------------------------------- | ----------------------------------------------- |
-| `pyproject.toml`, `src/fedmaq/` phase packages, `conf/`, tests | Phase 1 environment implementation              |
-| 11 `.cursor/rules/`, registries, 2 skills                      | Port baseline code into `src/fedmaq/baselines/` |
-| `context.md` deprecation notice                                | Docker, `scripts/run.py`, WandB integration     |
+| `pyproject.toml`, `src/fedmaq/` phase packages, `conf/`, tests | Port baseline code into `src/fedmaq/baselines/` |
+| 11 `.cursor/rules/`, registries, 2 skills                      | Docker integration                              |
+| `context.md` deprecation notice                                |                                                 |
+| Phase 1 environment: model factory, partitioning, caching,     |                                                 |
+| telemetry, client/strategy wrappers, `scripts/run.py`          |                                                 |
 
 Key paths: `src/fedmaq/phase1_env/` … `phase4_benchmark/`, `.cursor/project/baseline_registry.md`
 
@@ -150,7 +152,7 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 1   | Implement PDF convert (Docling + Marker QA)                | literature  | [x]                     |
 | 2   | LlamaIndex + Chroma ingest with Qwen3-4B                   | literature  | [x]                     |
 | 3   | `fedmaq-lit` summarize + approve + OpenRouter              | literature  | [x]                     |
-| 4   | Phase 1 FL environment (data partition, bandwidth, Flower) | experiments | [ ]                     |
+| 4   | Phase 1 FL environment (data partition, bandwidth, Flower) | experiments | [x]                     |
 | 5   | FedAvg baseline in `src/fedmaq/baselines/`                 | experiments | [ ]                     |
 | 6   | WandB + Hydra ingest utilities                             | analyses    | [ ]                     |
 | 7   | Manuscript `.cursor/` stub                                 | manuscript  | [ ] (blocked: template) |
@@ -160,7 +162,7 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 > [!TIP]
 > For **Task 8**, the agent should perform the corrections locally by reading the critique files (`summaries/drafts/*_critique.md`) and modifying the draft summaries directly, rather than calling OpenRouter APIs. This keeps the workflow fast and cost-free for the user's OpenRouter account.
 
-**Current focus:** P4 — Phase 1 FL environment (data partition, bandwidth, Flower) (`fedmaq-experiments`).
+**Current focus:** P5 — FedAvg baseline in `src/fedmaq/baselines/` (`fedmaq-experiments`).
 
 ---
 
@@ -205,6 +207,24 @@ Create `.env` locally (gitignored); document new vars here when added.
 ---
 
 ## 10. Changelog
+
+### 2026-06-25 — Baselines narrowed to 8 active SOTA algorithms
+
+- Streamlined the thesis scope by narrowing down from 11 baselines to 8 active baselines: FedAvg, FedProx, DAdaQuant, LAQ-HC, FedMD, FedKD, DynFed, and FedDT.
+- Set aside FedPAQ, AdaGQ, FedDistill, and AdaDQ-KD for future consideration.
+- Created `conf/algorithm/fedmd.yaml` and deleted configuration files for the 4 excluded algorithms.
+- Updated baseline registries under `.cursor/project/baseline_registry.md` and `baseline_reference_benchmarks.md`.
+- Modified `chapter_4.tex` in the manuscript repository to update the baseline count and table of hyperparameters.
+- Successfully verified that the LaTeX manuscript compiles clean and all unit tests continue to pass.
+
+### 2026-06-24 — Phase 1 Federated Learning Environment Completed and Verified
+
+- Implemented standard models (`SimpleCNN`, `ResNet18GN`) and parameter extraction/injection helpers in `fedmaq.core.models`.
+- Built Dirichlet data partitioner with determinism and client partitioning cache under `.data_partitions/` in `fedmaq.core.partitioning`.
+- Created customized `TelemetryFedAvg` strategy that simulates client upload/download bandwidth and compute speeds to estimate physical wall-clock time in `fedmaq.core.strategy`.
+- Robustified configuration parsing across the telemetry, client, and strategy classes to seamlessly support nested Hydra experiment keys and command line overrides.
+- Verified and passed all 5 pytest unit tests under `tests/`.
+- Verified end-to-end 1-round CPU simulation using the runner script `scripts/run.py`.
 
 ### 2026-06-23 — Y3T3W7 slide deck finalization and presentation styling rules update
 
@@ -301,19 +321,6 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ---
 
-## 11. Handoff message template
+## 11. Handoff recommendation
 
-When ending a session, the `agent-handoff` skill produces a message like this for the next chat:
-
-```txt
-FedMAQ workspace handoff — read fedmaq-experiments/HANDOFF.md first.
-
-Context: [1 sentence on thesis goal]
-Last session: [what was done]
-Active repo: [repo name]
-Next task: [specific item from Implementation queue]
-Read: fedmaq-experiments/.cursor/rules/ + [repo]/AGENTS.md
-Constraints: [any blockers or do-nots for next task]
-```
-
-The skill fills this template automatically; do not hand off without updating Section 6 and the changelog.
+When ending a session, the `agent-handoff` skill indicates whether you should hand off to a new agent session for clean context. Do not recommend handoff without updating Section 6 and the changelog.
