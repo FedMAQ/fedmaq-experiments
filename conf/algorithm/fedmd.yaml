@@ -1,1 +1,4 @@
 name: fedmd
+public_pretrain_epochs: 10
+private_pretrain_epochs: 10
+public_epochs: 5

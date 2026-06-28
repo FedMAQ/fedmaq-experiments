@@ -5,7 +5,7 @@ local_epochs: 5
 learning_rate: 0.01
 rho: 0.99               # Weight Decay / Momentum
 client_fraction: 0.1    # Fraction per round (10%)
-total_rounds: 100       # R (100 - 500 rounds)
+total_rounds: 100       # R (100 rounds)
 num_public_samples: 500 # Server public slice size
 
 # Bandwidth and Compute heterogeneity settings
@@ -23,3 +23,6 @@ telemetry:
   project: "fedmaq-experiments"
   mode: "offline"        # "online" or "offline"
   run_name: null
+
+# Local model checkpoint persistence for distillation baseline (e.g. FedMD)
+persistence_dir: ".data_partitions/fedmd_models"

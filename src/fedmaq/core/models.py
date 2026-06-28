@@ -9,14 +9,37 @@ import torch.nn.functional as F
 
 
 class SimpleCNN(nn.Module):
-    """LeNet-5 style Simple CNN for MNIST/FMNIST/FEMNIST."""
+    """LeNet-5 style Simple CNN for MNIST/FMNIST/FEMNIST/CIFAR10."""
 
     def __init__(self, in_channels: int = 1, num_classes: int = 10) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=5, padding=2)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
-        self.fc1 = nn.Linear(64 * 7 * 7, 512)
+        # Determine flat features based on channel size (3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST)
+        flat_features = 64 * 8 * 8 if in_channels == 3 else 64 * 7 * 7
+        self.fc1 = nn.Linear(flat_features, 512)
         self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        x = F.relu(F.max_pool2d(self.conv2(x), 2))
+        x = torch.flatten(x, 1)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+
+class TinyCNN(nn.Module):
+    """A smaller CNN for MNIST/FMNIST/FEMNIST/CIFAR10 to act as student model for FedKD."""
+
+    def __init__(self, in_channels: int = 1, num_classes: int = 10) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, padding=2)
+        # Determine flat features based on channel size (3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST)
+        flat_features = 32 * 8 * 8 if in_channels == 3 else 32 * 7 * 7
+        self.fc1 = nn.Linear(flat_features, 128)
+        self.fc2 = nn.Linear(128, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(F.max_pool2d(self.conv1(x), 2))

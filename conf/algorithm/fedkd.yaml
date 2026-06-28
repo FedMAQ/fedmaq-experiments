@@ -1,1 +1,4 @@
 name: fedkd
+tmin: 0.1
+tmax: 0.9
+temperature: 2.0
