@@ -2,12 +2,12 @@
 
 Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
 
-| Field                  | Value                                             |
-| ---------------------- | ------------------------------------------------- |
-| **Last updated**       | 2026-06-28                                        |
-| **Last session focus** | SOTA baseline alignment and dependency resolution |
-| **Active repo**        | fedmaq-experiments                                |
-| **Blockers**           | None                                              |
+| Field                  | Value                                            |
+| ---------------------- | ------------------------------------------------ |
+| **Last updated**       | 2026-06-28                                       |
+| **Last session focus** | Verification and alignment of all 6 FL baselines |
+| **Active repo**        | fedmaq-experiments                               |
+| **Blockers**           | None                                             |
 
 ---
 
@@ -58,13 +58,16 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ### fedmaq-experiments — [Phase 1 Env Complete]
 
-| Done                                                           | Pending                                         |
-| -------------------------------------------------------------- | ----------------------------------------------- |
-| `pyproject.toml`, `src/fedmaq/` phase packages, `conf/`, tests | Port baseline code into `src/fedmaq/baselines/` |
-| 11 `.cursor/rules/`, registries, 2 skills                      | Docker integration                              |
-| `context.md` deprecation notice                                |                                                 |
-| Phase 1 environment: model factory, partitioning, caching,     |                                                 |
-| telemetry, client/strategy wrappers, `scripts/run.py`          |                                                 |
+| Done                                                            | Pending                       |
+| --------------------------------------------------------------- | ----------------------------- |
+| `pyproject.toml`, `src/fedmaq/` phase packages, `conf/`, tests  | Port remaining SOTA baselines |
+| 11 `.cursor/rules/`, registries, 2 skills                       | (FedDistill, CFD, FedMAQ)     |
+| `context.md` deprecation notice                                 | Docker integration            |
+| Phase 1 environment: model factory, partitioning, caching,      |                               |
+| telemetry, client/strategy wrappers, `scripts/run.py`           |                               |
+| Seminal controls (FedAvg, FedProx), pure quantization (FedPAQ,  |                               |
+| DAdaQuant), model distillation (FedMD), and hybrid Q+KD (FedKD) |                               |
+| implementations                                                 |                               |
 
 Key paths: `src/fedmaq/phase1_env/` … `phase4_benchmark/`, `.cursor/project/baseline_registry.md`
 
@@ -153,7 +156,7 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 2   | LlamaIndex + Chroma ingest with Qwen3-4B                   | literature  | [x]                     |
 | 3   | `fedmaq-lit` summarize + approve + OpenRouter              | literature  | [x]                     |
 | 4   | Phase 1 FL environment (data partition, bandwidth, Flower) | experiments | [x]                     |
-| 5   | FedAvg baseline in `src/fedmaq/baselines/`                 | experiments | [ ]                     |
+| 5   | FedAvg / FedProx / FedPAQ / DAdaQuant baselines            | experiments | [x]                     |
 | 6   | WandB + Hydra ingest utilities                             | analyses    | [ ]                     |
 | 7   | Manuscript `.cursor/` stub                                 | manuscript  | [ ] (blocked: template) |
 | 8   | Review & approve remaining 10 draft summaries (remediate)  | literature  | [x]                     |
@@ -162,7 +165,7 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 > [!TIP]
 > For **Task 8**, the agent should perform the corrections locally by reading the critique files (`summaries/drafts/*_critique.md`) and modifying the draft summaries directly, rather than calling OpenRouter APIs. This keeps the workflow fast and cost-free for the user's OpenRouter account.
 
-**Current focus:** P5 — FedAvg baseline in `src/fedmaq/baselines/` (`fedmaq-experiments`).
+**Current focus:** P6 — WandB + Hydra ingest utilities (`fedmaq-analyses`).
 
 ---
 
@@ -207,6 +210,50 @@ Create `.env` locally (gitignored); document new vars here when added.
 ---
 
 ## 10. Changelog
+
+### 2026-06-28 — Verification and alignment of 6 experiment baselines
+
+- Conducted exhaustive verification of all 6 existing FL experiment baselines (FedAvg, FedProx, FedPAQ, DAdaQuant, FedMD, FedKD) against literature summaries.
+- Resolved a discrepancy in the FedKD strategy where SVD parameter reconstruction was missing from the server's download and evaluation paths, ensuring client-side training and evaluation match the reference SVD noise.
+- Fixed a shape mismatch RuntimeError on CIFAR-10 simulations for FedKD by configuring SimpleCNN and TinyCNN in `src/fedmaq/core/models.py` to dynamically compute linear layer input size based on image channel count.
+- Added comprehensive unit tests for `FedPAQCompressionHook` and `FedProxLossHook` in `tests/test_environment.py`.
+- Verified that all 13 tests in the test suite pass with 100% success rate.
+- Ran end-to-end 2-round MNIST simulation dry run for FedKD to ensure convergence and pipeline stability.
+
+### 2026-06-28 — Implementation and verification of FedKD baseline
+
+- Implemented FedKD (Federated Knowledge Distillation) baseline with adaptive mutual knowledge distillation and SVD-based dynamic compression.
+- Created `conf/algorithm/fedkd.yaml` with baseline configurations (tmin, tmax, temperature).
+- Added `TinyCNN` to `src/fedmaq/core/models.py` as a smaller student model for MNIST-like datasets.
+- Implemented `FedKDCompressionHook` in `src/fedmaq/baselines/compression.py` to compress parameters via SVD and estimate byte sizes.
+- Extended client `fit` in `src/fedmaq/core/client.py` to run a local joint training loop optimizing both student and teacher models using reciprocal KL-divergence distillation, saving local teacher weights to disk under `.data_partitions/fedkd_models/`.
+- Modified strategy `TelemetryFedAvg` in `src/fedmaq/core/strategy.py` to inject dynamic round-dependent energy thresholds and calculate SVD-compressed download size.
+- Updated `scripts/run.py` to select correct student models and the compression hook.
+- Added comprehensive unit and integration tests to `tests/test_environment.py` and verified 100% success rate on CPU/GPU simulation.
+
+### 2026-06-28 — Implementation and verification of FedMD baseline
+
+- Implemented FedMD (Federated Model Distillation) baseline following the reference code in `references/fedmd`.
+- Unified client model persistence on disk under `.data_partitions/fedmd_models/` to prevent state loss across dynamic client instantiation in Flower simulation.
+- Extended client `GenericClient.fit` to execute initial pre-training on public/private datasets, soft-target Digest training (using L1 loss), and Revisit training (using CrossEntropy loss).
+- Extended server `TelemetryFedAvg.aggregate_fit` to perform arithmetic mean aggregation of client soft-target predictions on the public dataset and adjust physical training time.
+- Implemented decentralized ensemble evaluation on the test dataset at the server.
+- Added integration test coverage in `tests/test_environment.py` and successfully ran 2-round dry run simulation.
+
+### 2026-06-28 — Implementation and verification of DAdaQuant baseline
+
+- Implemented `DAdaQuantCompressionHook` with stochastic uniform quantization and linear size estimation in `src/fedmaq/baselines/quantization.py`.
+- Integrated client-side local training loss evaluation on received global weights in `GenericClient.fit` when `dadaquant` is active.
+- Implemented server-side double-adaptive strategy logic in `TelemetryFedAvg` (time-adaptive quantization level doubling on convergence lookback, and client-adaptive quantization level assignment based on dataset weights).
+- Added robust test coverage for `DAdaQuantCompressionHook` and `TelemetryFedAvg` adaptive allocation logic in `tests/test_environment.py`.
+- Successfully verified the implementation with unit tests and a 2-round dry run simulation with zero errors.
+
+### 2026-06-28 — Verification of FedAvg/FedProx and implementation of FedPAQ
+
+- Verified `FedAvg` and `FedProx` (with proximal regularization) baselines using 2-round dry run simulations.
+- Implemented `FedPAQ` symmetric uniform quantization baseline as a custom `CompressionHook` in `src/fedmaq/baselines/quantization.py`.
+- Verified `FedPAQ` simulation, showing successful model delta quantization (round transmission size reduced from ~89 MB to ~55 MB, a ~37.5% saving).
+- Configured `pyproject.toml` to prevent `pytest` from collecting tests in `references/` directory.
 
 ### 2026-06-28 — SOTA baseline alignment and dependency resolution
 
