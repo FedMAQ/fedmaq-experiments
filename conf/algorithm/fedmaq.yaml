@@ -1,1 +1,22 @@
 name: fedmaq
+# Bit-width bounds
+q_min: 2
+q_max: 8
+
+# Tier 1 resource cap
+c_unit: 2048.0 # MB consumed per quantization bit
+
+# Tier 2 soft quality formulation selection
+# 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
+formulation: 3
+
+# Formulation-specific parameters
+gamma1: 0.5  # Alternative 1 & 2
+gamma2: 0.5  # Alternative 1 & 2
+lambda_val: 1.0  # Alternative 3 (dataset size modulator weight)
+tau_g: 0.5  # Alternative 4 (gradient threshold)
+tau_n: 0.5  # Alternative 4 (dataset threshold)
+
+# Distillation settings (Server/Client)
+temperature: 1.0
+kd_weight: 0.5 # loss weight for local and server KD loss

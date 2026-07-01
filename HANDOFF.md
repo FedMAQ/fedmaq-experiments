@@ -4,8 +4,8 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Field                  | Value                                            |
 | ---------------------- | ------------------------------------------------ |
-| **Last updated**       | 2026-06-28                                       |
-| **Last session focus** | Verification and alignment of all 6 FL baselines |
+| **Last updated**       | 2026-07-01                                       |
+| **Last session focus** | Revised FedMAQ methodology, utility metrics, and local telemetry logging |
 | **Active repo**        | fedmaq-experiments                               |
 | **Blockers**           | None                                             |
 
@@ -61,12 +61,13 @@ Living document for agent-to-agent and session-to-session continuity across the 
 | Done                                                            | Pending                       |
 | --------------------------------------------------------------- | ----------------------------- |
 | `pyproject.toml`, codebase structure, `conf/`, tests            | Port remaining SOTA baselines |
-| 11 `.cursor/rules/`, registries, 2 skills                       | (FedDistill, CFD, FedMAQ)     |
+| 11 `.cursor/rules/`, registries, 2 skills                       | (FedDistill, CFD)             |
 | `context.md` deprecation notice                                 | Docker integration            |
 | Phase 1 environment: model factory, partitioning, caching,      |                               |
 | telemetry, client/strategy wrappers, `scripts/run.py`           |                               |
 | Seminal controls (FedAvg, FedProx), pure quantization (FedPAQ,  |                               |
-| DAdaQuant), model distillation (FedMD), and hybrid Q+KD (FedKD) |                               |
+| DAdaQuant), model distillation (FedMD), hybrid Q+KD (FedKD),    |                               |
+| and revised FedMAQ (task-loss-only client, server distillation) |                               |
 | implementations                                                 |                               |
 
 Key paths: `src/fedmaq/core/`, `src/fedmaq/baselines/`, `.cursor/project/baseline_registry.md`
@@ -210,6 +211,15 @@ Create `.env` locally (gitignored); document new vars here when added.
 ---
 
 ## 10. Changelog
+
+### 2026-07-01 — Revised FedMAQ methodology, auxiliary metrics, and local telemetry logging
+
+- Simplified local client training for FedMAQ in `client.py` to strictly perform task-loss cross-entropy minimization ($L_{local} = CE(\hat{y}, y)$), removing student-teacher mutual learning and model checkpoint persistence on the client.
+- Redesigned server-side ensemble distillation for FedMAQ in `strategy.py` to dynamically construct client teacher models in memory from uploaded parameter updates, completely bypassing disk checkpoint files.
+- Configured a uniform client computation speed (`comp_max`) in `TelemetryFedAvg.__init__` to simulate uniform hardware across the federation.
+- Integrated macro-averaged Precision, Recall, and F1-score evaluation metrics on the server in `run.py`'s global and client-averaging evaluation paths.
+- Setup local telemetry logging to generate isolated `experiment_log.jsonl` and `experiment_log.csv` run artifacts within each Hydra execution directory using `HydraConfig`.
+- Successfully validated the implementation with the complete test suite and end-to-end 2-round MNIST simulation runs for FedAvg and FedMAQ.
 
 ### 2026-06-28 — Verification and alignment of 6 experiment baselines
 

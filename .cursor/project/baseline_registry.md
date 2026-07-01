@@ -12,6 +12,6 @@ Maps each SOTA target to implementation status. Update when porting into `src/fe
 | FedDistill | Pure KD           | Song et al., 2024       | `conf/algorithm/feddistill.yaml` | [Not Started] |                                            |
 | FedKD      | Hybrid Q+KD       | Wu et al., 2022         | `conf/algorithm/fedkd.yaml`      | [Complete]    | Verified 2-round local dry run simulation. |
 | CFD        | Hybrid Q+KD       | Sattler et al., 2022    | `conf/algorithm/cfd.yaml`        | [Not Started] |                                            |
-| FedMAQ     | Proposed SOTA     | Bunyi et al., 2026      | `conf/algorithm/fedmaq.yaml`     | [Not Started] |                                            |
+| FedMAQ     | Proposed SOTA     | Bunyi et al., 2026      | `conf/algorithm/fedmaq.yaml`     | [Complete]    | Verified 2-round local dry run simulation. |
 
 **Status:** `[Not Started]` | `[In Progress]` | `[Complete]`

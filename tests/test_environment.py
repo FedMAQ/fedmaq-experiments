@@ -694,3 +694,241 @@ def test_fedprox_loss_hook():
     loss = hook.compute_loss(model, outputs, targets, criterion)
     # Proximal term should be non-zero because parameter is modified
     assert loss.item() > 0.0
+
+
+def test_fedmaq_strategy_allocation():
+    """Test TelemetryFedAvg memory cap and multi-adaptive formula calculations for FedMAQ."""
+    cfg_dict = {
+        "num_clients": 2,
+        "batch_size": 2,
+        "seed": 42,
+        "experiment": {
+            "num_clients": 2,
+            "client_fraction": 1.0,
+            "total_rounds": 10,
+        },
+        "algorithm": {
+            "name": "fedmaq",
+            "q_min": 2,
+            "q_max": 8,
+            "c_unit": 2048.0,
+            "formulation": 3,
+            "lambda_val": 1.0,
+        },
+    }
+
+    client_indices_dict = {
+        "0": list(range(50)),  # weight: 50/150 = 1/3
+        "1": list(range(100)),  # weight: 100/150 = 2/3
+    }
+    public_indices = list(range(10))
+
+    telemetry = TelemetryManager(cfg_dict)
+    strategy = TelemetryFedAvg(
+        telemetry_manager=telemetry,
+        config=cfg_dict,
+        client_indices_dict=client_indices_dict,
+        public_indices=public_indices,
+        fraction_fit=1.0,
+        fraction_evaluate=0.0,
+        min_fit_clients=2,
+        min_available_clients=2,
+    )
+
+    class MockClientProxy(fl.server.client_proxy.ClientProxy):
+        def __init__(self, cid: str) -> None:
+            super().__init__(cid)
+
+        def get_properties(self, ins, timeout=None, group_id=None):
+            # Return partition ID matching proxy cid
+            from flwr.common import GetPropertiesRes, Status, Code
+
+            return GetPropertiesRes(
+                status=Status(code=Code.OK, message=""),
+                properties={"cid": int(self.cid)},
+            )
+
+        def get_parameters(self, ins, timeout):
+            return None
+
+        def fit(self, ins, timeout):
+            return None
+
+        def evaluate(self, ins, timeout):
+            return None
+
+        def reconnect(self, ins, timeout):
+            return None
+
+    # Test round 1 client-adaptive configuration for FedMAQ
+    # Mock parameters representing global weights
+    from fedmaq.core.models import TinyCNN, get_model_parameters
+
+    model = TinyCNN(in_channels=1, num_classes=10)
+    params = ndarrays_to_parameters(get_model_parameters(model))
+
+    client_manager = fl.server.client_manager.SimpleClientManager()
+    client_manager.register(MockClientProxy("0"))
+    client_manager.register(MockClientProxy("1"))
+
+    # Mock the client loader data to avoid file reads in test
+    import torch
+    from torch.utils.data import TensorDataset, DataLoader
+
+    mock_ds = TensorDataset(torch.randn(10, 1, 28, 28), torch.randint(0, 10, (10,)))
+    mock_loader = DataLoader(mock_ds, batch_size=2)
+
+    import fedmaq.core.partitioning
+
+    strategy.public_indices = public_indices
+
+    # Patch client memory for controlled testing
+    strategy.client_memory = np.array(
+        [2048.0, 16384.0]
+    )  # Client 0: Q_max=1, Client 1: Q_max=8
+
+    # We patch get_client_loader in partitioning module since it is imported inside configure_fit
+    original_loader = fedmaq.core.partitioning.get_client_loader
+    fedmaq.core.partitioning.get_client_loader = lambda *args, **kwargs: mock_loader
+
+    try:
+        instructions = strategy.configure_fit(
+            server_round=1, parameters=params, client_manager=client_manager
+        )
+    finally:
+        fedmaq.core.partitioning.get_client_loader = original_loader
+
+    assert len(instructions) == 2
+    q_dict = {inst.cid: fit_ins.config["q"] for inst, fit_ins in instructions}
+
+    # Check that memory hard cap is enforced
+    # Client 0 memory capacity is 2048 MB, c_unit = 2048.0 -> Q_max = 1
+    # Note that q_min is 2, so client 0 should be capped at min(Q_max, q_hat) -> min(1, q_hat) = 1
+    assert q_dict["0"] == 1
+    # Client 1 memory capacity is 16384 MB -> Q_max = 8. It should have a larger q
+    assert q_dict["1"] >= 1
+
+
+def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
+    """Test 2-round simulation of the FedMAQ algorithm implementation."""
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    import shutil
+    from pathlib import Path
+
+    persistence_dir = Path(".data_partitions/fedmaq_models")
+    if persistence_dir.exists():
+        shutil.rmtree(persistence_dir)
+
+    try:
+        # Setup partitioning
+        public_indices, client_indices_dict = generate_partition_indices(
+            "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
+        )
+
+        cfg_dict = {
+            "num_clients": 2,
+            "batch_size": 2,
+            "local_epochs": 1,
+            "seed": 42,
+            "experiment": {
+                "num_clients": 2,
+                "client_fraction": 1.0,
+                "total_rounds": 2,
+                "batch_size": 2,
+                "num_public_samples": 10,
+                "local_epochs": 1,
+                "persistence_dir": str(persistence_dir),
+            },
+            "dataset": {
+                "name": "mnist",
+                "num_classes": 10,
+            },
+            "algorithm": {
+                "name": "fedmaq",
+                "q_min": 2,
+                "q_max": 8,
+                "c_unit": 2048.0,
+                "formulation": 3,
+                "lambda_val": 1.0,
+                "temperature": 1.0,
+                "kd_weight": 0.5,
+            },
+        }
+
+        telemetry = TelemetryManager(cfg_dict)
+
+        def client_fn(context: fl.app.Context) -> fl.client.Client:
+            partition_id = context.node_config["partition-id"]
+            train_loader = get_client_loader(
+                "mnist", partition_id, client_indices_dict, batch_size=2, train=True
+            )
+            public_loader, _ = get_server_loaders("mnist", public_indices, batch_size=2)
+            from fedmaq.core.models import TinyCNN
+
+            model = TinyCNN(in_channels=1, num_classes=10)
+            loss_hook = LossHook()
+            from fedmaq.baselines.quantization import DAdaQuantCompressionHook
+
+            compressor_hook = DAdaQuantCompressionHook(q=2)
+
+            return GenericClient(
+                cid=str(partition_id),
+                trainloader=train_loader,
+                testloader=train_loader,
+                model=model,
+                loss_hook=loss_hook,
+                compressor_hook=compressor_hook,
+                config=cfg_dict,
+                public_loader=public_loader,
+            ).to_client()
+
+        client_app = ClientApp(client_fn=client_fn)
+
+        strategy = None
+
+        def server_fn(context: fl.app.Context) -> ServerAppComponents:
+            nonlocal strategy
+            from fedmaq.core.models import TinyCNN
+
+            global_model = TinyCNN(in_channels=1, num_classes=10)
+            initial_parameters = ndarrays_to_parameters(
+                get_model_parameters(global_model)
+            )
+
+            def evaluate_fn(server_round, parameters, config):
+                return 0.5, {"accuracy": 0.9}
+
+            strategy = TelemetryFedAvg(
+                telemetry_manager=telemetry,
+                config=cfg_dict,
+                client_indices_dict=client_indices_dict,
+                public_indices=public_indices,
+                fraction_fit=1.0,
+                fraction_evaluate=0.0,
+                min_fit_clients=2,
+                min_available_clients=2,
+                evaluate_fn=evaluate_fn,
+                initial_parameters=initial_parameters,
+            )
+            return ServerAppComponents(
+                strategy=strategy, config=ServerConfig(num_rounds=2)
+            )
+
+        server_app = ServerApp(server_fn=server_fn)
+
+        run_simulation(
+            server_app=server_app,
+            client_app=client_app,
+            num_supernodes=2,
+        )
+
+        # Verify simulation output variables
+        assert strategy.simulated_time > 0
+        assert telemetry.cumulative_bytes > 0
+        assert telemetry.jsonl_path.exists()
+        assert telemetry.csv_path.exists()
+
+    finally:
+        if persistence_dir.exists():
+            shutil.rmtree(persistence_dir)

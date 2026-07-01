@@ -12,7 +12,7 @@ alwaysApply: true
 ## Objectives
 
 1. Simulate FL with system heterogeneity (variable bandwidths) and statistical heterogeneity (non-IID data).
-2. Formulate multi-adaptive gradient quantization (resource, data, and time awareness).
+2. Formulate multi-adaptive gradient quantization (resource, data, and state/gradient-norm awareness).
 3. Devise server-side aggregation with KD to mitigate drift and quantization error.
 4. Benchmark against SOTA communication-efficient FL methods on accuracy, communication overhead, and convergence stability.
 

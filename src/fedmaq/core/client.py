@@ -401,6 +401,7 @@ class GenericClient(fl.client.NumPyClient):
 
         self.loss_hook.on_train_begin(self.model)
 
+        last_loss = 0.0
         for _ in range(epochs):
             for images, labels in self.trainloader:
                 images, labels = images.to(self.device), labels.to(self.device)
@@ -411,6 +412,7 @@ class GenericClient(fl.client.NumPyClient):
                 )
                 loss.backward()
                 optimizer.step()
+                last_loss = loss.item()
 
         # Extract updated parameters
         updated_params = get_model_parameters(self.model)
@@ -430,7 +432,7 @@ class GenericClient(fl.client.NumPyClient):
             {
                 "bytes_uploaded": byte_size,
                 "partition_id": int(self.cid),
-                "local_loss": local_loss,
+                "local_loss": float(last_loss) if alg_name == "fedmaq" else local_loss,
             },
         )
 
@@ -441,7 +443,7 @@ class GenericClient(fl.client.NumPyClient):
         alg_name = self.config.get("algorithm", {}).get("name", "")
         if alg_name == "fedmd":
             persistence_dir = self.config.get("experiment", {}).get(
-                "persistence_dir", ".data_partitions/fedmd_models"
+                "persistence_dir", f".data_partitions/{alg_name}_models"
             )
             model_path = Path(persistence_dir) / f"client_{self.cid}.pth"
             if model_path.exists():

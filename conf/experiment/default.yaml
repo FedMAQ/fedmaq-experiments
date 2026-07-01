@@ -5,7 +5,7 @@ local_epochs: 5
 learning_rate: 0.01
 rho: 0.99               # Weight Decay / Momentum
 client_fraction: 0.1    # Fraction per round (10%)
-total_rounds: 100       # R (100 rounds)
+total_rounds: 2        # R (2 rounds for preliminary metrics)
 num_public_samples: 500 # Server public slice size
 
 # Bandwidth and Compute heterogeneity settings

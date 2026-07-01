@@ -51,6 +51,33 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def compute_precision_recall_f1(
+    all_preds: np.ndarray, all_labels: np.ndarray, num_classes: int = 10
+) -> Tuple[float, float, float]:
+    """Calculate macro-averaged Precision, Recall, and F1-score."""
+    precision_list = []
+    recall_list = []
+    f1_list = []
+    for c in range(num_classes):
+        tp = np.sum((all_preds == c) & (all_labels == c))
+        fp = np.sum((all_preds == c) & (all_labels != c))
+        fn = np.sum((all_preds != c) & (all_labels == c))
+
+        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
+
+        precision_list.append(prec)
+        recall_list.append(rec)
+        f1_list.append(f1)
+
+    return (
+        float(np.mean(precision_list)),
+        float(np.mean(recall_list)),
+        float(np.mean(f1_list)),
+    )
+
+
 @hydra.main(config_path="../conf", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     # Set seed
@@ -93,7 +120,7 @@ def main(cfg: DictConfig) -> None:
         )
 
         # Get local model
-        if cfg.algorithm.name == "fedkd":
+        if cfg.algorithm.name in ["fedkd", "fedmaq"]:
             if "cifar" in cfg.dataset.name.lower():
                 model = SimpleCNN(in_channels=3, num_classes=cfg.dataset.num_classes)
             else:
@@ -112,7 +139,7 @@ def main(cfg: DictConfig) -> None:
             from fedmaq.baselines.quantization import FedPAQCompressionHook
 
             compressor_hook = FedPAQCompressionHook(q=cfg.algorithm.q)
-        elif cfg.algorithm.name == "dadaquant":
+        elif cfg.algorithm.name in ["dadaquant", "fedmaq"]:
             from fedmaq.baselines.quantization import DAdaQuantCompressionHook
 
             compressor_hook = DAdaQuantCompressionHook(q=int(cfg.algorithm.q_min))
@@ -137,7 +164,7 @@ def main(cfg: DictConfig) -> None:
     # 4. Define server app components
     def server_fn(context: fl.app.Context) -> ServerAppComponents:
         # Instantiate global model for initialization
-        if cfg.algorithm.name == "fedkd":
+        if cfg.algorithm.name in ["fedkd", "fedmaq"]:
             if "cifar" in cfg.dataset.name.lower():
                 global_model = SimpleCNN(
                     in_channels=3, num_classes=cfg.dataset.num_classes
@@ -148,6 +175,7 @@ def main(cfg: DictConfig) -> None:
                 )
         else:
             global_model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
+
         initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
 
         # Setup server-side evaluation test loader
@@ -168,7 +196,7 @@ def main(cfg: DictConfig) -> None:
                 from pathlib import Path
 
                 persistence_dir = cfg.experiment.get(
-                    "persistence_dir", ".data_partitions/fedmd_models"
+                    "persistence_dir", f".data_partitions/{cfg.algorithm.name}_models"
                 )
                 model_dir = Path(persistence_dir)
                 client_paths = (
@@ -182,6 +210,8 @@ def main(cfg: DictConfig) -> None:
                     loss_sum = 0.0
                     correct = 0
                     total = 0
+                    all_preds = []
+                    all_labels = []
                     with torch.no_grad():
                         for images, labels in test_loader:
                             images, labels = images.to(device), labels.to(device)
@@ -190,13 +220,33 @@ def main(cfg: DictConfig) -> None:
                             _, predicted = torch.max(outputs.data, 1)
                             total += labels.size(0)
                             correct += (predicted == labels).sum().item()
+                            all_preds.append(predicted.cpu().numpy())
+                            all_labels.append(labels.cpu().numpy())
                     loss = loss_sum / total if total > 0 else 0.0
                     accuracy = correct / total if total > 0 else 0.0
-                    return loss, {"accuracy": accuracy}
+                    if len(all_preds) > 0:
+                        preds_concat = np.concatenate(all_preds)
+                        labels_concat = np.concatenate(all_labels)
+                        precision, recall, f1 = compute_precision_recall_f1(
+                            preds_concat,
+                            labels_concat,
+                            num_classes=cfg.dataset.num_classes,
+                        )
+                    else:
+                        precision, recall, f1 = 0.0, 0.0, 0.0
+                    return loss, {
+                        "accuracy": accuracy,
+                        "precision": precision,
+                        "recall": recall,
+                        "f1": f1,
+                    }
 
                 # Evaluate each client model and average results
                 total_loss = 0.0
                 total_accuracy = 0.0
+                total_precision = 0.0
+                total_recall = 0.0
+                total_f1 = 0.0
                 num_eval_clients = 0
 
                 for path in client_paths:
@@ -211,6 +261,8 @@ def main(cfg: DictConfig) -> None:
                         loss_sum = 0.0
                         correct = 0
                         total = 0
+                        all_preds = []
+                        all_labels = []
                         with torch.no_grad():
                             for images, labels in test_loader:
                                 images, labels = images.to(device), labels.to(device)
@@ -221,11 +273,29 @@ def main(cfg: DictConfig) -> None:
                                 _, predicted = torch.max(outputs.data, 1)
                                 total += labels.size(0)
                                 correct += (predicted == labels).sum().item()
+                                all_preds.append(predicted.cpu().numpy())
+                                all_labels.append(labels.cpu().numpy())
 
                         client_loss = loss_sum / total if total > 0 else 0.0
                         client_acc = correct / total if total > 0 else 0.0
+                        if len(all_preds) > 0:
+                            preds_concat = np.concatenate(all_preds)
+                            labels_concat = np.concatenate(all_labels)
+                            client_prec, client_rec, client_f1 = (
+                                compute_precision_recall_f1(
+                                    preds_concat,
+                                    labels_concat,
+                                    num_classes=cfg.dataset.num_classes,
+                                )
+                            )
+                        else:
+                            client_prec, client_rec, client_f1 = 0.0, 0.0, 0.0
+
                         total_loss += client_loss
                         total_accuracy += client_acc
+                        total_precision += client_prec
+                        total_recall += client_rec
+                        total_f1 += client_f1
                         num_eval_clients += 1
                     except Exception as e:
                         logger.warning(
@@ -235,13 +305,20 @@ def main(cfg: DictConfig) -> None:
                 if num_eval_clients > 0:
                     loss = total_loss / num_eval_clients
                     accuracy = total_accuracy / num_eval_clients
+                    precision = total_precision / num_eval_clients
+                    recall = total_recall / num_eval_clients
+                    f1 = total_f1 / num_eval_clients
                 else:
-                    loss = 0.0
-                    accuracy = 0.0
+                    loss, accuracy, precision, recall, f1 = 0.0, 0.0, 0.0, 0.0, 0.0
 
-                return loss, {"accuracy": accuracy}
+                return loss, {
+                    "accuracy": accuracy,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1,
+                }
 
-            # Default FL path (FedAvg, FedProx, etc.)
+            # Default FL path (FedAvg, FedProx, FedMAQ, etc.)
             # Load weights
             set_model_parameters(global_model, parameters)
 
@@ -251,6 +328,8 @@ def main(cfg: DictConfig) -> None:
             loss_sum = 0.0
             correct = 0
             total = 0
+            all_preds = []
+            all_labels = []
 
             with torch.no_grad():
                 for images, labels in test_loader:
@@ -260,17 +339,33 @@ def main(cfg: DictConfig) -> None:
                     _, predicted = torch.max(outputs.data, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
+                    all_preds.append(predicted.cpu().numpy())
+                    all_labels.append(labels.cpu().numpy())
 
             loss = loss_sum / total if total > 0 else 0.0
             accuracy = correct / total if total > 0 else 0.0
+            if len(all_preds) > 0:
+                preds_concat = np.concatenate(all_preds)
+                labels_concat = np.concatenate(all_labels)
+                precision, recall, f1 = compute_precision_recall_f1(
+                    preds_concat, labels_concat, num_classes=cfg.dataset.num_classes
+                )
+            else:
+                precision, recall, f1 = 0.0, 0.0, 0.0
 
-            return loss, {"accuracy": accuracy}
+            return loss, {
+                "accuracy": accuracy,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+            }
 
         # Setup custom strategy
         strategy = TelemetryFedAvg(
             telemetry_manager=telemetry,
             config=cfg_dict,
             client_indices_dict=client_indices_dict,
+            public_indices=public_indices,
             fraction_fit=cfg.experiment.client_fraction,
             fraction_evaluate=0.0,  # Disable client-side evaluation overhead
             min_fit_clients=max(
