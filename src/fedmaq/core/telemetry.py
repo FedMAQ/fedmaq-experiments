@@ -1,7 +1,9 @@
 """Telemetry manager for tracking metrics and logging to Weights & Biases."""
 
 import logging
-from typing import Any, Dict, Optional
+from collections.abc import Mapping
+from typing import Any
+
 import wandb
 
 logger = logging.getLogger(__name__)
@@ -10,13 +12,11 @@ logger = logging.getLogger(__name__)
 class TelemetryManager:
     """Manages telemetry logging to WandB, local files, and console."""
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         exp_config = config.get("experiment", config)
         self.enabled = exp_config.get("telemetry", {}).get("wandb_enabled", True)
-        self.project = exp_config.get("telemetry", {}).get(
-            "project", "fedmaq-experiments"
-        )
+        self.project = exp_config.get("telemetry", {}).get("project", "fedmaq-experiments")
         self.run_name = exp_config.get("telemetry", {}).get("run_name", None)
         self.run = None
         self.cumulative_bytes = 0
@@ -54,19 +54,15 @@ class TelemetryManager:
                 config=flat_config,
                 mode=exp_config.get("telemetry", {}).get("mode", "online"),
             )
-            logger.info(
-                f"WandB run initialized: {self.run.name if self.run else 'offline'}"
-            )
+            logger.info(f"WandB run initialized: {self.run.name if self.run else 'offline'}")
         except Exception as exc:
-            logger.warning(
-                f"Could not initialize WandB: {exc}. Telemetry will be console-only."
-            )
+            logger.warning(f"Could not initialize WandB: {exc}. Telemetry will be console-only.")
             self.enabled = False
 
     def log(
         self,
         round_num: int,
-        metrics: Dict[str, Any],
+        metrics: dict[str, Any],
     ) -> None:
         """Log key metrics for a communication round using hierarchical namespaces."""
         # Accumulate communication bytes
@@ -90,7 +86,7 @@ class TelemetryManager:
         test_acc = metrics.get("test/accuracy", 0.0)
         test_loss = metrics.get("test/loss", 0.0)
         logger.info(
-            f"Round {round_num:3d} | Test Acc: {test_acc*100:6.2f}% | "
+            f"Round {round_num:3d} | Test Acc: {test_acc * 100:6.2f}% | "
             f"Test Loss: {test_loss:6.4f} | Comm: {cumulative_mb:7.3f} MB | "
             f"Sim Time: {self.cumulative_time:8.2f}s"
         )
@@ -101,9 +97,9 @@ class TelemetryManager:
         # Log locally
         self._write_local_logs(metrics)
 
-    def _write_local_logs(self, metrics: Dict[str, Any]) -> None:
-        import json
+    def _write_local_logs(self, metrics: dict[str, Any]) -> None:
         import csv
+        import json
 
         # 1. Write to JSONL
         try:
@@ -132,13 +128,13 @@ class TelemetryManager:
             logger.info("WandB run finished.")
 
     def _flatten_dict(
-        self, d: Dict[str, Any], parent_key: str = "", sep: str = "."
-    ) -> Dict[str, Any]:
+        self, d: dict[str, Any], parent_key: str = "", sep: str = "."
+    ) -> dict[str, Any]:
         """Helper to flatten nested dictionaries (such as Hydra Omegaconf)."""
-        items: Dict[str, Any] = {}
+        items: dict[str, Any] = {}
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
-            if isinstance(v, dict):
+            if isinstance(v, Mapping):
                 items.update(self._flatten_dict(v, new_key, sep=sep))
             else:
                 items[new_key] = v

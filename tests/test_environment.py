@@ -1,24 +1,21 @@
 """Unit and integration tests for the Phase 1 federated learning environment."""
 
-from collections import OrderedDict
-import pytest
+import flwr as fl
 import numpy as np
+import pytest
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset
-
-from torchvision.datasets import CIFAR10, CIFAR100, EMNIST, FashionMNIST, MNIST
-from torch.utils.data import TensorDataset
-import flwr as fl
 from flwr.clientapp import ClientApp
-from flwr.serverapp import ServerApp
-from flwr.server import ServerAppComponents, ServerConfig
-from flwr.simulation import run_simulation
 from flwr.common import ndarrays_to_parameters
+from flwr.server import ServerAppComponents, ServerConfig
+from flwr.serverapp import ServerApp
+from flwr.simulation import run_simulation
+from torch.utils.data import TensorDataset
 
+from fedmaq.core.client import CompressionHook, GenericClient, LossHook
 from fedmaq.core.models import (
-    SimpleCNN,
     ResNet18GN,
+    SimpleCNN,
     get_model,
     get_model_parameters,
     set_model_parameters,
@@ -27,11 +24,9 @@ from fedmaq.core.partitioning import (
     generate_partition_indices,
     get_client_loader,
     get_server_loaders,
-    load_dataset,
 )
-from fedmaq.core.telemetry import TelemetryManager
 from fedmaq.core.strategy import TelemetryFedAvg
-from fedmaq.core.client import GenericClient, LossHook, CompressionHook
+from fedmaq.core.telemetry import TelemetryManager
 
 
 @pytest.fixture
@@ -312,7 +307,8 @@ def test_dadaquant_strategy_allocation():
     assert q_dict["1"] >= 1
 
     # Simulate convergence to test time-adaptive q_t doubling
-    # phi is 3, so we check convergence when we have at least phi + 1 (4) rounds of history and rounds_since_increase >= 3.
+    # phi is 3, so we check convergence when we have at least phi + 1 (4) rounds of history
+    # and rounds_since_increase >= 3.
     strategy.moving_average_history = [1.0, 1.0, 1.0, 1.0]  # Plateau detected
     strategy.last_quantization_increase_round = 0
     strategy.q_t = 4
@@ -741,7 +737,7 @@ def test_fedmaq_strategy_allocation():
 
         def get_properties(self, ins, timeout=None, group_id=None):
             # Return partition ID matching proxy cid
-            from flwr.common import GetPropertiesRes, Status, Code
+            from flwr.common import Code, GetPropertiesRes, Status
 
             return GetPropertiesRes(
                 status=Status(code=Code.OK, message=""),
@@ -773,7 +769,7 @@ def test_fedmaq_strategy_allocation():
 
     # Mock the client loader data to avoid file reads in test
     import torch
-    from torch.utils.data import TensorDataset, DataLoader
+    from torch.utils.data import DataLoader, TensorDataset
 
     mock_ds = TensorDataset(torch.randn(10, 1, 28, 28), torch.randint(0, 10, (10,)))
     mock_loader = DataLoader(mock_ds, batch_size=2)

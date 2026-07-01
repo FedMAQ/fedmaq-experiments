@@ -1,36 +1,52 @@
 """Custom Flower Strategy extending FedAvg with simulated physical time tracking and telemetry."""
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
-import flwr as fl
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from flwr.common import (
-    EvaluateIns,
-    EvaluateRes,
     FitIns,
     FitRes,
+    GetPropertiesIns,
     Parameters,
     Scalar,
     ndarrays_to_parameters,
     parameters_to_ndarrays,
 )
+from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
-from flwr.server.client_manager import ClientManager
-import numpy as np
+
+from fedmaq.baselines.compression import compress_tensor, decompress_tensor
+from fedmaq.core.models import (
+    DEVICE,
+    get_kd_student_model,
+    get_model,
+    get_model_parameters,
+    set_model_parameters,
+)
+from fedmaq.core.partitioning import get_client_loader, get_server_loaders
 from fedmaq.core.telemetry import TelemetryManager
 
 logger = logging.getLogger(__name__)
 
 
 class TelemetryFedAvg(FedAvg):
-    """Custom FedAvg strategy tracking bandwidth delays, simulated time, and logging to telemetry."""
+    """Custom FedAvg strategy tracking bandwidth delays and simulated physical time.
+
+    Logs all results and telemetry to console, local logs, and Weight & Biases.
+    """
 
     def __init__(
         self,
         telemetry_manager: TelemetryManager,
-        config: Dict[str, Any],
-        client_indices_dict: Optional[Dict[str, List[int]]] = None,
-        public_indices: Optional[List[int]] = None,
+        config: dict[str, Any],
+        client_indices_dict: dict[str, list[int]] | None = None,
+        public_indices: list[int] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -85,7 +101,7 @@ class TelemetryFedAvg(FedAvg):
 
     def configure_fit(
         self, server_round: int, parameters: Parameters, client_manager: ClientManager
-    ) -> List[Tuple[ClientProxy, FitIns]]:
+    ) -> list[tuple[ClientProxy, FitIns]]:
         alg_name = self.config.get("algorithm", {}).get("name", "")
         if alg_name == "fedkd":
             tmin = float(self.config.get("algorithm", {}).get("tmin", 0.1))
@@ -98,7 +114,6 @@ class TelemetryFedAvg(FedAvg):
 
             # SVD parameter reconstruction for download path
             ndarrays = parameters_to_ndarrays(parameters)
-            from fedmaq.baselines.compression import compress_tensor, decompress_tensor
 
             reconstructed_ndarrays = []
             for arr in ndarrays:
@@ -133,9 +148,6 @@ class TelemetryFedAvg(FedAvg):
 
         if self.fedmaq_enabled:
             # Multi-Adaptive Quantization Logic for FedMAQ
-            import torch
-            from fedmaq.core.models import get_model, set_model_parameters
-            from fedmaq.core.partitioning import get_client_loader
 
             # Get configuration settings
             alg_cfg = self.config.get("algorithm", {})
@@ -155,13 +167,13 @@ class TelemetryFedAvg(FedAvg):
             batch_size = int(self.config.get("experiment", {}).get("batch_size", 64))
 
             # Instantiate temporary model to compute initial gradient norm
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = DEVICE
             temp_model = get_model(dataset_name, num_classes)
             temp_model.to(device)
             ndarrays = parameters_to_ndarrays(parameters)
             set_model_parameters(temp_model, ndarrays)
             temp_model.eval()
-            criterion = torch.nn.CrossEntropyLoss()
+            criterion = nn.CrossEntropyLoss()
 
             # Ensure proxy_cid_to_partition_id exists
             if not hasattr(self, "proxy_cid_to_partition_id"):
@@ -175,8 +187,6 @@ class TelemetryFedAvg(FedAvg):
                     pid = self.proxy_cid_to_partition_id[cid_str]
                 else:
                     try:
-                        from flwr.common import GetPropertiesIns
-
                         try:
                             res = client.get_properties(
                                 GetPropertiesIns(config={}), timeout=5.0, group_id=0
@@ -235,7 +245,8 @@ class TelemetryFedAvg(FedAvg):
                     ).item()
                 except Exception as e:
                     logger.warning(
-                        f"Error computing gradient norm for client partition {pid}: {e}. Defaulting to 1e-8."
+                        f"Error computing gradient norm for client partition {pid}: {e}. "
+                        "Defaulting to 1e-8."
                     )
                     norm = 1e-8
 
@@ -288,8 +299,6 @@ class TelemetryFedAvg(FedAvg):
                 q_k_t = int(min(q_max_capped, q_hat))
 
                 # Inject assigned q (instantiate new FitIns to prevent shared reference overwrites)
-                from flwr.common import FitIns
-
                 new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
                 new_fit_ins.config["q"] = q_k_t
                 updated_instructions.append((client, new_fit_ins))
@@ -322,7 +331,8 @@ class TelemetryFedAvg(FedAvg):
             ) - self.last_quantization_increase_round
 
             if history_len >= self.phi + 1 and rounds_since_increase >= self.phi:
-                # Compare latest moving average loss (index -1) with the one phi rounds ago (index -1-phi)
+                # Compare latest moving average loss (index -1)
+                # with the one phi rounds ago (index -1-phi)
                 latest_loss = self.moving_average_history[-1]
                 past_loss = self.moving_average_history[-1 - self.phi]
                 if latest_loss >= past_loss:
@@ -332,7 +342,8 @@ class TelemetryFedAvg(FedAvg):
                         self.last_quantization_increase_round = server_round - 1
                         logger.info(
                             f"Plateau detected (loss: {latest_loss:.4f} >= {past_loss:.4f}). "
-                            f"Doubling quantization level from {old_q} to {self.q_t} for round {server_round}."
+                            f"Doubling quantization level from {old_q} to {self.q_t} "
+                            f"for round {server_round}."
                         )
 
         # Ensure proxy_cid_to_partition_id exists
@@ -350,8 +361,6 @@ class TelemetryFedAvg(FedAvg):
                 else:
                     # Try to query properties
                     try:
-                        from flwr.common import GetPropertiesIns
-
                         try:
                             res = c.get_properties(
                                 GetPropertiesIns(config={}), timeout=5.0, group_id=0
@@ -381,7 +390,8 @@ class TelemetryFedAvg(FedAvg):
                     sizes.append(len(self.client_indices_dict[int(pid)]))
                 else:
                     logger.warning(
-                        f"Partition ID {pid} not found in client_indices_dict. Defaulting size to 1."
+                        f"Partition ID {pid} not found in client_indices_dict. "
+                        "Defaulting size to 1."
                     )
                     sizes.append(1)
         else:
@@ -417,9 +427,9 @@ class TelemetryFedAvg(FedAvg):
     def aggregate_fit(
         self,
         server_round: int,
-        results: List[Tuple[ClientProxy, FitRes]],
-        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
-    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+        results: list[tuple[ClientProxy, FitRes]],
+        failures: list[tuple[ClientProxy, FitRes] | BaseException],
+    ) -> tuple[Parameters | None, dict[str, Scalar]]:
         alg_name = self.config.get("algorithm", {}).get("name", "")
         if alg_name == "fedmd":
             if not results:
@@ -440,31 +450,13 @@ class TelemetryFedAvg(FedAvg):
 
         if self.fedmaq_enabled and aggregated_parameters is not None:
             # Server-side knowledge distillation logic for FedMAQ
-            import torch
-            import torch.nn as nn
-            import torch.nn.functional as F
-            from fedmaq.core.models import (
-                get_model,
-                set_model_parameters,
-                get_model_parameters,
-            )
-            from fedmaq.core.partitioning import get_server_loaders
-            from pathlib import Path
-
             dataset_name = self.config.get("dataset", {}).get("name", "mnist")
             num_classes = int(self.config.get("dataset", {}).get("num_classes", 10))
             batch_size = int(self.config.get("experiment", {}).get("batch_size", 64))
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = DEVICE
 
             if alg_name in ["fedkd", "fedmaq"]:
-                if "cifar" in dataset_name.lower():
-                    from fedmaq.core.models import SimpleCNN
-
-                    student_model = SimpleCNN(in_channels=3, num_classes=num_classes)
-                else:
-                    from fedmaq.core.models import TinyCNN
-
-                    student_model = TinyCNN(in_channels=1, num_classes=num_classes)
+                student_model = get_kd_student_model(dataset_name, num_classes)
             else:
                 student_model = get_model(dataset_name, num_classes)
             student_model.to(device)
@@ -559,7 +551,8 @@ class TelemetryFedAvg(FedAvg):
                     updated_ndarrays = get_model_parameters(student_model)
                     aggregated_parameters = ndarrays_to_parameters(updated_ndarrays)
                     logger.info(
-                        f"Server-side KD: successfully distilled knowledge from {len(teachers)} teacher models."
+                        f"Server-side KD: successfully distilled knowledge "
+                        f"from {len(teachers)} teacher models."
                     )
                 except Exception as e:
                     logger.error(f"Error during server-side KD: {e}")
@@ -592,8 +585,9 @@ class TelemetryFedAvg(FedAvg):
                     )
                 self.moving_average_history.append(self.running_average_loss)
                 logger.info(
-                    f"Round {server_round} - DAdaQuant estimated global loss: {weighted_loss_sum:.4f}, "
-                    f"moving average: {self.running_average_loss:.4f}, current q_t: {self.q_t}"
+                    f"Round {server_round} - DAdaQuant estimated global loss: "
+                    f"{weighted_loss_sum:.4f}, moving average: "
+                    f"{self.running_average_loss:.4f}, current q_t: {self.q_t}"
                 )
 
         if not results:
@@ -611,8 +605,6 @@ class TelemetryFedAvg(FedAvg):
                 )
                 energy = tmin + (server_round / total_rounds) * (tmax - tmin)
                 energy = min(max(0.0, energy), 1.0)
-
-                from fedmaq.baselines.compression import compress_tensor
 
                 model_size_bytes = 0
                 for arr in ndarrays:
@@ -697,7 +689,7 @@ class TelemetryFedAvg(FedAvg):
 
     def evaluate(
         self, server_round: int, parameters: Parameters
-    ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
+    ) -> tuple[float, dict[str, Scalar]] | None:
         alg_name = self.config.get("algorithm", {}).get("name", "")
         if alg_name == "fedkd" and server_round > 0:
             tmin = float(self.config.get("algorithm", {}).get("tmin", 0.1))
@@ -710,7 +702,6 @@ class TelemetryFedAvg(FedAvg):
 
             # SVD parameter reconstruction for evaluation
             ndarrays = parameters_to_ndarrays(parameters)
-            from fedmaq.baselines.compression import compress_tensor, decompress_tensor
 
             reconstructed_ndarrays = []
             for arr in ndarrays:

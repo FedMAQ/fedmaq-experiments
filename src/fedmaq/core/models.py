@@ -1,7 +1,7 @@
 """Standard PyTorch model architectures and helpers for FedMAQ."""
 
-from collections import OrderedDict
-from typing import Any, List
+from typing import Any
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,7 +15,8 @@ class SimpleCNN(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=5, padding=2)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
-        # Determine flat features based on channel size (3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST)
+        # Determine flat features based on channel size:
+        # 3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST
         flat_features = 64 * 8 * 8 if in_channels == 3 else 64 * 7 * 7
         self.fc1 = nn.Linear(flat_features, 512)
         self.fc2 = nn.Linear(512, num_classes)
@@ -36,7 +37,8 @@ class TinyCNN(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=5, padding=2)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, padding=2)
-        # Determine flat features based on channel size (3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST)
+        # Determine flat features based on channel size:
+        # 3 channels implies 32x32 CIFAR, 1 channel implies 28x28 MNIST
         flat_features = 32 * 8 * 8 if in_channels == 3 else 32 * 7 * 7
         self.fc1 = nn.Linear(flat_features, 128)
         self.fc2 = nn.Linear(128, num_classes)
@@ -55,17 +57,13 @@ class BasicBlock(nn.Module):
 
     expansion = 1
 
-    def __init__(
-        self, in_planes: int, planes: int, stride: int = 1, num_groups: int = 32
-    ) -> None:
+    def __init__(self, in_planes: int, planes: int, stride: int = 1, num_groups: int = 32) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(
             in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
         self.gn1 = nn.GroupNorm(min(num_groups, planes), planes)
-        self.conv2 = nn.Conv2d(
-            planes, planes, kernel_size=3, stride=1, padding=1, bias=False
-        )
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.gn2 = nn.GroupNorm(min(num_groups, planes), planes)
 
         self.shortcut = nn.Sequential()
@@ -78,9 +76,7 @@ class BasicBlock(nn.Module):
                     stride=stride,
                     bias=False,
                 ),
-                nn.GroupNorm(
-                    min(num_groups, self.expansion * planes), self.expansion * planes
-                ),
+                nn.GroupNorm(min(num_groups, self.expansion * planes), self.expansion * planes),
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -94,17 +90,13 @@ class BasicBlock(nn.Module):
 class ResNet18GN(nn.Module):
     """ResNet-18 architecture with Group Normalization instead of Batch Normalization."""
 
-    def __init__(
-        self, in_channels: int = 3, num_classes: int = 10, num_groups: int = 32
-    ) -> None:
+    def __init__(self, in_channels: int = 3, num_classes: int = 10, num_groups: int = 32) -> None:
         super().__init__()
         self.in_planes = 64
         self.num_groups = num_groups
 
         # Small 3x3 conv at the start (standard for CIFAR-10/100 32x32 resolution)
-        self.conv1 = nn.Conv2d(
-            in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.gn1 = nn.GroupNorm(num_groups, 64)
 
         self.layer1 = self._make_layer(BasicBlock, 64, 2, stride=1)
@@ -113,9 +105,7 @@ class ResNet18GN(nn.Module):
         self.layer4 = self._make_layer(BasicBlock, 512, 2, stride=2)
         self.linear = nn.Linear(512 * BasicBlock.expansion, num_classes)
 
-    def _make_layer(
-        self, block: Any, planes: int, num_blocks: int, stride: int
-    ) -> nn.Sequential:
+    def _make_layer(self, block: Any, planes: int, num_blocks: int, stride: int) -> nn.Sequential:
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for s in strides:
@@ -135,14 +125,12 @@ class ResNet18GN(nn.Module):
         return out
 
 
-def get_model_parameters(model: nn.Module) -> List[np.ndarray]:
+def get_model_parameters(model: nn.Module) -> list[np.ndarray]:
     """Extract model parameters as a list of NumPy arrays."""
-    return [
-        val.cpu().detach().numpy() for val in model.parameters() if val.requires_grad
-    ]
+    return [val.cpu().detach().numpy() for val in model.parameters() if val.requires_grad]
 
 
-def set_model_parameters(model: nn.Module, parameters: List[np.ndarray]) -> None:
+def set_model_parameters(model: nn.Module, parameters: list[np.ndarray]) -> None:
     """Load parameters (NumPy arrays) into the model."""
     params = [p for p in model.parameters() if p.requires_grad]
     for p, w in zip(params, parameters):
@@ -160,3 +148,24 @@ def get_model(dataset_name: str, num_classes: int) -> nn.Module:
         return ResNet18GN(in_channels=in_channels, num_classes=num_classes)
     else:
         raise ValueError(f"Unsupported dataset for model selection: {dataset_name}")
+
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def get_kd_student_model(dataset_name: str, num_classes: int) -> nn.Module:
+    """Retrieve student model for knowledge distillation baselines (FedKD/FedMAQ)."""
+    dataset_name_lower = dataset_name.lower()
+    if "cifar" in dataset_name_lower:
+        return SimpleCNN(in_channels=3, num_classes=num_classes)
+    else:
+        return TinyCNN(in_channels=1, num_classes=num_classes)
+
+
+def get_kd_teacher_model(dataset_name: str, num_classes: int) -> nn.Module:
+    """Retrieve teacher model for knowledge distillation baselines (FedKD/FedMAQ)."""
+    dataset_name_lower = dataset_name.lower()
+    if "cifar" in dataset_name_lower:
+        return ResNet18GN(in_channels=3, num_classes=num_classes)
+    else:
+        return SimpleCNN(in_channels=1, num_classes=num_classes)

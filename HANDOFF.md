@@ -212,6 +212,15 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 10. Changelog
 
+### 2026-07-01 — Code Quality Review and Best Practices Refactoring
+
+- Fixed a bug in `FedPAQCompressionHook` where quantization levels were cached at initialization instead of dynamically recomputing when bit-width `q` changed.
+- Centralized device detection and student-teacher model instantiation stubs in `models.py`, eliminating duplicated model factory code in `client.py`, `strategy.py`, and `run.py`.
+- Optimized import structure in `strategy.py` by moving local/dynamic imports to the top level.
+- Robustified dictionary flattening in `TelemetryManager` to support OmegaConf configurations.
+- Executed code cleanup and formatting sweep with Ruff, achieving 100% compliance with PEP 8 and modern Python conventions.
+- Verified all improvements with the full test suite and MNIST simulations.
+
 ### 2026-07-01 — Revised FedMAQ methodology, auxiliary metrics, and local telemetry logging
 
 - Simplified local client training for FedMAQ in `client.py` to strictly perform task-loss cross-entropy minimization ($L_{local} = CE(\hat{y}, y)$), removing student-teacher mutual learning and model checkpoint persistence on the client.

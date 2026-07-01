@@ -1,6 +1,5 @@
 """Quantization-based baseline compression hooks (FedPAQ, etc.)."""
 
-from typing import List, Tuple
 import numpy as np
 
 from fedmaq.core.client import CompressionHook
@@ -18,10 +17,13 @@ class FedPAQCompressionHook(CompressionHook):
             Number of quantization bits (default: 8).
         """
         self.q = q
-        # Number of positive quantization levels for symmetric bounds (e.g. 127 for 8-bit)
-        self.levels = (1 << (q - 1)) - 1
 
-    def compress(self, deltas: List[np.ndarray]) -> Tuple[List[np.ndarray], int]:
+    @property
+    def levels(self) -> int:
+        """Number of positive quantization levels for symmetric bounds (e.g. 127 for 8-bit)."""
+        return (1 << (self.q - 1)) - 1
+
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using symmetric uniform quantization.
 
         Parameters
@@ -77,7 +79,7 @@ class DAdaQuantCompressionHook(CompressionHook):
         """
         self.q = q
 
-    def compress(self, deltas: List[np.ndarray]) -> Tuple[List[np.ndarray], int]:
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using stochastic uniform quantization with self.q bins per sign.
 
         Parameters

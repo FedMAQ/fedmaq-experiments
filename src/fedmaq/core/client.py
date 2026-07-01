@@ -1,13 +1,20 @@
 """Generic Flower Client implementation with customizable hooks for loss and compression."""
 
-from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+from typing import Any
+
 import flwr as fl
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fedmaq.core.models import get_model_parameters, set_model_parameters
+
+from fedmaq.core.models import (
+    DEVICE,
+    get_kd_teacher_model,
+    get_model_parameters,
+    set_model_parameters,
+)
 
 
 class LossHook:
@@ -33,13 +40,11 @@ class FedProxLossHook(LossHook):
 
     def __init__(self, mu: float = 0.01) -> None:
         self.mu = mu
-        self.global_params: List[torch.Tensor] = []
+        self.global_params: list[torch.Tensor] = []
 
     def on_train_begin(self, model: nn.Module) -> None:
         # Save a frozen copy of the initial global weights
-        self.global_params = [
-            p.clone().detach() for p in model.parameters() if p.requires_grad
-        ]
+        self.global_params = [p.clone().detach() for p in model.parameters() if p.requires_grad]
 
     def compute_loss(
         self,
@@ -59,7 +64,7 @@ class FedProxLossHook(LossHook):
 class CompressionHook:
     """Base class for compressing client model updates (deltas)."""
 
-    def compress(self, deltas: List[np.ndarray]) -> Tuple[List[np.ndarray], int]:
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas and return (compressed_deltas, byte_size)."""
         # Default: Identity (uncompressed Float32 weights -> 4 bytes per element)
         byte_size = sum(d.nbytes for d in deltas)
@@ -77,8 +82,8 @@ class GenericClient(fl.client.NumPyClient):
         model: nn.Module,
         loss_hook: LossHook,
         compressor_hook: CompressionHook,
-        config: Dict[str, Any],
-        public_loader: Optional[torch.utils.data.DataLoader] = None,
+        config: dict[str, Any],
+        public_loader: torch.utils.data.DataLoader | None = None,
     ) -> None:
         self.cid = cid
         self.trainloader = trainloader
@@ -88,15 +93,15 @@ class GenericClient(fl.client.NumPyClient):
         self.compressor_hook = compressor_hook
         self.config = config
         self.public_loader = public_loader
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = DEVICE
         self.model.to(self.device)
 
-    def get_properties(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def get_properties(self, config: dict[str, Any]) -> dict[str, Any]:
         return {"cid": self.cid}
 
     def fit(
-        self, parameters: List[np.ndarray], config: Dict[str, Any]
-    ) -> Tuple[List[np.ndarray], int, Dict[str, Any]]:
+        self, parameters: list[np.ndarray], config: dict[str, Any]
+    ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
         alg_name = self.config.get("algorithm", {}).get("name", "")
 
         if alg_name == "fedmd":
@@ -109,9 +114,7 @@ class GenericClient(fl.client.NumPyClient):
 
             # 1. Load weights if file exists, else pre-train
             if model_path.exists():
-                self.model.load_state_dict(
-                    torch.load(model_path, map_location=self.device)
-                )
+                self.model.load_state_dict(torch.load(model_path, map_location=self.device))
             else:
                 # Run pre-training (Transfer Learning Phase)
                 alg_cfg = self.config.get("algorithm", {})
@@ -134,9 +137,7 @@ class GenericClient(fl.client.NumPyClient):
                     self.model.train()
                     for epoch in range(pub_pretrain_epochs):
                         for images, labels in self.public_loader:
-                            images, labels = images.to(self.device), labels.to(
-                                self.device
-                            )
+                            images, labels = images.to(self.device), labels.to(self.device)
                             optimizer.zero_grad()
                             outputs = self.model(images)
                             loss = criterion(outputs, labels)
@@ -157,13 +158,10 @@ class GenericClient(fl.client.NumPyClient):
                 # Save initial weights
                 torch.save(self.model.state_dict(), model_path)
 
-            # 2. Check if we received predictions (soft targets) from the server (if server_round > 1)
+            # 2. Check if we received predictions (soft targets) from the server
+            # (if server_round > 1)
             server_round = config.get("server_round", 1)
-            if (
-                server_round > 1
-                and len(parameters) == 1
-                and self.public_loader is not None
-            ):
+            if server_round > 1 and len(parameters) == 1 and self.public_loader is not None:
                 avg_predictions = parameters[0]
                 alg_cfg = self.config.get("algorithm", {})
                 public_epochs = int(alg_cfg.get("public_epochs", 5))
@@ -200,9 +198,7 @@ class GenericClient(fl.client.NumPyClient):
                         optimizer.step()
 
                 # Revisit Phase: cross entropy loss on private dataset
-                private_epochs = int(
-                    config.get("epochs", exp_config.get("local_epochs", 5))
-                )
+                private_epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
                 ce_criterion = nn.CrossEntropyLoss()
                 self.model.train()
                 for epoch in range(private_epochs):
@@ -251,23 +247,14 @@ class GenericClient(fl.client.NumPyClient):
             teacher_path = model_dir / f"teacher_{self.cid}.pth"
 
             # 1. Instantiate teacher model based on dataset
-            dataset_name = self.config.get("dataset", {}).get("name", "").lower()
+            dataset_name = self.config.get("dataset", {}).get("name", "")
             num_classes = int(self.config.get("dataset", {}).get("num_classes", 10))
-            if "cifar" in dataset_name:
-                from fedmaq.core.models import ResNet18GN
-
-                teacher_model = ResNet18GN(in_channels=3, num_classes=num_classes)
-            else:
-                from fedmaq.core.models import SimpleCNN
-
-                teacher_model = SimpleCNN(in_channels=1, num_classes=num_classes)
+            teacher_model = get_kd_teacher_model(dataset_name, num_classes)
             teacher_model.to(self.device)
 
             # 2. Load teacher weights if file exists, otherwise keep random initialization
             if teacher_path.exists():
-                teacher_model.load_state_dict(
-                    torch.load(teacher_path, map_location=self.device)
-                )
+                teacher_model.load_state_dict(torch.load(teacher_path, map_location=self.device))
 
             # 3. Load global student parameters
             set_model_parameters(self.model, parameters)
@@ -285,9 +272,7 @@ class GenericClient(fl.client.NumPyClient):
             )
             ce_criterion = nn.CrossEntropyLoss()
             kl_criterion = nn.KLDivLoss(reduction="batchmean")
-            temperature = float(
-                self.config.get("algorithm", {}).get("temperature", 2.0)
-            )
+            temperature = float(self.config.get("algorithm", {}).get("temperature", 2.0))
 
             # 5. Local Training: Student-Teacher Mutual Distillation
             self.model.train()
@@ -312,12 +297,8 @@ class GenericClient(fl.client.NumPyClient):
                     outputs_t_soft = F.softmax(outputs_t / temperature, dim=1)
 
                     # Mutual Knowledge Distillation Loss (scaled by temperature^2)
-                    kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (
-                        temperature**2
-                    )
-                    kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (
-                        temperature**2
-                    )
+                    kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
+                    kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
 
                     # Adaptive scaling: divide by sum of task losses
                     denom = loss_s_task + loss_t_task + 1e-6
@@ -348,9 +329,7 @@ class GenericClient(fl.client.NumPyClient):
             compressed_deltas, byte_size = self.compressor_hook.compress(deltas)
 
             # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-            reconstructed_params = [
-                o + cd for o, cd in zip(parameters, compressed_deltas)
-            ]
+            reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas)]
 
             return (
                 reconstructed_params,
@@ -394,9 +373,7 @@ class GenericClient(fl.client.NumPyClient):
 
         # Setup training
         self.model.train()
-        optimizer = torch.optim.SGD(
-            self.model.parameters(), lr=lr, weight_decay=weight_decay
-        )
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.CrossEntropyLoss()
 
         self.loss_hook.on_train_begin(self.model)
@@ -407,9 +384,7 @@ class GenericClient(fl.client.NumPyClient):
                 images, labels = images.to(self.device), labels.to(self.device)
                 optimizer.zero_grad()
                 outputs = self.model(images)
-                loss = self.loss_hook.compute_loss(
-                    self.model, outputs, labels, criterion
-                )
+                loss = self.loss_hook.compute_loss(self.model, outputs, labels, criterion)
                 loss.backward()
                 optimizer.step()
                 last_loss = loss.item()
@@ -437,8 +412,8 @@ class GenericClient(fl.client.NumPyClient):
         )
 
     def evaluate(
-        self, parameters: List[np.ndarray], config: Dict[str, Any]
-    ) -> Tuple[float, int, Dict[str, Any]]:
+        self, parameters: list[np.ndarray], config: dict[str, Any]
+    ) -> tuple[float, int, dict[str, Any]]:
         # Load weights
         alg_name = self.config.get("algorithm", {}).get("name", "")
         if alg_name == "fedmd":
@@ -447,9 +422,7 @@ class GenericClient(fl.client.NumPyClient):
             )
             model_path = Path(persistence_dir) / f"client_{self.cid}.pth"
             if model_path.exists():
-                self.model.load_state_dict(
-                    torch.load(model_path, map_location=self.device)
-                )
+                self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         else:
             set_model_parameters(self.model, parameters)
 

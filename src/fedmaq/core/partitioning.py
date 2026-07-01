@@ -3,12 +3,12 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Tuple
+
 import numpy as np
 import torch
-from torch.utils.data import Dataset, Subset
 import torchvision.transforms as transforms
-from torchvision.datasets import CIFAR10, CIFAR100, EMNIST, FashionMNIST, MNIST
+from torch.utils.data import Dataset, Subset
+from torchvision.datasets import CIFAR10, CIFAR100, EMNIST, MNIST, FashionMNIST
 
 # Base paths
 DATA_DIR = Path("data").resolve()
@@ -19,12 +19,8 @@ TRANSFORMS = {
     "mnist": transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     ),
-    "fmnist": transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
-    ),
-    "femnist": transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
-    ),
+    "fmnist": transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]),
+    "femnist": transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]),
     "cifar10": transforms.Compose(
         [
             transforms.ToTensor(),
@@ -46,13 +42,9 @@ def load_dataset(dataset_name: str, train: bool = True) -> Dataset:
     name_lower = dataset_name.lower()
 
     if name_lower == "mnist":
-        return MNIST(
-            DATA_DIR, train=train, download=True, transform=TRANSFORMS["mnist"]
-        )
+        return MNIST(DATA_DIR, train=train, download=True, transform=TRANSFORMS["mnist"])
     elif name_lower == "fmnist":
-        return FashionMNIST(
-            DATA_DIR, train=train, download=True, transform=TRANSFORMS["fmnist"]
-        )
+        return FashionMNIST(DATA_DIR, train=train, download=True, transform=TRANSFORMS["fmnist"])
     elif name_lower == "femnist":
         # FEMNIST is approximated via EMNIST with 'byclass' split
         return EMNIST(
@@ -63,13 +55,9 @@ def load_dataset(dataset_name: str, train: bool = True) -> Dataset:
             transform=TRANSFORMS["femnist"],
         )
     elif name_lower in ["cifar10", "cifar-10"]:
-        return CIFAR10(
-            DATA_DIR, train=train, download=True, transform=TRANSFORMS["cifar10"]
-        )
+        return CIFAR10(DATA_DIR, train=train, download=True, transform=TRANSFORMS["cifar10"])
     elif name_lower in ["cifar100", "cifar-100"]:
-        return CIFAR100(
-            DATA_DIR, train=train, download=True, transform=TRANSFORMS["cifar100"]
-        )
+        return CIFAR100(DATA_DIR, train=train, download=True, transform=TRANSFORMS["cifar100"])
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
 
@@ -96,7 +84,7 @@ def generate_partition_indices(
     alpha: float,
     num_public_samples: int = 500,
     seed: int = 42,
-) -> Tuple[List[int], Dict[str, List[int]]]:
+) -> tuple[list[int], dict[str, list[int]]]:
     """Generate or retrieve cached partition indices (deterministic).
 
     Returns:
@@ -104,20 +92,20 @@ def generate_partition_indices(
         client_indices: Map of str(client_id) -> list of sample indices
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
-    cache_file = (
-        CACHE_DIR
-        / f"{dataset_name.lower()}_clients_{num_clients}_alpha_{alpha}_pub_{num_public_samples}_seed_{seed}.json"
+    cache_name = (
+        f"{dataset_name.lower()}_clients_{num_clients}_"
+        f"alpha_{alpha}_pub_{num_public_samples}_seed_{seed}.json"
     )
+    cache_file = CACHE_DIR / cache_name
 
     if cache_file.is_file():
-        with open(cache_file, "r") as f:
+        with open(cache_file) as f:
             cache_data = json.load(f)
         return cache_data["public_indices"], cache_data["client_indices"]
 
     # Generate indices
     dataset = load_dataset(dataset_name, train=True)
     labels = get_dataset_labels(dataset)
-    num_samples = len(dataset)
     num_classes = len(np.unique(labels))
 
     # Set seed for determinism
@@ -168,7 +156,7 @@ def generate_partition_indices(
 def get_client_loader(
     dataset_name: str,
     client_id: int,
-    client_indices_dict: Dict[str, List[int]],
+    client_indices_dict: dict[str, list[int]],
     batch_size: int = 64,
     train: bool = True,
 ) -> torch.utils.data.DataLoader:
@@ -176,24 +164,18 @@ def get_client_loader(
     dataset = load_dataset(dataset_name, train=train)
     indices = client_indices_dict[str(client_id)]
     client_subset = Subset(dataset, indices)
-    return torch.utils.data.DataLoader(
-        client_subset, batch_size=batch_size, shuffle=train
-    )
+    return torch.utils.data.DataLoader(client_subset, batch_size=batch_size, shuffle=train)
 
 
 def get_server_loaders(
-    dataset_name: str, public_indices: List[int], batch_size: int = 64
-) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    dataset_name: str, public_indices: list[int], batch_size: int = 64
+) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Return public unlabeled server dataset loader and central evaluation test loader."""
     train_dataset = load_dataset(dataset_name, train=True)
     public_subset = Subset(train_dataset, public_indices)
-    public_loader = torch.utils.data.DataLoader(
-        public_subset, batch_size=batch_size, shuffle=False
-    )
+    public_loader = torch.utils.data.DataLoader(public_subset, batch_size=batch_size, shuffle=False)
 
     test_dataset = load_dataset(dataset_name, train=False)
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False
-    )
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return public_loader, test_loader

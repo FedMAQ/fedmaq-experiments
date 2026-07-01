@@ -1,20 +1,19 @@
 """Main experiment runner using Hydra and Flower simulation."""
 
 import logging
-import os
 import random
-from typing import Dict, Optional, Tuple
+
 import flwr as fl
+import hydra
+import numpy as np
+import torch
+import torch.nn as nn
+from flwr.clientapp import ClientApp
 from flwr.common import Scalar, ndarrays_to_parameters
 from flwr.server import ServerAppComponents, ServerConfig
 from flwr.serverapp import ServerApp
-from flwr.clientapp import ClientApp
 from flwr.simulation import run_simulation
-import hydra
-import numpy as np
 from omegaconf import DictConfig, OmegaConf
-import torch
-import torch.nn as nn
 
 from fedmaq.core.client import (
     CompressionHook,
@@ -23,11 +22,11 @@ from fedmaq.core.client import (
     LossHook,
 )
 from fedmaq.core.models import (
+    DEVICE,
+    get_kd_student_model,
     get_model,
     get_model_parameters,
     set_model_parameters,
-    SimpleCNN,
-    TinyCNN,
 )
 from fedmaq.core.partitioning import (
     generate_partition_indices,
@@ -53,7 +52,7 @@ def set_seed(seed: int) -> None:
 
 def compute_precision_recall_f1(
     all_preds: np.ndarray, all_labels: np.ndarray, num_classes: int = 10
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """Calculate macro-averaged Precision, Recall, and F1-score."""
     precision_list = []
     recall_list = []
@@ -121,10 +120,7 @@ def main(cfg: DictConfig) -> None:
 
         # Get local model
         if cfg.algorithm.name in ["fedkd", "fedmaq"]:
-            if "cifar" in cfg.dataset.name.lower():
-                model = SimpleCNN(in_channels=3, num_classes=cfg.dataset.num_classes)
-            else:
-                model = TinyCNN(in_channels=1, num_classes=cfg.dataset.num_classes)
+            model = get_kd_student_model(cfg.dataset.name, cfg.dataset.num_classes)
         else:
             model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
 
@@ -165,14 +161,7 @@ def main(cfg: DictConfig) -> None:
     def server_fn(context: fl.app.Context) -> ServerAppComponents:
         # Instantiate global model for initialization
         if cfg.algorithm.name in ["fedkd", "fedmaq"]:
-            if "cifar" in cfg.dataset.name.lower():
-                global_model = SimpleCNN(
-                    in_channels=3, num_classes=cfg.dataset.num_classes
-                )
-            else:
-                global_model = TinyCNN(
-                    in_channels=1, num_classes=cfg.dataset.num_classes
-                )
+            global_model = get_kd_student_model(cfg.dataset.name, cfg.dataset.num_classes)
         else:
             global_model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
 
@@ -187,9 +176,9 @@ def main(cfg: DictConfig) -> None:
         def evaluate_fn(
             server_round: int,
             parameters: fl.common.NDArrays,
-            config: Dict[str, Scalar],
-        ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            config: dict[str, Scalar],
+        ) -> tuple[float, dict[str, Scalar]] | None:
+            device = DEVICE
             criterion = nn.CrossEntropyLoss()
 
             if cfg.algorithm.name == "fedmd":
@@ -199,9 +188,7 @@ def main(cfg: DictConfig) -> None:
                     "persistence_dir", f".data_partitions/{cfg.algorithm.name}_models"
                 )
                 model_dir = Path(persistence_dir)
-                client_paths = (
-                    list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
-                )
+                client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
 
                 if not client_paths:
                     # Fallback to random global model if no client models are saved yet
@@ -252,9 +239,7 @@ def main(cfg: DictConfig) -> None:
                 for path in client_paths:
                     client_model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
                     try:
-                        client_model.load_state_dict(
-                            torch.load(path, map_location=device)
-                        )
+                        client_model.load_state_dict(torch.load(path, map_location=device))
                         client_model.eval()
                         client_model.to(device)
 
@@ -267,9 +252,7 @@ def main(cfg: DictConfig) -> None:
                             for images, labels in test_loader:
                                 images, labels = images.to(device), labels.to(device)
                                 outputs = client_model(images)
-                                loss_sum += criterion(outputs, labels).item() * len(
-                                    labels
-                                )
+                                loss_sum += criterion(outputs, labels).item() * len(labels)
                                 _, predicted = torch.max(outputs.data, 1)
                                 total += labels.size(0)
                                 correct += (predicted == labels).sum().item()
@@ -281,12 +264,10 @@ def main(cfg: DictConfig) -> None:
                         if len(all_preds) > 0:
                             preds_concat = np.concatenate(all_preds)
                             labels_concat = np.concatenate(all_labels)
-                            client_prec, client_rec, client_f1 = (
-                                compute_precision_recall_f1(
-                                    preds_concat,
-                                    labels_concat,
-                                    num_classes=cfg.dataset.num_classes,
-                                )
+                            client_prec, client_rec, client_f1 = compute_precision_recall_f1(
+                                preds_concat,
+                                labels_concat,
+                                num_classes=cfg.dataset.num_classes,
                             )
                         else:
                             client_prec, client_rec, client_f1 = 0.0, 0.0, 0.0
@@ -298,9 +279,7 @@ def main(cfg: DictConfig) -> None:
                         total_f1 += client_f1
                         num_eval_clients += 1
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to load or evaluate model at {path}: {e}"
-                        )
+                        logger.warning(f"Failed to load or evaluate model at {path}: {e}")
 
                 if num_eval_clients > 0:
                     loss = total_loss / num_eval_clients

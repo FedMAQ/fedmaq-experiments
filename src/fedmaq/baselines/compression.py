@@ -1,12 +1,11 @@
 """SVD-based dynamic compression hook for FedKD."""
 
-from typing import List, Tuple
 import numpy as np
 
 from fedmaq.core.client import CompressionHook
 
 
-def compress_tensor(tensor_np: np.ndarray, energy: float) -> Tuple[np.ndarray, ...]:
+def compress_tensor(tensor_np: np.ndarray, energy: float) -> tuple[np.ndarray, ...]:
     """Compresses a tensor using SVD if its dimension is >= 2.
 
     Returns either (U, Sigma, V) or (tensor_np,).
@@ -46,7 +45,7 @@ def compress_tensor(tensor_np: np.ndarray, energy: float) -> Tuple[np.ndarray, .
 
 
 def decompress_tensor(
-    compressed: Tuple[np.ndarray, ...], orig_shape: Tuple[int, ...]
+    compressed: tuple[np.ndarray, ...], orig_shape: tuple[int, ...]
 ) -> np.ndarray:
     """Decompress a compressed tensor representation back to its original shape."""
     if len(compressed) == 1:
@@ -70,7 +69,7 @@ class FedKDCompressionHook(CompressionHook):
         """
         self.energy = energy
 
-    def compress(self, deltas: List[np.ndarray]) -> Tuple[List[np.ndarray], int]:
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using SVD.
 
         Parameters
