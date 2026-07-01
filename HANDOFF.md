@@ -2,12 +2,12 @@
 
 Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
 
-| Field                  | Value                                            |
-| ---------------------- | ------------------------------------------------ |
-| **Last updated**       | 2026-07-01                                       |
+| Field                  | Value                                                                    |
+| ---------------------- | ------------------------------------------------------------------------ |
+| **Last updated**       | 2026-07-01                                                               |
 | **Last session focus** | Revised FedMAQ methodology, utility metrics, and local telemetry logging |
-| **Active repo**        | fedmaq-experiments                               |
-| **Blockers**           | None                                             |
+| **Active repo**        | fedmaq-experiments                                                       |
+| **Blockers**           | None                                                                     |
 
 ---
 
