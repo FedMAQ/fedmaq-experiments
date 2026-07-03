@@ -103,7 +103,7 @@ class GenericClient(fl.client.NumPyClient):
         self.compressor_hook = compressor_hook
         self.config = config
         self.public_loader = public_loader
-        self.device = torch.device(config.get("device", DEVICE))
+        self.device = torch.device(config.get("device") or DEVICE)
         self.model.to(self.device)
 
     def get_properties(self, config: Config) -> dict[str, Any]:

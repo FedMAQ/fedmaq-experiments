@@ -91,8 +91,18 @@ def evaluate_fedmd_ensemble(
     total_f1 = 0.0
     num_eval_clients = 0
 
+    # Instantiate model architecture once to avoid allocation overhead in loop
+    if client_paths:
+        try:
+            client_model = get_model(dataset_name, num_classes)
+            client_model.to(device)
+        except Exception as e:
+            logger.error(f"Failed to initialize evaluation model architecture: {e}")
+            return 0.0, {"accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0}
+    else:
+        return 0.0, {"accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0}
+
     for path in client_paths:
-        client_model = get_model(dataset_name, num_classes)
         try:
             client_model.load_state_dict(torch.load(path, map_location=device))
             client_loss, client_metrics = evaluate_global_model(

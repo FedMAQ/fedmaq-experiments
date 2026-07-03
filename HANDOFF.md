@@ -2,12 +2,12 @@
 
 Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
 
-| Field                  | Value                                                   |
-| ---------------------- | ------------------------------------------------------- |
-| **Last updated**       | 2026-07-03                                              |
-| **Last session focus** | experiments: Full Core Codebase Refactoring & Hardening |
-| **Active repo**        | fedmaq-experiments                                      |
-| **Blockers**           | None                                                    |
+| Field                  | Value                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| **Last updated**       | 2026-07-03                                                                           |
+| **Last session focus** | experiments: Codebase Hardening, Performance Optimization & Mathematical Correctness |
+| **Active repo**        | fedmaq-experiments                                                                   |
+| **Blockers**           | None                                                                                 |
 
 ---
 
@@ -58,7 +58,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Hook-Refactored]
 
-- **Status details:** See completed baselines and status in [baseline_registry.md](.cursor/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`).
+- **Status details:** See completed baselines and status in [baseline_registry.md](.cursor/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), and hardened the codebase with performance, correctness, and robustness optimizations (partition resolution, model reuse, independent client seeds).
 - **Pending:** Port remaining SOTA baselines (FedDistill, CFD — Sep 2026), Docker integration.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [Complete]
@@ -157,6 +157,15 @@ Create `.env` locally (gitignored); document new vars here when added.
 ## 10. Changelog
 
 - See the complete historical archive of session-to-session changes in [changelog.md](.cursor/project/changelog.md).
+
+### 2026-07-03 — Codebase Hardening, Optimization & Correctness (Refactor Session)
+
+- **Partition Resolution Optimization**: Bypassed synchronous `client.get_properties()` RPC queries and 5s timeouts in strategy hooks (`dadaquant.py` and `fedmaq.py`) by checking `cid_str.isdigit()` and validating against client counts.
+- **Ensemble Evaluation Memory Optimization**: Reduced PyTorch allocation and memory overhead in FedMD evaluation (`evaluation.py`) by instantiating the model once outside the checkpoint loop and reusing it.
+- **Stochastic Rounding Correctness**: Seeded each client's random number generator using `cfg.seed + partition_id` in `run.py`, ensuring mathematically independent stochastic rounding across clients while remaining fully reproducible.
+- **Telemetry Robustness**: Guarded `import wandb` in `telemetry.py` to prevent import crashes when the library is not installed, and pre-populated the CSV header with a stable canonical column order.
+- **Safe Device Config Resolution**: Handled explicit `null` / `None` device definitions in configurations across client and strategy hooks.
+- **Validation**: Executed test suite (20/20 tests passed) and ran end-to-end simulation dry runs to verify changes.
 
 ### 2026-07-03 — Core Codebase Refactoring & Hardening
 

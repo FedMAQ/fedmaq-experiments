@@ -8,7 +8,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-import wandb
+try:
+    import wandb
+
+    _WANDB_AVAILABLE = True
+except ImportError:
+    _WANDB_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +66,11 @@ class TelemetryManager:
         """Initialize WandB connection if enabled."""
         if not self.enabled:
             logger.info("WandB telemetry is disabled.")
+            return
+
+        if not _WANDB_AVAILABLE:
+            logger.warning("WandB is not installed. Telemetry will be local-only.")
+            self.enabled = False
             return
 
         # Flatten config dict for wandb configuration logging
@@ -144,7 +154,29 @@ class TelemetryManager:
         #    are written as empty strings to keep columns aligned.
         try:
             if self._csv_fieldnames is None:
-                self._csv_fieldnames = sorted(metrics.keys())
+                canonical = [
+                    "round",
+                    "test/loss",
+                    "test/accuracy",
+                    "test/precision",
+                    "test/recall",
+                    "test/f1",
+                    "communication/round_bytes",
+                    "communication/cumulative_bytes",
+                    "communication/cumulative_mb",
+                    "system/round_time_sec",
+                    "system/cumulative_time_sec",
+                    "system/client_sim_time_sec",
+                    "system/cumulative_client_time_sec",
+                    "system/server_sim_time_sec",
+                    "system/cumulative_server_time_sec",
+                ]
+                seen = set(canonical)
+                fieldnames = list(canonical)
+                for key in sorted(metrics.keys()):
+                    if key not in seen:
+                        fieldnames.append(key)
+                self._csv_fieldnames = fieldnames
 
             file_exists = self.csv_path.exists()
             with open(self.csv_path, "a", newline="", encoding="utf-8") as f:

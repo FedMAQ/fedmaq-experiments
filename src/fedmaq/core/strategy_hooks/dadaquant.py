@@ -57,6 +57,13 @@ def _resolve_partition_id(
     if cid_str in strategy.proxy_cid_to_partition_id:
         return strategy.proxy_cid_to_partition_id[cid_str]
 
+    # Flower simulation shortcut: client.cid is typically the stringified partition ID
+    if cid_str.isdigit():
+        pid = int(cid_str)
+        if pid < strategy.num_clients:
+            strategy.proxy_cid_to_partition_id[cid_str] = pid
+            return pid
+
     try:
         try:
             res = client.get_properties(
