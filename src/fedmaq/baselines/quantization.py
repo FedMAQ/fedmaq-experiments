@@ -1,4 +1,6 @@
-"""Quantization-based baseline compression hooks (FedPAQ, etc.)."""
+"""Quantization-based baseline compression hooks (FedPAQ, DAdaQuant)."""
+
+import math
 
 import numpy as np
 
@@ -14,7 +16,9 @@ class FedPAQCompressionHook(CompressionHook):
         Parameters
         ----------
         q : int
-            Number of quantization bits (default: 8).
+            Number of quantization *bits* (default: 8).
+            Each element is represented with ``q`` bits, giving
+            ``2^(q-1) - 1`` positive quantization levels.
         """
         self.q = q
 
@@ -28,12 +32,12 @@ class FedPAQCompressionHook(CompressionHook):
 
         Parameters
         ----------
-        deltas : List[np.ndarray]
+        deltas : list[np.ndarray]
             List of model weight updates (deltas).
 
         Returns
         -------
-        Tuple[List[np.ndarray], int]
+        tuple[list[np.ndarray], int]
             Quantized deltas and the estimated size in bytes.
         """
         quantized_deltas = []
@@ -56,9 +60,9 @@ class FedPAQCompressionHook(CompressionHook):
                 dequantized = (quantized / self.levels) * scale
                 quantized_deltas.append(dequantized.astype(np.float32))
 
-                # Estimate size: q bits per element + 4 bytes (Float32) for scale metadata
+                # Estimate size: q bits per element + 4 bytes (float32) for scale metadata
                 element_bits = d.size * self.q
-                total_bytes += int(np.ceil(element_bits / 8.0)) + 4
+                total_bytes += int(math.ceil(element_bits / 8.0)) + 4
             else:
                 quantized_deltas.append(d)
                 total_bytes += 4  # scale = 0.0
@@ -67,7 +71,19 @@ class FedPAQCompressionHook(CompressionHook):
 
 
 class DAdaQuantCompressionHook(CompressionHook):
-    """Doubly-adaptive quantization hook implementing DAdaQuant's client-side quantizer."""
+    """Doubly-adaptive quantization hook implementing DAdaQuant's client-side quantizer.
+
+    .. note::
+        The attribute ``q`` represents the number of quantization *levels per sign*
+        (symmetric around zero), NOT a bit-width. The total number of discrete levels
+        is ``2*q + 1`` (integers in [-q, q]).  Byte-size is estimated as
+        ``ceil(log2(2*q + 1))`` bits per element, which differs from FedPAQ where
+        ``q`` is a true bit-width.
+
+        This attribute is written at runtime by :class:`~fedmaq.core.client.GenericClient`
+        via ``compressor_hook.q = int(config["q"])`` when the server sends an updated
+        quantization level.
+    """
 
     def __init__(self, q: int = 8, rng: np.random.Generator | None = None) -> None:
         """Initialize the compression hook.
@@ -75,7 +91,8 @@ class DAdaQuantCompressionHook(CompressionHook):
         Parameters
         ----------
         q : int
-            Quantization level (default: 8).
+            Number of quantization *levels per sign* (default: 8).
+            The quantizer maps values to integers in [-q, q] (2q+1 total levels).
         rng : np.random.Generator | None
             Seeded NumPy random generator for reproducible stochastic rounding.
             If None, a default (unseeded) generator is used.
@@ -84,20 +101,23 @@ class DAdaQuantCompressionHook(CompressionHook):
         self.rng = rng if rng is not None else np.random.default_rng()
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
-        """Compress deltas using stochastic uniform quantization with self.q bins per sign.
+        """Compress deltas using stochastic uniform quantization with ``self.q`` bins per sign.
 
         Parameters
         ----------
-        deltas : List[np.ndarray]
+        deltas : list[np.ndarray]
             List of model weight updates (deltas).
 
         Returns
         -------
-        Tuple[List[np.ndarray], int]
+        tuple[list[np.ndarray], int]
             Quantized deltas and the estimated size in bytes.
         """
         quantized_deltas = []
         total_bytes = 0
+
+        # Bits needed to represent 2q+1 levels (e.g. q=8 → log2(17) ≈ 4.09 → 5 bits)
+        bits_per_element = math.ceil(math.log2(max(2, 2 * self.q + 1)))
 
         for d in deltas:
             if d.size == 0:
@@ -120,9 +140,9 @@ class DAdaQuantCompressionHook(CompressionHook):
                 dequantized = (quantized / self.q) * scale
                 quantized_deltas.append(dequantized.astype(np.float32))
 
-                # Estimate size: self.q bits per element + 4 bytes scale metadata
-                element_bits = d.size * self.q
-                total_bytes += int(np.ceil(element_bits / 8.0)) + 4
+                # Estimate size: bits_per_element bits per element + 4 bytes scale metadata
+                element_bits = d.size * bits_per_element
+                total_bytes += int(math.ceil(element_bits / 8.0)) + 4
             else:
                 quantized_deltas.append(d)
                 total_bytes += 4  # scale = 0.0

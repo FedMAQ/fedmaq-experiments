@@ -11,6 +11,7 @@ Supported partition modes:
 
 import json
 import os
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -47,6 +48,21 @@ TRANSFORMS = {
         ]
     ),
 }
+
+
+@lru_cache(maxsize=8)
+def _load_dataset_cached(dataset_name: str, train: bool) -> Dataset:
+    """Cached internal loader — call ``load_dataset`` instead.
+
+    The cache avoids repeated torchvision disk scans when the same dataset is
+    requested multiple times (e.g. once per sampled client in FedMAQ gradient
+    norm computation).  ``maxsize=8`` covers four datasets × two splits.
+
+    .. note::
+        Test monkeypatching must target ``load_dataset`` (the public function),
+        not this cached helper, to avoid stale cache entries across tests.
+    """
+    return load_dataset(dataset_name, train)
 
 
 def load_dataset(dataset_name: str, train: bool = True) -> Dataset:
@@ -231,7 +247,7 @@ def get_client_loader(
     train: bool = True,
 ) -> torch.utils.data.DataLoader:
     """Return PyTorch DataLoader for a specific client partition."""
-    dataset = load_dataset(dataset_name, train=train)
+    dataset = _load_dataset_cached(dataset_name, train)
     indices = client_indices_dict[str(client_id)]
     client_subset = Subset(dataset, indices)
     return torch.utils.data.DataLoader(
@@ -243,13 +259,13 @@ def get_server_loaders(
     dataset_name: str, public_indices: list[int], batch_size: int = 64
 ) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Return public unlabeled server dataset loader and central evaluation test loader."""
-    train_dataset = load_dataset(dataset_name, train=True)
+    train_dataset = _load_dataset_cached(dataset_name, True)
     public_subset = Subset(train_dataset, public_indices)
     public_loader = torch.utils.data.DataLoader(
         public_subset, batch_size=batch_size, shuffle=False
     )
 
-    test_dataset = load_dataset(dataset_name, train=False)
+    test_dataset = _load_dataset_cached(dataset_name, False)
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False
     )

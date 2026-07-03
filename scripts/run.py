@@ -2,6 +2,7 @@
 
 import logging
 import random
+from pathlib import Path
 
 import flwr as fl
 import hydra
@@ -14,17 +15,12 @@ from flwr.serverapp import ServerApp
 from flwr.simulation import run_simulation
 from omegaconf import DictConfig, OmegaConf
 
-from fedmaq.core.client import (
-    CompressionHook,
-    FedProxLossHook,
-    GenericClient,
-    LossHook,
-)
+from fedmaq.baselines import get_compressor_hook
+from fedmaq.core.client import GenericClient, get_loss_hook
 from fedmaq.core.evaluation import evaluate_fedmd_ensemble, evaluate_global_model
 from fedmaq.core.models import (
     DEVICE,
-    get_kd_student_model,
-    get_model,
+    get_client_model,
     get_model_parameters,
     set_model_parameters,
 )
@@ -75,9 +71,13 @@ def main(cfg: DictConfig) -> None:
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     logger.info(f"Running simulation with config:\n{OmegaConf.to_yaml(cfg)}")
 
-    # 1. Generate partitioning (Option A - Server reserve is always active)
+    alg_name: str = cfg.algorithm.name
+    dataset_name: str = cfg.dataset.name
+    num_classes: int = int(cfg.dataset.num_classes)
+
+    # 1. Generate partitioning (server reserve is always active)
     public_indices, client_indices_dict = generate_partition_indices(
-        dataset_name=cfg.dataset.name,
+        dataset_name=dataset_name,
         num_clients=cfg.experiment.num_clients,
         alpha=cfg.heterogeneity.alpha,
         num_public_samples=cfg.experiment.num_public_samples,
@@ -91,57 +91,30 @@ def main(cfg: DictConfig) -> None:
 
     # 3. Define client app components
     def client_fn(context: fl.app.Context) -> fl.client.Client:
-        # Retrieve partition ID
         partition_id = context.node_config["partition-id"]
 
-        # Get client dataset loader
         train_loader = get_client_loader(
-            dataset_name=cfg.dataset.name,
+            dataset_name=dataset_name,
             client_id=partition_id,
             client_indices_dict=client_indices_dict,
             batch_size=cfg.experiment.batch_size,
             train=True,
         )
-
-        # Get public dataset loader for distillation
         public_loader, _ = get_server_loaders(
-            cfg.dataset.name, public_indices, batch_size=cfg.experiment.batch_size
+            dataset_name, public_indices, batch_size=cfg.experiment.batch_size
         )
+        model = get_client_model(alg_name, dataset_name, num_classes)
 
-        # Get local model
-        if cfg.algorithm.name in ["fedkd", "fedmaq"]:
-            model = get_kd_student_model(cfg.dataset.name, cfg.dataset.num_classes)
-        else:  # fedavg, fedprox, fedpaq, dadaquant, fedmd, fedavg_kd, ablation variants
-            model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
-
-        # Determine loss hook based on algorithm
-        loss_hook = LossHook()
-        if cfg.algorithm.name == "fedprox":
-            loss_hook = FedProxLossHook(mu=cfg.algorithm.mu)
-
-        # Determine compressor hook based on algorithm
-        compressor_hook = CompressionHook()
-        if cfg.algorithm.name == "fedpaq":
-            from fedmaq.baselines.quantization import FedPAQCompressionHook
-
-            compressor_hook = FedPAQCompressionHook(q=cfg.algorithm.q)
-        elif cfg.algorithm.name in ["dadaquant", "fedmaq"]:
-            from fedmaq.baselines.quantization import DAdaQuantCompressionHook
-
-            compressor_hook = DAdaQuantCompressionHook(
-                q=int(cfg.algorithm.q_min),
-                rng=np.random.default_rng(cfg.seed),
-            )
-        elif cfg.algorithm.name == "fedkd":
-            from fedmaq.baselines.compression import FedKDCompressionHook
-
-            compressor_hook = FedKDCompressionHook(energy=float(cfg.algorithm.tmin))
-        # fedavg_kd uses identity CompressionHook (no client-side quantization)
+        alg_cfg_dict = OmegaConf.to_container(cfg.algorithm, resolve=True)
+        loss_hook = get_loss_hook(alg_name, alg_cfg_dict)
+        compressor_hook = get_compressor_hook(
+            alg_name, alg_cfg_dict, rng=np.random.default_rng(cfg.seed)
+        )
 
         return GenericClient(
             cid=str(partition_id),
             trainloader=train_loader,
-            testloader=train_loader,  # Client local evaluation evaluates on own data
+            testloader=train_loader,  # Client local eval uses own partition data
             model=model,
             loss_hook=loss_hook,
             compressor_hook=compressor_hook,
@@ -153,22 +126,14 @@ def main(cfg: DictConfig) -> None:
 
     # 4. Define server app components
     def server_fn(context: fl.app.Context) -> ServerAppComponents:
-        # Instantiate global model for initialization
-        if cfg.algorithm.name in ["fedkd", "fedmaq"]:
-            global_model = get_kd_student_model(
-                cfg.dataset.name, cfg.dataset.num_classes
-            )
-        else:  # fedavg, fedprox, fedpaq, dadaquant, fedmd, fedavg_kd, ablation variants
-            global_model = get_model(cfg.dataset.name, cfg.dataset.num_classes)
+        initial_model = get_client_model(alg_name, dataset_name, num_classes)
+        initial_parameters = ndarrays_to_parameters(get_model_parameters(initial_model))
 
-        initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
-
-        # Setup server-side evaluation test loader
+        # Server-side test loader (uses full held-out test split, not public reserve)
         _, test_loader = get_server_loaders(
-            cfg.dataset.name, public_indices, batch_size=cfg.experiment.batch_size
+            dataset_name, public_indices, batch_size=cfg.experiment.batch_size
         )
 
-        # Global evaluation function run on the server
         def evaluate_fn(
             server_round: int,
             parameters: fl.common.NDArrays,
@@ -177,45 +142,42 @@ def main(cfg: DictConfig) -> None:
             device_str = OmegaConf.select(cfg, "device", default=None)
             device = torch.device(device_str) if device_str else DEVICE
 
-            if cfg.algorithm.name == "fedmd":
-                from pathlib import Path
-
+            if alg_name == "fedmd":
                 persistence_dir = cfg.experiment.get(
-                    "persistence_dir", f".data_partitions/{cfg.algorithm.name}_models"
+                    "persistence_dir", f".data_partitions/{alg_name}_models"
                 )
                 model_dir = Path(persistence_dir)
                 client_paths = (
                     list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
                 )
-
                 if not client_paths:
                     # Fallback to random global model if no client models are saved yet
+                    eval_model = get_client_model(alg_name, dataset_name, num_classes)
                     return evaluate_global_model(
-                        global_model,
+                        eval_model,
                         test_loader,
-                        num_classes=cfg.dataset.num_classes,
+                        num_classes=num_classes,
                         device=device,
                     )
-
                 return evaluate_fedmd_ensemble(
                     client_paths=client_paths,
-                    dataset_name=cfg.dataset.name,
-                    num_classes=cfg.dataset.num_classes,
+                    dataset_name=dataset_name,
+                    num_classes=num_classes,
                     test_loader=test_loader,
                     device=device,
                 )
 
-            # Default FL path (FedAvg, FedProx, FedMAQ, etc.)
-            # Load weights
-            set_model_parameters(global_model, parameters)
+            # Default FL path: reconstruct a fresh model each round to avoid
+            # mutable-closure issues in async simulation scenarios.
+            eval_model = get_client_model(alg_name, dataset_name, num_classes)
+            set_model_parameters(eval_model, parameters)
             return evaluate_global_model(
-                global_model,
+                eval_model,
                 test_loader,
-                num_classes=cfg.dataset.num_classes,
+                num_classes=num_classes,
                 device=device,
             )
 
-        # Setup custom strategy
         strategy = TelemetryFedAvg(
             telemetry_manager=telemetry,
             config=cfg_dict,
@@ -232,7 +194,6 @@ def main(cfg: DictConfig) -> None:
         )
 
         server_config = ServerConfig(num_rounds=cfg.experiment.total_rounds)
-
         return ServerAppComponents(strategy=strategy, config=server_config)
 
     server_app = ServerApp(server_fn=server_fn)

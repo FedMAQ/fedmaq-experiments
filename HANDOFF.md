@@ -4,9 +4,9 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Field                  | Value                                                   |
 | ---------------------- | ------------------------------------------------------- |
-| **Last updated**       | 2026-07-02                                              |
-| **Last session focus** | Workspace Agent Context Pruning & Slash Workflows Setup |
-| **Active repo**        | fedmaq-experiments, fedmaq-manuscript                   |
+| **Last updated**       | 2026-07-03                                              |
+| **Last session focus** | experiments: Full Core Codebase Refactoring & Hardening |
+| **Active repo**        | fedmaq-experiments                                      |
 | **Blockers**           | None                                                    |
 
 ---
@@ -17,7 +17,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 2. Read this file end-to-end, then the **active task** in [Section 6](#6-implementation-queue).
 3. Load domain rules from [`fedmaq-experiments/.cursor/rules/`](.cursor/rules/) (canonical thesis context).
 4. Work in **one primary repo** per task; use sibling `AGENTS.md` for entrypoints.
-5. Before ending a session, run the **`agent-handoff` skill** (`.cursor/skills/agent-handoff/`) to update this file and recommend whether to hand off for clean context.
+5. Before ending a session, update this handoff file with changelog entries and recommendations for clean context.
 
 **Candidate:** Christian Joseph Bunyi | **Institution:** De La Salle University | **Advisor:** Fritz Flores
 
@@ -56,9 +56,9 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 4. Per-repo status
 
-### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Manuscript Aligned]
+### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Hook-Refactored]
 
-- **Status details:** See completed baselines and status in [baseline_registry.md](.cursor/project/baseline_registry.md).
+- **Status details:** See completed baselines and status in [baseline_registry.md](.cursor/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`).
 - **Pending:** Port remaining SOTA baselines (FedDistill, CFD — Sep 2026), Docker integration.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [Complete]
@@ -158,6 +158,14 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 - See the complete historical archive of session-to-session changes in [changelog.md](.cursor/project/changelog.md).
 
+### 2026-07-03 — Core Codebase Refactoring & Hardening
+
+- **Strategy Modularization**: Extracted algorithm-specific logic from `TelemetryFedAvg` inside `strategy.py` into distinct modular strategy hooks (`core/strategy_hooks/`), significantly reducing complexity (953 → 430 lines) and preparing the ground for Task 10/11 (FedDistill/CFD).
+- **Correctness Fix**: Fixed a critical estimation error in `DAdaQuantCompressionHook` where quantization levels were treated directly as bits, correcting upload bandwidth metrics.
+- **Performance Optimizations**: Added `lru_cache` to torchvision dataset loading to eliminate redundant disk reads across clients, and vectorised F1 evaluation metrics using `scikit-learn`.
+- **Typing & Robustness**: Aligned API signatures with Flower types, resolved bare exception swallows, locked CSV schemas, and resolved mutable closure risks in `evaluate_fn`.
+- **Test Validation**: Confirmed that all 20 environment, simulation, and hook unit tests pass cleanly after the refactoring.
+
 ### 2026-07-02 — Workspace Agent Context Pruning & Slash Workflows Setup
 
 - **Context Optimization**: Pruned redundant tables, literature specifications, and logs from `HANDOFF.md`, linking to active registries and stack readmes.
@@ -169,4 +177,4 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 11. Handoff recommendation
 
-When ending a session, the `agent-handoff` skill indicates whether you should hand off to a new agent session for clean context. Do not recommend handoff without updating Section 6 and the changelog.
+Recommend initiating a new clean agent session to clear the current conversation history. The next session should focus on **P7: WandB + Hydra Ingest Utilities** in the `fedmaq-analyses` repository.

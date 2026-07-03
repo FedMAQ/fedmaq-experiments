@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
 
 from fedmaq.core.models import get_model
@@ -16,28 +17,15 @@ logger = logging.getLogger(__name__)
 def compute_precision_recall_f1(
     all_preds: np.ndarray, all_labels: np.ndarray, num_classes: int = 10
 ) -> tuple[float, float, float]:
-    """Calculate macro-averaged Precision, Recall, and F1-score."""
-    precision_list = []
-    recall_list = []
-    f1_list = []
-    for c in range(num_classes):
-        tp = np.sum((all_preds == c) & (all_labels == c))
-        fp = np.sum((all_preds == c) & (all_labels != c))
-        fn = np.sum((all_preds != c) & (all_labels == c))
-
-        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (2 * prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
-
-        precision_list.append(prec)
-        recall_list.append(rec)
-        f1_list.append(f1)
-
-    return (
-        float(np.mean(precision_list)),
-        float(np.mean(recall_list)),
-        float(np.mean(f1_list)),
+    """Calculate macro-averaged Precision, Recall, and F1-score using sklearn."""
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        all_labels,
+        all_preds,
+        average="macro",
+        zero_division=0,
+        labels=list(range(num_classes)),
     )
+    return float(precision), float(recall), float(f1)
 
 
 def evaluate_global_model(

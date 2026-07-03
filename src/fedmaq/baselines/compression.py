@@ -4,11 +4,16 @@ import numpy as np
 
 from fedmaq.core.client import CompressionHook
 
+# Explicit Union type for compress_tensor return value.
+# Either a raw 1-tuple (uncompressed pass-through) or a 3-tuple of SVD factors.
+CompressedTensor = tuple[np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]
 
-def compress_tensor(tensor_np: np.ndarray, energy: float) -> tuple[np.ndarray, ...]:
-    """Compresses a tensor using SVD if its dimension is >= 2.
 
-    Returns either (U, Sigma, V) or (tensor_np,).
+def compress_tensor(tensor_np: np.ndarray, energy: float) -> CompressedTensor:
+    """Compress a tensor using SVD if its dimension is >= 2.
+
+    Returns either ``(U, Sigma, V)`` (compressed) or ``(tensor_np,)``
+    (pass-through for 1-D tensors or SVD failures).
     """
     orig_shape = tensor_np.shape
     if len(orig_shape) < 2:
@@ -45,7 +50,7 @@ def compress_tensor(tensor_np: np.ndarray, energy: float) -> tuple[np.ndarray, .
 
 
 def decompress_tensor(
-    compressed: tuple[np.ndarray, ...], orig_shape: tuple[int, ...]
+    compressed: CompressedTensor, orig_shape: tuple[int, ...]
 ) -> np.ndarray:
     """Decompress a compressed tensor representation back to its original shape."""
     if len(compressed) == 1:
@@ -74,12 +79,12 @@ class FedKDCompressionHook(CompressionHook):
 
         Parameters
         ----------
-        deltas : List[np.ndarray]
+        deltas : list[np.ndarray]
             List of model weight updates (deltas).
 
         Returns
         -------
-        Tuple[List[np.ndarray], int]
+        tuple[list[np.ndarray], int]
             Reconstructed deltas and the estimated size in bytes.
         """
         reconstructed_deltas = []
@@ -100,7 +105,7 @@ class FedKDCompressionHook(CompressionHook):
                 decompressed = decompress_tensor(compressed, orig_shape)
                 reconstructed_deltas.append(decompressed.astype(np.float32))
 
-                # Size calculation: (u.size + sigma.size + v.size) * 4 bytes
+                # Size calculation: (u.size + sigma.size + v.size) * 4 bytes (float32)
                 element_bytes = (u.size + sigma.size + v.size) * 4
                 total_bytes += element_bytes
             else:

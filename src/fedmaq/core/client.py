@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from flwr.common import Config
 
 from fedmaq.core.models import (
     DEVICE,
@@ -73,6 +74,13 @@ class CompressionHook:
         return deltas, byte_size
 
 
+def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:
+    """Factory: return the appropriate LossHook for the given algorithm name."""
+    if alg_name == "fedprox":
+        return FedProxLossHook(mu=float(alg_cfg.get("mu", 0.01)))
+    return LossHook()
+
+
 class GenericClient(fl.client.NumPyClient):
     """Extensible client wrapping a PyTorch model and executing local epochs."""
 
@@ -98,7 +106,7 @@ class GenericClient(fl.client.NumPyClient):
         self.device = torch.device(config.get("device", DEVICE))
         self.model.to(self.device)
 
-    def get_properties(self, config: dict[str, Any]) -> dict[str, Any]:
+    def get_properties(self, config: Config) -> dict[str, Any]:
         return {"cid": self.cid}
 
     def _get_decayed_lr(self, config: dict[str, Any]) -> float:
@@ -154,7 +162,7 @@ class GenericClient(fl.client.NumPyClient):
             # a. Pre-train on public dataset
             if self.public_loader is not None:
                 self.model.train()
-                for epoch in range(pub_pretrain_epochs):
+                for _ in range(pub_pretrain_epochs):
                     for images, labels in self.public_loader:
                         images, labels = images.to(self.device), labels.to(self.device)
                         optimizer.zero_grad()
@@ -165,7 +173,7 @@ class GenericClient(fl.client.NumPyClient):
 
             # b. Pre-train on private dataset
             self.model.train()
-            for epoch in range(priv_pretrain_epochs):
+            for _ in range(priv_pretrain_epochs):
                 for images, labels in self.trainloader:
                     images, labels = images.to(self.device), labels.to(self.device)
                     optimizer.zero_grad()
@@ -199,7 +207,7 @@ class GenericClient(fl.client.NumPyClient):
 
             # Digest Phase: L1 loss against public soft targets
             self.model.train()
-            for epoch in range(public_epochs):
+            for _ in range(public_epochs):
                 start_idx = 0
                 for images, _ in self.public_loader:
                     images = images.to(self.device)
@@ -223,7 +231,7 @@ class GenericClient(fl.client.NumPyClient):
             )
             ce_criterion = nn.CrossEntropyLoss()
             self.model.train()
-            for epoch in range(private_epochs):
+            for _ in range(private_epochs):
                 for images, labels in self.trainloader:
                     images, labels = images.to(self.device), labels.to(self.device)
                     optimizer.zero_grad()
@@ -303,7 +311,7 @@ class GenericClient(fl.client.NumPyClient):
         # 5. Local Training: Student-Teacher Mutual Distillation
         self.model.train()
         teacher_model.train()
-        for epoch in range(epochs):
+        for _ in range(epochs):
             for images, labels in self.trainloader:
                 images, labels = images.to(self.device), labels.to(self.device)
                 optimizer.zero_grad()

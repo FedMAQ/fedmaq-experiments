@@ -1,12 +1,23 @@
 """Telemetry manager for tracking metrics and logging to Weights & Biases."""
 
+import csv
+import json
 import logging
+import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import wandb
 
 logger = logging.getLogger(__name__)
+
+try:
+    from hydra.core.hydra_config import HydraConfig
+
+    _HYDRA_AVAILABLE = True
+except Exception:
+    _HYDRA_AVAILABLE = False
 
 
 class TelemetryManager:
@@ -21,23 +32,30 @@ class TelemetryManager:
         )
         self.run_name = exp_config.get("telemetry", {}).get("run_name", None)
         self.run = None
-        self.cumulative_bytes = 0
-        self.cumulative_time = 0.0
+
+        # Communication and time accumulators
+        self.cumulative_bytes: int = 0
+        self.cumulative_time: float = 0.0
+        self.cumulative_client_time: float = 0.0
+        self.cumulative_server_time: float = 0.0
 
         # Local tracking setup in Hydra's output directory, falling back to current dir
-        import os
-        from pathlib import Path
-
-        try:
-            from hydra.core.hydra_config import HydraConfig
-
-            self.log_dir = Path(HydraConfig.get().runtime.output_dir)
-        except Exception:
+        if _HYDRA_AVAILABLE:
+            try:
+                self.log_dir = Path(HydraConfig.get().runtime.output_dir)
+            except Exception:
+                self.log_dir = Path(os.getcwd())
+        else:
             self.log_dir = Path(os.getcwd())
 
         self.jsonl_path = self.log_dir / "experiment_log.jsonl"
         self.csv_path = self.log_dir / "experiment_log.csv"
-        self.csv_header_written = False
+
+        # Stable CSV field schema — captured on first write, held constant thereafter.
+        # Rows with missing keys are written as empty strings; extra keys are silently
+        # ignored. This prevents header duplication when algorithm-specific metrics
+        # (e.g. DAdaQuant q_t) appear only in certain rounds.
+        self._csv_fieldnames: list[str] | None = None
 
     def init_wandb(self) -> None:
         """Initialize WandB connection if enabled."""
@@ -88,12 +106,9 @@ class TelemetryManager:
         if "system/cumulative_time_sec" not in metrics:
             metrics["system/cumulative_time_sec"] = self.cumulative_time
 
-        # Accumulate client and server times if provided
+        # Accumulate client and server times
         client_time = metrics.get("system/client_sim_time_sec", 0.0)
         server_time = metrics.get("system/server_sim_time_sec", 0.0)
-        if not hasattr(self, "cumulative_client_time"):
-            self.cumulative_client_time = 0.0
-            self.cumulative_server_time = 0.0
         self.cumulative_client_time += client_time
         self.cumulative_server_time += server_time
         if "system/cumulative_client_time_sec" not in metrics:
@@ -117,9 +132,6 @@ class TelemetryManager:
         self._write_local_logs(metrics)
 
     def _write_local_logs(self, metrics: dict[str, Any]) -> None:
-        import csv
-        import json
-
         # 1. Write to JSONL
         try:
             with open(self.jsonl_path, "a", encoding="utf-8") as f:
@@ -127,15 +139,23 @@ class TelemetryManager:
         except Exception as exc:
             logger.warning(f"Failed to write to local JSONL log: {exc}")
 
-        # 2. Write to CSV
+        # 2. Write to CSV with a stable schema captured on first write.
+        #    Extra keys beyond the schema are silently dropped; missing keys
+        #    are written as empty strings to keep columns aligned.
         try:
-            fieldnames = sorted(list(metrics.keys()))
+            if self._csv_fieldnames is None:
+                self._csv_fieldnames = sorted(metrics.keys())
+
             file_exists = self.csv_path.exists()
             with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                if not file_exists or not self.csv_header_written:
+                writer = csv.DictWriter(
+                    f,
+                    fieldnames=self._csv_fieldnames,
+                    extrasaction="ignore",
+                    restval="",
+                )
+                if not file_exists:
                     writer.writeheader()
-                    self.csv_header_written = True
                 writer.writerow(metrics)
         except Exception as exc:
             logger.warning(f"Failed to write to local CSV log: {exc}")
