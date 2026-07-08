@@ -1,8 +1,3 @@
----
-description: Repository style and workflow preferences (living document)
-alwaysApply: true
----
-
 # Repo Preferences
 
 - No emojis in repository files; use `[Complete]`, `[Draft]`, `[x]`, `[ ]` instead.

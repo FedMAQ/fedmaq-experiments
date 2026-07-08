@@ -1,9 +1,3 @@
----
-description: Flower client/server/strategy conventions
-globs: src/**/*.py
-alwaysApply: false
----
-
 # Flower Patterns
 
 - Separate **client app**, **server app**, and **strategy** modules per baseline or phase.
@@ -11,4 +5,4 @@ alwaysApply: false
 - Use Flower's recommended `ClientApp` / `ServerApp` patterns for simulation.
 - Hydra configs select algorithm and dataset; avoid hardcoding hyperparameters in Python.
 
-Consult context7 MCP for current Flower API when unsure.
+If a Flower API documentation MCP server (e.g. `context7`) is configured, consult it when unsure of current Flower API surface.

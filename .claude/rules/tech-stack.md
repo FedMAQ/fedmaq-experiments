@@ -1,9 +1,3 @@
----
-description: Preferred tech stack for experiments (not a hard ban on other tools)
-globs: "**/*.py,pyproject.toml"
-alwaysApply: false
----
-
 # Tech Stack (Preferred)
 
 1. **Docker** — reproducible environments

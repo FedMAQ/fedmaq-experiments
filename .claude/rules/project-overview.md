@@ -1,8 +1,3 @@
----
-description: FedMAQ thesis title, objectives, and core hypothesis
-alwaysApply: true
----
-
 # Project Overview
 
 **Title:** FedMAQ: Communication-Efficient Federated Learning via Multi-Adaptive Quantization and Knowledge Distillation

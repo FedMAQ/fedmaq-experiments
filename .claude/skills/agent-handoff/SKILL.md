@@ -9,7 +9,7 @@ description: >-
 
 # Agent Handoff
 
-End-of-session workflow for the FedMAQ multi-repo workspace. Keeps [HANDOFF.md](../../HANDOFF.md) current and indicates if a new agent session is recommended for clean context.
+End-of-session workflow for the FedMAQ multi-repo workspace. Keeps [HANDOFF.md](../../../HANDOFF.md) current and indicates if a new agent session is recommended for clean context.
 
 ## When to run
 
@@ -33,10 +33,10 @@ From the current conversation and git status, determine:
 
 ### 2. Update HANDOFF.md
 
-Edit [HANDOFF.md](../../HANDOFF.md):
+Edit [HANDOFF.md](../../../HANDOFF.md):
 
 | Section                     | Update                                                          |
-| --------------------------- | --------------------------------------------------------------- |
+| ---------------------------- | ----------------------------------------------------------------|
 | Top table                   | `Last updated`, `Last session focus`, `Active repo`, `Blockers` |
 | Section 4 (per-repo status) | Move items from Pending → Done where applicable                 |
 | Section 6 (queue)           | Mark completed `[x]`; set **Current focus** to next task        |
@@ -71,6 +71,6 @@ After updating the file, tell the user:
 
 ## Related files
 
-- Canonical handoff: [HANDOFF.md](../../HANDOFF.md)
-- Domain rules: [`.cursor/rules/`](../rules/)
+- Canonical handoff: [HANDOFF.md](../../../HANDOFF.md)
+- Domain rules: [`.claude/rules/`](../../rules/)
 - Sibling AGENTS.md files reference HANDOFF.md from other repos

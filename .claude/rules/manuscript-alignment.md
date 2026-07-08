@@ -1,16 +1,10 @@
----
-description: Constraints for maintaining alignment between python code and LaTeX manuscript
-globs: src/**,conf/**,tests/**
-alwaysApply: true
----
-
 # Codebase-to-Manuscript Alignment Rules
 
-All agents and developers modifying this codebase must adhere strictly to the following mathematical, architectural, and hyperparameter constraints from the LaTeX thesis manuscript (located in the `fedmaq-manuscript` sibling repository):
+All agents and developers modifying this codebase must adhere strictly to the following mathematical, architectural, and hyperparameter constraints from the LaTeX thesis manuscript (located in the `fedmaq-manuscript` sibling repository).
 
 ## 1. Hyperparameter Synchronization
 
-Every benchmark experiment must use the hyperparameters specified in **Table 4.1** of the manuscript. These default parameters are captured in [default.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/experiment/default.yaml):
+Every benchmark experiment must use the hyperparameters specified in **Table 4.1** of the manuscript. These default parameters are captured in [conf/experiment/default.yaml](../../conf/experiment/default.yaml):
 
 - $K = 100$ total clients (or $200$ for FEMNIST)
 - $B = 64$ local batch size

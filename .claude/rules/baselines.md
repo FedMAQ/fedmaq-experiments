@@ -1,12 +1,6 @@
----
-description: Eight SOTA baseline targets for FedMAQ benchmarking
-globs: src/fedmaq/baselines/**
-alwaysApply: false
----
-
 # Baseline Algorithm Stack
 
-Implement under `src/fedmaq/baselines/` and track in `.cursor/project/baseline_registry.md`:
+Implement under `src/fedmaq/baselines/` and track in `.claude/project/baseline_registry.md`:
 
 | Group             | Algorithms        |
 | ----------------- | ----------------- |

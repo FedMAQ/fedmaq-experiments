@@ -1,9 +1,3 @@
----
-description: Four-phase ablation methodology and code layout
-globs: src/**,conf/**
-alwaysApply: false
----
-
 # Ablation Phases
 
 The ablation study progresses sequentially through the following four research phases. These represent conceptual and experimental milestones (configured dynamically via Hydra under `conf/`), not separate python packages:

@@ -1,9 +1,3 @@
----
-description: Required WandB telemetry and convergence curves
-globs: src/**
-alwaysApply: false
----
-
 # Evaluation Metrics
 
 Log to WandB for every experiment run:

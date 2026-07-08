@@ -1,9 +1,3 @@
----
-description: Hydra config composition and CLI overrides
-globs: conf/**/*.yaml
-alwaysApply: false
----
-
 # Hydra Config
 
 - Root config: `conf/config.yaml` composes `dataset/`, `heterogeneity/`, `algorithm/`, `experiment/` groups.

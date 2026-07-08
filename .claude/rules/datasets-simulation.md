@@ -1,9 +1,3 @@
----
-description: Vision datasets and heterogeneity simulation parameters
-globs: conf/**,src/**
-alwaysApply: false
----
-
 # Datasets and Simulation
 
 **Task:** Discrete image classification only.

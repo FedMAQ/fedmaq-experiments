@@ -9,8 +9,8 @@ conf/                 # Hydra config groups
 src/fedmaq/
   core/               # shared Flower simulation & telemetry utilities
   baselines/          # SOTA baseline implementations
-.cursor/rules/        # canonical thesis domain context for workspace
-.cursor/project/      # experiment + baseline registries
+.claude/rules/         # canonical thesis domain context for workspace
+.claude/project/      # experiment + baseline registries
 ```
 
 ## Setup
@@ -23,6 +23,6 @@ uv run pytest
 ## Agent onboarding
 
 1. Read [HANDOFF.md](HANDOFF.md) (workspace handoff; update via `agent-handoff` skill each session).
-2. Read [AGENTS.md](AGENTS.md). Domain rules live in `.cursor/rules/`.
+2. Read [AGENTS.md](AGENTS.md). Domain rules live in `.claude/rules/`.
 
 **Sibling repos:** `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-manuscript`, `fedmaq-presentations`.

@@ -15,7 +15,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 1. Open the **multi-root workspace** with all five `fedmaq-*` repos.
 2. Read this file end-to-end, then the **active task** in [Section 6](#6-implementation-queue).
-3. Load domain rules from [`fedmaq-experiments/.cursor/rules/`](.cursor/rules/) (canonical thesis context).
+3. Load domain rules from [`fedmaq-experiments/.claude/rules/`](.claude/rules/) (canonical thesis context).
 4. Work in **one primary repo** per task; use sibling `AGENTS.md` for entrypoints.
 5. Before ending a session, update this handoff file with changelog entries and recommendations for clean context.
 
@@ -27,15 +27,15 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Repo                                             | Role                              | Agent entry                                    | Domain rules                       |
 | ------------------------------------------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------- |
-| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB | [AGENTS.md](../fedmaq-experiments/AGENTS.md)   | **Owner:** `.cursor/rules/`        |
+| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB | [AGENTS.md](../fedmaq-experiments/AGENTS.md)   | **Owner:** `.claude/rules/`        |
 | [fedmaq-literature](../fedmaq-literature/)       | PDFs, RAG, summaries              | [AGENTS.md](../fedmaq-literature/AGENTS.md)    | `thesis-context.mdc` → experiments |
 | [fedmaq-analyses](../fedmaq-analyses/)           | Notebooks, thesis figures         | [AGENTS.md](../fedmaq-analyses/AGENTS.md)      | `thesis-context.mdc` → experiments |
-| [fedmaq-manuscript](../fedmaq-manuscript/)       | LaTeX thesis (template pending)   | [README.md](../fedmaq-manuscript/README.md)    | Defer until template               |
+| [fedmaq-manuscript](../fedmaq-manuscript/)       | LaTeX thesis (Active; Ch 1-4 integrated, Ch 5 drafted, Ch 6 pending) | [README.md](../fedmaq-manuscript/README.md)    | **Owner:** `.claude/rules/`        |
 | [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides                     | [AGENTS.md](../fedmaq-presentations/AGENTS.md) | `thesis-context.mdc` → experiments |
 
-**Cross-repo rule:** Non-experiments repos must not duplicate domain content. Index via `../fedmaq-experiments/.cursor/rules/`.
+**Cross-repo rule:** Non-experiments repos must not duplicate domain content. Index via `../fedmaq-experiments/.claude/rules/`.
 
-**Cursor layout:** Each repo owns `.cursor/rules/`, `.cursor/skills/`, `.cursor/project/`. No shared parent `.cursor/` (may add later).
+**Agent tooling layout (mixed state):** `fedmaq-experiments` and `fedmaq-manuscript` have migrated to Claude Code — each owns `.claude/rules/`, `.claude/skills/`, `.claude/project/` (experiments also has `.claude/commands/`). `fedmaq-literature`, `fedmaq-analyses`, and `fedmaq-presentations` have not migrated yet and still use `.cursor/rules/`, `.cursor/skills/`, `.cursor/project/`. Their `thesis-context.mdc` files still point at `fedmaq-experiments/.cursor/rules/`, which no longer exists — those pointers are stale until each repo's own migration pass updates them to `.claude/rules/`. No shared parent config directory across repos (may add later).
 
 ---
 
@@ -43,9 +43,9 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Topic              | Decision                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Thesis context     | `fedmaq-experiments/.cursor/rules/` (decomposed from `context.md`; `context.md` is human snapshot only) |
+| Thesis context     | `fedmaq-experiments/.claude/rules/` (decomposed from `context.md`; `context.md` is human snapshot only) |
 | Experiments layout | uv monorepo, code under `src/fedmaq/core/` and `src/fedmaq/baselines/`                                  |
-| Tooling            | Preferred stack in `tech-stack.mdc`; adopt extra libs (pandas, sklearn, etc.) when justified            |
+| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified              |
 | Literature PDFs    | Never parse `papers/*.pdf` in chat; pipeline + `markdown/` only                                         |
 | RAG boundaries     | Drafts → `*/drafts/`; human `approve` before promotion; no cross-repo auto-edits                        |
 | Embeddings         | **`Qwen/Qwen3-Embedding-4B`** local GPU; serialize GPU jobs (convert then embed)                        |
@@ -58,7 +58,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Hook-Refactored]
 
-- **Status details:** See completed baselines and status in [baseline_registry.md](.cursor/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), and hardened the codebase with performance, correctness, and robustness optimizations (partition resolution, model reuse, independent client seeds).
+- **Status details:** See completed baselines and status in [baseline_registry.md](.claude/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), and hardened the codebase with performance, correctness, and robustness optimizations (partition resolution, model reuse, independent client seeds).
 - **Pending:** Port remaining SOTA baselines (FedDistill, CFD — Sep 2026), Docker integration.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [Complete]
@@ -78,8 +78,8 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active]
 
-- **Completed:** Chapter 1–4 LaTeX template integrated, Claude audit revisions applied (benchmark scope, $\alpha$ grid, and Pilot study adjustments).
-- **Pending:** Draft final Chapters 5 and 6, incorporate proposal panel feedback post-defense.
+- **Completed:** Chapter 1–4 LaTeX template integrated, Claude audit revisions applied (benchmark scope, $\alpha$ grid, and Pilot study adjustments). Chapter 5 drafted.
+- **Pending:** Finalize Chapter 5, draft Chapter 6, incorporate proposal panel feedback post-defense.
 
 ---
 
@@ -136,11 +136,12 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 8. Agent conventions
 
-- **Registries** (`.cursor/project/*.md`): update when adding baselines, papers, figures, or runs.
-- **Rules** (`.cursor/rules/*.mdc`): concise; one concern per file; experiments owns domain rules.
-- **Skills** (`.cursor/skills/*/SKILL.md`): procedural workflows; prefer skills over ad-hoc commands.
-- **No emojis** in repo files (`repo-preferences.mdc`).
-- **MCP:** context7 (library docs), GitHub (issues/PRs) — user-level.
+- **Registries** (`.claude/project/*.md` in experiments/manuscript; `.cursor/project/*.md` in unmigrated siblings): update when adding baselines, papers, figures, or runs.
+- **Rules** (`.claude/rules/*.md` in experiments/manuscript; `.cursor/rules/*.mdc` in unmigrated siblings): concise; one concern per file; experiments owns domain rules.
+- **Skills** (`.claude/skills/*/SKILL.md` in experiments; `.cursor/skills/*/SKILL.md` in unmigrated siblings): procedural workflows; prefer skills over ad-hoc commands.
+- **Commands** (`.claude/commands/*.md` in experiments): slash-command workflows, e.g. `/add-baseline`, `/align-manuscript`, `/run-benchmark`.
+- **No emojis** in repo files (`repo-preferences.md`).
+- **MCP:** context7 (library docs), GitHub (issues/PRs) — user-level, if configured.
 
 ---
 
@@ -149,14 +150,22 @@ Create `.env` locally (gitignored); document new vars here when added.
 - Parse `papers/*.pdf` directly in Cursor chat.
 - Auto-promote LLM drafts to `summaries/` or `syntheses/` without human approve.
 - Let RAG agents edit experiments/analyses/manuscript code directly.
-- Duplicate thesis domain content outside `fedmaq-experiments/.cursor/rules/`.
+- Duplicate thesis domain content outside `fedmaq-experiments/.claude/rules/`.
 - Add top-level `reproductions/` packages; use `src/fedmaq/baselines/`.
 
 ---
 
 ## 10. Changelog
 
-- See the complete historical archive of session-to-session changes in [changelog.md](.cursor/project/changelog.md).
+- See the complete historical archive of session-to-session changes in [changelog.md](.claude/project/changelog.md).
+
+### 2026-07-09 — Cursor to Claude Code Migration (experiments + manuscript)
+
+- **Tooling migration:** Replaced Cursor config with Claude Code equivalents in `fedmaq-experiments` and `fedmaq-manuscript`. `.cursor/rules/*.mdc` → `.claude/rules/*.md` (frontmatter stripped, `agent-workflows.mdc` rewritten as `agent-delegation.md` with Claude-Code-native delegation guidance instead of Cursor subagent names), `.cursor/skills/*` → `.claude/skills/*`, `.cursor/project/*` → `.claude/project/*`, `.agents/workflows/*.md` → `.claude/commands/*.md` slash commands.
+- **New entry point:** Both repos now have `.claude/CLAUDE.md`, which `@import`s the modular rule files (imports are unconditional, unlike Cursor's `alwaysApply`/`globs` scoping — noted explicitly in each CLAUDE.md).
+- **Cross-repo docs updated:** `HANDOFF.md` and `AGENTS.md` now point at `.claude/` locations for experiments and manuscript. `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-presentations` are unmigrated; their `thesis-context.mdc` pointers to the old `fedmaq-experiments/.cursor/rules/` are now stale until their own future migration.
+- **Deleted:** `.cursor/` and `.agents/` in `fedmaq-experiments` and `fedmaq-manuscript` (Cursor config fully replaced, not kept in parallel).
+- **Adjacent cleanup:** Fixed stale manuscript status in the workspace map (was "template pending", corrected to reflect Ch 1-4 integrated/Ch 5 drafted/Ch 6 pending); fixed manuscript README's chapter list to include Ch 5-6.
 
 ### 2026-07-03 — Codebase Hardening, Optimization & Correctness (Refactor Session)
 
