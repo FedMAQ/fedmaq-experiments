@@ -157,45 +157,7 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 10. Changelog
 
-- See the complete historical archive of session-to-session changes in [changelog.md](.claude/project/changelog.md).
-
-### 2026-07-09 — CLAUDE.md Relocation to Repo Root and AGENTS.md Removal
-
-- **Entry point moved:** `.claude/CLAUDE.md` → root `CLAUDE.md` in both `fedmaq-experiments` and `fedmaq-manuscript` — more discoverable location, and `@import` paths now resolve relative to repo root instead of `.claude/`.
-- **Lean CLAUDE.md:** In experiments, only the 4 rule files that were `alwaysApply: true` under the old Cursor setup are `@import`ed (`project-overview.md`, `repo-preferences.md`, `manuscript-alignment.md`, `agent-delegation.md`), plus `HANDOFF.md`. The remaining 7 task-specific rule files are listed in a routing table (path + one-line trigger) instead of being unconditionally imported, restoring the conditional-loading behavior Cursor's `globs`/`alwaysApply: false` used to provide.
-- **`AGENTS.md` removed** (experiments only — manuscript never had one): its resource-index content is now redundant since skills/commands are auto-discovered by Claude Code and registries are linked directly from the skills/commands that use them. The workspace map's "Agent entry" for experiments now points at `CLAUDE.md` instead.
-
-### 2026-07-09 — Cursor to Claude Code Migration (experiments + manuscript)
-
-- **Tooling migration:** Replaced Cursor config with Claude Code equivalents in `fedmaq-experiments` and `fedmaq-manuscript`. `.cursor/rules/*.mdc` → `.claude/rules/*.md` (frontmatter stripped, `agent-workflows.mdc` rewritten as `agent-delegation.md` with Claude-Code-native delegation guidance instead of Cursor subagent names), `.cursor/skills/*` → `.claude/skills/*`, `.cursor/project/*` → `.claude/project/*`, `.agents/workflows/*.md` → `.claude/commands/*.md` slash commands.
-- **New entry point:** Both repos now have `.claude/CLAUDE.md`, which `@import`s the modular rule files (imports are unconditional, unlike Cursor's `alwaysApply`/`globs` scoping — noted explicitly in each CLAUDE.md; later superseded same-day, see entry above).
-- **Cross-repo docs updated:** `HANDOFF.md` and `README.md` now point at `.claude/` locations for experiments and manuscript (`AGENTS.md` itself was later removed from experiments, see the entry above). `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-presentations` are unmigrated; their `thesis-context.mdc` pointers to the old `fedmaq-experiments/.cursor/rules/` are now stale until their own future migration.
-- **Deleted:** `.cursor/` and `.agents/` in `fedmaq-experiments` and `fedmaq-manuscript` (Cursor config fully replaced, not kept in parallel).
-- **Adjacent cleanup:** Fixed stale manuscript status in the workspace map (was "template pending", corrected to reflect Ch 1-4 integrated/Ch 5 drafted/Ch 6 pending); fixed manuscript README's chapter list to include Ch 5-6.
-
-### 2026-07-03 — Codebase Hardening, Optimization & Correctness (Refactor Session)
-
-- **Partition Resolution Optimization**: Bypassed synchronous `client.get_properties()` RPC queries and 5s timeouts in strategy hooks (`dadaquant.py` and `fedmaq.py`) by checking `cid_str.isdigit()` and validating against client counts.
-- **Ensemble Evaluation Memory Optimization**: Reduced PyTorch allocation and memory overhead in FedMD evaluation (`evaluation.py`) by instantiating the model once outside the checkpoint loop and reusing it.
-- **Stochastic Rounding Correctness**: Seeded each client's random number generator using `cfg.seed + partition_id` in `run.py`, ensuring mathematically independent stochastic rounding across clients while remaining fully reproducible.
-- **Telemetry Robustness**: Guarded `import wandb` in `telemetry.py` to prevent import crashes when the library is not installed, and pre-populated the CSV header with a stable canonical column order.
-- **Safe Device Config Resolution**: Handled explicit `null` / `None` device definitions in configurations across client and strategy hooks.
-- **Validation**: Executed test suite (20/20 tests passed) and ran end-to-end simulation dry runs to verify changes.
-
-### 2026-07-03 — Core Codebase Refactoring & Hardening
-
-- **Strategy Modularization**: Extracted algorithm-specific logic from `TelemetryFedAvg` inside `strategy.py` into distinct modular strategy hooks (`core/strategy_hooks/`), significantly reducing complexity (953 → 430 lines) and preparing the ground for Task 10/11 (FedDistill/CFD).
-- **Correctness Fix**: Fixed a critical estimation error in `DAdaQuantCompressionHook` where quantization levels were treated directly as bits, correcting upload bandwidth metrics.
-- **Performance Optimizations**: Added `lru_cache` to torchvision dataset loading to eliminate redundant disk reads across clients, and vectorised F1 evaluation metrics using `scikit-learn`.
-- **Typing & Robustness**: Aligned API signatures with Flower types, resolved bare exception swallows, locked CSV schemas, and resolved mutable closure risks in `evaluate_fn`.
-- **Test Validation**: Confirmed that all 20 environment, simulation, and hook unit tests pass cleanly after the refactoring.
-
-### 2026-07-02 — Workspace Agent Context Pruning & Slash Workflows Setup
-
-- **Context Optimization**: Pruned redundant tables, literature specifications, and logs from `HANDOFF.md`, linking to active registries and stack readmes.
-- **Workflow Automation**: Defined and automated project-scoped triggers for `/align-manuscript`, `/add-baseline`, and `/run-benchmark` under `.agents/workflows/`.
-- **Rule Consolidation**: Deleted redundant `.cursor/rules/hyperparameters.mdc`, deferring default configs and constraints to `manuscript-alignment.mdc`.
-- **Test Integrity**: Executed `uv run pytest` to ensure all 20 environment and simulation tests pass successfully.
+- Full session-to-session history lives in [changelog.md](.claude/project/changelog.md) (includes the 2026-07-09 Cursor→Claude Code migration and CLAUDE.md relocation, plus the 2026-07-03 hardening/refactor sessions).
 
 ---
 
