@@ -4,8 +4,8 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 | Field                  | Value                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------ |
-| **Last updated**       | 2026-07-03                                                                           |
-| **Last session focus** | experiments: Codebase Hardening, Performance Optimization & Mathematical Correctness |
+| **Last updated**       | 2026-07-09                                                                           |
+| **Last session focus** | experiments + manuscript: Cursor to Claude Code migration and doc restructure        |
 | **Active repo**        | fedmaq-experiments                                                                   |
 | **Blockers**           | None                                                                                 |
 
@@ -16,7 +16,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 1. Open the **multi-root workspace** with all five `fedmaq-*` repos.
 2. Read this file end-to-end, then the **active task** in [Section 6](#6-implementation-queue).
 3. Load domain rules from [`fedmaq-experiments/.claude/rules/`](.claude/rules/) (canonical thesis context).
-4. Work in **one primary repo** per task; use sibling `AGENTS.md` for entrypoints.
+4. Work in **one primary repo** per task; use the "Agent entry" column in the workspace map below for entrypoints (`CLAUDE.md` for experiments/manuscript, `AGENTS.md` for unmigrated siblings).
 5. Before ending a session, update this handoff file with changelog entries and recommendations for clean context.
 
 **Candidate:** Christian Joseph Bunyi | **Institution:** De La Salle University | **Advisor:** Fritz Flores
@@ -25,13 +25,13 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 2. Workspace map
 
-| Repo                                             | Role                              | Agent entry                                    | Domain rules                       |
-| ------------------------------------------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------- |
-| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB | [AGENTS.md](../fedmaq-experiments/AGENTS.md)   | **Owner:** `.claude/rules/`        |
-| [fedmaq-literature](../fedmaq-literature/)       | PDFs, RAG, summaries              | [AGENTS.md](../fedmaq-literature/AGENTS.md)    | `thesis-context.mdc` → experiments |
-| [fedmaq-analyses](../fedmaq-analyses/)           | Notebooks, thesis figures         | [AGENTS.md](../fedmaq-analyses/AGENTS.md)      | `thesis-context.mdc` → experiments |
+| Repo                                             | Role                                                                 | Agent entry                                    | Domain rules                       |
+| ------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB                                    | [CLAUDE.md](../fedmaq-experiments/CLAUDE.md)   | **Owner:** `.claude/rules/`        |
+| [fedmaq-literature](../fedmaq-literature/)       | PDFs, RAG, summaries                                                 | [AGENTS.md](../fedmaq-literature/AGENTS.md)    | `thesis-context.mdc` → experiments |
+| [fedmaq-analyses](../fedmaq-analyses/)           | Notebooks, thesis figures                                            | [AGENTS.md](../fedmaq-analyses/AGENTS.md)      | `thesis-context.mdc` → experiments |
 | [fedmaq-manuscript](../fedmaq-manuscript/)       | LaTeX thesis (Active; Ch 1-4 integrated, Ch 5 drafted, Ch 6 pending) | [README.md](../fedmaq-manuscript/README.md)    | **Owner:** `.claude/rules/`        |
-| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides                     | [AGENTS.md](../fedmaq-presentations/AGENTS.md) | `thesis-context.mdc` → experiments |
+| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides                                                        | [AGENTS.md](../fedmaq-presentations/AGENTS.md) | `thesis-context.mdc` → experiments |
 
 **Cross-repo rule:** Non-experiments repos must not duplicate domain content. Index via `../fedmaq-experiments/.claude/rules/`.
 
@@ -45,7 +45,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Thesis context     | `fedmaq-experiments/.claude/rules/` (decomposed from `context.md`; `context.md` is human snapshot only) |
 | Experiments layout | uv monorepo, code under `src/fedmaq/core/` and `src/fedmaq/baselines/`                                  |
-| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified              |
+| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified             |
 | Literature PDFs    | Never parse `papers/*.pdf` in chat; pipeline + `markdown/` only                                         |
 | RAG boundaries     | Drafts → `*/drafts/`; human `approve` before promotion; no cross-repo auto-edits                        |
 | Embeddings         | **`Qwen/Qwen3-Embedding-4B`** local GPU; serialize GPU jobs (convert then embed)                        |
@@ -159,11 +159,17 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 - See the complete historical archive of session-to-session changes in [changelog.md](.claude/project/changelog.md).
 
+### 2026-07-09 — CLAUDE.md Relocation to Repo Root and AGENTS.md Removal
+
+- **Entry point moved:** `.claude/CLAUDE.md` → root `CLAUDE.md` in both `fedmaq-experiments` and `fedmaq-manuscript` — more discoverable location, and `@import` paths now resolve relative to repo root instead of `.claude/`.
+- **Lean CLAUDE.md:** In experiments, only the 4 rule files that were `alwaysApply: true` under the old Cursor setup are `@import`ed (`project-overview.md`, `repo-preferences.md`, `manuscript-alignment.md`, `agent-delegation.md`), plus `HANDOFF.md`. The remaining 7 task-specific rule files are listed in a routing table (path + one-line trigger) instead of being unconditionally imported, restoring the conditional-loading behavior Cursor's `globs`/`alwaysApply: false` used to provide.
+- **`AGENTS.md` removed** (experiments only — manuscript never had one): its resource-index content is now redundant since skills/commands are auto-discovered by Claude Code and registries are linked directly from the skills/commands that use them. The workspace map's "Agent entry" for experiments now points at `CLAUDE.md` instead.
+
 ### 2026-07-09 — Cursor to Claude Code Migration (experiments + manuscript)
 
 - **Tooling migration:** Replaced Cursor config with Claude Code equivalents in `fedmaq-experiments` and `fedmaq-manuscript`. `.cursor/rules/*.mdc` → `.claude/rules/*.md` (frontmatter stripped, `agent-workflows.mdc` rewritten as `agent-delegation.md` with Claude-Code-native delegation guidance instead of Cursor subagent names), `.cursor/skills/*` → `.claude/skills/*`, `.cursor/project/*` → `.claude/project/*`, `.agents/workflows/*.md` → `.claude/commands/*.md` slash commands.
-- **New entry point:** Both repos now have `.claude/CLAUDE.md`, which `@import`s the modular rule files (imports are unconditional, unlike Cursor's `alwaysApply`/`globs` scoping — noted explicitly in each CLAUDE.md).
-- **Cross-repo docs updated:** `HANDOFF.md` and `AGENTS.md` now point at `.claude/` locations for experiments and manuscript. `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-presentations` are unmigrated; their `thesis-context.mdc` pointers to the old `fedmaq-experiments/.cursor/rules/` are now stale until their own future migration.
+- **New entry point:** Both repos now have `.claude/CLAUDE.md`, which `@import`s the modular rule files (imports are unconditional, unlike Cursor's `alwaysApply`/`globs` scoping — noted explicitly in each CLAUDE.md; later superseded same-day, see entry above).
+- **Cross-repo docs updated:** `HANDOFF.md` and `README.md` now point at `.claude/` locations for experiments and manuscript (`AGENTS.md` itself was later removed from experiments, see the entry above). `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-presentations` are unmigrated; their `thesis-context.mdc` pointers to the old `fedmaq-experiments/.cursor/rules/` are now stale until their own future migration.
 - **Deleted:** `.cursor/` and `.agents/` in `fedmaq-experiments` and `fedmaq-manuscript` (Cursor config fully replaced, not kept in parallel).
 - **Adjacent cleanup:** Fixed stale manuscript status in the workspace map (was "template pending", corrected to reflect Ch 1-4 integrated/Ch 5 drafted/Ch 6 pending); fixed manuscript README's chapter list to include Ch 5-6.
 
@@ -195,4 +201,4 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 11. Handoff recommendation
 
-Recommend initiating a new clean agent session to clear the current conversation history. The next session should focus on **P7: WandB + Hydra Ingest Utilities** in the `fedmaq-analyses` repository.
+**Recommend handoff.** The Cursor-to-Claude-Code migration and CLAUDE.md restructure for `fedmaq-experiments` and `fedmaq-manuscript` are complete: `.cursor/`/`.agents/` removed, `CLAUDE.md` at repo root in both repos, `AGENTS.md` retired, tests passing (20/20). This is a clean, self-contained stopping point — initiate a new agent session to clear context. The next session should focus on **P7: WandB + Hydra Ingest Utilities** in the `fedmaq-analyses` repository (unchanged from before this session).

@@ -23,6 +23,6 @@ uv run pytest
 ## Agent onboarding
 
 1. Read [HANDOFF.md](HANDOFF.md) (workspace handoff; update via `agent-handoff` skill each session).
-2. Read [AGENTS.md](AGENTS.md). Domain rules live in `.claude/rules/`.
+2. Read [CLAUDE.md](CLAUDE.md), the agent entry point. Domain rules live in `.claude/rules/`.
 
 **Sibling repos:** `fedmaq-literature`, `fedmaq-analyses`, `fedmaq-manuscript`, `fedmaq-presentations`.
