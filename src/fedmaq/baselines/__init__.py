@@ -56,11 +56,17 @@ def get_compressor_hook(
     """
     if alg_name == "fedpaq":
         return FedPAQCompressionHook(q=int(alg_cfg.get("q", 8)))
-    elif alg_name in {"dadaquant", "fedmaq"}:
+    elif alg_name == "dadaquant":
         return DAdaQuantCompressionHook(
             q=int(alg_cfg.get("q_min", 1)),
             rng=rng,
         )
+    elif alg_name == "fedmaq":
+        # FedMAQ's q is a true bit-width from the manuscript's discrete set
+        # {1,...,8,16,32} (see compute_fedmaq_q_k_t), so it must use FedPAQ's
+        # bit-width-faithful symmetric quantizer, not DAdaQuant's levels-per-sign
+        # semantics (which would badly misinterpret e.g. q=16 as 33 levels).
+        return FedPAQCompressionHook(q=int(alg_cfg.get("q_min", 2)))
     elif alg_name == "fedkd":
         return FedKDCompressionHook(energy=float(alg_cfg.get("tmin", 0.5)))
     # fedavg, fedprox, fedmd, fedavg_kd: identity (uncompressed float32)

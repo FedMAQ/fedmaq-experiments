@@ -14,7 +14,7 @@ weight_decay: 0.0001      # lambda (SGD weight decay, 10^-4)
 momentum: 0.9             # beta (SGD momentum)
 client_fraction: 0.1      # C (10% per round)
 total_rounds: 10          # Preliminary staging value
-num_public_samples: 200   # |D_pub| per manuscript §4.3, Table 4.1
+num_public_samples: 1600  # |D_pub| per manuscript §4.3, Table 4.1
 client_gpus: 0.2          # GPU resource fraction allocated per client simulator
 
 # Bandwidth and Compute settings (uniform)

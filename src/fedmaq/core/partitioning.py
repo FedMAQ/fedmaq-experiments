@@ -215,13 +215,35 @@ def generate_partition_indices(
     public_indices: list[int] = []
     class_indices = {c: np.where(labels == c)[0] for c in range(num_classes)}
 
-    samples_per_class = num_public_samples // num_classes
+    # Distribute num_public_samples as evenly as possible across classes: base
+    # count per class plus one extra for the first `remainder` classes, so the
+    # pool totals exactly num_public_samples (when enough samples are available)
+    # instead of silently dropping num_public_samples % num_classes samples.
+    base_per_class = num_public_samples // num_classes
+    remainder = num_public_samples % num_classes
     for c in range(num_classes):
+        target = base_per_class + (1 if c < remainder else 0)
         n_available = len(class_indices[c])
-        n_select = min(samples_per_class, n_available)
+        n_select = min(target, n_available)
         selected = rng.choice(class_indices[c], size=n_select, replace=False)
         public_indices.extend(selected.tolist())
         class_indices[c] = np.setdiff1d(class_indices[c], selected)
+
+    # Top up from classes with remaining capacity if any class was short on
+    # samples, so the pool still reaches num_public_samples when feasible.
+    shortfall = num_public_samples - len(public_indices)
+    if shortfall > 0:
+        for c in range(num_classes):
+            if shortfall <= 0:
+                break
+            n_available = len(class_indices[c])
+            if n_available == 0:
+                continue
+            n_select = min(shortfall, n_available)
+            selected = rng.choice(class_indices[c], size=n_select, replace=False)
+            public_indices.extend(selected.tolist())
+            class_indices[c] = np.setdiff1d(class_indices[c], selected)
+            shortfall -= n_select
 
     # Step 2: Partition remaining data
     if partition == "writer":

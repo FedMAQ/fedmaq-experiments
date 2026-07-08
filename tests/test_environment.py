@@ -143,6 +143,35 @@ def test_writer_based_partitioning(mock_dataset, tmp_path, monkeypatch):
         assert client_dict1[k] == client_dict2[k]
 
 
+def test_public_pool_exact_size_with_remainder(tmp_path, monkeypatch):
+    """Public pool must total exactly num_public_samples even when it doesn't
+    divide evenly across classes (e.g. FEMNIST's 62 classes), instead of
+    silently dropping num_public_samples % num_classes samples."""
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    # 7 classes, 20 samples each (140 total) — 17 % 7 != 0, exercising the remainder path.
+    num_classes = 7
+    samples_per_class = 20
+    data = torch.randn(num_classes * samples_per_class, 1, 4, 4)
+    labels = torch.cat(
+        [torch.full((samples_per_class,), c) for c in range(num_classes)]
+    )
+    mock_ds = TensorDataset(data, labels)
+    mock_ds.targets = labels
+    monkeypatch.setattr(
+        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
+    )
+
+    from fedmaq.core.partitioning import generate_partition_indices
+
+    num_public = 17  # 17 // 7 = 2 base, remainder = 3
+    pub_idx, client_dict = generate_partition_indices(
+        "mnist", num_clients=2, alpha=0.5, num_public_samples=num_public, seed=42
+    )
+
+    assert len(pub_idx) == num_public
+
+
 def test_client_server_loaders(mock_dataset):
     """Test retrieval of client and server PyTorch DataLoaders."""
     client_dict = {"0": [0, 1, 2], "1": [3, 4]}
@@ -1115,6 +1144,59 @@ def test_compute_fedmaq_q_k_t():
         tau_n=0.6,
     )
     assert q_th_c == 2
+
+
+def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
+    """Manuscript §4.2's Q = {1,...,8,16,32} must always be respected, including
+    when the soft-target range or memory cap would otherwise land off-set."""
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+    from fedmaq.core.strategy_hooks.fedmaq import DEFAULT_BIT_WIDTHS
+
+    # Soft target interpolates within [q_min, q_max] = [1, 20]; formulation 0 forces
+    # q_hat = q_max = 20, which is not in Q and must snap to the nearest member (16).
+    q = compute_fedmaq_q_k_t(
+        c_k=1_000_000.0,  # effectively unconstrained memory
+        c_unit=1.0,
+        g_k=0.5,
+        g_max=1.0,
+        n_k=100,
+        n_max=200,
+        formulation=0,
+        q_min=1,
+        q_max=20,
+    )
+    assert q == 16
+    assert q in DEFAULT_BIT_WIDTHS
+
+    # A generous memory/c_unit ratio should be able to reach the 32-bit escape tier
+    # once snapped down to the nearest permissible value <= the raw capacity ratio.
+    q_capped = compute_fedmaq_q_k_t(
+        c_k=40.0,
+        c_unit=1.0,  # raw ratio = 40 -> nearest permissible value <= 40 is 32
+        g_k=0.5,
+        g_max=1.0,
+        n_k=100,
+        n_max=200,
+        formulation=0,
+        q_min=1,
+        q_max=32,
+    )
+    assert q_capped == 32
+
+    # Every output across formulations/configs must always land in the permissible set.
+    for formulation in range(5):
+        result = compute_fedmaq_q_k_t(
+            c_k=16384.0,
+            c_unit=2048.0,
+            g_k=0.7,
+            g_max=1.0,
+            n_k=150,
+            n_max=200,
+            formulation=formulation,
+            q_min=2,
+            q_max=8,
+        )
+        assert result in DEFAULT_BIT_WIDTHS
 
 
 def test_compute_dadaquant_client_q():

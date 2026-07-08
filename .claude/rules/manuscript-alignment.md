@@ -15,7 +15,7 @@ Every benchmark experiment must use the hyperparameters specified in **Table 4.1
 - $\lambda = 10^{-4}$ SGD weight decay
 - $C = 0.1$ client fraction per round
 - $R = 100$ communication rounds
-- $\|D_{pub}\| = 200$ server-side proxy dataset size
+- $\|D_{pub}\| = 1600$ server-side proxy dataset size
 
 ## 2. Quantization Soft Quality Target Formulas
 
@@ -28,6 +28,8 @@ Ensure that any precision-scaling evaluations strictly match the five mathematic
 5. **Formulation 4**: Threshold-Based Staged Rule (piecewise discrete mapping to $q_max$, $q_mid$, or $q_min$ using thresholds $\tau_g, \tau_n$)
 
 The outer memory constraint must always be active: $q_k^{(t)} = \min(Q_k^{max}, \hat{q}_k^{(t)})$ where $Q_k^{max} = \lfloor c_k / c_{unit} \rfloor$.
+
+The final bit-width (both $\hat{q}_k^{(t)}$ and $Q_k^{max}$) must snap to the manuscript's permissible discrete set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32\}$, not an arbitrary continuous integer.
 
 ## 3. Decoupled Simulated Time & Overheads
 
@@ -44,7 +46,7 @@ The simulation time logged in `TelemetryFedAvg` must track:
 
 Any mathematical or simulation configuration updates must be accompanied by comprehensive tests verifying correctness and determinism, particularly for:
 
-- Stochastic rounding (DAdaQuant and FedMAQ)
+- Stochastic rounding (DAdaQuant); symmetric uniform quantization (FedPAQ and FedMAQ, which share bit-width semantics)
 - Formulation output values
 - Decoupled telemetry calculations
 - Deterministic data partitioning (Dirichlet skew and FEMNIST writer chunking)

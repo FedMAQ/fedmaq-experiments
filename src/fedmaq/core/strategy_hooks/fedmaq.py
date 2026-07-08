@@ -35,6 +35,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Permissible bit-width set per manuscript §4.2: Q = {1,...,8, 16, 32}.
+# 16/32-bit tiers are effectively "escape" precision levels for well-resourced
+# clients; reachability depends on c_unit and configured memory range (see
+# conf/algorithm/fedmaq.yaml).
+DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
+
+
+def _snap_nearest(value: float, bit_widths: tuple[int, ...]) -> int:
+    """Snap ``value`` to the nearest permissible bit-width in ``bit_widths``."""
+    return min(bit_widths, key=lambda b: abs(b - value))
+
+
+def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
+    """Snap ``value`` down to the largest permissible bit-width <= ``value``."""
+    eligible = [b for b in bit_widths if b <= value]
+    return max(eligible) if eligible else min(bit_widths)
+
 
 def compute_fedmaq_q_k_t(
     c_k: float,
@@ -51,14 +68,21 @@ def compute_fedmaq_q_k_t(
     lambda_val: float = 1.0,
     tau_g: float = 0.5,
     tau_n: float = 0.5,
+    bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
 ) -> int:
-    """Compute client-specific quantization bit-width for FedMAQ."""
+    """Compute client-specific quantization bit-width for FedMAQ.
+
+    The final result is always a member of ``bit_widths`` (manuscript §4.2's
+    permissible set Q), not an arbitrary continuous integer.
+    """
     # Normalized signals
     tilde_g = g_k / g_max if g_max > 0.0 else 0.0
     tilde_n = n_k / n_max if n_max > 0.0 else 0.0
 
-    # Tier 1 hard cap: Q_max = floor(c_k / c_unit)
-    q_max_capped = int(max(1, np.floor(c_k / c_unit)))
+    # Tier 1 hard cap: Q_max = floor(c_k / c_unit), snapped down to the nearest
+    # permissible bit-width so memory-limited clients never exceed a physically
+    # unquantizable precision level.
+    q_max_capped = _snap_floor(max(1.0, np.floor(c_k / c_unit)), bit_widths)
 
     # Tier 2 soft quality target based on the formulation
     q_hat: int | float
@@ -90,11 +114,14 @@ def compute_fedmaq_q_k_t(
     else:
         q_hat = q_min
 
-    # Clamp intermediate result to valid range and convert to int
-    q_hat = int(max(q_min, min(q_max, int(q_hat))))
+    # Clamp intermediate result to the configured [q_min, q_max] soft-target range,
+    # then snap to the nearest permissible bit-width in the manuscript's set Q.
+    q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
+    q_hat_snapped = _snap_nearest(q_hat, bit_widths)
     # Tier-1 hard cap: memory-limited clients may receive fewer bits than q_min.
     # This is intentional — the physical bound wins over the soft quality target.
-    return int(min(q_max_capped, q_hat))
+    # Both operands are already members of `bit_widths`, so the min is too.
+    return min(q_max_capped, q_hat_snapped)
 
 
 def _resolve_partition_id(
@@ -170,6 +197,7 @@ class FedMAQHook(StrategyHook):
         lambda_val = float(alg_cfg.get("lambda_val", 1.0))
         tau_g = float(alg_cfg.get("tau_g", 0.5))
         tau_n = float(alg_cfg.get("tau_n", 0.5))
+        bit_widths = tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS))
 
         dataset_name = self._config.get("dataset", {}).get("name", "mnist")
         num_classes = int(self._config.get("dataset", {}).get("num_classes", 10))
@@ -265,6 +293,7 @@ class FedMAQHook(StrategyHook):
                 lambda_val=lambda_val,
                 tau_g=tau_g,
                 tau_n=tau_n,
+                bit_widths=bit_widths,
             )
             # Instantiate new FitIns to prevent shared reference overwrites
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))

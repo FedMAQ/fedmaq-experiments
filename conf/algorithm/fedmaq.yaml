@@ -1,7 +1,14 @@
 name: fedmaq
-# Bit-width bounds
+# Bit-width bounds for the soft-quality-target interpolation range (formulations 1-4)
 q_min: 2
 q_max: 8
+
+# Permissible discrete bit-width set per manuscript §4.2 (Q). The soft target and the
+# Tier-1 memory hard-cap both snap to the nearest member of this set — q_min/q_max above
+# only bound the *interpolation* range, not the final snapped output. 16/32-bit tiers are
+# reachable only when a client's memory/c_unit ratio permits (see c_unit below; with the
+# default memory range U(2048, 16384) MB and c_unit=2048, the cap tops out at 8-bit).
+bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
 
 # Tier 1 resource cap
 c_unit: 2048.0  # MB consumed per quantization bit
