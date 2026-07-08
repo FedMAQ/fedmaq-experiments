@@ -2,12 +2,12 @@
 
 Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
 
-| Field                  | Value                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| **Last updated**       | 2026-07-09                                                                           |
-| **Last session focus** | experiments + manuscript: Cursor to Claude Code migration and doc restructure        |
-| **Active repo**        | fedmaq-experiments                                                                   |
-| **Blockers**           | None                                                                                 |
+| Field                  | Value                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| **Last updated**       | 2026-07-09                                                                    |
+| **Last session focus** | experiments + manuscript: Cursor to Claude Code migration and doc restructure |
+| **Active repo**        | fedmaq-experiments                                                            |
+| **Blockers**           | None                                                                          |
 
 ---
 
