@@ -4,6 +4,16 @@ Archive of session-to-session changelog entries for the FedMAQ thesis codebase.
 
 ## Historical Entries
 
+### 2026-07-09 — Manuscript Alignment: Proxy Pool Size, Discrete Bit-Widths, FedDistill Spec (experiments + manuscript)
+
+- **Manuscript is canon:** Reconciled `fedmaq-experiments` against user-updated `chapter_1.tex`/`chapter_4.tex` (Ch. 1 Introduction, Ch. 4 Methodology). Where the two disagreed, code was changed to match the manuscript; manuscript-only issues were reported back rather than silently resolved.
+- **Proxy/public pool size 200 -> 1600:** Updated `conf/experiment/{default,femnist,preliminary}.yaml`; fixed a general (not FEMNIST-specific) remainder-allocation bug in `partitioning.py` so the pool always totals exactly `num_public_samples` regardless of class count.
+- **Discrete bit-width set:** `compute_fedmaq_q_k_t` (`core/strategy_hooks/fedmaq.py`) now snaps both the Tier-1 memory hard cap and the Tier-2 soft quality target to the manuscript's permissible set `Q = {1,2,3,4,5,6,7,8,16,32}` instead of an arbitrary continuous integer; added `bit_widths` to `conf/algorithm/fedmaq.yaml`.
+- **Compressor semantics fix:** FedMAQ's client-side compressor switched from `DAdaQuantCompressionHook` (levels-per-sign) to `FedPAQCompressionHook` (true bit-width) — needed once 16/32-bit tiers were reachable, since the old hook would have badly misinterpreted `q=16` as only 33 levels.
+- **`baseline_registry.md`:** FedDistill entry updated to the FEDDISTILL+/FedGen spec (Jeong et al.) per manuscript Sec 4.3.1, pointing at `references/feddistill/`; CFD entry notes no reference implementation exists yet.
+- **Manuscript edits (in `fedmaq-manuscript`, uncommitted — user's repo to commit):** `chapter_4.tex` updated per the plan's report items: FedKD SVD threshold now shown as a `0.1 -> 0.95` schedule instead of a fixed constant; KD temperature split into two rows (FedMAQ/FedAvgKD `T=1.0` vs. FedKD internal `T=2.0`); the five candidate quantization formulations transcribed into a real table ahead of the still-pending pilot-study results placeholder; `|D_pub|`/`|D_proxy|` symbol duplication resolved to `|D_pub|=1600`; dataset-overview placeholder caption no longer lists MNIST/FMNIST (out of benchmark scope); the "516-run experimental grid" claim replaced with a flagged `[VERIFY: ...]` note showing the actual computed total (~165 runs) from the documented `conf/config.yaml` sweeps, left for the user to reconcile.
+- **Tests:** Added coverage for exact-size proxy pools under remainder conditions and for bit-width snapping (including the 16/32-bit escape tiers); full suite passes (22/22).
+
 ### 2026-07-09 — CLAUDE.md Relocation to Repo Root and AGENTS.md Removal
 
 - **Entry point moved:** `.claude/CLAUDE.md` → root `CLAUDE.md` in both `fedmaq-experiments` and `fedmaq-manuscript` — more discoverable location, and `@import` paths now resolve relative to repo root instead of `.claude/`.

@@ -5,8 +5,8 @@ Living document for agent-to-agent and session-to-session continuity across the 
 | Field                  | Value                                                                         |
 | ---------------------- | ----------------------------------------------------------------------------- |
 | **Last updated**       | 2026-07-09                                                                    |
-| **Last session focus** | experiments + manuscript: Cursor to Claude Code migration and doc restructure |
-| **Active repo**        | fedmaq-experiments                                                            |
+| **Last session focus** | experiments + manuscript: align codebase (proxy pool, bit-widths, FedDistill spec) with updated Ch. 1/4 manuscript; applied reported manuscript-side fixes to chapter_4.tex |
+| **Active repo**        | fedmaq-experiments (secondary: fedmaq-manuscript)                             |
 | **Blockers**           | None                                                                          |
 
 ---
@@ -56,10 +56,15 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 4. Per-repo status
 
-### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Hook-Refactored]
+### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Manuscript-Aligned]
 
-- **Status details:** See completed baselines and status in [baseline_registry.md](.claude/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), and hardened the codebase with performance, correctness, and robustness optimizations (partition resolution, model reuse, independent client seeds).
+- **Status details:** See completed baselines and status in [baseline_registry.md](.claude/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), hardened the codebase with performance/correctness/robustness optimizations, and reconciled against the updated Ch. 1/4 manuscript (proxy pool size 1600, discrete bit-width set `Q`, FedPAQ-semantics compressor for FedMAQ). Committed as `8590d1f`.
 - **Pending:** Port remaining SOTA baselines (FedDistill, CFD — Sep 2026), Docker integration.
+
+### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active]
+
+- **Completed:** Chapter 1–4 LaTeX template integrated, Claude audit revisions applied. Chapter 5 drafted. `chapter_4.tex` updated this session with reported fixes (SVD schedule, KD temperature split, candidate-formulation table, `|D_pub|` unification, dataset-overview caption, flagged 516-run grid discrepancy) — **uncommitted**, left for user to review/commit.
+- **Pending:** User to reconcile the flagged experimental-grid-size note in `chapter_4.tex` (Software/MLOps Stack subsection) against the intended final run count; commit `chapter_4.tex`; finalize Chapter 5; draft Chapter 6; incorporate proposal panel feedback post-defense.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [Complete]
 
@@ -75,11 +80,6 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 - **Status details:** Slide mapping and metadata updated in [slide_registry.md](../fedmaq-presentations/.cursor/project/slide_registry.md).
 - **Pending:** None.
-
-### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active]
-
-- **Completed:** Chapter 1–4 LaTeX template integrated, Claude audit revisions applied (benchmark scope, $\alpha$ grid, and Pilot study adjustments). Chapter 5 drafted.
-- **Pending:** Finalize Chapter 5, draft Chapter 6, incorporate proposal panel feedback post-defense.
 
 ---
 
@@ -106,11 +106,12 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 9   | Compile/synthesize summaries into thematic syntheses       | literature  | [ ]    |
 | 10  | Port FedDistill baseline                                   | experiments | [ ]    |
 | 11  | Port CFD baseline                                          | experiments | [ ]    |
+| 12  | Align experiments code + Ch. 1/4 manuscript (proxy pool, discrete bit-widths, FedDistill spec); apply manuscript-side fixes to chapter_4.tex | experiments + manuscript | [x] |
 
 > [!TIP]
 > For **Task 8**, the agent should perform the corrections locally by reading the critique files (`summaries/drafts/*_critique.md`) and modifying the draft summaries directly, rather than calling OpenRouter APIs. This keeps the workflow fast and cost-free for the user's OpenRouter account.
 
-**Current focus:** P7 — WandB + Hydra ingest utilities (`fedmaq-analyses`). Tasks 10--11 (FedDistill, CFD) are Sep--Oct 2026 per Gantt.
+**Current focus:** P7 — WandB + Hydra ingest utilities (`fedmaq-analyses`). Tasks 10--11 (FedDistill, CFD) are Sep--Oct 2026 per Gantt. User should also review/commit the `chapter_4.tex` edits from Task 12 and resolve the flagged experimental-grid-size note.
 
 ---
 
@@ -163,4 +164,4 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 11. Handoff recommendation
 
-**Recommend handoff.** The Cursor-to-Claude-Code migration and CLAUDE.md restructure for `fedmaq-experiments` and `fedmaq-manuscript` are complete: `.cursor/`/`.agents/` removed, `CLAUDE.md` at repo root in both repos, `AGENTS.md` retired, tests passing (20/20). This is a clean, self-contained stopping point — initiate a new agent session to clear context. The next session should focus on **P7: WandB + Hydra Ingest Utilities** in the `fedmaq-analyses` repository (unchanged from before this session).
+**Recommend handoff.** The manuscript-alignment task (P12) is complete and self-contained: experiments code changes are committed (`8590d1f`), tests pass (22/22), and the reported manuscript-side fixes have been applied directly to `chapter_4.tex` (uncommitted, in `fedmaq-manuscript`, awaiting user review/commit). This is a clean stopping point — initiate a new agent session to clear context. The next session should focus on **P7: WandB + Hydra Ingest Utilities** in the `fedmaq-analyses` repository (unchanged from before this session), or on reviewing/committing the `chapter_4.tex` edits if the user wants that done first.
