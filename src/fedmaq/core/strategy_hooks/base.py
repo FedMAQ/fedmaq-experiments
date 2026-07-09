@@ -111,3 +111,58 @@ class StrategyHook(ABC):
         Default: empty dict (no extra metrics).
         """
         return {}
+
+    # ------------------------------------------------------------------ #
+    # Simulated time / communication model contributions.                #
+    # These keep NetworkSimulator and the telemetry path free of         #
+    # ``if alg_name == ...`` dispatch; each hook supplies its own model.  #
+    # ------------------------------------------------------------------ #
+
+    def download_size_bytes(
+        self,
+        strategy: TelemetryFedAvg,
+        ndarrays: list[Any],
+    ) -> int:
+        """Transmitted size of the server->client model broadcast, in bytes.
+
+        Default: the raw float32 size. FedKD overrides this with its SVD-compressed
+        download size.
+        """
+        return sum(int(arr.nbytes) for arr in ndarrays)
+
+    def compute_speed_scale(self) -> float:
+        """Multiplicative factor on client compute speed for local-training time.
+
+        Default: 1.0 (no penalty). FedKD returns ``1 / compute_penalty`` to model
+        the slowdown from jointly training the student and teacher.
+        """
+        return 1.0
+
+    def local_train_sample_count(
+        self,
+        num_samples: int,
+        epochs: int,
+        num_public: int,
+        public_epochs: int,
+        server_round: int,
+    ) -> float:
+        """Effective number of sample-epochs processed during local training.
+
+        Divided by (scaled) client compute speed to get the training delay.
+        Default: ``num_samples * epochs``. FedMD overrides this to fold in its
+        round-1 public/private pre-training.
+        """
+        return num_samples * epochs
+
+    def server_sim_time(
+        self,
+        strategy: TelemetryFedAvg,
+        results: list[tuple[ClientProxy, FitRes]],
+        aggregated_parameters: Parameters | None,
+    ) -> float:
+        """Simulated server-side compute time added to the round, in seconds.
+
+        Default: 0.0 (no server compute). FedMAQ and FedAvgKD override this with
+        their server-side distillation delay.
+        """
+        return 0.0

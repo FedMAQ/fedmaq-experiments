@@ -15,7 +15,6 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
-from fedmaq.baselines.compression import compress_tensor
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     DAdaQuantHook,
@@ -49,45 +48,24 @@ class NetworkSimulator:
         cid: int,
         model_size_bytes: int,
         bytes_uploaded: int,
-        num_samples: int,
-        epochs: int,
-        alg_name: str,
-        public_epochs: int = 5,
-        num_public: int = 200,
-        server_round: int = 1,
+        train_sample_count: float,
+        compute_scale: float = 1.0,
     ) -> tuple[float, float, float]:
-        """Return (t_download, t_train, t_upload) for a single client."""
+        """Return (t_download, t_train, t_upload) for a single client.
+
+        ``train_sample_count`` is the effective number of sample-epochs processed
+        during local training and ``compute_scale`` a multiplicative factor on the
+        client's compute speed. Both are supplied by the algorithm's strategy hook
+        so this method carries no per-algorithm branching.
+        """
         # Speed in bytes per second (from Mbps)
         upload_speed = (self.client_upload_bw[cid] * 10**6) / 8.0
         download_speed = (self.client_download_bw[cid] * 10**6) / 8.0
-        comp_speed = self.client_comp_speed[cid]
+        comp_speed = self.client_comp_speed[cid] * compute_scale
 
-        # Apply computational penalty scale factor for FedKD due to dual model training
-        if alg_name == "fedkd":
-            comp_speed = comp_speed / 2.5
-
-        # 1. Download Delay
         t_download = model_size_bytes / download_speed
-
-        # 2. Upload Delay
         t_upload = bytes_uploaded / upload_speed
-
-        # 3. Local Training Delay
-        if alg_name == "fedmd":
-            # In round 1, include mandatory public and private pre-training (10 epochs each)
-            if server_round == 1:
-                t_train = (
-                    num_public * 10
-                    + num_samples * 10
-                    + num_public * public_epochs
-                    + num_samples * epochs
-                ) / comp_speed
-            else:
-                t_train = (
-                    num_public * public_epochs + num_samples * epochs
-                ) / comp_speed
-        else:
-            t_train = (num_samples * epochs) / comp_speed
+        t_train = train_sample_count / comp_speed
 
         return t_download, t_train, t_upload
 
@@ -125,8 +103,14 @@ class TelemetryFedAvg(FedAvg):
         exp_config = config.get("experiment", config)
         self.num_clients = exp_config.get("num_clients", 10)
         self.simulated_time = 0.0
-        self.cumulative_bytes = 0
         self.alg_name: str = config.get("algorithm", {}).get("name", "")
+
+        # Per-round telemetry snapshots, read back in evaluate(). Initialized here
+        # so the first evaluate() call (round 0) has defined values without getattr.
+        self.last_round_bytes = 0
+        self.last_round_time = 0.0
+        self.last_client_time = 0.0
+        self.last_server_time = 0.0
 
         # Seeded generator for reproducibility
         seed = config.get("seed", 42)
@@ -231,30 +215,10 @@ class TelemetryFedAvg(FedAvg):
         if not results:
             return aggregated_parameters, metrics
 
-        # 3. Telemetry: compute model download size in bytes
+        # 3. Telemetry: compute model download size in bytes (hook may compress it)
         if aggregated_parameters is not None:
             ndarrays = parameters_to_ndarrays(aggregated_parameters)
-            if self.alg_name == "fedkd":
-                # Compute SVD-compressed download size using the same energy as configure_fit
-                from fedmaq.core.strategy_hooks.fedkd import FedKDHook
-
-                energy = (
-                    self.hook._current_energy
-                    if isinstance(self.hook, FedKDHook)
-                    else 1.0
-                )
-                model_size_bytes = 0
-                for arr in ndarrays:
-                    if arr.size == 0:
-                        continue
-                    compressed = compress_tensor(arr, energy)
-                    if len(compressed) == 3:
-                        u, sigma, v = compressed
-                        model_size_bytes += (u.size + sigma.size + v.size) * 4
-                    else:
-                        model_size_bytes += arr.nbytes
-            else:
-                model_size_bytes = sum(arr.nbytes for arr in ndarrays)
+            model_size_bytes = self.hook.download_size_bytes(self, ndarrays)
         else:
             model_size_bytes = 0
 
@@ -264,6 +228,11 @@ class TelemetryFedAvg(FedAvg):
 
         exp_config = self.config.get("experiment", self.config)
         epochs = exp_config.get("local_epochs", 5)
+        public_epochs = int(self.config.get("algorithm", {}).get("public_epochs", 5))
+        num_public = int(
+            self.config.get("experiment", {}).get("num_public_samples", 200)
+        )
+        compute_scale = self.hook.compute_speed_scale()
 
         for client_proxy, fit_res in results:
             cid = int(fit_res.metrics.get("partition_id", -1))
@@ -274,11 +243,12 @@ class TelemetryFedAvg(FedAvg):
                 fit_res.metrics.get("bytes_uploaded", model_size_bytes)
             )
             num_samples = fit_res.num_examples
-            public_epochs = int(
-                self.config.get("algorithm", {}).get("public_epochs", 5)
-            )
-            num_public = int(
-                self.config.get("experiment", {}).get("num_public_samples", 200)
+            train_sample_count = self.hook.local_train_sample_count(
+                num_samples=num_samples,
+                epochs=epochs,
+                num_public=num_public,
+                public_epochs=public_epochs,
+                server_round=server_round,
             )
 
             t_download, t_train, t_upload = (
@@ -286,12 +256,8 @@ class TelemetryFedAvg(FedAvg):
                     cid=cid,
                     model_size_bytes=model_size_bytes,
                     bytes_uploaded=bytes_uploaded,
-                    num_samples=num_samples,
-                    epochs=epochs,
-                    alg_name=self.alg_name,
-                    public_epochs=public_epochs,
-                    num_public=num_public,
-                    server_round=server_round,
+                    train_sample_count=train_sample_count,
+                    compute_scale=compute_scale,
                 )
             )
 
@@ -303,29 +269,17 @@ class TelemetryFedAvg(FedAvg):
         # Decouple client and server simulated delays
         client_sim_time = max(round_delays) if round_delays else 0.0
 
-        # Server compute time: non-zero for FedMAQ / FedAvgKD server-side distillation
-        server_sim_time = 0.0
-        if (
-            self.alg_name in {"fedmaq", "fedavg_kd"}
-            and aggregated_parameters is not None
-        ):
-            num_teachers = len(results)
-            num_public = int(
-                self.config.get("experiment", {}).get("num_public_samples", 200)
-            )
-            kd_epochs = int(self.config.get("algorithm", {}).get("kd_epochs", 1))
-            server_comp_speed = (
-                2000.0  # Simulated high-performance server speed (samples/sec)
-            )
-            server_sim_time = (
-                num_public * kd_epochs * num_teachers
-            ) / server_comp_speed
+        # Server compute time: non-zero for hooks with server-side work (KD).
+        server_sim_time = self.hook.server_sim_time(
+            self, results, aggregated_parameters
+        )
 
         round_time = client_sim_time + server_sim_time
         self.simulated_time += round_time
 
+        # TelemetryManager owns cumulative byte/time accounting (see telemetry.py);
+        # the strategy only snapshots the latest round for evaluate() logging.
         round_total_bytes = round_bytes_downloaded + round_bytes_uploaded
-        self.cumulative_bytes += round_total_bytes
         self.last_round_bytes = round_total_bytes
         self.last_round_time = round_time
         self.last_client_time = client_sim_time
@@ -348,18 +302,10 @@ class TelemetryFedAvg(FedAvg):
             loss, metrics = eval_res
             acc = float(metrics.get("accuracy", 0.0))
 
-            round_bytes = (
-                getattr(self, "last_round_bytes", 0) if server_round > 0 else 0
-            )
-            round_time = (
-                getattr(self, "last_round_time", 0.0) if server_round > 0 else 0.0
-            )
-            client_time = (
-                getattr(self, "last_client_time", 0.0) if server_round > 0 else 0.0
-            )
-            server_time = (
-                getattr(self, "last_server_time", 0.0) if server_round > 0 else 0.0
-            )
+            round_bytes = self.last_round_bytes if server_round > 0 else 0
+            round_time = self.last_round_time if server_round > 0 else 0.0
+            client_time = self.last_client_time if server_round > 0 else 0.0
+            server_time = self.last_server_time if server_round > 0 else 0.0
 
             log_metrics: dict[str, Any] = {
                 "round": server_round,

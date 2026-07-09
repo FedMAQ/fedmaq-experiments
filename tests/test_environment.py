@@ -66,8 +66,31 @@ def test_model_factory_and_parameters():
 
     # Verify modification
     re_extracted = get_model_parameters(model)
-    for p_new, p_re in zip(new_params, re_extracted):
+    for p_new, p_re in zip(new_params, re_extracted, strict=True):
         np.testing.assert_allclose(p_new, p_re, rtol=1e-5)
+
+
+def test_set_model_parameters_raises_on_mismatch():
+    """set_model_parameters must fail loudly on a count or shape mismatch.
+
+    Regression: a plain zip silently truncated, so loading e.g. a TinyCNN's
+    parameters into a SimpleCNN corrupted the model instead of erroring.
+    """
+    from fedmaq.core.models import TinyCNN
+
+    simple = get_model("mnist", num_classes=10)  # SimpleCNN
+    simple_params = get_model_parameters(simple)
+
+    # Count mismatch: drop a tensor.
+    with pytest.raises(ValueError, match="count mismatch"):
+        set_model_parameters(simple, simple_params[:-1])
+
+    # Shape mismatch at matching count: TinyCNN has the same tensor count as
+    # SimpleCNN for 1-channel inputs but different conv widths (16 vs 32).
+    tiny_params = get_model_parameters(TinyCNN(in_channels=1, num_classes=10))
+    assert len(tiny_params) == len(simple_params)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        set_model_parameters(simple, tiny_params)
 
 
 def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatch):
@@ -592,6 +615,54 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
     assert teacher_file.exists()
 
 
+def test_dadaquant_fit_reports_pretrain_loss(mock_dataset):
+    """DAdaQuant's local_loss must be the CE loss on the incoming model BEFORE training.
+
+    This feeds the server-side plateau -> q_t doubling, so the eval-before-train
+    ordering is behavior-critical and not exercised by short smoke runs (plateau
+    needs phi+1 non-improving rounds).
+    """
+    from fedmaq.core.models import SimpleCNN, get_model_parameters
+
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=4)
+    model = SimpleCNN(in_channels=1, num_classes=10)
+    initial_params = get_model_parameters(model)
+
+    # Expected pre-training loss: CE over the loader on the untrained model.
+    reference = SimpleCNN(in_channels=1, num_classes=10)
+    set_model_parameters(reference, initial_params)
+    reference.eval()
+    criterion = nn.CrossEntropyLoss()
+    loss_sum, n = 0.0, 0
+    with torch.no_grad():
+        for images, labels in train_loader:
+            out = reference(images)
+            loss_sum += criterion(out, labels).item() * len(labels)
+            n += len(labels)
+    expected = loss_sum / n
+
+    cfg_dict = {
+        "experiment": {"local_epochs": 1, "learning_rate": 0.01, "weight_decay": 0.0},
+        "algorithm": {"name": "dadaquant", "q_min": 1, "q_max": 8},
+        "dataset": {"name": "mnist", "num_classes": 10},
+    }
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=CompressionHook(),
+        config=cfg_dict,
+    )
+    _, _, metrics = client.fit(initial_params, {"q": 4})
+
+    assert metrics["local_loss"] > 0.0
+    # Reported loss is measured on the pre-training model, so it matches the
+    # reference computed on the initial parameters (not the post-training loss).
+    assert metrics["local_loss"] == pytest.approx(expected, rel=1e-4)
+
+
 def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     """Test 2-round simulation of the FedKD baseline implementation."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
@@ -730,6 +801,34 @@ def test_fedpaq_compression_hook():
     np.testing.assert_allclose(
         compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32)
     )
+
+
+def test_fedpaq_no_nan_for_all_permissible_bit_widths():
+    """FedPAQ quantization must never emit NaN for any q in the permissible set Q.
+
+    Regression: at q=1 the old (1 << (q-1)) - 1 gave 0 positive levels and a
+    0/0 NaN on dequantization, which is reachable via FedMAQ's Tier-1 memory cap.
+    """
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    rng = np.random.default_rng(0)
+    deltas = [rng.standard_normal((4, 3)).astype(np.float32)]
+    for q in (1, 2, 3, 4, 5, 6, 7, 8, 16, 32):
+        compressed, _ = FedPAQCompressionHook(q=q).compress(deltas)
+        assert np.all(np.isfinite(compressed[0])), f"NaN/Inf produced at q={q}"
+
+
+def test_fedpaq_q1_is_sign_quantization():
+    """q=1 must reduce to sign quantization: nonzero elements map to +/- scale."""
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    deltas = [np.array([-3.0, -0.5, 0.0, 0.5, 3.0], dtype=np.float32)]
+    compressed, _ = FedPAQCompressionHook(q=1).compress(deltas)
+    # scale = max|d| = 3.0; every nonzero element -> sign(d)*scale, zeros stay 0.
+    np.testing.assert_allclose(
+        compressed[0], np.array([-3.0, -3.0, 0.0, 3.0, 3.0], dtype=np.float32)
+    )
+    assert set(np.unique(compressed[0]).tolist()) <= {-3.0, 0.0, 3.0}
 
 
 def test_fedprox_loss_hook():
@@ -1092,7 +1191,7 @@ def test_compute_fedmaq_q_k_t():
         q_max=8,
         lambda_val=1.0,
     )
-    # modulator = (1.0 + 1.0 * 0.5) / 2.0 = 0.75. q_hat = 2 + round(6 * 0.5 * 0.75) = 2 + round(2.25) = 4.
+    # modulator = (1 + 1*0.5)/2 = 0.75. q_hat = 2 + round(6*0.5*0.75) = 2 + round(2.25) = 4.
     assert q_mod == 4
 
     # Test formulation 4: Threshold-Based Staged Rule
@@ -1211,6 +1310,24 @@ def test_compute_dadaquant_client_q():
     assert q_is[1] >= q_is[0]
 
 
+def test_compute_dadaquant_client_q_clamps_to_range():
+    """Per-client q_i must be clamped to [q_min, q_max] when bounds are supplied.
+
+    Regression: a heavily skewed data share can drive sqrt(a/b)*w_i^(2/3) above
+    the budget; without the upper clamp a client is assigned more levels than
+    q_max allows.
+    """
+    from fedmaq.core.strategy import compute_dadaquant_client_q
+
+    # Extreme skew: one dominant client would otherwise exceed q_max.
+    sizes = [1, 10000]
+    q_is = compute_dadaquant_client_q(sizes, q_t=4, q_min=2, q_max=8)
+    assert all(2 <= q <= 8 for q in q_is), q_is
+    # No upper bound by default (backward-compatible), only the floor of 1.
+    q_is_unbounded = compute_dadaquant_client_q(sizes, q_t=4)
+    assert all(q >= 1 for q in q_is_unbounded)
+
+
 def test_network_simulator():
     """Test NetworkSimulator delay calculation."""
     import numpy as np
@@ -1227,9 +1344,8 @@ def test_network_simulator():
         cid=0,
         model_size_bytes=1000000,  # 1 MB
         bytes_uploaded=500000,  # 0.5 MB
-        num_samples=200,
-        epochs=5,
-        alg_name="fedavg",
+        train_sample_count=200 * 5,  # 200 samples * 5 epochs
+        compute_scale=1.0,
     )
 
     # 1 MB download on 20 Mbps link:
@@ -1262,3 +1378,152 @@ def test_evaluation_metrics():
     assert abs(precision - 0.5) < 1e-5
     assert abs(recall - 0.5) < 1e-5
     assert abs(f1 - 0.5) < 1e-5
+
+
+def test_strategy_hook_registry():
+    """get_strategy_hook: dict lookup, Passthrough fallback, unported guard."""
+    from fedmaq.core.strategy_hooks import (
+        FedDistillHook,
+        FedMAQHook,
+        PassthroughHook,
+        get_strategy_hook,
+    )
+
+    cfg = {"algorithm": {"name": "fedmaq"}}
+    assert isinstance(get_strategy_hook("fedmaq", cfg), FedMAQHook)
+    assert isinstance(get_strategy_hook("feddistill", {}), FedDistillHook)
+
+    # Unknown FedAvg-family name falls back to PassthroughHook (client-only algos).
+    assert isinstance(get_strategy_hook("fedavg", {}), PassthroughHook)
+
+    # Registered-but-unimplemented baselines fail loudly at construction time.
+    with pytest.raises(NotImplementedError):
+        get_strategy_hook("cfd", {})
+
+
+def test_feddistill_logit_tracker_no_nan():
+    """LogitTracker must stay finite when a client is missing most classes.
+
+    Under Dirichlet alpha=0.1 most clients hold only a few labels; counts are
+    initialized to ones so unseen classes yield a finite all-zero row, not 0/0 NaN.
+    """
+    from fedmaq.core.client_hooks.feddistill import LogitTracker
+
+    tracker = LogitTracker(num_labels=10)
+    logits = torch.randn(6, 10)
+    labels = torch.tensor([0, 0, 3, 3, 0, 3])  # only classes 0 and 3 present
+    tracker.update(logits, labels)
+
+    avg = tracker.avg()
+    assert avg.shape == (10, 10)
+    assert np.all(np.isfinite(avg)), "LogitTracker produced NaN/Inf"
+    for missing in (1, 2, 4, 5, 6, 7, 8, 9):
+        assert np.allclose(avg[missing], 0.0), f"class {missing} row should be zero"
+
+
+def test_feddistill_bytes_shape_guard():
+    """Deserializing a logit buffer with the wrong num_labels must fail loudly."""
+    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+
+    buf = logits_to_bytes(np.zeros((3, 3), dtype=np.float32))
+    assert bytes_to_logits(buf, 3).shape == (3, 3)
+    with pytest.raises(ValueError, match="num_labels"):
+        bytes_to_logits(buf, 4)  # 9 floats != 4^2
+
+
+def test_feddistill_hook_aggregation_and_broadcast():
+    """Server averages client logit matrices, passes weights through, rebroadcasts."""
+    from flwr.common import Code, FitIns, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    hook = FedDistillHook({"dataset": {"num_classes": 3}})
+    assert hook.global_logits is None
+
+    def _fit_res(matrix):
+        return FitRes(
+            status=Status(code=Code.OK, message=""),
+            parameters=ndarrays_to_parameters([]),
+            num_examples=1,
+            metrics={"client_logits": logits_to_bytes(matrix)},
+        )
+
+    m1 = np.ones((3, 3), dtype=np.float32)
+    m2 = np.full((3, 3), 3.0, dtype=np.float32)
+    results = [(None, _fit_res(m1)), (None, _fit_res(m2))]
+
+    sentinel = ndarrays_to_parameters([np.zeros(2, dtype=np.float32)])
+    out_params, _ = hook.aggregate_fit(None, 1, results, [], sentinel, {})
+    # FedAvg-averaged weights are passed through untouched.
+    assert out_params is sentinel
+    # Consensus logits = elementwise mean of the client matrices.
+    assert np.allclose(hook.global_logits, 2.0)
+    assert np.all(np.isfinite(hook.global_logits))
+
+    # configure_fit broadcasts the consensus matrix as bytes.
+    fit_ins = FitIns(ndarrays_to_parameters([]), {})
+    updated = hook.configure_fit(
+        None, 2, ndarrays_to_parameters([]), None, [(None, fit_ins)]
+    )
+    gl = updated[0][1].config["global_logits"]
+    assert isinstance(gl, bytes)
+    assert np.allclose(bytes_to_logits(gl, 3), 2.0)
+
+
+def test_feddistill_two_round_reg_path(mock_dataset):
+    """End-to-end 2-round FedDistill+: round 2 must exercise the logit-KD reg branch.
+
+    Round 1 has no global logits (plain CE); only after the server aggregates and
+    rebroadcasts does the KLDiv(log_softmax(z), softmax(global_logits[y])) term fire.
+    """
+    from flwr.common import Code, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import logits_to_bytes
+    from fedmaq.core.models import SimpleCNN, get_model_parameters
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=4)
+    model = SimpleCNN(in_channels=1, num_classes=10)
+    params = get_model_parameters(model)
+    cfg = {
+        "experiment": {"local_epochs": 1, "learning_rate": 0.01, "weight_decay": 0.0},
+        "algorithm": {"name": "feddistill", "reg_alpha": 1.0},
+        "dataset": {"name": "mnist", "num_classes": 10},
+    }
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=CompressionHook(),
+        config=cfg,
+    )
+
+    # Round 1: no global logits -> plain CE, but still emits per-class logits.
+    p1, n1, m1 = client.fit(params, {"server_round": 1})
+    assert isinstance(m1["client_logits"], bytes)
+    assert all(np.all(np.isfinite(p)) for p in p1)
+
+    # Server aggregates -> global logits become available.
+    hook = FedDistillHook({"dataset": {"num_classes": 10}})
+    fit_res = FitRes(
+        status=Status(code=Code.OK, message=""),
+        parameters=ndarrays_to_parameters(p1),
+        num_examples=n1,
+        metrics=m1,
+    )
+    hook.aggregate_fit(None, 1, [(None, fit_res)], [], ndarrays_to_parameters(p1), {})
+    assert hook.global_logits is not None
+    assert np.all(np.isfinite(hook.global_logits))
+
+    # Round 2: broadcasting the global logits must drive the reg path without error.
+    p2, _, m2 = client.fit(
+        p1, {"server_round": 2, "global_logits": logits_to_bytes(hook.global_logits)}
+    )
+    assert all(np.all(np.isfinite(p)) for p in p2)
+    # Upload accounting = model weights + the 10x10 float32 logit matrix.
+    assert m2["bytes_uploaded"] == sum(int(p.nbytes) for p in p2) + 10 * 10 * 4

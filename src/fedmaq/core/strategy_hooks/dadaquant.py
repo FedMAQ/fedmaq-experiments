@@ -7,10 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from flwr.common import FitIns, Parameters, Scalar
-from flwr.common.typing import FitRes, GetPropertiesIns
+from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.strategy_hooks._partition import (
+    partition_dataset_size,
+    resolve_partition_id,
+)
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -22,8 +26,17 @@ logger = logging.getLogger(__name__)
 def compute_dadaquant_client_q(
     sizes: list[int],
     q_t: int,
+    q_min: int = 1,
+    q_max: int | None = None,
 ) -> list[int]:
-    """Compute optimal client-adaptive quantization levels for each client in DAdaQuant."""
+    """Compute optimal client-adaptive quantization levels for each client in DAdaQuant.
+
+    The per-client optimum ``q_i = sqrt(a/b) * w_i^(2/3)`` is clamped to the
+    ``[q_min, q_max]`` range (``q_max=None`` disables the upper bound). Without
+    the upper clamp a client with a large data share can be assigned more levels
+    than the budget allows, mirroring the time-adaptive path which already caps
+    ``q_t`` at ``q_max``.
+    """
     if not sizes:
         return []
     total_size = sum(sizes)
@@ -38,52 +51,17 @@ def compute_dadaquant_client_q(
     b = sum(ws / (q_t**2) for ws in w_sq)
 
     q_i_list = []
-    for wi, wi_pow in zip(w, w_pow):
+    for wi_pow in w_pow:
         if b > 0:
             q_val = np.sqrt(a / b) * wi_pow
-            q_i = int(max(1, np.round(q_val)))
+            q_i = int(np.round(q_val))
         else:
             q_i = q_t
+        q_i = max(q_min, q_i)
+        if q_max is not None:
+            q_i = min(q_max, q_i)
         q_i_list.append(q_i)
     return q_i_list
-
-
-def _resolve_partition_id(
-    client: ClientProxy,
-    strategy: TelemetryFedAvg,
-) -> int:
-    """Resolve a client's partition ID, caching the result on the strategy."""
-    cid_str = str(client.cid)
-    if cid_str in strategy.proxy_cid_to_partition_id:
-        return strategy.proxy_cid_to_partition_id[cid_str]
-
-    # Flower simulation shortcut: client.cid is typically the stringified partition ID
-    if cid_str.isdigit():
-        pid = int(cid_str)
-        if pid < strategy.num_clients:
-            strategy.proxy_cid_to_partition_id[cid_str] = pid
-            return pid
-
-    try:
-        try:
-            res = client.get_properties(
-                GetPropertiesIns(config={}), timeout=5.0, group_id=0
-            )
-        except TypeError:
-            res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
-        pid = int(res.properties["cid"])
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.info(f"Queried partition ID {pid} for Client Proxy {cid_str}")
-        return pid
-    except Exception as exc:
-        pid = hash(client.cid) % strategy.num_clients
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.warning(
-            f"Could not resolve partition ID for client {cid_str} ({exc}). "
-            f"Falling back to hash-based mapping → partition {pid}. "
-            "Verify that GenericClient.get_properties exposes 'cid'."
-        )
-        return pid
 
 
 class DAdaQuantHook(StrategyHook):
@@ -157,26 +135,22 @@ class DAdaQuantHook(StrategyHook):
         # 2. Compute client-adaptive quantization levels q_i
         clients = [c for c, _ in client_instructions]
         client_indices_dict = strategy.client_indices_dict
-        if client_indices_dict is not None:
-            sizes = []
-            for c in clients:
-                pid = _resolve_partition_id(c, strategy)
-                if str(pid) in client_indices_dict:
-                    sizes.append(len(client_indices_dict[str(pid)]))
-                elif int(pid) in client_indices_dict:
-                    sizes.append(len(client_indices_dict[int(pid)]))
-                else:
-                    logger.warning(
-                        f"Partition ID {pid} not found in client_indices_dict. "
-                        "Defaulting size to 1."
-                    )
-                    sizes.append(1)
-        else:
+        if client_indices_dict is None:
+            # No partition map: skip ID resolution entirely and default all sizes.
             sizes = [1] * len(clients)
+        else:
+            sizes = [
+                partition_dataset_size(
+                    client_indices_dict, resolve_partition_id(c, strategy)
+                )
+                for c in clients
+            ]
 
-        q_i_list = compute_dadaquant_client_q(sizes, self.q_t)
+        q_i_list = compute_dadaquant_client_q(
+            sizes, self.q_t, q_min=q_min, q_max=q_max
+        )
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
-        for (client, fit_ins), q_i in zip(client_instructions, q_i_list):
+        for (client, fit_ins), q_i in zip(client_instructions, q_i_list, strict=True):
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
             new_fit_ins.config["q"] = q_i
             updated_instructions.append((client, new_fit_ins))

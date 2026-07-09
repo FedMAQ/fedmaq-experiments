@@ -1,7 +1,5 @@
 """Standard PyTorch model architectures and helpers for FedMAQ."""
 
-from typing import Any
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -121,7 +119,7 @@ class ResNet18GN(nn.Module):
         self.linear = nn.Linear(512 * BasicBlock.expansion, num_classes)
 
     def _make_layer(
-        self, block: Any, planes: int, num_blocks: int, stride: int
+        self, block: type[BasicBlock], planes: int, num_blocks: int, stride: int
     ) -> nn.Sequential:
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
@@ -150,9 +148,24 @@ def get_model_parameters(model: nn.Module) -> list[np.ndarray]:
 
 
 def set_model_parameters(model: nn.Module, parameters: list[np.ndarray]) -> None:
-    """Load parameters (NumPy arrays) into the model."""
+    """Load parameters (NumPy arrays) into the model.
+
+    Raises ``ValueError`` on a length or per-tensor shape mismatch rather than
+    silently truncating (which would happen with a plain ``zip``), so that loading
+    an incompatible parameter list into the wrong architecture fails loudly.
+    """
     params = [p for p in model.parameters() if p.requires_grad]
-    for p, w in zip(params, parameters):
+    if len(params) != len(parameters):
+        raise ValueError(
+            f"Parameter count mismatch: model expects {len(params)} trainable tensors "
+            f"but received {len(parameters)}. Likely a model-architecture mismatch."
+        )
+    for p, w in zip(params, parameters, strict=True):
+        if tuple(p.shape) != tuple(w.shape):
+            raise ValueError(
+                f"Parameter shape mismatch: model tensor {tuple(p.shape)} vs "
+                f"incoming {tuple(w.shape)}."
+            )
         p.data = torch.from_numpy(w).to(p.device)
 
 

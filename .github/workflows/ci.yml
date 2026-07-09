@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    # Fast, deterministic gate: ruff needs no project dependencies, so it runs via
+    # `uvx` without the CUDA-pinned torch install. This is the blocking check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Ruff lint
+        run: uvx ruff@0.15.19 check .
+
+  typecheck:
+    # Non-blocking while the type-annotation debt is paid down through the refactor.
+    # Flip `continue-on-error` to false (or remove it) once `mypy src` is clean.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Mypy (informational)
+        run: uvx mypy@1.13 src/fedmaq --ignore-missing-imports --python-version 3.11
+
+  # NOTE: the pytest suite is intentionally not run in CI. The project pins
+  # torch==2.12.1+cu132 from a custom CUDA index and targets a dedicated GPU
+  # workstation (chapter_4.tex), so the full suite is run locally with `uv run pytest`.

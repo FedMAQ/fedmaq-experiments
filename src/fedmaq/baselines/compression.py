@@ -61,6 +61,20 @@ def decompress_tensor(
     return reconstructed_2d.reshape(orig_shape)
 
 
+def svd_compressed_nbytes(compressed: CompressedTensor, fallback_nbytes: int) -> int:
+    """Transmitted byte size of an SVD-compressed tensor.
+
+    A 3-tuple ``(U, Sigma, V)`` costs ``(U.size + Sigma.size + V.size) * 4`` bytes
+    (float32 factors); a pass-through 1-tuple costs ``fallback_nbytes`` (the raw
+    tensor). Shared by the FedKD upload accounting (:class:`FedKDCompressionHook`)
+    and the server-side download-size telemetry.
+    """
+    if len(compressed) == 3:
+        u, sigma, v = compressed
+        return (u.size + sigma.size + v.size) * 4
+    return fallback_nbytes
+
+
 class FedKDCompressionHook(CompressionHook):
     """SVD-based dynamic compression hook implementing FedKD."""
 
@@ -97,20 +111,14 @@ class FedKDCompressionHook(CompressionHook):
 
             orig_shape = d.shape
             compressed = compress_tensor(d, self.energy)
+            total_bytes += svd_compressed_nbytes(compressed, d.nbytes)
 
             if len(compressed) == 3:
-                # Compressed: U, Sigma, V
-                u, sigma, v = compressed
                 # Reconstruct/decompress locally to return in reconstructed_params
                 decompressed = decompress_tensor(compressed, orig_shape)
                 reconstructed_deltas.append(decompressed.astype(np.float32))
-
-                # Size calculation: (u.size + sigma.size + v.size) * 4 bytes (float32)
-                element_bytes = (u.size + sigma.size + v.size) * 4
-                total_bytes += element_bytes
             else:
-                # Uncompressed
+                # Uncompressed pass-through
                 reconstructed_deltas.append(d)
-                total_bytes += d.nbytes
 
         return reconstructed_deltas, total_bytes

@@ -1,8 +1,12 @@
-# @package _global_
-# CI / fast-testing override — NOT for production experiments.
-# Usage: uv run python scripts/run.py +experiment=ci
-# Or via pytest fixtures: overrides=["experiment=default,ci"]
+# CI / fast-testing experiment — NOT for production runs.
+# Inherits all Table 4.1 defaults, then shrinks rounds/clients for speed.
+# Usage: uv run python scripts/run.py experiment=ci
 #
-# Reduces rounds and client count to keep test time < 60 s per algorithm.
+# NOTE: this is a full experiment config (selected with `experiment=ci`, not
+# `+experiment=ci`) because `experiment` is a regular composition group. It pulls
+# in default.yaml so the code still sees batch_size, learning_rate, etc.
+defaults:
+  - default
+
 total_rounds: 2
 num_clients: 2

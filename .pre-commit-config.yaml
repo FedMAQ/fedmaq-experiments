@@ -1,0 +1,17 @@
+# Pre-commit hooks for fedmaq-experiments.
+# Install once with:  uv run pre-commit install   (or: pipx run pre-commit install)
+# Gate mirrors CI: ruff lint must pass. Type-checking (mypy) is run locally/CI as a
+# non-blocking step while the codebase's type-annotation debt is paid down.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.19
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-merge-conflict

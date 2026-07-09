@@ -12,22 +12,23 @@ from flwr.common import (
     FitIns,
     Parameters,
     Scalar,
-    ndarrays_to_parameters,
     parameters_to_ndarrays,
 )
-from flwr.common.typing import FitRes, GetPropertiesIns
+from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
-from fedmaq.core.kd_utils import run_server_side_kd
+from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import (
     DEVICE,
     get_kd_student_model,
-    get_model,
-    get_model_parameters,
     set_model_parameters,
 )
-from fedmaq.core.partitioning import get_client_loader, get_server_loaders
+from fedmaq.core.partitioning import get_client_loader
+from fedmaq.core.strategy_hooks._partition import (
+    partition_dataset_size,
+    resolve_partition_id,
+)
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ def compute_fedmaq_q_k_t(
     q_max_capped = _snap_floor(max(1.0, np.floor(c_k / c_unit)), bit_widths)
 
     # Tier 2 soft quality target based on the formulation
-    q_hat: int | float
+    q_hat: float
     if formulation == 0:
         # Alternative 0: Resource-Only hard cap — no soft quality signal.
         # The soft target is always q_max; only Tier-1 constrains the final value.
@@ -122,48 +123,6 @@ def compute_fedmaq_q_k_t(
     # This is intentional — the physical bound wins over the soft quality target.
     # Both operands are already members of `bit_widths`, so the min is too.
     return min(q_max_capped, q_hat_snapped)
-
-
-def _resolve_partition_id(
-    client: ClientProxy,
-    strategy: TelemetryFedAvg,
-) -> int:
-    """Resolve a client's partition ID, caching the result on the strategy.
-
-    First checks the cache; if missing, queries ``get_properties`` with a
-    ``group_id`` fallback for older Flower versions; falls back to a hash-based
-    mapping and logs a WARNING so the failure is visible.
-    """
-    cid_str = str(client.cid)
-    if cid_str in strategy.proxy_cid_to_partition_id:
-        return strategy.proxy_cid_to_partition_id[cid_str]
-
-    # Flower simulation shortcut: client.cid is typically the stringified partition ID
-    if cid_str.isdigit():
-        pid = int(cid_str)
-        if pid < strategy.num_clients:
-            strategy.proxy_cid_to_partition_id[cid_str] = pid
-            return pid
-
-    try:
-        try:
-            res = client.get_properties(
-                GetPropertiesIns(config={}), timeout=5.0, group_id=0
-            )
-        except TypeError:
-            res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
-        pid = int(res.properties["cid"])
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        return pid
-    except Exception as exc:
-        pid = hash(client.cid) % strategy.num_clients
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.warning(
-            f"Could not resolve partition ID for client {cid_str} ({exc}). "
-            f"Falling back to hash-based mapping → partition {pid}. "
-            "Verify that GenericClient.get_properties exposes 'cid'."
-        )
-        return pid
 
 
 class FedMAQHook(StrategyHook):
@@ -204,9 +163,13 @@ class FedMAQHook(StrategyHook):
         batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
         device = torch.device(self._config.get("device") or DEVICE)
 
-        # Lazily instantiate and cache the gradient norm model
+        # Lazily instantiate and cache the gradient norm model.
+        # FedMAQ's global/client model IS the KD student (TinyCNN for 1-channel,
+        # SimpleCNN for CIFAR), so the grad-norm probe must use that same
+        # architecture; using the full get_model() here loads mismatched
+        # parameters (e.g. ResNet18GN on CIFAR) and silently zeroes every norm.
         if self._grad_norm_model is None:
-            self._grad_norm_model = get_model(dataset_name, num_classes)
+            self._grad_norm_model = get_kd_student_model(dataset_name, num_classes)
             self._grad_norm_model.to(device)
         temp_model = self._grad_norm_model
         ndarrays = parameters_to_ndarrays(parameters)
@@ -216,7 +179,7 @@ class FedMAQHook(StrategyHook):
 
         # Map client proxies to partition IDs
         client_pids = [
-            _resolve_partition_id(c, strategy) for c, _ in client_instructions
+            resolve_partition_id(c, strategy) for c, _ in client_instructions
         ]
 
         # 1. Compute raw gradient norms for sampled clients
@@ -224,17 +187,7 @@ class FedMAQHook(StrategyHook):
         dataset_sizes: list[int] = []
         client_indices_dict = strategy.client_indices_dict
         for pid in client_pids:
-            # Retrieve dataset size
-            if client_indices_dict is not None:
-                key_str, key_int = str(pid), int(pid)
-                if key_str in client_indices_dict:
-                    n_k = len(client_indices_dict[key_str])
-                elif key_int in client_indices_dict:
-                    n_k = len(client_indices_dict[key_int])
-                else:
-                    n_k = 1
-            else:
-                n_k = 1
+            n_k = partition_dataset_size(client_indices_dict, pid)
             dataset_sizes.append(n_k)
 
             # Get client loader and compute stochastic gradient norm
@@ -275,7 +228,7 @@ class FedMAQHook(StrategyHook):
         # 3. Compute and inject client-specific quantization bit-widths
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), pid, g_k, n_k in zip(
-            client_instructions, client_pids, grad_norms, dataset_sizes
+            client_instructions, client_pids, grad_norms, dataset_sizes, strict=True
         ):
             c_k = float(strategy.client_memory[pid])
             q_k_t = compute_fedmaq_q_k_t(
@@ -326,49 +279,35 @@ class FedMAQHook(StrategyHook):
         device = torch.device(self._config.get("device") or DEVICE)
         alg_cfg = self._config.get("algorithm", {})
 
-        # Student model architecture for FedMAQ uses the KD student (TinyCNN/SimpleCNN)
-        student_model = get_kd_student_model(dataset_name, num_classes)
-        student_model.to(device)
-        set_model_parameters(
-            student_model, parameters_to_ndarrays(aggregated_parameters)
+        # FedMAQ's student/teacher architecture is the KD student (TinyCNN/SimpleCNN).
+        aggregated_parameters = distill_ensemble_into_global(
+            model_factory=get_kd_student_model,
+            aggregated_parameters=aggregated_parameters,
+            results=results,
+            public_indices=strategy.public_indices,
+            dataset_name=dataset_name,
+            num_classes=num_classes,
+            batch_size=batch_size,
+            alg_cfg=alg_cfg,
+            device=device,
         )
-
-        # Load teacher models from client parameter snapshots
-        teachers: list[nn.Module] = []
-        for _, fit_res in results:
-            try:
-                teacher = get_kd_student_model(dataset_name, num_classes)
-                set_model_parameters(
-                    teacher, parameters_to_ndarrays(fit_res.parameters)
-                )
-                teacher.eval()
-                teacher.to(device)
-                teachers.append(teacher)
-            except Exception as exc:
-                logger.warning(f"Failed to load client model from parameters: {exc}")
-
-        if teachers and strategy.public_indices is not None:
-            try:
-                public_loader, _ = get_server_loaders(
-                    dataset_name, strategy.public_indices, batch_size=batch_size
-                )
-                run_server_side_kd(
-                    student_model=student_model,
-                    teachers=teachers,
-                    public_loader=public_loader,
-                    temperature=float(alg_cfg.get("temperature", 1.0)),
-                    learning_rate=float(alg_cfg.get("server_kd_lr", 0.01)),
-                    momentum=float(alg_cfg.get("server_kd_momentum", 0.9)),
-                    epochs=int(alg_cfg.get("kd_epochs", 1)),
-                    device=device,
-                )
-                updated_ndarrays = get_model_parameters(student_model)
-                aggregated_parameters = ndarrays_to_parameters(updated_ndarrays)
-                logger.info(
-                    f"Server-side KD: successfully distilled knowledge "
-                    f"from {len(teachers)} teacher models."
-                )
-            except Exception as exc:
-                logger.error(f"Error during server-side KD: {exc}")
-
         return aggregated_parameters, metrics
+
+    def server_sim_time(
+        self,
+        strategy: TelemetryFedAvg,
+        results: list[tuple[ClientProxy, FitRes]],
+        aggregated_parameters: Parameters | None,
+    ) -> float:
+        if aggregated_parameters is None:
+            return 0.0
+        alg_cfg = self._config.get("algorithm", {})
+        num_public = int(
+            self._config.get("experiment", {}).get("num_public_samples", 200)
+        )
+        return kd_server_sim_time(
+            num_public=num_public,
+            kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
+            num_teachers=len(results),
+            server_compute_speed=float(alg_cfg.get("server_compute_speed", 2000.0)),
+        )
