@@ -5,8 +5,8 @@ Living document for agent-to-agent and session-to-session continuity across the 
 | Field                  | Value                                                                         |
 | ---------------------- | ----------------------------------------------------------------------------- |
 | **Last updated**       | 2026-07-09                                                                    |
-| **Last session focus** | experiments + manuscript: align codebase (proxy pool, bit-widths, FedDistill spec) with updated Ch. 1/4 manuscript; applied reported manuscript-side fixes to chapter_4.tex |
-| **Active repo**        | fedmaq-experiments (secondary: fedmaq-manuscript)                             |
+| **Last session focus** | experiments: deep cleanup/refactor — hook-based client/server dispatch (no `alg_name` branching), dedup into `core/`, correctness fixes (FedMAQ grad-norm arch, q=1 NaN, DAdaQuant clamp), and a full FedDistill+ port. Branch `refactor/cleanup-and-feddistill`. |
+| **Active repo**        | fedmaq-experiments                                                            |
 | **Blockers**           | None                                                                          |
 
 ---
@@ -56,10 +56,10 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 4. Per-repo status
 
-### [fedmaq-experiments](../fedmaq-experiments/) — [Phase 1 Env Complete; Hardened & Manuscript-Aligned]
+### [fedmaq-experiments](../fedmaq-experiments/) — [Deep-refactored, hook-based; FedDistill+ ported]
 
-- **Status details:** See completed baselines and status in [baseline_registry.md](.claude/project/baseline_registry.md). Fully refactored `TelemetryFedAvg` into modular strategy hooks (`core/strategy_hooks/`), hardened the codebase with performance/correctness/robustness optimizations, and reconciled against the updated Ch. 1/4 manuscript (proxy pool size 1600, discrete bit-width set `Q`, FedPAQ-semantics compressor for FedMAQ). Committed as `8590d1f`.
-- **Pending:** Port remaining SOTA baselines (FedDistill, CFD — Sep 2026), Docker integration.
+- **Status details:** See completed baselines in [baseline_registry.md](.claude/project/baseline_registry.md). This session (branch `refactor/cleanup-and-feddistill`, not yet merged to `main`) removed all `alg_name` string-dispatch: client-side local training now goes through `ClientFitStrategy` hooks (`core/client_hooks/`), and server-side time/comms modelling through new `StrategyHook` methods (`download_size_bytes`, `compute_speed_scale`, `local_train_sample_count`, `server_sim_time`) — `strategy.py`/`NetworkSimulator` carry no per-algorithm branches. Magic numbers (fedkd `2.5`, server KD `2000.0`, fedmd pretrain `10`) moved to config. Deduped KD/partition/SVD/quantization helpers into `core/`. Correctness fixes: FedMAQ grad-norm now on the KD-student architecture (was silently zeroed on CIFAR), 1-bit FedPAQ sign-quantization (was NaN), DAdaQuant per-client `q` clamp, `set_model_parameters` shape guard. **FedDistill+ ported** (FedAvg weights + label-wise logit KD; `core/{client_hooks,strategy_hooks}/feddistill.py`). Safety net added: `simulation.run(cfg)`, composition + golden time/bytes tests, 54 tests green, ruff clean.
+- **Pending:** Merge `refactor/cleanup-and-feddistill` to `main` (open PR). Port CFD baseline (P11, ~Oct 2026 — still a config-time-guarded stub). Docker integration. Minor debt: mypy non-blocking (27 errors, mostly Hydra OmegaConf->dict variance + torch `Dataset.__len__` stubs); DAdaQuant unit-test params (phi=3,q_min=4) differ from `dadaquant.yaml` (phi=5,q_min=1) — reconcile by composing real configs in tests.
 
 ### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active]
 
@@ -104,14 +104,15 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 7   | WandB + Hydra ingest utilities                             | analyses    | [ ]    |
 | 8   | Review & approve remaining 10 draft summaries (remediate)  | literature  | [x]    |
 | 9   | Compile/synthesize summaries into thematic syntheses       | literature  | [ ]    |
-| 10  | Port FedDistill baseline                                   | experiments | [ ]    |
+| 10  | Port FedDistill baseline                                   | experiments | [x]    |
 | 11  | Port CFD baseline                                          | experiments | [ ]    |
+| 13  | Deep cleanup/refactor: hook-based client/server dispatch, dedup, correctness fixes | experiments | [x] |
 | 12  | Align experiments code + Ch. 1/4 manuscript (proxy pool, discrete bit-widths, FedDistill spec); apply manuscript-side fixes to chapter_4.tex | experiments + manuscript | [x] |
 
 > [!TIP]
 > For **Task 8**, the agent should perform the corrections locally by reading the critique files (`summaries/drafts/*_critique.md`) and modifying the draft summaries directly, rather than calling OpenRouter APIs. This keeps the workflow fast and cost-free for the user's OpenRouter account.
 
-**Current focus:** P7 — WandB + Hydra ingest utilities (`fedmaq-analyses`). Tasks 10--11 (FedDistill, CFD) are Sep--Oct 2026 per Gantt. User should also review/commit the `chapter_4.tex` edits from Task 12 and resolve the flagged experimental-grid-size note.
+**Current focus:** Merge the `refactor/cleanup-and-feddistill` branch to `main` (open a PR; the branch has 10 commits, 54 tests green, ruff clean). Then P7 — WandB + Hydra ingest utilities (`fedmaq-analyses`). P11 (CFD) remains ~Oct 2026 per Gantt and is a config-time-guarded stub. Still open from prior session: review/commit the `chapter_4.tex` edits (Task 12) and resolve the flagged experimental-grid-size note.
 
 ---
 
