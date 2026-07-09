@@ -38,7 +38,7 @@ def compute_dadaquant_client_q(
     b = sum(ws / (q_t**2) for ws in w_sq)
 
     q_i_list = []
-    for wi, wi_pow in zip(w, w_pow):
+    for wi_pow in w_pow:
         if b > 0:
             q_val = np.sqrt(a / b) * wi_pow
             q_i = int(max(1, np.round(q_val)))
@@ -176,7 +176,7 @@ class DAdaQuantHook(StrategyHook):
 
         q_i_list = compute_dadaquant_client_q(sizes, self.q_t)
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
-        for (client, fit_ins), q_i in zip(client_instructions, q_i_list):
+        for (client, fit_ins), q_i in zip(client_instructions, q_i_list, strict=True):
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
             new_fit_ins.config["q"] = q_i
             updated_instructions.append((client, new_fit_ins))

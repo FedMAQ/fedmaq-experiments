@@ -1,0 +1,102 @@
+"""Phase 0 safety-net tests: Hydra config composition + in-process run(cfg) smoke.
+
+These guard the orchestration path that the hand-rolled unit tests in
+``test_environment.py`` never exercise: that every ``conf/algorithm/*.yaml`` composes
+into a valid config, and that the decorator-free :func:`fedmaq.simulation.run` entry
+point drives the real ``client_fn``/``server_fn`` wiring end-to-end.
+"""
+
+import numpy as np
+import pytest
+import torch
+from hydra import compose, initialize
+from torch.utils.data import TensorDataset
+
+# Every selectable algorithm config (including the FedDistill/CFD stubs, whose YAML
+# must still compose even though their hooks are not yet implemented).
+ALGORITHM_CONFIGS = [
+    "fedavg",
+    "fedprox",
+    "fedpaq",
+    "dadaquant",
+    "fedmd",
+    "fedkd",
+    "fedavg_kd",
+    "fedmaq",
+    "fedmaq_no_kd",
+    "fedmaq_state_only",
+    "fedmaq_data_only",
+    "fedmaq_resource_only",
+    "feddistill",
+    "cfd",
+]
+
+
+@pytest.fixture
+def mock_dataset(monkeypatch):
+    """Mock torchvision dataset loading with 100 MNIST-like samples."""
+    mock_data = torch.randn(100, 1, 28, 28)
+    mock_labels = torch.randint(0, 10, (100,))
+    mock_ds = TensorDataset(mock_data, mock_labels)
+    mock_ds.targets = mock_labels
+    monkeypatch.setattr(
+        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
+    )
+    return mock_ds
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHM_CONFIGS)
+def test_algorithm_config_composes(algorithm):
+    """Every algorithm config must compose into a structurally valid experiment config.
+
+    A malformed ``conf/algorithm/*.yaml`` (or a broken default/interpolation) is
+    otherwise invisible to the suite, since the unit tests build cfg dicts inline.
+    """
+    with initialize(config_path="../conf", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=[f"algorithm={algorithm}"])
+
+    # Composition wiring: the four config groups + a resolvable algorithm name.
+    assert cfg.algorithm.name, f"{algorithm} config is missing algorithm.name"
+    assert cfg.dataset.name
+    assert cfg.experiment.num_clients > 0
+    assert cfg.experiment.total_rounds > 0
+    # Manuscript Table 4.1 anchors that must survive composition.
+    assert cfg.experiment.batch_size == 64
+    assert cfg.experiment.num_public_samples == 1600
+
+
+def test_run_cfg_smoke_fedavg(mock_dataset, tmp_path, monkeypatch):
+    """The extracted run(cfg) entry point drives a real 1-round simulation in-process.
+
+    Unlike a subprocess ``scripts/run.py`` smoke (which only checks an exit code),
+    this asserts on returned telemetry state, making orchestration regressions and
+    empty-payload bugs observable.
+    """
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    from fedmaq.simulation import run
+
+    with initialize(config_path="../conf", version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "algorithm=fedavg",
+                # Route to the lightweight SimpleCNN path so the 1x28x28 mock fits.
+                "dataset.name=mnist",
+                "dataset.num_classes=10",
+                "experiment.num_clients=2",
+                "experiment.total_rounds=1",
+                "experiment.num_public_samples=10",
+                "experiment.batch_size=2",
+                "experiment.local_epochs=1",
+                "experiment.client_fraction=1.0",
+                "experiment.client_gpus=0.0",
+            ],
+        )
+
+    telemetry = run(cfg)
+
+    # The run completed and accounted for transmitted bytes over the wire.
+    assert telemetry.cumulative_bytes > 0
+    assert telemetry.jsonl_path.exists()
+    assert np.isfinite(telemetry.cumulative_bytes)

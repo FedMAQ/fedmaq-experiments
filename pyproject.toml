@@ -9,6 +9,7 @@ dependencies = [
     "hydra-core>=1.3.3",
     "matplotlib>=3.11.0",
     "omegaconf>=2.3.1",
+    "scikit-learn>=1.9.0",  # runtime: macro P/R/F1 in core/evaluation.py
     "seaborn>=0.13.2",
     "torch==2.12.1+cu132",
     "torchvision==0.27.1+cu132",
@@ -17,9 +18,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.13.0",
     "pytest>=9.1.1",
     "ruff>=0.15.19",
-    "scikit-learn>=1.9.0",
 ]
 
 [project.scripts]
@@ -37,11 +38,21 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "I", "UP", "B"]
 
 [tool.flwr.app]
 publisher = "fedmaq"
 flwr-version-target = "1.31.0"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/fedmaq"]
+ignore_missing_imports = true       # flwr / torch / hydra ship partial or no stubs
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Pragmatic gate for a research codebase: enforce annotations where they exist without
+# demanding full coverage. Tighten (disallow_untyped_defs) once the refactor settles.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -66,7 +66,7 @@ def test_model_factory_and_parameters():
 
     # Verify modification
     re_extracted = get_model_parameters(model)
-    for p_new, p_re in zip(new_params, re_extracted):
+    for p_new, p_re in zip(new_params, re_extracted, strict=True):
         np.testing.assert_allclose(p_new, p_re, rtol=1e-5)
 
 
@@ -1092,7 +1092,7 @@ def test_compute_fedmaq_q_k_t():
         q_max=8,
         lambda_val=1.0,
     )
-    # modulator = (1.0 + 1.0 * 0.5) / 2.0 = 0.75. q_hat = 2 + round(6 * 0.5 * 0.75) = 2 + round(2.25) = 4.
+    # modulator = (1 + 1*0.5)/2 = 0.75. q_hat = 2 + round(6*0.5*0.75) = 2 + round(2.25) = 4.
     assert q_mod == 4
 
     # Test formulation 4: Threshold-Based Staged Rule

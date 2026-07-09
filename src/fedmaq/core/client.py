@@ -59,7 +59,7 @@ class FedProxLossHook(LossHook):
         loss = criterion(outputs, targets)
         proximal_term = 0.0
         params = [p for p in model.parameters() if p.requires_grad]
-        for p, gp in zip(params, self.global_params):
+        for p, gp in zip(params, self.global_params, strict=True):
             proximal_term += torch.sum((p - gp) ** 2)
         return loss + (self.mu / 2.0) * proximal_term
 
@@ -356,7 +356,7 @@ class GenericClient(fl.client.NumPyClient):
 
         # 7. Extract updated student model parameters and compute delta
         updated_params = get_model_parameters(self.model)
-        deltas = [u - o for u, o in zip(updated_params, parameters)]
+        deltas = [u - o for u, o in zip(updated_params, parameters, strict=True)]
 
         # 8. Update compressor hook with dynamic energy if provided in configuration
         if "energy" in config:
@@ -367,7 +367,9 @@ class GenericClient(fl.client.NumPyClient):
         compressed_deltas, byte_size = self.compressor_hook.compress(deltas)
 
         # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas)]
+        reconstructed_params = [
+            o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)
+        ]
 
         return (
             reconstructed_params,
@@ -445,13 +447,15 @@ class GenericClient(fl.client.NumPyClient):
         updated_params = get_model_parameters(self.model)
 
         # Compute delta = w_new - w_old
-        deltas = [u - o for u, o in zip(updated_params, parameters)]
+        deltas = [u - o for u, o in zip(updated_params, parameters, strict=True)]
 
         # Compress updates
         compressed_deltas, byte_size = self.compressor_hook.compress(deltas)
 
         # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas)]
+        reconstructed_params = [
+            o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)
+        ]
 
         return (
             reconstructed_params,
