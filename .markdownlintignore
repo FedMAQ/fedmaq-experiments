@@ -1,4 +1,0 @@
-# Ignore agent-managed and generated markdown files from lint rules
-.cursor/
-HANDOFF.md
-AGENTS.md
