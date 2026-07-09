@@ -615,6 +615,54 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
     assert teacher_file.exists()
 
 
+def test_dadaquant_fit_reports_pretrain_loss(mock_dataset):
+    """DAdaQuant's local_loss must be the CE loss on the incoming model BEFORE training.
+
+    This feeds the server-side plateau -> q_t doubling, so the eval-before-train
+    ordering is behavior-critical and not exercised by short smoke runs (plateau
+    needs phi+1 non-improving rounds).
+    """
+    from fedmaq.core.models import SimpleCNN, get_model_parameters
+
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=4)
+    model = SimpleCNN(in_channels=1, num_classes=10)
+    initial_params = get_model_parameters(model)
+
+    # Expected pre-training loss: CE over the loader on the untrained model.
+    reference = SimpleCNN(in_channels=1, num_classes=10)
+    set_model_parameters(reference, initial_params)
+    reference.eval()
+    criterion = nn.CrossEntropyLoss()
+    loss_sum, n = 0.0, 0
+    with torch.no_grad():
+        for images, labels in train_loader:
+            out = reference(images)
+            loss_sum += criterion(out, labels).item() * len(labels)
+            n += len(labels)
+    expected = loss_sum / n
+
+    cfg_dict = {
+        "experiment": {"local_epochs": 1, "learning_rate": 0.01, "weight_decay": 0.0},
+        "algorithm": {"name": "dadaquant", "q_min": 1, "q_max": 8},
+        "dataset": {"name": "mnist", "num_classes": 10},
+    }
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=CompressionHook(),
+        config=cfg_dict,
+    )
+    _, _, metrics = client.fit(initial_params, {"q": 4})
+
+    assert metrics["local_loss"] > 0.0
+    # Reported loss is measured on the pre-training model, so it matches the
+    # reference computed on the initial parameters (not the post-training loss).
+    assert metrics["local_loss"] == pytest.approx(expected, rel=1e-4)
+
+
 def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     """Test 2-round simulation of the FedKD baseline implementation."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
