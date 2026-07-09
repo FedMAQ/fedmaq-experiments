@@ -15,7 +15,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
-from fedmaq.baselines.compression import compress_tensor
+from fedmaq.baselines.compression import compress_tensor, svd_compressed_nbytes
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     DAdaQuantHook,
@@ -248,11 +248,7 @@ class TelemetryFedAvg(FedAvg):
                     if arr.size == 0:
                         continue
                     compressed = compress_tensor(arr, energy)
-                    if len(compressed) == 3:
-                        u, sigma, v = compressed
-                        model_size_bytes += (u.size + sigma.size + v.size) * 4
-                    else:
-                        model_size_bytes += arr.nbytes
+                    model_size_bytes += svd_compressed_nbytes(compressed, arr.nbytes)
             else:
                 model_size_bytes = sum(arr.nbytes for arr in ndarrays)
         else:

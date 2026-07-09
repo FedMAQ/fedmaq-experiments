@@ -7,10 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from flwr.common import FitIns, Parameters, Scalar
-from flwr.common.typing import FitRes, GetPropertiesIns
+from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.strategy_hooks._partition import (
+    partition_dataset_size,
+    resolve_partition_id,
+)
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -58,44 +62,6 @@ def compute_dadaquant_client_q(
             q_i = min(q_max, q_i)
         q_i_list.append(q_i)
     return q_i_list
-
-
-def _resolve_partition_id(
-    client: ClientProxy,
-    strategy: TelemetryFedAvg,
-) -> int:
-    """Resolve a client's partition ID, caching the result on the strategy."""
-    cid_str = str(client.cid)
-    if cid_str in strategy.proxy_cid_to_partition_id:
-        return strategy.proxy_cid_to_partition_id[cid_str]
-
-    # Flower simulation shortcut: client.cid is typically the stringified partition ID
-    if cid_str.isdigit():
-        pid = int(cid_str)
-        if pid < strategy.num_clients:
-            strategy.proxy_cid_to_partition_id[cid_str] = pid
-            return pid
-
-    try:
-        try:
-            res = client.get_properties(
-                GetPropertiesIns(config={}), timeout=5.0, group_id=0
-            )
-        except TypeError:
-            res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
-        pid = int(res.properties["cid"])
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.info(f"Queried partition ID {pid} for Client Proxy {cid_str}")
-        return pid
-    except Exception as exc:
-        pid = hash(client.cid) % strategy.num_clients
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.warning(
-            f"Could not resolve partition ID for client {cid_str} ({exc}). "
-            f"Falling back to hash-based mapping → partition {pid}. "
-            "Verify that GenericClient.get_properties exposes 'cid'."
-        )
-        return pid
 
 
 class DAdaQuantHook(StrategyHook):
@@ -169,22 +135,12 @@ class DAdaQuantHook(StrategyHook):
         # 2. Compute client-adaptive quantization levels q_i
         clients = [c for c, _ in client_instructions]
         client_indices_dict = strategy.client_indices_dict
-        if client_indices_dict is not None:
-            sizes = []
-            for c in clients:
-                pid = _resolve_partition_id(c, strategy)
-                if str(pid) in client_indices_dict:
-                    sizes.append(len(client_indices_dict[str(pid)]))
-                elif int(pid) in client_indices_dict:
-                    sizes.append(len(client_indices_dict[int(pid)]))
-                else:
-                    logger.warning(
-                        f"Partition ID {pid} not found in client_indices_dict. "
-                        "Defaulting size to 1."
-                    )
-                    sizes.append(1)
-        else:
-            sizes = [1] * len(clients)
+        sizes = [
+            partition_dataset_size(
+                client_indices_dict, resolve_partition_id(c, strategy)
+            )
+            for c in clients
+        ]
 
         q_i_list = compute_dadaquant_client_q(
             sizes, self.q_t, q_min=q_min, q_max=q_max
