@@ -86,7 +86,7 @@ def compute_fedmaq_q_k_t(
     q_max_capped = _snap_floor(max(1.0, np.floor(c_k / c_unit)), bit_widths)
 
     # Tier 2 soft quality target based on the formulation
-    q_hat: int | float
+    q_hat: float
     if formulation == 0:
         # Alternative 0: Resource-Only hard cap — no soft quality signal.
         # The soft target is always q_max; only Tier-1 constrains the final value.

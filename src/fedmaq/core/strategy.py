@@ -103,8 +103,14 @@ class TelemetryFedAvg(FedAvg):
         exp_config = config.get("experiment", config)
         self.num_clients = exp_config.get("num_clients", 10)
         self.simulated_time = 0.0
-        self.cumulative_bytes = 0
         self.alg_name: str = config.get("algorithm", {}).get("name", "")
+
+        # Per-round telemetry snapshots, read back in evaluate(). Initialized here
+        # so the first evaluate() call (round 0) has defined values without getattr.
+        self.last_round_bytes = 0
+        self.last_round_time = 0.0
+        self.last_client_time = 0.0
+        self.last_server_time = 0.0
 
         # Seeded generator for reproducibility
         seed = config.get("seed", 42)
@@ -271,8 +277,9 @@ class TelemetryFedAvg(FedAvg):
         round_time = client_sim_time + server_sim_time
         self.simulated_time += round_time
 
+        # TelemetryManager owns cumulative byte/time accounting (see telemetry.py);
+        # the strategy only snapshots the latest round for evaluate() logging.
         round_total_bytes = round_bytes_downloaded + round_bytes_uploaded
-        self.cumulative_bytes += round_total_bytes
         self.last_round_bytes = round_total_bytes
         self.last_round_time = round_time
         self.last_client_time = client_sim_time
@@ -295,18 +302,10 @@ class TelemetryFedAvg(FedAvg):
             loss, metrics = eval_res
             acc = float(metrics.get("accuracy", 0.0))
 
-            round_bytes = (
-                getattr(self, "last_round_bytes", 0) if server_round > 0 else 0
-            )
-            round_time = (
-                getattr(self, "last_round_time", 0.0) if server_round > 0 else 0.0
-            )
-            client_time = (
-                getattr(self, "last_client_time", 0.0) if server_round > 0 else 0.0
-            )
-            server_time = (
-                getattr(self, "last_server_time", 0.0) if server_round > 0 else 0.0
-            )
+            round_bytes = self.last_round_bytes if server_round > 0 else 0
+            round_time = self.last_round_time if server_round > 0 else 0.0
+            client_time = self.last_client_time if server_round > 0 else 0.0
+            server_time = self.last_server_time if server_round > 0 else 0.0
 
             log_metrics: dict[str, Any] = {
                 "round": server_round,

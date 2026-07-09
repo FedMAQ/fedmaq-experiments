@@ -1378,3 +1378,23 @@ def test_evaluation_metrics():
     assert abs(precision - 0.5) < 1e-5
     assert abs(recall - 0.5) < 1e-5
     assert abs(f1 - 0.5) < 1e-5
+
+
+def test_strategy_hook_registry():
+    """get_strategy_hook: dict lookup, Passthrough fallback, unported guard."""
+    from fedmaq.core.strategy_hooks import (
+        FedMAQHook,
+        PassthroughHook,
+        get_strategy_hook,
+    )
+
+    cfg = {"algorithm": {"name": "fedmaq"}}
+    assert isinstance(get_strategy_hook("fedmaq", cfg), FedMAQHook)
+
+    # Unknown FedAvg-family name falls back to PassthroughHook (client-only algos).
+    assert isinstance(get_strategy_hook("fedavg", {}), PassthroughHook)
+
+    # Registered-but-unimplemented baselines fail loudly at construction time.
+    for unported in ("feddistill", "cfd"):
+        with pytest.raises(NotImplementedError):
+            get_strategy_hook(unported, {})

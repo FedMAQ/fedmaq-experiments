@@ -1,7 +1,5 @@
 """Standard PyTorch model architectures and helpers for FedMAQ."""
 
-from typing import Any
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -121,7 +119,7 @@ class ResNet18GN(nn.Module):
         self.linear = nn.Linear(512 * BasicBlock.expansion, num_classes)
 
     def _make_layer(
-        self, block: Any, planes: int, num_blocks: int, stride: int
+        self, block: type[BasicBlock], planes: int, num_blocks: int, stride: int
     ) -> nn.Sequential:
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
