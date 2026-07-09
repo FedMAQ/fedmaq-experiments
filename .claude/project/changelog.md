@@ -4,6 +4,18 @@ Archive of session-to-session changelog entries for the FedMAQ thesis codebase.
 
 ## Historical Entries
 
+### 2026-07-09 — Literature OKF Restructure (literature)
+
+Branch `okf-restructure` in `fedmaq-literature`. Restructured the literature repo from a local-first vector-RAG pipeline into an **Open Knowledge Format** knowledge graph, chosen over Karpathy's LLM-Wiki pattern for long-term LLM-agent integration and conformant to the user-provided `SPEC.md` (OKF v0.1). Executed in phases; the advisor was consulted at phase boundaries.
+
+- **Decision + scope (three approved calls):** Remove the Chroma/LlamaIndex vector-RAG stack entirely (keep only Docling/Marker PDF→markdown conversion); Phase 1 = papers only (Method/Concept/Finding/Gap dirs scaffolded but empty); drop the draft→approve gate (nodes authored directly, reviewed via `git diff`).
+- **Two-layer architecture:** raw layer `markdown/{slug}/paper.md` (verbatim, citable) + knowledge layer `kg/` (curated OKF nodes with YAML frontmatter, root-absolute intra-bundle links, `index.md`/`log.md` reserved files). No vector DB — grep + read replaces retrieval.
+- **Conversions:** Confirmed 10 of 39 canon papers were unconverted (acar, karimireddy, li-moon, tan, wang-fednova, alistarh, bernstein, jeong, lin, zhu); converted all via the pipeline. Fixed the recursive PDF resolver (`resolve_pdf_path` non-recursive `glob` → `rglob`, since PDFs live in batch subfolders).
+- **Migration:** Built a reproducible generator (`scripts/build_kg_papers.py` + hand-authored `scripts/kg_bodies/`, kept as provenance) emitting all **39** `type: Paper` nodes to `kg/papers/{slug}.md` (28 migrated from prior summaries + 11 hand-authored from `paper.md`). Fixes along the way: YAML-scalar quoting for titles/descriptions with colons; PDF-filename-derived titles + a `TITLE_OVERRIDES` map for Windows-dropped colons/truncation; batch-tag recovery; CJK cleanup; method-trigger cross-linking that avoids fabricating edges from shared surnames. All nodes OKF-conformant, 116 intra-bundle links resolve.
+- **Stack removal:** Dropped `chromadb`/`llama-index-*`/`openai` from `pyproject.toml`; removed `ingest/`, `workflows/`, `summaries/`, `syntheses/`, `storage/` and their tests; rewrote the CLI to `convert` + `list-slugs` only.
+- **Docs/rules/skills (Phase 4):** Retargeted `AGENTS.md`/`README.md` to the bundle. Rules: added `kg-conventions.mdc` (replaces `rag-boundaries`), `okf-paper-template.mdc` (replaces `summary-template`), `okf-finding-template.mdc` (replaces `synthesis-template`); updated `naming-conventions`/`no-pdf-read`. Skills: added `convert-paper` (replaces `ingest-paper`) and `author-node` (replaces `summarize-paper`); removed `query-literature` and `approve-summary`. Slimmed `paper_registry.md` to conversion status (dropped dead Indexing/Summary columns) with matching `registry.py` + test changes. 14 tests green. (Literature remains on `.cursor/` tooling — not yet migrated to `.claude/`.)
+- **Cross-repo:** Updated `HANDOFF.md` (workspace map, locked decisions, per-repo status, queue, env vars, what-not-to-do, recommendation) to reflect the restructure and to mark the now-resolved experiments-refactor (PR #1) and manuscript `chapter_4.tex` (`b6c08bc`) threads.
+
 ### 2026-07-09 — Deep Cleanup/Refactor + FedDistill+ Port (experiments)
 
 Branch `refactor/cleanup-and-feddistill` (10 commits, not yet merged to `main`). 54 tests green, ruff clean, mypy non-blocking. Executed a 6-phase plan; the advisor was consulted at each phase boundary.
