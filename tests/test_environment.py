@@ -1383,6 +1383,7 @@ def test_evaluation_metrics():
 def test_strategy_hook_registry():
     """get_strategy_hook: dict lookup, Passthrough fallback, unported guard."""
     from fedmaq.core.strategy_hooks import (
+        FedDistillHook,
         FedMAQHook,
         PassthroughHook,
         get_strategy_hook,
@@ -1390,11 +1391,139 @@ def test_strategy_hook_registry():
 
     cfg = {"algorithm": {"name": "fedmaq"}}
     assert isinstance(get_strategy_hook("fedmaq", cfg), FedMAQHook)
+    assert isinstance(get_strategy_hook("feddistill", {}), FedDistillHook)
 
     # Unknown FedAvg-family name falls back to PassthroughHook (client-only algos).
     assert isinstance(get_strategy_hook("fedavg", {}), PassthroughHook)
 
     # Registered-but-unimplemented baselines fail loudly at construction time.
-    for unported in ("feddistill", "cfd"):
-        with pytest.raises(NotImplementedError):
-            get_strategy_hook(unported, {})
+    with pytest.raises(NotImplementedError):
+        get_strategy_hook("cfd", {})
+
+
+def test_feddistill_logit_tracker_no_nan():
+    """LogitTracker must stay finite when a client is missing most classes.
+
+    Under Dirichlet alpha=0.1 most clients hold only a few labels; counts are
+    initialized to ones so unseen classes yield a finite all-zero row, not 0/0 NaN.
+    """
+    from fedmaq.core.client_hooks.feddistill import LogitTracker
+
+    tracker = LogitTracker(num_labels=10)
+    logits = torch.randn(6, 10)
+    labels = torch.tensor([0, 0, 3, 3, 0, 3])  # only classes 0 and 3 present
+    tracker.update(logits, labels)
+
+    avg = tracker.avg()
+    assert avg.shape == (10, 10)
+    assert np.all(np.isfinite(avg)), "LogitTracker produced NaN/Inf"
+    for missing in (1, 2, 4, 5, 6, 7, 8, 9):
+        assert np.allclose(avg[missing], 0.0), f"class {missing} row should be zero"
+
+
+def test_feddistill_bytes_shape_guard():
+    """Deserializing a logit buffer with the wrong num_labels must fail loudly."""
+    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+
+    buf = logits_to_bytes(np.zeros((3, 3), dtype=np.float32))
+    assert bytes_to_logits(buf, 3).shape == (3, 3)
+    with pytest.raises(ValueError, match="num_labels"):
+        bytes_to_logits(buf, 4)  # 9 floats != 4^2
+
+
+def test_feddistill_hook_aggregation_and_broadcast():
+    """Server averages client logit matrices, passes weights through, rebroadcasts."""
+    from flwr.common import Code, FitIns, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    hook = FedDistillHook({"dataset": {"num_classes": 3}})
+    assert hook.global_logits is None
+
+    def _fit_res(matrix):
+        return FitRes(
+            status=Status(code=Code.OK, message=""),
+            parameters=ndarrays_to_parameters([]),
+            num_examples=1,
+            metrics={"client_logits": logits_to_bytes(matrix)},
+        )
+
+    m1 = np.ones((3, 3), dtype=np.float32)
+    m2 = np.full((3, 3), 3.0, dtype=np.float32)
+    results = [(None, _fit_res(m1)), (None, _fit_res(m2))]
+
+    sentinel = ndarrays_to_parameters([np.zeros(2, dtype=np.float32)])
+    out_params, _ = hook.aggregate_fit(None, 1, results, [], sentinel, {})
+    # FedAvg-averaged weights are passed through untouched.
+    assert out_params is sentinel
+    # Consensus logits = elementwise mean of the client matrices.
+    assert np.allclose(hook.global_logits, 2.0)
+    assert np.all(np.isfinite(hook.global_logits))
+
+    # configure_fit broadcasts the consensus matrix as bytes.
+    fit_ins = FitIns(ndarrays_to_parameters([]), {})
+    updated = hook.configure_fit(
+        None, 2, ndarrays_to_parameters([]), None, [(None, fit_ins)]
+    )
+    gl = updated[0][1].config["global_logits"]
+    assert isinstance(gl, bytes)
+    assert np.allclose(bytes_to_logits(gl, 3), 2.0)
+
+
+def test_feddistill_two_round_reg_path(mock_dataset):
+    """End-to-end 2-round FedDistill+: round 2 must exercise the logit-KD reg branch.
+
+    Round 1 has no global logits (plain CE); only after the server aggregates and
+    rebroadcasts does the KLDiv(log_softmax(z), softmax(global_logits[y])) term fire.
+    """
+    from flwr.common import Code, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import logits_to_bytes
+    from fedmaq.core.models import SimpleCNN, get_model_parameters
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=4)
+    model = SimpleCNN(in_channels=1, num_classes=10)
+    params = get_model_parameters(model)
+    cfg = {
+        "experiment": {"local_epochs": 1, "learning_rate": 0.01, "weight_decay": 0.0},
+        "algorithm": {"name": "feddistill", "reg_alpha": 1.0},
+        "dataset": {"name": "mnist", "num_classes": 10},
+    }
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=CompressionHook(),
+        config=cfg,
+    )
+
+    # Round 1: no global logits -> plain CE, but still emits per-class logits.
+    p1, n1, m1 = client.fit(params, {"server_round": 1})
+    assert isinstance(m1["client_logits"], bytes)
+    assert all(np.all(np.isfinite(p)) for p in p1)
+
+    # Server aggregates -> global logits become available.
+    hook = FedDistillHook({"dataset": {"num_classes": 10}})
+    fit_res = FitRes(
+        status=Status(code=Code.OK, message=""),
+        parameters=ndarrays_to_parameters(p1),
+        num_examples=n1,
+        metrics=m1,
+    )
+    hook.aggregate_fit(None, 1, [(None, fit_res)], [], ndarrays_to_parameters(p1), {})
+    assert hook.global_logits is not None
+    assert np.all(np.isfinite(hook.global_logits))
+
+    # Round 2: broadcasting the global logits must drive the reg path without error.
+    p2, _, m2 = client.fit(
+        p1, {"server_round": 2, "global_logits": logits_to_bytes(hook.global_logits)}
+    )
+    assert all(np.all(np.isfinite(p)) for p in p2)
+    # Upload accounting = model weights + the 10x10 float32 logit matrix.
+    assert m2["bytes_uploaded"] == sum(int(p.nbytes) for p in p2) + 10 * 10 * 4

@@ -100,3 +100,37 @@ def test_run_cfg_smoke_fedavg(mock_dataset, tmp_path, monkeypatch):
     assert telemetry.cumulative_bytes > 0
     assert telemetry.jsonl_path.exists()
     assert np.isfinite(telemetry.cumulative_bytes)
+
+
+def test_run_cfg_smoke_feddistill_two_rounds(mock_dataset, tmp_path, monkeypatch):
+    """FedDistill+ over 2 rounds through the real Flower orchestration.
+
+    Validates the bytes-over-Flower transport that the in-process unit tests bypass:
+    clients emit per-class logits in FitRes.metrics, the server averages and
+    rebroadcasts them via FitIns.config, and round 2 runs the logit-KD reg path.
+    """
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    from fedmaq.simulation import run
+
+    with initialize(config_path="../conf", version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "algorithm=feddistill",
+                "dataset.name=mnist",
+                "dataset.num_classes=10",
+                "experiment.num_clients=2",
+                "experiment.total_rounds=2",
+                "experiment.num_public_samples=10",
+                "experiment.batch_size=2",
+                "experiment.local_epochs=1",
+                "experiment.client_fraction=1.0",
+                "experiment.client_gpus=0.0",
+            ],
+        )
+
+    telemetry = run(cfg)
+
+    assert telemetry.cumulative_bytes > 0
+    assert np.isfinite(telemetry.cumulative_bytes)
