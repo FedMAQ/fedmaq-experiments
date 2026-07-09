@@ -135,12 +135,16 @@ class DAdaQuantHook(StrategyHook):
         # 2. Compute client-adaptive quantization levels q_i
         clients = [c for c, _ in client_instructions]
         client_indices_dict = strategy.client_indices_dict
-        sizes = [
-            partition_dataset_size(
-                client_indices_dict, resolve_partition_id(c, strategy)
-            )
-            for c in clients
-        ]
+        if client_indices_dict is None:
+            # No partition map: skip ID resolution entirely and default all sizes.
+            sizes = [1] * len(clients)
+        else:
+            sizes = [
+                partition_dataset_size(
+                    client_indices_dict, resolve_partition_id(c, strategy)
+                )
+                for c in clients
+            ]
 
         q_i_list = compute_dadaquant_client_q(
             sizes, self.q_t, q_min=q_min, q_max=q_max
