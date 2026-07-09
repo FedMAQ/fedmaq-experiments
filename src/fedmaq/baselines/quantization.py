@@ -24,8 +24,13 @@ class FedPAQCompressionHook(CompressionHook):
 
     @property
     def levels(self) -> int:
-        """Number of positive quantization levels for symmetric bounds (e.g. 127 for 8-bit)."""
-        return (1 << (self.q - 1)) - 1
+        """Number of positive quantization levels for symmetric bounds (e.g. 127 for 8-bit).
+
+        Floored at 1 so the ``q=1`` case (which would otherwise give 0 positive
+        levels and a 0/0 NaN on dequantization) is well-defined; ``compress``
+        additionally special-cases ``q<=1`` as pure sign quantization.
+        """
+        return max(1, (1 << (self.q - 1)) - 1)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using symmetric uniform quantization.
@@ -52,13 +57,21 @@ class FedPAQCompressionHook(CompressionHook):
             scale = float(np.max(np.abs(d)))
 
             if scale > 0.0:
-                # Normalize to [-1, 1]
-                normalized = d / scale
-                # Map to [-levels, levels] and round to nearest integer
-                quantized = np.round(normalized * self.levels)
-                # Map back to float32 domain
-                dequantized = (quantized / self.levels) * scale
-                quantized_deltas.append(dequantized.astype(np.float32))
+                if self.q <= 1:
+                    # 1-bit sign quantization: each element -> sign(d)*scale, i.e.
+                    # values in {-scale, +scale} (exact zeros stay 0). Avoids the
+                    # 0/0 NaN that a 0-positive-level uniform quantizer would give.
+                    dequantized = (np.sign(d) * scale).astype(np.float32)
+                else:
+                    # Normalize to [-1, 1]
+                    normalized = d / scale
+                    # Map to [-levels, levels] and round to nearest integer
+                    quantized = np.round(normalized * self.levels)
+                    # Map back to float32 domain
+                    dequantized = ((quantized / self.levels) * scale).astype(
+                        np.float32
+                    )
+                quantized_deltas.append(dequantized)
 
                 # Estimate size: q bits per element + 4 bytes (float32) for scale metadata
                 element_bits = d.size * self.q

@@ -22,8 +22,17 @@ logger = logging.getLogger(__name__)
 def compute_dadaquant_client_q(
     sizes: list[int],
     q_t: int,
+    q_min: int = 1,
+    q_max: int | None = None,
 ) -> list[int]:
-    """Compute optimal client-adaptive quantization levels for each client in DAdaQuant."""
+    """Compute optimal client-adaptive quantization levels for each client in DAdaQuant.
+
+    The per-client optimum ``q_i = sqrt(a/b) * w_i^(2/3)`` is clamped to the
+    ``[q_min, q_max]`` range (``q_max=None`` disables the upper bound). Without
+    the upper clamp a client with a large data share can be assigned more levels
+    than the budget allows, mirroring the time-adaptive path which already caps
+    ``q_t`` at ``q_max``.
+    """
     if not sizes:
         return []
     total_size = sum(sizes)
@@ -41,9 +50,12 @@ def compute_dadaquant_client_q(
     for wi_pow in w_pow:
         if b > 0:
             q_val = np.sqrt(a / b) * wi_pow
-            q_i = int(max(1, np.round(q_val)))
+            q_i = int(np.round(q_val))
         else:
             q_i = q_t
+        q_i = max(q_min, q_i)
+        if q_max is not None:
+            q_i = min(q_max, q_i)
         q_i_list.append(q_i)
     return q_i_list
 
@@ -174,7 +186,9 @@ class DAdaQuantHook(StrategyHook):
         else:
             sizes = [1] * len(clients)
 
-        q_i_list = compute_dadaquant_client_q(sizes, self.q_t)
+        q_i_list = compute_dadaquant_client_q(
+            sizes, self.q_t, q_min=q_min, q_max=q_max
+        )
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), q_i in zip(client_instructions, q_i_list, strict=True):
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))

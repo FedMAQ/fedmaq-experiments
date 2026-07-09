@@ -70,6 +70,29 @@ def test_model_factory_and_parameters():
         np.testing.assert_allclose(p_new, p_re, rtol=1e-5)
 
 
+def test_set_model_parameters_raises_on_mismatch():
+    """set_model_parameters must fail loudly on a count or shape mismatch.
+
+    Regression: a plain zip silently truncated, so loading e.g. a TinyCNN's
+    parameters into a SimpleCNN corrupted the model instead of erroring.
+    """
+    from fedmaq.core.models import TinyCNN
+
+    simple = get_model("mnist", num_classes=10)  # SimpleCNN
+    simple_params = get_model_parameters(simple)
+
+    # Count mismatch: drop a tensor.
+    with pytest.raises(ValueError, match="count mismatch"):
+        set_model_parameters(simple, simple_params[:-1])
+
+    # Shape mismatch at matching count: TinyCNN has the same tensor count as
+    # SimpleCNN for 1-channel inputs but different conv widths (16 vs 32).
+    tiny_params = get_model_parameters(TinyCNN(in_channels=1, num_classes=10))
+    assert len(tiny_params) == len(simple_params)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        set_model_parameters(simple, tiny_params)
+
+
 def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatch):
     """Test Dirichlet partitioning with public reserve and local caching."""
     # Patch CACHE_DIR to temp directory for testing
@@ -732,6 +755,34 @@ def test_fedpaq_compression_hook():
     )
 
 
+def test_fedpaq_no_nan_for_all_permissible_bit_widths():
+    """FedPAQ quantization must never emit NaN for any q in the permissible set Q.
+
+    Regression: at q=1 the old (1 << (q-1)) - 1 gave 0 positive levels and a
+    0/0 NaN on dequantization, which is reachable via FedMAQ's Tier-1 memory cap.
+    """
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    rng = np.random.default_rng(0)
+    deltas = [rng.standard_normal((4, 3)).astype(np.float32)]
+    for q in (1, 2, 3, 4, 5, 6, 7, 8, 16, 32):
+        compressed, _ = FedPAQCompressionHook(q=q).compress(deltas)
+        assert np.all(np.isfinite(compressed[0])), f"NaN/Inf produced at q={q}"
+
+
+def test_fedpaq_q1_is_sign_quantization():
+    """q=1 must reduce to sign quantization: nonzero elements map to +/- scale."""
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    deltas = [np.array([-3.0, -0.5, 0.0, 0.5, 3.0], dtype=np.float32)]
+    compressed, _ = FedPAQCompressionHook(q=1).compress(deltas)
+    # scale = max|d| = 3.0; every nonzero element -> sign(d)*scale, zeros stay 0.
+    np.testing.assert_allclose(
+        compressed[0], np.array([-3.0, -3.0, 0.0, 3.0, 3.0], dtype=np.float32)
+    )
+    assert set(np.unique(compressed[0]).tolist()) <= {-3.0, 0.0, 3.0}
+
+
 def test_fedprox_loss_hook():
     """Test FedProxLossHook proximal L2 regularization."""
     from fedmaq.core.client import FedProxLossHook
@@ -1209,6 +1260,24 @@ def test_compute_dadaquant_client_q():
     assert len(q_is) == 2
     # Client with larger dataset (index 1) should have greater or equal q_i.
     assert q_is[1] >= q_is[0]
+
+
+def test_compute_dadaquant_client_q_clamps_to_range():
+    """Per-client q_i must be clamped to [q_min, q_max] when bounds are supplied.
+
+    Regression: a heavily skewed data share can drive sqrt(a/b)*w_i^(2/3) above
+    the budget; without the upper clamp a client is assigned more levels than
+    q_max allows.
+    """
+    from fedmaq.core.strategy import compute_dadaquant_client_q
+
+    # Extreme skew: one dominant client would otherwise exceed q_max.
+    sizes = [1, 10000]
+    q_is = compute_dadaquant_client_q(sizes, q_t=4, q_min=2, q_max=8)
+    assert all(2 <= q <= 8 for q in q_is), q_is
+    # No upper bound by default (backward-compatible), only the floor of 1.
+    q_is_unbounded = compute_dadaquant_client_q(sizes, q_t=4)
+    assert all(q >= 1 for q in q_is_unbounded)
 
 
 def test_network_simulator():
