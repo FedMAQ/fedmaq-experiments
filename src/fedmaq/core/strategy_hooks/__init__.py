@@ -47,7 +47,7 @@ def get_strategy_hook(alg_name: str, config: dict[str, Any]) -> StrategyHook:
     elif alg_name == "fedkd":
         return FedKDHook(config)
     elif alg_name == "fedmd":
-        return FedMDHook()
+        return FedMDHook(config)
     elif alg_name == "fedavg_kd":
         return FedAvgKDHook(config)
     elif alg_name == "feddistill":

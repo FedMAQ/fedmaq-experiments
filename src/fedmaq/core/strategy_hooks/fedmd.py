@@ -24,7 +24,29 @@ class FedMDHook(StrategyHook):
 
     - ``pre_aggregate_fit``: averages client logit predictions; bypasses FedAvg.
     - ``configure_fit``/``aggregate_fit``: pass-through (no additional logic needed).
+    - ``local_train_sample_count``: folds in round-1 public/private pre-training.
     """
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self._config = config
+
+    def local_train_sample_count(
+        self,
+        num_samples: int,
+        epochs: int,
+        num_public: int,
+        public_epochs: int,
+        server_round: int,
+    ) -> float:
+        # Digest (public) + revisit (private) every round.
+        base = num_public * public_epochs + num_samples * epochs
+        if server_round != 1:
+            return base
+        # Round 1 additionally runs mandatory public/private pre-training.
+        alg_cfg = self._config.get("algorithm", {})
+        pub_pretrain = int(alg_cfg.get("public_pretrain_epochs", 10))
+        priv_pretrain = int(alg_cfg.get("private_pretrain_epochs", 10))
+        return num_public * pub_pretrain + num_samples * priv_pretrain + base
 
     def configure_fit(
         self,

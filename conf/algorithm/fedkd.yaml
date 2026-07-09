@@ -2,3 +2,4 @@ name: fedkd
 tmin: 0.1   # starting SVD energy cutoff (low compression)
 tmax: 0.95  # target SVD energy cutoff T_SVD per manuscript §4.3, Table 4.1
 temperature: 2.0  # mutual KD temperature (client-side, distinct from server KD)
+compute_penalty: 2.5  # simulated client compute slowdown from joint student+teacher training

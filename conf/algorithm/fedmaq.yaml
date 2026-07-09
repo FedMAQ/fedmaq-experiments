@@ -29,3 +29,4 @@ temperature: 1.0       # T — generalized softmax temperature
 kd_epochs: 1           # distillation passes over D_proxy per round
 server_kd_lr: 0.01     # SGD learning rate for global student during KD
 server_kd_momentum: 0.9  # SGD momentum for global student during KD
+server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD delay (§3.3)

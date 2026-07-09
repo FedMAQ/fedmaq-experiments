@@ -10,7 +10,11 @@ from flwr.common.typing import FitIns, FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
-from fedmaq.baselines.compression import compress_tensor, decompress_tensor
+from fedmaq.baselines.compression import (
+    compress_tensor,
+    decompress_tensor,
+    svd_compressed_nbytes,
+)
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -31,8 +35,27 @@ class FedKDHook(StrategyHook):
         self._tmin = float(alg_cfg.get("tmin", 0.1))
         self._tmax = float(alg_cfg.get("tmax", 0.9))
         self._total_rounds = int(config.get("experiment", {}).get("total_rounds", 10))
+        # Dual-model (student+teacher) training slows effective client compute.
+        self._compute_penalty = float(alg_cfg.get("compute_penalty", 2.5))
         # Cached energy for current round (set in pre_configure_fit, read in configure_fit)
         self._current_energy: float = self._tmin
+
+    def download_size_bytes(
+        self,
+        strategy: TelemetryFedAvg,
+        ndarrays: list[Any],
+    ) -> int:
+        """SVD-compressed download size at the current round's energy level."""
+        model_size_bytes = 0
+        for arr in ndarrays:
+            if arr.size == 0:
+                continue
+            compressed = compress_tensor(arr, self._current_energy)
+            model_size_bytes += svd_compressed_nbytes(compressed, arr.nbytes)
+        return model_size_bytes
+
+    def compute_speed_scale(self) -> float:
+        return 1.0 / self._compute_penalty
 
     def _compute_energy(self, server_round: int) -> float:
         energy = self._tmin + (server_round / self._total_rounds) * (

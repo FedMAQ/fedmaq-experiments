@@ -69,6 +69,23 @@ def run_server_side_kd(
             optimizer.step()
 
 
+def kd_server_sim_time(
+    num_public: int,
+    kd_epochs: int,
+    num_teachers: int,
+    server_compute_speed: float,
+) -> float:
+    """Simulated server-side distillation time for ensemble KD, in seconds.
+
+    Scales with the proxy-set size, KD epochs, and number of teacher models,
+    divided by the (simulated) server compute speed. Shared by the FedMAQ and
+    FedAvgKD telemetry paths.
+    """
+    if server_compute_speed <= 0.0:
+        return 0.0
+    return (num_public * kd_epochs * num_teachers) / server_compute_speed
+
+
 def distill_ensemble_into_global(
     model_factory: Callable[[str, int], nn.Module],
     aggregated_parameters: Parameters,

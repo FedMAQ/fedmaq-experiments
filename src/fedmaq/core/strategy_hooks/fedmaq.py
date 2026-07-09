@@ -18,7 +18,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
-from fedmaq.core.kd_utils import distill_ensemble_into_global
+from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import (
     DEVICE,
     get_kd_student_model,
@@ -292,3 +292,22 @@ class FedMAQHook(StrategyHook):
             device=device,
         )
         return aggregated_parameters, metrics
+
+    def server_sim_time(
+        self,
+        strategy: TelemetryFedAvg,
+        results: list[tuple[ClientProxy, FitRes]],
+        aggregated_parameters: Parameters | None,
+    ) -> float:
+        if aggregated_parameters is None:
+            return 0.0
+        alg_cfg = self._config.get("algorithm", {})
+        num_public = int(
+            self._config.get("experiment", {}).get("num_public_samples", 200)
+        )
+        return kd_server_sim_time(
+            num_public=num_public,
+            kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
+            num_teachers=len(results),
+            server_compute_speed=float(alg_cfg.get("server_compute_speed", 2000.0)),
+        )

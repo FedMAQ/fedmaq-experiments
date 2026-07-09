@@ -1344,9 +1344,8 @@ def test_network_simulator():
         cid=0,
         model_size_bytes=1000000,  # 1 MB
         bytes_uploaded=500000,  # 0.5 MB
-        num_samples=200,
-        epochs=5,
-        alg_name="fedavg",
+        train_sample_count=200 * 5,  # 200 samples * 5 epochs
+        compute_scale=1.0,
     )
 
     # 1 MB download on 20 Mbps link:
