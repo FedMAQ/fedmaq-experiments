@@ -23,7 +23,6 @@ from fedmaq.core.kd_utils import run_server_side_kd
 from fedmaq.core.models import (
     DEVICE,
     get_kd_student_model,
-    get_model,
     get_model_parameters,
     set_model_parameters,
 )
@@ -204,9 +203,13 @@ class FedMAQHook(StrategyHook):
         batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
         device = torch.device(self._config.get("device") or DEVICE)
 
-        # Lazily instantiate and cache the gradient norm model
+        # Lazily instantiate and cache the gradient norm model.
+        # FedMAQ's global/client model IS the KD student (TinyCNN for 1-channel,
+        # SimpleCNN for CIFAR), so the grad-norm probe must use that same
+        # architecture; using the full get_model() here loads mismatched
+        # parameters (e.g. ResNet18GN on CIFAR) and silently zeroes every norm.
         if self._grad_norm_model is None:
-            self._grad_norm_model = get_model(dataset_name, num_classes)
+            self._grad_norm_model = get_kd_student_model(dataset_name, num_classes)
             self._grad_norm_model.to(device)
         temp_model = self._grad_norm_model
         ndarrays = parameters_to_ndarrays(parameters)
@@ -275,7 +278,7 @@ class FedMAQHook(StrategyHook):
         # 3. Compute and inject client-specific quantization bit-widths
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), pid, g_k, n_k in zip(
-            client_instructions, client_pids, grad_norms, dataset_sizes
+            client_instructions, client_pids, grad_norms, dataset_sizes, strict=True
         ):
             c_k = float(strategy.client_memory[pid])
             q_k_t = compute_fedmaq_q_k_t(
