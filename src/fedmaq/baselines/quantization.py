@@ -8,6 +8,17 @@ import numpy as np
 from fedmaq.core.client import CompressionHook
 
 
+def _normalize_and_round(d: np.ndarray, scale: float, levels: int) -> np.ndarray:
+    """Normalize ``d`` by ``scale`` and round to integer-valued codes in [-levels, levels]."""
+    normalized = d / scale
+    return np.round(normalized * levels)
+
+
+def _codes_to_float(codes: np.ndarray, scale: float, levels: int) -> np.ndarray:
+    """Map integer-valued codes in [-levels, levels] back to float via ``scale``."""
+    return (codes / levels) * scale
+
+
 def _quantize_deltas(
     deltas: list[np.ndarray],
     quantize_elem: Callable[[np.ndarray, float], np.ndarray],
@@ -72,9 +83,8 @@ class FedPAQCompressionHook(CompressionHook):
             # 0-positive-level uniform quantizer would give.
             return np.sign(d) * scale
         # Normalize to [-1, 1], map to [-levels, levels], round, map back.
-        normalized = d / scale
-        quantized = np.round(normalized * self.levels)
-        return (quantized / self.levels) * scale
+        codes = _normalize_and_round(d, scale, self.levels)
+        return _codes_to_float(codes, scale, self.levels)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using symmetric uniform quantization.

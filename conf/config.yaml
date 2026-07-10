@@ -18,17 +18,22 @@ hydra:
 # Full benchmark sweep (CIFAR-10 / CIFAR-100, two alpha values, 3 seeds):
 #   uv run python scripts/run.py --multirun \
 #     dataset=cifar10,cifar100 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq \
+#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq,feddistill,cfd \
 #     seed=0,42,123
 #
 # FEMNIST sweep (writer partition, 3 seeds):
 #   uv run python scripts/run.py --multirun \
 #     dataset=femnist heterogeneity=femnist experiment=femnist \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq \
+#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq,feddistill,cfd \
 #     seed=0,42,123
 #
 # Pilot formulation study (§4.3): CIFAR-10, alpha=0.1, variable memory, all 4 formulations:
 #   uv run python scripts/run.py --multirun \
 #     dataset=cifar10 heterogeneity=dirichlet_alpha_0.1 algorithm=fedmaq \
 #     algorithm.formulation=0,1,2,3,4 seed=0,42,123
+#
+# ``algorithm.post_process`` (§4.3) gates FedMAQ's error-feedback/diff-coding/zlib
+# pipeline on top of quantization; true by default for fedmaq.yaml (primary
+# benchmarking + FEMNIST grids above), false everywhere else including the
+# Ablation Study's fedmaq_* arm yamls.
 seed: 42

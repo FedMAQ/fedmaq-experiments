@@ -2,3 +2,6 @@ name: fedmd
 public_pretrain_epochs: 10
 private_pretrain_epochs: 10
 public_epochs: 5
+
+# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
+post_process: false

@@ -19,3 +19,6 @@ temperature: 1.0
 kd_epochs: 1
 server_kd_lr: 0.01
 server_kd_momentum: 0.9
+
+# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
+post_process: false

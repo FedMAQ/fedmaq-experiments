@@ -115,7 +115,10 @@ def run(cfg: DictConfig) -> TelemetryManager:
         alg_cfg_dict = OmegaConf.to_container(cfg.algorithm, resolve=True)
         loss_hook = get_loss_hook(alg_name, alg_cfg_dict)
         compressor_hook = get_compressor_hook(
-            alg_name, alg_cfg_dict, rng=np.random.default_rng(cfg.seed + partition_id)
+            alg_name,
+            alg_cfg_dict,
+            rng=np.random.default_rng(cfg.seed + partition_id),
+            state=context.state,
         )
 
         return GenericClient(

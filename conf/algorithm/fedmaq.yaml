@@ -29,3 +29,8 @@ kd_epochs: 1           # distillation passes over D_proxy per round
 server_kd_lr: 0.01     # SGD learning rate for global student during KD
 server_kd_momentum: 0.9  # SGD momentum for global student during KD
 server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD delay (§3.3)
+
+# Post-processing pipeline (§4.3): error-feedback + diff-coding + lossless zlib
+# on top of quantization. Applies to the primary CIFAR-10/100 + FEMNIST grid only,
+# not the Ablation Study.
+post_process: true

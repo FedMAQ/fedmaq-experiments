@@ -1,2 +1,5 @@
 name: fedpaq
 q: 8
+
+# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
+post_process: false
