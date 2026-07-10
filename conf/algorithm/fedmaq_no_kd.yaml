@@ -5,7 +5,7 @@
 name: fedmaq
 q_min: 2
 q_max: 8
-c_unit: 2048.0
+c_unit: 512.0
 bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]  # manuscript Q set (matches DEFAULT_BIT_WIDTHS)
 formulation: 3            # Gradient-Primary, Data-Modulated (full formula)
 gamma1: 0.5

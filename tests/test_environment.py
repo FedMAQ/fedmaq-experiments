@@ -1252,7 +1252,7 @@ def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
     from fedmaq.core.strategy_hooks.fedmaq import DEFAULT_BIT_WIDTHS
 
     # Soft target interpolates within [q_min, q_max] = [1, 20]; formulation 0 forces
-    # q_hat = q_max = 20, which is not in Q and must snap to the nearest member (16).
+    # q_hat = q_max = 20, which is not in Q and must floor to the largest member <= 20 (16).
     q = compute_fedmaq_q_k_t(
         c_k=1_000_000.0,  # effectively unconstrained memory
         c_unit=1.0,
@@ -1296,6 +1296,30 @@ def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
             q_max=8,
         )
         assert result in DEFAULT_BIT_WIDTHS
+
+
+def test_fedmaq_q_k_t_floors_not_rounds_at_q_set_gap():
+    """Regression: combine-then-floor-once must not round to the nearest Q member.
+
+    q_hat=13 with an unconstrained memory cap: the old (buggy) nearest-snap logic
+    picked 16 (|13-16|=3 < |13-8|=5), which can exceed a client's memory cap.
+    The manuscript's floor(min(Q_k^max, q_hat)) semantics must instead give 8,
+    the largest permissible member <= 13.
+    """
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+
+    q = compute_fedmaq_q_k_t(
+        c_k=1_000_000.0,  # effectively unconstrained memory
+        c_unit=1.0,
+        g_k=0.5,
+        g_max=1.0,
+        n_k=100,
+        n_max=200,
+        formulation=0,
+        q_min=1,
+        q_max=13,
+    )
+    assert q == 8
 
 
 def test_compute_dadaquant_client_q():
