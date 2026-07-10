@@ -3,3 +3,6 @@ name: feddistill
 # Clients regularize local training toward the broadcast consensus logits with
 # loss = CE + reg_alpha * KLDiv(log_softmax(z), softmax(global_logits[y])).
 reg_alpha: 1.0  # weight of the label-wise logit-distillation regularizer
+
+# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
+post_process: false

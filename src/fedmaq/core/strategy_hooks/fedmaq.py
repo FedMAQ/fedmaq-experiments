@@ -43,11 +43,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
 
 
-def _snap_nearest(value: float, bit_widths: tuple[int, ...]) -> int:
-    """Snap ``value`` to the nearest permissible bit-width in ``bit_widths``."""
-    return min(bit_widths, key=lambda b: abs(b - value))
-
-
 def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
     """Snap ``value`` down to the largest permissible bit-width <= ``value``."""
     eligible = [b for b in bit_widths if b <= value]
@@ -80,10 +75,9 @@ def compute_fedmaq_q_k_t(
     tilde_g = g_k / g_max if g_max > 0.0 else 0.0
     tilde_n = n_k / n_max if n_max > 0.0 else 0.0
 
-    # Tier 1 hard cap: Q_max = floor(c_k / c_unit), snapped down to the nearest
-    # permissible bit-width so memory-limited clients never exceed a physically
-    # unquantizable precision level.
-    q_max_capped = _snap_floor(max(1.0, np.floor(c_k / c_unit)), bit_widths)
+    # Tier 1 hard cap: Q_max = floor(c_k / c_unit), kept raw (unsnapped) so it can
+    # be combined with the raw Tier-2 target below before a single floor-into-Q.
+    q_k_max_raw = max(1.0, np.floor(c_k / c_unit))
 
     # Tier 2 soft quality target based on the formulation
     q_hat: float
@@ -115,14 +109,13 @@ def compute_fedmaq_q_k_t(
     else:
         q_hat = q_min
 
-    # Clamp intermediate result to the configured [q_min, q_max] soft-target range,
-    # then snap to the nearest permissible bit-width in the manuscript's set Q.
+    # Clamp intermediate result to the configured [q_min, q_max] soft-target range.
     q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
-    q_hat_snapped = _snap_nearest(q_hat, bit_widths)
-    # Tier-1 hard cap: memory-limited clients may receive fewer bits than q_min.
-    # This is intentional — the physical bound wins over the soft quality target.
-    # Both operands are already members of `bit_widths`, so the min is too.
-    return min(q_max_capped, q_hat_snapped)
+    # Combine raw Tier-1 cap and raw Tier-2 target via min(), then floor into the
+    # permissible set Q exactly once: q_k^(t) = max{q in Q | q <= min(Q_k^max, q_hat_k^(t))}.
+    # Memory-limited clients may receive fewer bits than q_min — intentional, the
+    # physical bound wins over the soft quality target.
+    return _snap_floor(min(q_k_max_raw, q_hat), bit_widths)
 
 
 class FedMAQHook(StrategyHook):

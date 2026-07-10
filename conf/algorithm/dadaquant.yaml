@@ -3,3 +3,6 @@ psi: 0.9
 phi: 5
 q_min: 1
 q_max: 8
+
+# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
+post_process: false
