@@ -1,37 +1,25 @@
 # FedMAQ Workspace Handoff
 
-Living document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace.
+Old document for agent-to-agent and session-to-session continuity across the FedMAQ thesis multi-repo workspace. Has yet to be removed and will be superseded by Claude Code memory management, e.g., transferred to CLAUDE.md and .claude files.
 
-| Field                  | Value                                                                         |
-| ---------------------- | ----------------------------------------------------------------------------- |
-| **Last updated**       | 2026-07-10                                                                    |
-| **Last session focus** | Codebase-consistency audit + fixes in `fedmaq-experiments` against the finalized manuscript (branch `fix/codebase-manuscript-consistency`, not yet PR'd): `c_unit` 2048→512 MB (5 yamls), combine-then-floor-once bit-width snap logic (was independently nearest-snapping Tier-1/Tier-2 then min'ing, could violate the memory cap), and a new post-processing pipeline (error-feedback + diff-coding + lossless zlib) for FedMAQ's winning formulation on the primary CIFAR-10/100 + FEMNIST grid only (`src/fedmaq/baselines/postprocess.py`, gated via `post_process` in all 14 algorithm yamls). 73 tests green (9 new), full CPU smoke run pending verification. |
-| **Active repo**        | fedmaq-experiments (open PR for `fix/codebase-manuscript-consistency`, then back to fedmaq-manuscript: final polishing pass — task detail incoming from user) |
-| **Blockers**           | None                                                                          |
-
----
-
-## 1. Quick start (new agent)
-
-1. Open the **multi-root workspace** with all five `fedmaq-*` repos.
-2. Read this file end-to-end, then the **active task** in [Section 6](#6-implementation-queue).
-3. Load domain rules from [`fedmaq-experiments/.claude/rules/`](.claude/rules/) (canonical thesis context).
-4. Work in **one primary repo** per task; use the "Agent entry" column in the workspace map below for entrypoints (`CLAUDE.md` for experiments/manuscript, `AGENTS.md` for unmigrated siblings).
-5. Before ending a session, update this handoff file with changelog entries and recommendations for clean context.
-
-**Candidate:** Christian Joseph Bunyi | **Institution:** De La Salle University | **Advisor:** Fritz Flores
+| Field                  | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Last updated**       | 2026-07-10                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Last session focus** | Codebase-consistency audit + fixes in `fedmaq-experiments` against the finalized manuscript: `c_unit` 2048→512 MB (5 yamls), combine-then-floor-once bit-width snap logic (was independently nearest-snapping Tier-1/Tier-2 then min'ing, could violate the memory cap), and a new post-processing pipeline (error-feedback + diff-coding + lossless zlib) for FedMAQ's winning formulation on the primary CIFAR-10/100 + FEMNIST grid only (`src/fedmaq/baselines/postprocess.py`, gated via `post_process` in all 14 algorithm yamls). 73 tests green (9 new), full CPU smoke run pending verification. |
+| **Active repo**        | fedmaq-experiments (open PR for `fix/codebase-manuscript-consistency`, then back to fedmaq-manuscript: final polishing pass — task detail incoming from user)                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Blockers**           | None                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ---
 
 ## 2. Workspace map
 
-| Repo                                             | Role                                                                 | Agent entry                                    | Domain rules                       |
-| ------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
-| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB                                    | [CLAUDE.md](../fedmaq-experiments/CLAUDE.md)   | **Owner:** `.claude/rules/`        |
-| [fedmaq-literature](../fedmaq-literature/)       | PDFs, markdown conversions, OKF knowledge graph (`kg/`)              | [CLAUDE.md](../fedmaq-literature/CLAUDE.md)    | `thesis-context.md` → experiments  |
-| [fedmaq-analyses](../fedmaq-analyses/)           | Notebooks, thesis figures                                            | [AGENTS.md](../fedmaq-analyses/AGENTS.md)      | `thesis-context.mdc` → experiments |
-| [fedmaq-manuscript](../fedmaq-manuscript/)       | LaTeX thesis (Active; Ch 1–6 drafted, de-overclaim pass applied)    | [README.md](../fedmaq-manuscript/README.md)    | **Owner:** `.claude/rules/`        |
-| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides                                                        | [AGENTS.md](../fedmaq-presentations/AGENTS.md) | `thesis-context.mdc` → experiments |
+| Repo                                             | Role                                                             | Agent entry                                    | Domain rules                       |
+| ------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| [fedmaq-experiments](../fedmaq-experiments/)     | FedMAQ code, Hydra, Flower, WandB                                | [CLAUDE.md](../fedmaq-experiments/CLAUDE.md)   | **Owner:** `.claude/rules/`        |
+| [fedmaq-literature](../fedmaq-literature/)       | PDFs, markdown conversions, OKF knowledge graph (`kg/`)          | [CLAUDE.md](../fedmaq-literature/CLAUDE.md)    | `thesis-context.md` → experiments  |
+| [fedmaq-analyses](../fedmaq-analyses/)           | Notebooks, thesis figures                                        | [AGENTS.md](../fedmaq-analyses/AGENTS.md)      | `thesis-context.mdc` → experiments |
+| [fedmaq-manuscript](../fedmaq-manuscript/)       | LaTeX thesis (Active; Ch 1–6 drafted, de-overclaim pass applied) | [README.md](../fedmaq-manuscript/README.md)    | **Owner:** `.claude/rules/`        |
+| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides                                                    | [AGENTS.md](../fedmaq-presentations/AGENTS.md) | `thesis-context.mdc` → experiments |
 
 **Cross-repo rule:** Non-experiments repos must not duplicate domain content. Index via `../fedmaq-experiments/.claude/rules/`.
 
@@ -41,18 +29,20 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ## 3. Locked architectural decisions
 
-| Topic              | Decision                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Thesis context     | `fedmaq-experiments/.claude/rules/` (decomposed from `context.md`; `context.md` is human snapshot only) |
-| Experiments layout | uv monorepo, code under `src/fedmaq/core/` and `src/fedmaq/baselines/`                                  |
-| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified             |
-| Literature PDFs    | Never parse `papers/*.pdf` in chat; pipeline + `markdown/` only                                         |
+| Topic              | Decision                                                                                                                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Thesis context     | `fedmaq-experiments/.claude/rules/` (decomposed from `context.md`; `context.md` is human snapshot only)                                                                                                                                      |
+| Experiments layout | uv monorepo, code under `src/fedmaq/core/` and `src/fedmaq/baselines/`                                                                                                                                                                       |
+| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified                                                                                                                                                  |
+| Literature PDFs    | Never parse `papers/*.pdf` in chat; pipeline + `markdown/` only                                                                                                                                                                              |
 | Literature KG      | OKF bundle at `kg/` (see `fedmaq-literature/SPEC.md`); two layers — raw `markdown/` (citable) + curated OKF nodes. No vector store (grep + read); nodes authored directly, no approve gate (review via `git diff`); no cross-repo auto-edits |
-| Analyses inputs    | WandB exports + Hydra outputs from experiments                                                          |
+| Analyses inputs    | WandB exports + Hydra outputs from experiments                                                                                                                                                                                               |
 
 ---
 
 ## 4. Per-repo status
+
+**VERY IMPORTANT NOTE TO AGENT**: These may be outdated and no longer needed as their individual statuses can be kept in their own CLAUDE.md/Claude agent-related files. Plan with user on what to do with the info here.
 
 ### [fedmaq-experiments](../fedmaq-experiments/) — [Deep-refactored, hook-based; FedDistill+ ported]
 
@@ -61,7 +51,7 @@ Living document for agent-to-agent and session-to-session continuity across the 
 
 ### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active — next task]
 
-- **Completed:** Chapter 1–6 drafted (Ch5 is largely results placeholders awaiting the run grid; Ch6 has content with `[PLACEHOLDER]` slots). **Grilling-pass de-overclaim revision** applied across Ch1–6 on branch `manuscript-deoverclaim-communication-primary` (PR pending, compiles clean, 65 pp): communication-primary problem statement with memory as a hard feasibility *ceiling*; two-axis objectives; central §3.5 rewrite crediting quantization-noise attenuation to unbiased **parameter averaging** (~1/K_active) and KD to non-IID **drift reconciliation** (not noise cancellation — Jensen/nonlinear-softmax), with a falsifiable α-prediction wired to the ablation; unbiased-quantizer note in §3.3; "pilot study" → "formulation study" across both α∈{0.1,1.0}; **195-run grid** (108 main + 27 FEMNIST + 30 formulation + 30 ablation); DynFed-style reference arm; hardware reframed (lab datacenter primary, RTX 5060 dev/smoke); removed "mathematically unifying"/"resolves the conflicting demands" over-claims. The earlier flagged experimental-grid-size note is now reconciled to 195 runs.
+- **Completed:** Chapter 1–6 drafted (Ch5 is largely results placeholders awaiting the run grid; Ch6 has content with `[PLACEHOLDER]` slots). **Grilling-pass de-overclaim revision** applied across Ch1–6 on branch `manuscript-deoverclaim-communication-primary` (PR pending, compiles clean, 65 pp): communication-primary problem statement with memory as a hard feasibility _ceiling_; two-axis objectives; central §3.5 rewrite crediting quantization-noise attenuation to unbiased **parameter averaging** (~1/K_active) and KD to non-IID **drift reconciliation** (not noise cancellation — Jensen/nonlinear-softmax), with a falsifiable α-prediction wired to the ablation; unbiased-quantizer note in §3.3; "pilot study" → "formulation study" across both α∈{0.1,1.0}; **195-run grid** (108 main + 27 FEMNIST + 30 formulation + 30 ablation); DynFed-style reference arm; hardware reframed (lab datacenter primary, RTX 5060 dev/smoke); removed "mathematically unifying"/"resolves the conflicting demands" over-claims. The earlier flagged experimental-grid-size note is now reconciled to 195 runs.
 - **Pending (NEXT TASK):** **Final polishing pass over the manuscript** — user will detail scope for the next agent. Ch5/Ch6 still hold `[PLACEHOLDER]` slots that fill once results land. Incorporate proposal-panel feedback post-defense.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [OKF bundle fully populated]
@@ -97,27 +87,27 @@ store — retrieval is grep + read over `markdown/` and `kg/`.
 
 Priority order for upcoming work. Mark items `[x]` when done; add new items at the bottom with date.
 
-| P   | Task                                                       | Repo        | Status |
-| --- | ---------------------------------------------------------- | ----------- | ------ |
-| 1   | Implement PDF convert (Docling + Marker QA)                | literature  | [x]    |
-| 2   | LlamaIndex + Chroma ingest with Qwen3-4B _(removed in OKF restructure)_ | literature  | [x]    |
-| 3   | `fedmaq-lit` summarize + approve + OpenRouter _(removed in OKF restructure)_ | literature  | [x]    |
-| 4   | Phase 1 FL environment (data partition, bandwidth, Flower) | experiments | [x]    |
-| 5   | FedAvg / FedProx / FedPAQ / DAdaQuant baselines            | experiments | [x]    |
-| 6   | Full manuscript audit + codebase hardening (Ch. 1--4)      | experiments | [x]    |
-| 7   | WandB + Hydra ingest utilities                             | analyses    | [ ]    |
-| 8   | Review & approve remaining 10 draft summaries (remediate) _(summaries removed; content re-authored as OKF nodes in Task 14)_ | literature  | [x]    |
-| 9   | Consolidate cross-paper findings (OKF Phase 2: `kg/findings/`) _(reframed from the removed `syntheses/` workflow)_ | literature  | [ ]    |
-| 10  | Port FedDistill baseline                                   | experiments | [x]    |
-| 11  | Port CFD baseline                                          | experiments | [ ]    |
-| 13  | Deep cleanup/refactor: hook-based client/server dispatch, dedup, correctness fixes | experiments | [x] |
-| 12  | Align experiments code + Ch. 1/4 manuscript (proxy pool, discrete bit-widths, FedDistill spec); apply manuscript-side fixes to chapter_4.tex | experiments + manuscript | [x] |
-| 14  | Restructure literature to OKF: remove vector-RAG, convert 10 missing papers, migrate 39 papers into `kg/` bundle | literature | [x] |
-| 15  | Populate OKF knowledge layer (methods, concepts, findings, gaps → 87 nodes) | literature | [x] |
-| 16  | Grilling-pass de-overclaim: KG gap/finding nodes + manuscript Ch1–6 (multi-signal framing, communication-primary, two-stage aggregation, 195-run grid) | literature + manuscript | [x] |
-| 17  | **Final polishing pass over the manuscript** (scope detail incoming from user)   | manuscript  | [ ] |
-| 18  | Section B — align experiments code: switch FedPAQ quantizer to **stochastic rounding** (reuse `DAdaQuantCompressionHook._quantize_elem`) + wire 195-run/both-α ablation. Hard dependency for the α-prediction. | experiments | [ ] |
-| 19  | Codebase-consistency fixes: `c_unit` 512, combine-then-floor-once bit-width snap, post-processing pipeline (error-feedback + diff-coding + zlib) gated by `post_process` on the primary grid only | experiments | [x] |
+| P   | Task                                                                                                                                                                                                           | Repo                     | Status |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------ |
+| 1   | Implement PDF convert (Docling + Marker QA)                                                                                                                                                                    | literature               | [x]    |
+| 2   | LlamaIndex + Chroma ingest with Qwen3-4B _(removed in OKF restructure)_                                                                                                                                        | literature               | [x]    |
+| 3   | `fedmaq-lit` summarize + approve + OpenRouter _(removed in OKF restructure)_                                                                                                                                   | literature               | [x]    |
+| 4   | Phase 1 FL environment (data partition, bandwidth, Flower)                                                                                                                                                     | experiments              | [x]    |
+| 5   | FedAvg / FedProx / FedPAQ / DAdaQuant baselines                                                                                                                                                                | experiments              | [x]    |
+| 6   | Full manuscript audit + codebase hardening (Ch. 1--4)                                                                                                                                                          | experiments              | [x]    |
+| 7   | WandB + Hydra ingest utilities                                                                                                                                                                                 | analyses                 | [ ]    |
+| 8   | Review & approve remaining 10 draft summaries (remediate) _(summaries removed; content re-authored as OKF nodes in Task 14)_                                                                                   | literature               | [x]    |
+| 9   | Consolidate cross-paper findings (OKF Phase 2: `kg/findings/`) _(reframed from the removed `syntheses/` workflow)_                                                                                             | literature               | [ ]    |
+| 10  | Port FedDistill baseline                                                                                                                                                                                       | experiments              | [x]    |
+| 11  | Port CFD baseline                                                                                                                                                                                              | experiments              | [ ]    |
+| 13  | Deep cleanup/refactor: hook-based client/server dispatch, dedup, correctness fixes                                                                                                                             | experiments              | [x]    |
+| 12  | Align experiments code + Ch. 1/4 manuscript (proxy pool, discrete bit-widths, FedDistill spec); apply manuscript-side fixes to chapter_4.tex                                                                   | experiments + manuscript | [x]    |
+| 14  | Restructure literature to OKF: remove vector-RAG, convert 10 missing papers, migrate 39 papers into `kg/` bundle                                                                                               | literature               | [x]    |
+| 15  | Populate OKF knowledge layer (methods, concepts, findings, gaps → 87 nodes)                                                                                                                                    | literature               | [x]    |
+| 16  | Grilling-pass de-overclaim: KG gap/finding nodes + manuscript Ch1–6 (multi-signal framing, communication-primary, two-stage aggregation, 195-run grid)                                                         | literature + manuscript  | [x]    |
+| 17  | **Final polishing pass over the manuscript** (scope detail incoming from user)                                                                                                                                 | manuscript               | [ ]    |
+| 18  | Section B — align experiments code: switch FedPAQ quantizer to **stochastic rounding** (reuse `DAdaQuantCompressionHook._quantize_elem`) + wire 195-run/both-α ablation. Hard dependency for the α-prediction. | experiments              | [ ]    |
+| 19  | Codebase-consistency fixes: `c_unit` 512, combine-then-floor-once bit-width snap, post-processing pipeline (error-feedback + diff-coding + zlib) gated by `post_process` on the primary grid only              | experiments              | [x]    |
 
 **Current focus:** The grilling-pass de-overclaim (Task 16) is complete across
 both repos, each on its own branch with a **PR pending** (`kg-deoverclaim-multisignal`
@@ -125,21 +115,22 @@ in literature, `manuscript-deoverclaim-communication-primary` in manuscript — 
 via the compare links; `gh` CLI is not installed on this machine). Next substantive
 work is **P17 — final polishing pass over the manuscript**; the user will detail the
 scope for the next agent. Also open: **P18** (Section B — stochastic-quantizer switch
-+ both-α ablation in experiments; hard dependency for the α-prediction, deferred to
-its own experiments-scoped session), **P7** (WandB + Hydra ingest, analyses), and
-**P11** (CFD, ~Oct 2026 stub).
+
+- both-α ablation in experiments; hard dependency for the α-prediction, deferred to
+  its own experiments-scoped session), **P7** (WandB + Hydra ingest, analyses), and
+  **P11** (CFD, ~Oct 2026 stub).
 
 ---
 
 ## 7. Environment and secrets
 
-| Variable                      | Used by               | Notes                                         |
-| ----------------------------- | --------------------- | --------------------------------------------- |
-| `FEDMAQ_QA_MIN_MEAN_GRADE`    | literature            | Default `good` (Docling mean_grade threshold) |
-| `FEDMAQ_QA_MIN_LOW_GRADE`     | literature            | Default `fair`                                |
-| `FEDMAQ_MARKER_DEVICE`        | literature            | Override Marker device (`cuda` / `cpu`)       |
-| `HF_HUB_DISABLE_SYMLINKS`     | literature            | Set automatically on Windows in Docling path  |
-| `WANDB_API_KEY`               | experiments, analyses | Experiment tracking                           |
+| Variable                   | Used by               | Notes                                         |
+| -------------------------- | --------------------- | --------------------------------------------- |
+| `FEDMAQ_QA_MIN_MEAN_GRADE` | literature            | Default `good` (Docling mean_grade threshold) |
+| `FEDMAQ_QA_MIN_LOW_GRADE`  | literature            | Default `fair`                                |
+| `FEDMAQ_MARKER_DEVICE`     | literature            | Override Marker device (`cuda` / `cpu`)       |
+| `HF_HUB_DISABLE_SYMLINKS`  | literature            | Set automatically on Windows in Docling path  |
+| `WANDB_API_KEY`            | experiments, analyses | Experiment tracking                           |
 
 The literature RAG variables (`OPENROUTER_API_KEY`, `FEDMAQ_EMBED_*`) were retired
 with the vector-RAG stack in the OKF restructure; only the conversion-QA and
@@ -158,7 +149,7 @@ Create `.env` locally (gitignored); document new vars here when added.
 - **Skills** (`.claude/skills/*/SKILL.md` in experiments; `.cursor/skills/*/SKILL.md` in unmigrated siblings): procedural workflows; prefer skills over ad-hoc commands.
 - **Commands** (`.claude/commands/*.md` in experiments): slash-command workflows, e.g. `/add-baseline`, `/align-manuscript`, `/run-benchmark`.
 - **No emojis** in repo files (`repo-preferences.md`).
-- **MCP:** context7 (library docs), GitHub (issues/PRs) — user-level, if configured.
+- **MCP:** context7 (library docs).
 
 ---
 
@@ -174,27 +165,4 @@ Create `.env` locally (gitignored); document new vars here when added.
 
 ## 10. Changelog
 
-- Full session-to-session history lives in [changelog.md](.claude/project/changelog.md) (includes the 2026-07-09 Cursor→Claude Code migration and CLAUDE.md relocation, plus the 2026-07-03 hardening/refactor sessions).
-
----
-
-## 11. Handoff recommendation
-
-**Recommend handoff.** The grilling-pass de-overclaim (P16) is complete and
-self-contained across two branches, each with a PR pending: `kg-deoverclaim-multisignal`
-in `fedmaq-literature` (6 gap/finding nodes + `log.md` retitled to the multi-signal
-combination framing) and `manuscript-deoverclaim-communication-primary` in
-`fedmaq-manuscript` (Ch1–6 communication-primary reframing; compiles clean, 65 pp).
-Both are pushed and ready to merge at the user's discretion — open the PRs via the
-GitHub compare links (`gh` is not installed locally). This is a clean stopping point;
-initiate a new session to clear context.
-
-**Next task — P17: final polishing pass over the manuscript** (`fedmaq-manuscript`).
-The user will detail the scope for the next agent, so a manuscript-scoped session is
-the right entrypoint (read `fedmaq-manuscript/README.md` + `.claude/rules/`). Context
-the next agent needs: the de-overclaim branch above should be merged first (or the
-polishing rebased onto it) so the two passes don't conflict; Ch5/Ch6 still carry
-`[PLACEHOLDER]` slots that fill once the 195-run grid produces results. Also open when
-convenient: **P18** (Section B — stochastic-quantizer switch + both-α ablation in
-`fedmaq-experiments`; its own experiments-scoped session), **P7** (WandB + Hydra
-ingest, analyses), and **P11** (CFD, ~Oct 2026 stub).
+- Full session-to-session history lives in [changelog.md](.claude/project/changelog.md)
