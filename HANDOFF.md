@@ -51,7 +51,7 @@ Old document for agent-to-agent and session-to-session continuity across the Fed
 
 ### [fedmaq-manuscript](../fedmaq-manuscript/) — [Active — next task]
 
-- **Completed:** Chapter 1–6 drafted (Ch5 is largely results placeholders awaiting the run grid; Ch6 has content with `[PLACEHOLDER]` slots). **Grilling-pass de-overclaim revision** applied across Ch1–6 on branch `manuscript-deoverclaim-communication-primary` (PR pending, compiles clean, 65 pp): communication-primary problem statement with memory as a hard feasibility _ceiling_; two-axis objectives; central §3.5 rewrite crediting quantization-noise attenuation to unbiased **parameter averaging** (~1/K_active) and KD to non-IID **drift reconciliation** (not noise cancellation — Jensen/nonlinear-softmax), with a falsifiable α-prediction wired to the ablation; unbiased-quantizer note in §3.3; "pilot study" → "formulation study" across both α∈{0.1,1.0}; **195-run grid** (108 main + 27 FEMNIST + 30 formulation + 30 ablation); DynFed-style reference arm; hardware reframed (lab datacenter primary, RTX 5060 dev/smoke); removed "mathematically unifying"/"resolves the conflicting demands" over-claims. The earlier flagged experimental-grid-size note is now reconciled to 195 runs.
+- **Completed:** Chapter 1–6 drafted (Ch5 is largely results placeholders awaiting the run grid; Ch6 has content with `[PLACEHOLDER]` slots). **Grilling-pass de-overclaim revision** applied across Ch1–6 on branch `manuscript-deoverclaim-communication-primary` (PR pending, compiles clean, 65 pp): communication-primary problem statement with memory as a hard feasibility _ceiling_; two-axis objectives; central §3.5 rewrite crediting quantization-noise attenuation to unbiased **parameter averaging** (~1/K_active) and KD to non-IID **drift reconciliation** (not noise cancellation — Jensen/nonlinear-softmax), with a falsifiable α-prediction wired to the ablation; unbiased-quantizer note in §3.3; "pilot study" → "formulation study" across both α∈{0.1,1.0}; **201-run grid** (108 main + 27 FEMNIST + 30 formulation + 30 ablation + 6 uniform-memory control); DynFed-style reference arm; hardware reframed (lab datacenter primary, RTX 5060 dev/smoke); removed "mathematically unifying"/"resolves the conflicting demands" over-claims. The earlier flagged experimental-grid-size note is now reconciled to 201 runs.
 - **Pending (NEXT TASK):** **Final polishing pass over the manuscript** — user will detail scope for the next agent. Ch5/Ch6 still hold `[PLACEHOLDER]` slots that fill once results land. Incorporate proposal-panel feedback post-defense.
 
 ### [fedmaq-literature](../fedmaq-literature/) — [OKF bundle fully populated]
@@ -104,9 +104,9 @@ Priority order for upcoming work. Mark items `[x]` when done; add new items at t
 | 12  | Align experiments code + Ch. 1/4 manuscript (proxy pool, discrete bit-widths, FedDistill spec); apply manuscript-side fixes to chapter_4.tex                                                                   | experiments + manuscript | [x]    |
 | 14  | Restructure literature to OKF: remove vector-RAG, convert 10 missing papers, migrate 39 papers into `kg/` bundle                                                                                               | literature               | [x]    |
 | 15  | Populate OKF knowledge layer (methods, concepts, findings, gaps → 87 nodes)                                                                                                                                    | literature               | [x]    |
-| 16  | Grilling-pass de-overclaim: KG gap/finding nodes + manuscript Ch1–6 (multi-signal framing, communication-primary, two-stage aggregation, 195-run grid)                                                         | literature + manuscript  | [x]    |
+| 16  | Grilling-pass de-overclaim: KG gap/finding nodes + manuscript Ch1–6 (multi-signal framing, communication-primary, two-stage aggregation, 201-run grid)                                                         | literature + manuscript  | [x]    |
 | 17  | **Final polishing pass over the manuscript** (scope detail incoming from user)                                                                                                                                 | manuscript               | [ ]    |
-| 18  | Section B — align experiments code: switch FedPAQ quantizer to **stochastic rounding** (reuse `DAdaQuantCompressionHook._quantize_elem`) + wire 195-run/both-α ablation. Hard dependency for the α-prediction. | experiments              | [ ]    |
+| 18  | Section B — align experiments code: switch FedPAQ quantizer to **stochastic rounding** (reuse `DAdaQuantCompressionHook._quantize_elem`) + wire 201-run/both-α ablation. Hard dependency for the α-prediction. | experiments              | [ ]    |
 | 19  | Codebase-consistency fixes: `c_unit` 512, combine-then-floor-once bit-width snap, post-processing pipeline (error-feedback + diff-coding + zlib) gated by `post_process` on the primary grid only              | experiments              | [x]    |
 
 **Current focus:** The grilling-pass de-overclaim (Task 16) is complete across
@@ -118,7 +118,7 @@ scope for the next agent. Also open: **P18** (Section B — stochastic-quantizer
 
 - both-α ablation in experiments; hard dependency for the α-prediction, deferred to
   its own experiments-scoped session), and **P7** (WandB + Hydra ingest, analyses).
-  **P11 (CFD) is now complete** — see the changelog entry below; the 195-run grid
+  **P11 (CFD) is now complete** — see the changelog entry below; the 201-run grid
   is unblocked (all baselines ported).
 
 ---
