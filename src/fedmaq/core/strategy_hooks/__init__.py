@@ -5,7 +5,7 @@ To add a new baseline:
 2. Register its class in ``_STRATEGY_HOOKS`` below (constructor takes ``config``).
 3. Register any client-side hooks in ``core/client_hooks`` and
    ``baselines/__init__.py:get_compressor_hook``.
-4. Update ``HANDOFF.md`` and ``baseline_registry.md``.
+4. Update ``baseline_registry.md``.
 
 Algorithms with no registered hook fall back to :class:`PassthroughHook` (the
 FedAvg-family default) with a warning. Algorithms listed in ``_UNPORTED`` raise a

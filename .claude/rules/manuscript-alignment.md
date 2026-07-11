@@ -42,7 +42,18 @@ The simulation time logged in `TelemetryFedAvg` must track:
 3. **Server Distillation Overhead**:
    - FedMAQ server distillation delay scales with proxy size, epochs, and number of teachers: $T_{server} = \frac{\|D_{pub}\| \cdot E_{kd} \cdot K_{active}}{ServerSpeed}$.
 
-## 4. Testing Rigor
+## 4. Locked Cross-Repo Architectural Decisions
+
+| Topic              | Decision                                                                                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Thesis context     | `fedmaq-experiments/.claude/rules/` is canonical (decomposed from a prior `context.md`)                                                                                                                                                      |
+| Experiments layout | uv monorepo, code under `src/fedmaq/core/` and `src/fedmaq/baselines/`                                                                                                                                                                       |
+| Tooling            | Preferred stack in `tech-stack.md`; adopt extra libs (pandas, sklearn, etc.) when justified                                                                                                                                                  |
+| Literature PDFs    | Never parse `papers/*.pdf` in chat; pipeline + `markdown/` only                                                                                                                                                                              |
+| Literature KG      | OKF bundle at `kg/` (see `fedmaq-literature/SPEC.md`); two layers — raw `markdown/` (citable) + curated OKF nodes. No vector store (grep + read); nodes authored directly, no approve gate (review via `git diff`); no cross-repo auto-edits |
+| Analyses inputs    | WandB exports + Hydra outputs from experiments                                                                                                                                                                                               |
+
+## 5. Testing Rigor
 
 Any mathematical or simulation configuration updates must be accompanied by comprehensive tests verifying correctness and determinism, particularly for:
 

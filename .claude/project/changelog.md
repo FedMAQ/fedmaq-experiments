@@ -2,6 +2,11 @@
 
 Archive of session-to-session changelog entries for the FedMAQ thesis codebase.
 
+**Policy (as of 2026-07-11):** going forward, only append entries for major
+milestones (merged PRs, architecture shifts, phase completions) — not routine
+per-session narrative, since claude-mem now covers that granularity. Existing
+entries below are historical and not retroactively edited.
+
 ## Historical Entries
 
 ### 2026-07-11 — CFD Baseline Port, Paper-Faithful (experiments)
