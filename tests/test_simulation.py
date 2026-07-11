@@ -134,3 +134,40 @@ def test_run_cfg_smoke_feddistill_two_rounds(mock_dataset, tmp_path, monkeypatch
 
     assert telemetry.cumulative_bytes > 0
     assert np.isfinite(telemetry.cumulative_bytes)
+
+
+def test_run_cfg_smoke_cfd_two_rounds(mock_dataset, tmp_path, monkeypatch):
+    """CFD over 2 rounds through the real Flower orchestration.
+
+    Validates the soft-label transport the in-process unit tests bypass: clients
+    return quantized codes as ``parameters`` (not weights), the server dequantizes
+    + averages + dual-distills its persistent server_model, and round 2 broadcasts
+    quantized server labels so the client-side digest (KL) branch engages.
+    """
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    from fedmaq.simulation import run
+
+    with initialize(config_path="../conf", version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "algorithm=cfd",
+                "dataset.name=mnist",
+                "dataset.num_classes=10",
+                "experiment.num_clients=2",
+                "experiment.total_rounds=2",
+                "experiment.num_public_samples=10",
+                "experiment.batch_size=2",
+                "experiment.local_epochs=1",
+                "experiment.client_fraction=1.0",
+                "experiment.client_gpus=0.0",
+            ],
+        )
+
+    telemetry = run(cfg)
+
+    # Round 1 has no downstream broadcast (untrained server model); round 2 does,
+    # so cumulative bytes must still be positive and finite overall.
+    assert telemetry.cumulative_bytes > 0
+    assert np.isfinite(telemetry.cumulative_bytes)

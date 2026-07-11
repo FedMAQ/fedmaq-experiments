@@ -1405,8 +1405,10 @@ def test_evaluation_metrics():
 
 
 def test_strategy_hook_registry():
-    """get_strategy_hook: dict lookup, Passthrough fallback, unported guard."""
+    """get_strategy_hook: dict lookup, Passthrough fallback, CFD construction."""
     from fedmaq.core.strategy_hooks import (
+        _UNPORTED,
+        CFDHook,
         FedDistillHook,
         FedMAQHook,
         PassthroughHook,
@@ -1420,9 +1422,12 @@ def test_strategy_hook_registry():
     # Unknown FedAvg-family name falls back to PassthroughHook (client-only algos).
     assert isinstance(get_strategy_hook("fedavg", {}), PassthroughHook)
 
-    # Registered-but-unimplemented baselines fail loudly at construction time.
-    with pytest.raises(NotImplementedError):
-        get_strategy_hook("cfd", {})
+    # CFD is fully ported: constructs (no longer in _UNPORTED) with sane defaults.
+    assert "cfd" not in _UNPORTED
+    cfd_hook = get_strategy_hook("cfd", {"dataset": {"name": "mnist", "num_classes": 10}})
+    assert isinstance(cfd_hook, CFDHook)
+    assert cfd_hook.b_up == 1
+    assert cfd_hook.b_down == 1
 
 
 def test_feddistill_logit_tracker_no_nan():

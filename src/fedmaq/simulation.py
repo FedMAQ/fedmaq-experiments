@@ -130,6 +130,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
             compressor_hook=compressor_hook,
             config=cfg_dict,
             public_loader=public_loader,
+            state=context.state,
         ).to_client()
 
     client_app = ClientApp(client_fn=client_fn)

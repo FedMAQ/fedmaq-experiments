@@ -88,6 +88,7 @@ class GenericClient(fl.client.NumPyClient):
         compressor_hook: CompressionHook,
         config: dict[str, Any],
         public_loader: torch.utils.data.DataLoader | None = None,
+        state: Any | None = None,
     ) -> None:
         self.cid = cid
         self.trainloader = trainloader
@@ -97,6 +98,7 @@ class GenericClient(fl.client.NumPyClient):
         self.compressor_hook = compressor_hook
         self.config = config
         self.public_loader = public_loader
+        self.state = state
         self.device = torch.device(config.get("device") or DEVICE)
         self.model.to(self.device)
 

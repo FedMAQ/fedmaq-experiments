@@ -10,6 +10,7 @@ To add a new baseline with custom local training:
 from __future__ import annotations
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.cfd import CFDFit
 from fedmaq.core.client_hooks.feddistill import FedDistillFit
 from fedmaq.core.client_hooks.fedkd import FedKDFit
 from fedmaq.core.client_hooks.fedmd import FedMDFit
@@ -23,6 +24,7 @@ __all__ = [
     "FedMDFit",
     "FedKDFit",
     "FedDistillFit",
+    "CFDFit",
     "get_fit_strategy",
 ]
 
@@ -33,6 +35,7 @@ _FIT_STRATEGIES: dict[str, type[ClientFitStrategy]] = {
     "dadaquant": DAdaQuantFit,
     "fedmaq": FedMAQFit,
     "feddistill": FedDistillFit,
+    "cfd": CFDFit,
 }
 
 
