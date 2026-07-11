@@ -9,6 +9,7 @@ dependencies = [
     "hydra-core>=1.3.3",
     "matplotlib>=3.11.0",
     "omegaconf>=2.3.1",
+    "pandas>=3.0.3",  # runtime: scripts/analysis.py formulation-winner harness
     "scikit-learn>=1.9.0",  # runtime: macro P/R/F1 in core/evaluation.py
     "seaborn>=0.13.2",
     "torch==2.12.1+cu132",
