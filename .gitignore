@@ -4,6 +4,7 @@ data/
 multirun/
 outputs/
 references/
+scripts/analysis_output/
 
 # Weights & Biases
 wandb/
