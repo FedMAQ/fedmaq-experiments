@@ -4,6 +4,48 @@ Archive of session-to-session changelog entries for the FedMAQ thesis codebase.
 
 ## Historical Entries
 
+### 2026-07-11 — CFD Baseline Port, Paper-Faithful (experiments)
+
+Ports the last unported baseline (P11): CFD (Compressed Federated Distillation, Sattler
+et al. 2022). Exchanges quantized soft-labels on the shared public proxy set instead of
+weights/gradients; the manuscript (ch4 §Baselines) names it one of only two reproducible
+Category-D (Hybrid Q+KD) comparators, so the 195-run grid was blocked on this port.
+
+- **`core/softlabel_codec.py`** (new, pure numpy): `constrained_quantize` — b-bit uniform
+  quantization onto the probability simplex via largest-remainder (Hamilton apportionment),
+  exactly preserving `codes.sum(axis=1) == 2**b - 1` per row (paper eq. 10); reduces exactly
+  to argmax one-hot at b=1 (eq. 11), verified rather than special-cased. `dequantize`,
+  `encode_bytes` (delta + zlib, mirrors `postprocess.py`'s pattern), `codes_to_bytes`/
+  `codes_from_bytes` for the `FitIns.config`/`parameters` transport channels.
+- **Server `CFDHook`** (`core/strategy_hooks/cfd.py`): holds a persistent `server_model`
+  (the hook is a long-lived object, unlike ephemeral simulated clients) refined every round
+  via dual distillation on the aggregated client soft-labels; its predictions become next
+  round's downstream target. `pre_aggregate_fit` returns the `(None, {})` tuple (not bare
+  `None`) to bypass FedAvg weight-averaging the int64 soft-label codes. Round 1 skips the
+  downstream broadcast (server model untrained, no delta reference) but clients still upload
+  soft-labels, seeding dual distillation from round 1.
+- **Client `CFDFit`** (`core/client_hooks/cfd.py`): fresh model init each round (paper's
+  design — clients hold no persistent state); digests server labels via KL (round >= 2, gated
+  like FedMD), trains private CE, returns quantized soft-label codes as `parameters` (not
+  weights). Only the upstream delta-reference codes persist, via `client.state`
+  (`Context.state`, now threaded into `GenericClient` itself, not just
+  `get_compressor_hook`).
+- **Circular-import fix:** `softlabel_codec.py` lives under `core/`, not `baselines/`
+  (deviating from the original plan) — `client_hooks/cfd.py` needing it from `baselines/`
+  would import that package's `__init__.py`, which needs `fedmaq.core.client.CompressionHook`,
+  while `core.client` is still mid-import via its own `client_hooks` import. The codec has no
+  `fedmaq` dependencies, so `core/` sidesteps the cycle cleanly.
+- **Fidelity caveats (documented in-code):** zlib substitutes for CABAC/arithmetic coding;
+  public proxy is the 1600-sample FedMAQ pool, not the paper's ~80k-sample STL-10.
+- **Tests:** `tests/test_cfd.py` (new, 11 tests: quantizer math, delta/zlib codec, server
+  dual-distillation across 2 rounds, FedAvg-bypass, client round-gating, upstream delta-state
+  persistence); `tests/test_environment.py` (registry test now constructs `CFDHook` instead of
+  asserting `NotImplementedError`); `tests/test_simulation.py` (2-round `run(cfg)` smoke, like
+  FedDistill's); `tests/test_timing_golden.py` (2 new goldens for the client digest-phase
+  timing contribution). 78 tests green, ruff clean, mypy no new errors. CPU end-to-end smoke
+  on CIFAR-10 (2 rounds, 6 clients) completes and produces finite eval accuracy.
+- **Docs:** `baseline_registry.md` row 14 → `[Complete]`; `HANDOFF.md` P11 → `[x]`.
+
 ### 2026-07-09 — Literature OKF Restructure (literature)
 
 Branch `okf-restructure` in `fedmaq-literature`. Restructured the literature repo from a local-first vector-RAG pipeline into an **Open Knowledge Format** knowledge graph, chosen over Karpathy's LLM-Wiki pattern for long-term LLM-agent integration and conformant to the user-provided `SPEC.md` (OKF v0.1). Executed in phases; the advisor was consulted at phase boundaries.

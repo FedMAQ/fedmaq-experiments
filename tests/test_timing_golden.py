@@ -18,6 +18,7 @@ import numpy as np
 from fedmaq.core.kd_utils import kd_server_sim_time
 from fedmaq.core.strategy import NetworkSimulator
 from fedmaq.core.strategy_hooks import (
+    CFDHook,
     FedKDHook,
     FedMDHook,
     PassthroughHook,
@@ -80,6 +81,24 @@ def test_fedmd_round2_no_pretrain_golden():
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=2)
     # (200*5 + 200*5) / 100 = 2000 / 100 = 20.0 s.
     assert t_train == 20.0
+
+
+def test_cfd_round1_no_digest_golden():
+    """CFD round 1: no downstream labels yet, so no digest-phase compute."""
+    hook = CFDHook({"dataset": {"name": "mnist", "num_classes": 4}})
+    _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=1)
+    # 200 samples * 5 epochs / 100 samples/sec = 10.0 s (private-only).
+    assert t_train == 10.0
+
+
+def test_cfd_round2_adds_digest_phase_golden():
+    """CFD round >1 folds in the client digest phase (distill_epochs on public set)."""
+    hook = CFDHook(
+        {"dataset": {"name": "mnist", "num_classes": 4}, "algorithm": {"distill_epochs": 2}}
+    )
+    _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=2)
+    # (200*5 + 200*2) / 100 = 1400 / 100 = 14.0 s.
+    assert t_train == 14.0
 
 
 def test_server_kd_sim_time_golden():

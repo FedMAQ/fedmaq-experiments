@@ -2,3 +2,13 @@ name: cfd
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
+
+# CFD-1-1_delta (paper's headline config): 1-bit soft-label quantization both
+# directions, delta-coded across rounds. Table 4.1 leaves CFD unpinned, so
+# b_up/b_down are configurable per-run.
+b_up: 1
+b_down: 1
+delta_coding: true
+distill_epochs: 1
+server_distill_epochs: 1
+temperature: 1.0

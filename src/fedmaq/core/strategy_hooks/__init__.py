@@ -51,13 +51,12 @@ _STRATEGY_HOOKS: dict[str, Callable[[dict[str, Any]], StrategyHook]] = {
     "fedmd": FedMDHook,
     "fedavg_kd": FedAvgKDHook,
     "feddistill": FedDistillHook,
+    "cfd": CFDHook,
 }
 
 # Registered configs whose hook is not yet implemented. Selecting one fails at
 # construction time (clear message) instead of raising mid-round.
-_UNPORTED: dict[str, str] = {
-    "cfd": "CFD (Task 11, ~Oct 2026)",
-}
+_UNPORTED: dict[str, str] = {}
 
 
 def get_strategy_hook(alg_name: str, config: dict[str, Any]) -> StrategyHook:
