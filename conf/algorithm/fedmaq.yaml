@@ -13,7 +13,7 @@ bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
 c_unit: 512.0  # MB consumed per quantization bit
 
 # Tier 2 soft quality formulation selection
-# 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
+# 0: Resource-Only Hard Cap, 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
 formulation: 3
 
 # Formulation-specific parameters

@@ -1,6 +1,10 @@
 # Control group: uniform memory 8192 MB per client (§4.1)
 # Isolates Server-Side KD accuracy recovery from memory-based quantization (system heterogeneity off).
 # Usage: uv run python scripts/run.py heterogeneity=uniform_memory
+#
+# Full control-arm sweep (§4.3): CIFAR-10, both alpha regimes, 3 seeds (2 x 3 = 6 runs):
+#   uv run python scripts/run.py --multirun dataset=cifar10 heterogeneity=uniform_memory \
+#     heterogeneity.alpha=0.1,1.0 algorithm=fedmaq seed=0,42,123
 partition: dirichlet
 alpha: 1.0          # Moderate data skew; combine with other alpha configs as needed
 uniform_memory_mb: 8192  # Fixed memory capacity for all clients (control group)

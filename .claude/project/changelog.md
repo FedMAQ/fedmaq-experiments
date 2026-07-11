@@ -9,7 +9,7 @@ Archive of session-to-session changelog entries for the FedMAQ thesis codebase.
 Ports the last unported baseline (P11): CFD (Compressed Federated Distillation, Sattler
 et al. 2022). Exchanges quantized soft-labels on the shared public proxy set instead of
 weights/gradients; the manuscript (ch4 §Baselines) names it one of only two reproducible
-Category-D (Hybrid Q+KD) comparators, so the 195-run grid was blocked on this port.
+Category-D (Hybrid Q+KD) comparators, so the 201-run grid was blocked on this port.
 
 - **`core/softlabel_codec.py`** (new, pure numpy): `constrained_quantize` — b-bit uniform
   quantization onto the probability simplex via largest-remainder (Hamilton apportionment),
