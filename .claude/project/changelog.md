@@ -9,6 +9,18 @@ entries below are historical and not retroactively edited.
 
 ## Historical Entries
 
+### 2026-07-13 — FedKD Chance-Level Bug Fixed: Server-Side SVD Now Compresses Deltas (experiments)
+
+Root-caused and fixed FedKD's accuracy being pinned at chance level (~10%/ln(10)) on CIFAR-10 regardless of round count. `FedKDHook._svd_compress_parameters` in `src/fedmaq/core/strategy_hooks/fedkd.py` was applying SVD rank-truncation directly to full aggregated weight matrices on both the download (`pre_configure_fit`) and eval (`pre_evaluate`) paths every round — full weight matrices aren't low-rank, so this collapsed `mean_rank_retained` to ~0.037 (near rank-1) almost immediately regardless of the energy ramp, independent of the upload-path compression (`FedKDCompressionHook.compress`) which already correctly compressed deltas.
+
+Fix (commit `d8bcccd`): renamed to `_svd_compress_delta`, which tracks a client-side reference (`self._reference`) and SVD-compresses `parameters - reference` instead of raw weights, mirroring the upload path and matching the original paper's (Wu et al., 2022) gradient/update-compression design. `pre_evaluate` now reuses the reconstruction from `pre_configure_fit` instead of running a second, independent compression pass.
+
+20-round CIFAR-10 verification (`experiment.total_rounds=20`, `client_fraction=0.2`, 10 clients/round): alpha=1.0 (homogeneous) converged cleanly to 24.19% accuracy / loss 2.017, down from chance-level 10%/ln(10)=2.303; alpha=0.1 (heterogeneous) reached 14.72%, noisier but no longer dead-flat. `mean_rank_retained` now correctly tracks the energy ramp (floors early when energy is low, climbs to 0.10-0.14 near tmax=0.9) rather than sitting fixed regardless of energy target.
+
+Also surfaced and cleared a separate infra issue during this investigation: leaked Ray worker/actor processes from prior killed sweep launches accumulated across the session and saturated the 8GB GPU (down to 144 MiB free), causing cascading CUDA OOM errors independent of the FedKD bug. Killed via direct PID termination + `ray stop`; not yet root-caused why `pkill -f "scripts/run.py"` doesn't reach detached Ray actor subprocesses.
+
+Remaining: 20 rounds/10 clients-per-round is still triage-scale, not benchmark-scale — a longer run (40-100 rounds) is needed before this counts as a confirmed FedKD result, especially to see if the alpha=0.1 (heterogeneous) case converges as cleanly as alpha=1.0 did.
+
 ### 2026-07-13 — Round 3 Final Audit Closes Out Grilling Thread (manuscript, literature, experiments)
 
 Holistic cross-chapter read (Ch1-Ch6 + CONTEXT.md end-to-end) plus a self-check of Round 2's own edits, closing the multi-round grill-with-docs thread. Found and fixed instances of the "three coequal dimensions" pattern (banned since Round 1) that Round 2's chapter-by-chapter sweep missed in Ch1/Ch2/Ch3/Ch6; a self-contradiction in `chapter_4.tex:165` vs `:354`; an implicit-only bandwidth/compute-uniform claim in Ch1; a `kg/papers/` dangling reference from Round 2's FedDistill naming-collision fix that never touched the `papers/` tree; and a redundant `fd-faug.md`/`feddistill.md` content overlap. All fixes applied and pushed directly to `main` across three repos, per standing user instruction for this thread.
