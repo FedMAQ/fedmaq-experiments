@@ -6,7 +6,7 @@
 
 ## Objectives
 
-1. Simulate FL with uniform system parameters (bandwidth and compute) and statistical heterogeneity (non-IID data).
+1. Simulate FL with uniform bandwidth and compute, heterogeneous per-client memory (the Tier-1 hard-clamp resource signal), and statistical heterogeneity (non-IID data).
 2. Formulate multi-adaptive gradient quantization (resource, data, and state/gradient-norm awareness).
 3. Devise server-side aggregation with KD to mitigate drift and quantization error.
 4. Benchmark against SOTA communication-efficient FL methods on accuracy, communication overhead, and convergence stability.
