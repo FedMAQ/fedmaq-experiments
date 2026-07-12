@@ -21,28 +21,28 @@ FedMAQ thesis experiments: a uv monorepo (Flower, Hydra, PyTorch, WandB) impleme
 
 Not imported — read the relevant file when the task matches:
 
-| Rule                                   | Read when...                               |
-| -------------------------------------- | ------------------------------------------ |
-| `.claude/rules/ablation-phases.md`     | working across the 4 research phases       |
-| `.claude/rules/baselines.md`           | adding or porting a SOTA baseline          |
-| `.claude/rules/datasets-simulation.md` | touching dataset or heterogeneity config   |
-| `.claude/rules/evaluation-metrics.md`  | wiring up WandB logging                    |
-| `.claude/rules/flower-patterns.md`     | writing Flower client/server/strategy code |
-| `.claude/rules/hydra-config.md`        | editing `conf/`                            |
-| `.claude/rules/tech-stack.md`          | choosing or adding a dependency            |
+| Rule                                   | Read when...                                                |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `.claude/rules/ablation-phases.md`     | working across the 4 research phases                        |
+| `.claude/rules/baselines.md`           | adding or porting a SOTA baseline                           |
+| `.claude/rules/datasets-simulation.md` | touching dataset or heterogeneity config                    |
+| `.claude/rules/evaluation-metrics.md`  | wiring up WandB logging                                     |
+| `.claude/rules/flower-patterns.md`     | writing Flower client/server/strategy code                  |
+| `.claude/rules/hydra-config.md`        | editing `conf/`                                             |
+| `.claude/rules/tech-stack.md`          | choosing or adding a dependency                             |
 | `.claude/rules/agent-memory.md`        | deciding whether to trust remembered vs. current repo state |
 
 Skills (`.claude/skills/`) are auto-discovered by Claude Code — no manual index needed here.
 
 ## Project registries
 
-| File                                          | Contents                                  |
-| ---------------------------------------------- | ------------------------------------------ |
-| `.claude/project/workspace_map.md`            | Sibling-repo table and tooling migration state |
-| `.claude/project/env_vars.md`                 | Environment variables and secrets          |
-| `.claude/project/baseline_registry.md`        | Baseline algorithm implementation status   |
-| `.claude/project/experiment_registry.md`      | Completed experiment runs                  |
-| `.claude/project/changelog.md`                | Milestone-level session history            |
+| File                                     | Contents                                       |
+| ---------------------------------------- | ---------------------------------------------- |
+| `.claude/project/workspace_map.md`       | Sibling-repo table and tooling migration state |
+| `.claude/project/env_vars.md`            | Environment variables and secrets              |
+| `.claude/project/baseline_registry.md`   | Baseline algorithm implementation status       |
+| `.claude/project/experiment_registry.md` | Completed experiment runs                      |
+| `.claude/project/changelog.md`           | Milestone-level session history                |
 
 ## Sibling repos
 
