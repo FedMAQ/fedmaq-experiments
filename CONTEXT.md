@@ -39,6 +39,14 @@ _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 
 All previously logged Ch1-Ch6 prose fixes and nits have been applied directly to `fedmaq-manuscript` (main). None remain outstanding as of this session.
 
+### Resolved this session — Round 3 final audit (holistic cross-chapter pass)
+
+- **"Three dimensions" pattern (banned by this glossary) recurred outside Ch4** — Round 1 fixed it in Ch4 (`:112`, `:121`) but a chapter-by-chapter sweep in Round 2 missed identical instances in `chapter_1.tex:211`, `chapter_2.tex:429,442,425-438`, `chapter_3.tex:172`, `chapter_6.tex:40`. All reworded to Tier 1 hard clamp (memory) + Tier 2 two soft signals (data, state), matching Ch4's canonical phrasing. **Applied** (`fedmaq-manuscript` main).
+- **`chapter_4.tex:165` self-contradiction**: used glossary-banned terms "DynFed-core reference arm" / "state-only-plus-distillation" while the same chapter's `:354` correctly said "DynFed-style reference point" / "state-awareness-only ablation (Configuration 4)". Reworded `:165` to match `:354`. **Applied.**
+- **Objective 1's bandwidth/compute-uniform claim was implicit, never explicit in the manuscript**: `chapter_1.tex:164` only ever varied memory, never stated bandwidth/compute are held uniform by design. Added an explicit clause. **Applied.**
+- **`fd-faug.md` duplicated `feddistill.md`'s FD mechanism/formula** instead of linking to it, undercutting the stated file split. Trimmed to a one-line summary + link. **Applied** (`fedmaq-literature` main).
+- **Dangling FedDistill naming-collision reference in `kg/papers/`**: Round 2's naming-collision fix (see below) repointed `kg/concepts/` and `kg/methods/` but never touched `kg/papers/`. `jeong-2023-feddistill-aug.md:49` listed Song et al. 2024's FedDistill as a communication-reducing refinement of Jeong's mechanism — false, per Song's own paper ("No Communication Reduction"). Removed the false link, added a disambiguation note. `song-2024-feddistill.md` frontmatter `baseline: FedDistill` and `kg/papers/index.md`'s matching annotation reworded to clarify it's a name collision, not the implemented FedMAQ baseline. **Applied.**
+
 - ~~Ch4 "Objective-4 bits-to-accuracy product" undefined~~ — false alarm, Objective 4 is defined in Ch1 §1.2 (benchmarking objective, matches `.claude/rules/project-overview.md`). No fix needed; just a cross-chapter reference invisible when reading Ch3/Ch4 alone.
 
 ### Resolved this session — Ch1/Ch2/Ch5/Ch6 sweep

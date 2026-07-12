@@ -9,6 +9,10 @@ entries below are historical and not retroactively edited.
 
 ## Historical Entries
 
+### 2026-07-13 — Round 3 Final Audit Closes Out Grilling Thread (manuscript, literature, experiments)
+
+Holistic cross-chapter read (Ch1-Ch6 + CONTEXT.md end-to-end) plus a self-check of Round 2's own edits, closing the multi-round grill-with-docs thread. Found and fixed instances of the "three coequal dimensions" pattern (banned since Round 1) that Round 2's chapter-by-chapter sweep missed in Ch1/Ch2/Ch3/Ch6; a self-contradiction in `chapter_4.tex:165` vs `:354`; an implicit-only bandwidth/compute-uniform claim in Ch1; a `kg/papers/` dangling reference from Round 2's FedDistill naming-collision fix that never touched the `papers/` tree; and a redundant `fd-faug.md`/`feddistill.md` content overlap. All fixes applied and pushed directly to `main` across three repos, per standing user instruction for this thread.
+
 ### 2026-07-12 — Ch1/2/5/6 Grilling Sweep Closes Out Manuscript-Code Drift (manuscript, literature, experiments)
 
 Completes the grill-with-docs terminology/consistency pass across the whole manuscript (Ch3/Ch4 resolved in a prior session; this closes Ch1/2/5/6). All fixes applied and pushed directly to `main` across three repos.
