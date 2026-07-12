@@ -1,6 +1,7 @@
 ---
 name: run-minitest
-description: Runs a minified sanity-check sweep across all baseline algorithms and the
+description:
+  Runs a minified sanity-check sweep across all baseline algorithms and the
   main FedMAQ formulation to eyeball whether implementations behave and whether FedMAQ
   is trending correctly. Not a benchmark run — no methodology rigor, single seed, local
   telemetry only. Use when asked for a quick sanity/pilot check across algorithms.
@@ -9,7 +10,7 @@ description: Runs a minified sanity-check sweep across all baseline algorithms a
 # Run Minitest
 
 Quick, repeatable sanity sweep — not a citable benchmark result. Uses `experiment=preliminary`
-(50 clients, 10 rounds) instead of full-scale `experiment=default` (100/100), single seed,
+(50 clients, 50 rounds, 0.2 client participation rate) instead of full-scale `experiment=default` (100/100), single seed,
 local-only telemetry.
 
 1. Run the sweep:

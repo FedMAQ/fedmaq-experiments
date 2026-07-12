@@ -12,7 +12,7 @@ learning_rate: 0.01       # eta (base learning rate)
 learning_rate_decay: 0.99 # gamma (per-round exponential decay factor)
 weight_decay: 0.0001      # lambda (SGD weight decay, 10^-4)
 momentum: 0.9             # beta (SGD momentum)
-client_fraction: 0.1      # C (10% per round)
+client_fraction: 0.2      # C (20% per round)
 total_rounds: 10          # Preliminary staging value
 num_public_samples: 1600  # |D_pub| per manuscript §4.3, Table 4.1
 client_gpus: 0.2          # GPU resource fraction allocated per client simulator
