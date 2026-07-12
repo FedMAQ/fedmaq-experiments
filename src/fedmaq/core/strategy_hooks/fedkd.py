@@ -42,6 +42,15 @@ class FedKDHook(StrategyHook):
         self._compute_penalty = float(alg_cfg.get("compute_penalty", 2.5))
         # Cached energy for current round (set in pre_configure_fit, read in configure_fit)
         self._current_energy: float = self._tmin
+        # Client-side reference state: the last parameters the clients actually
+        # hold, reconstructed from compressed deltas. SVD is applied to the
+        # *delta* against this reference (gradient-like, genuinely low-rank),
+        # never to the full weight matrices (which are not low-rank).
+        self._reference: list[np.ndarray] | None = None
+        # Reconstructed parameters cached from pre_configure_fit so pre_evaluate
+        # evaluates the exact same compressed state clients received, instead of
+        # running a second, independent compression pass.
+        self._last_reconstructed: Parameters | None = None
 
     def download_size_bytes(
         self,
@@ -49,11 +58,13 @@ class FedKDHook(StrategyHook):
         ndarrays: list[Any],
     ) -> int:
         """SVD-compressed download size at the current round's energy level."""
+        reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         model_size_bytes = 0
-        for arr in ndarrays:
+        for arr, ref in zip(ndarrays, reference):
             if arr.size == 0:
                 continue
-            compressed = compress_tensor(arr, self._current_energy)
+            delta = arr - ref
+            compressed = compress_tensor(delta, self._current_energy)
             model_size_bytes += svd_compressed_nbytes(compressed, arr.nbytes)
         return model_size_bytes
 
@@ -66,27 +77,38 @@ class FedKDHook(StrategyHook):
         )
         return float(min(max(0.0, energy), 1.0))
 
-    def _svd_compress_parameters(
+    def _svd_compress_delta(
         self, parameters: Parameters, energy: float, tag: str = ""
     ) -> Parameters:
-        """Apply SVD compression to model parameters for the download path."""
+        """SVD-compress the delta against ``self._reference`` and advance it.
+
+        Compresses ``parameters - reference`` (a genuinely low-rank,
+        gradient-like update), not the raw weight matrices, then folds the
+        reconstructed delta back into the reference. This mirrors the upload
+        path (:class:`FedKDCompressionHook.compress`), which already
+        compresses deltas rather than full weights.
+        """
         ndarrays = parameters_to_ndarrays(parameters)
-        reconstructed: list[np.ndarray] = []
+        if self._reference is None:
+            self._reference = [np.zeros_like(arr) for arr in ndarrays]
+
+        new_reference: list[np.ndarray] = []
         rank_ratios: list[float] = []
-        for arr in ndarrays:
+        for arr, ref in zip(ndarrays, self._reference):
             if arr.size == 0:
-                reconstructed.append(arr)
+                new_reference.append(arr)
                 continue
-            orig_shape = arr.shape
-            compressed = compress_tensor(arr, energy)
+            delta = arr - ref
+            orig_shape = delta.shape
+            compressed = compress_tensor(delta, energy)
             if len(compressed) == 3:
                 u, sigma, _v = compressed
-                full_rank = min(arr.reshape(orig_shape[0], -1).shape)
+                full_rank = min(delta.reshape(orig_shape[0], -1).shape)
                 rank_ratios.append(sigma.size / full_rank)
-                decompressed = decompress_tensor(compressed, orig_shape)
-                reconstructed.append(decompressed.astype(np.float32))
+                delta_hat = decompress_tensor(compressed, orig_shape).astype(np.float32)
             else:
-                reconstructed.append(arr)
+                delta_hat = delta
+            new_reference.append(ref + delta_hat)
         if rank_ratios:
             mean_ratio = sum(rank_ratios) / len(rank_ratios)
             logger.info(
@@ -96,7 +118,8 @@ class FedKDHook(StrategyHook):
                 mean_ratio,
                 len(rank_ratios),
             )
-        return ndarrays_to_parameters(reconstructed)
+        self._reference = new_reference
+        return ndarrays_to_parameters(new_reference)
 
     def pre_configure_fit(
         self,
@@ -105,9 +128,11 @@ class FedKDHook(StrategyHook):
         parameters: Parameters,
     ) -> Parameters:
         self._current_energy = self._compute_energy(server_round)
-        return self._svd_compress_parameters(
+        reconstructed = self._svd_compress_delta(
             parameters, self._current_energy, tag="download"
         )
+        self._last_reconstructed = reconstructed
+        return reconstructed
 
     def configure_fit(
         self,
@@ -141,5 +166,10 @@ class FedKDHook(StrategyHook):
     ) -> Parameters:
         if server_round <= 0:
             return parameters
+        # Reuse the exact reconstruction already sent to clients this round
+        # (avoids a second, independent compression pass diverging from what
+        # clients actually train on).
+        if self._last_reconstructed is not None:
+            return self._last_reconstructed
         energy = self._compute_energy(server_round)
-        return self._svd_compress_parameters(parameters, energy, tag="eval")
+        return self._svd_compress_delta(parameters, energy, tag="eval")
