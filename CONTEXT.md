@@ -37,9 +37,21 @@ _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 
 ## Open items
 
-All previously logged Ch3/Ch4 prose fixes and nits have been applied directly to `fedmaq-manuscript` (main). None remain outstanding for Ch3/Ch4 as of this session.
+All previously logged Ch1-Ch6 prose fixes and nits have been applied directly to `fedmaq-manuscript` (main). None remain outstanding as of this session.
 
 - ~~Ch4 "Objective-4 bits-to-accuracy product" undefined~~ — false alarm, Objective 4 is defined in Ch1 §1.2 (benchmarking objective, matches `.claude/rules/project-overview.md`). No fix needed; just a cross-chapter reference invisible when reading Ch3/Ch4 alone.
+
+### Resolved this session — Ch1/Ch2/Ch5/Ch6 sweep
+
+- **Objective 1 uniform-vs-heterogeneous contradiction**: `project-overview.md` said fully "uniform system parameters"; Ch1/Scope assume heterogeneous per-client memory (Tier-1 hard clamp). Resolved as: bandwidth/compute uniform, memory heterogeneous. **Applied** (`.claude/rules/project-overview.md`, `fedmaq-experiments` main).
+- **Ch2 DAdaQuant mischaracterization** (`chapter_2.tex:258-259`): claimed DAdaQuant adapts on raw elapsed time; source paper (Hönig et al. 2022) shows it reacts to a moving-average global-loss plateau. Narrowed the research-gap argument to gradient-norm/optimization-geometry specifically, which neither DAdaQuant nor LAQ-HC captures. **Applied.**
+- **Ch2 LAQ-HC mislabeled "delay-adaptive"** (`chapter_2.tex:258`, `:280`): source paper (Cui et al. 2026) shows selection via a data-quality/bandwidth flag function, not delay/latency. Renamed to "quality/bandwidth-adaptive." **Applied.**
+- **Ch5 asserted unexecuted results as completed** (`chapter_5.tex:24,45-51`): past-tense claims ("we executed," "we evaluated") had no backing in `experiment_registry.md` (zero logged runs). Reworded to future/conditional tense until real runs are logged. **Applied.**
+- **FedDistill naming collision in `fedmaq-literature` kg**: `kg/methods/feddistill.md` conflated Jeong et al. 2023's per-label-logit mechanism (the actually-implemented baseline) with Song et al. 2024's group-distillation/de-biasing mechanism. Rescoped `feddistill.md` to Jeong's mechanism; split Song's into new `kg/methods/feddistill-debias.md`; repointed cross-references. **Applied** (`fedmaq-literature` main).
+- Ch1 Objective 2 wording gap (objective statement omits data/state awareness, present only in \S1.3.2 prose): reviewed, left as-is — intentional abstraction.
+- Ch6: placeholder-only, no drift found.
+- Appendices A/B: boilerplate, not referenced by Ch1/2/5/6, no drift.
+- No ADR-worthy architectural trade-offs surfaced in this sweep.
 
 ### Resolved this session (applied directly to `fedmaq-manuscript`, main branch)
 
