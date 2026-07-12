@@ -37,15 +37,16 @@ _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 
 ## Open items
 
-Manuscript prose fixes needed (Ch3/Ch4), no code changes:
+All previously logged Ch3/Ch4 prose fixes and nits have been applied directly to `fedmaq-manuscript` (main). None remain outstanding for Ch3/Ch4 as of this session.
 
-- Ch3 §3.3: rename "soft quality function" ($\hat q_k^{(t)}$) to "soft quality target" to match code and this glossary.
-- Ch4 §4 (ablation study): reword "three dimensions of awareness" to state resource as Tier 1 (hard clamp) and data/state as the two Tier 2 signals, matching Ch3's actual mechanism.
-- Ch3 §3.3: add a `[Alternative 0: Resource-Only Hard Cap]` bracketed heading to match the structure of Alternatives 1-4 (currently inline-only, despite Ch4's table treating it as a full 5th formulation row).
-- Ch4 §4 (Ablation Study), line 356: delete the sentence proposing an "optional sixth arm substituting DynFed's recursive, inertial bit-width tracker" — decided not to pursue (no value added to the ablation); no recursive/inertial tracker code exists anywhere in `src/fedmaq/`, confirming the decision was never implemented. Also resolves the numbering collision (sentence called it a "sixth arm" while Configuration 6 already names something else).
 - ~~Ch4 "Objective-4 bits-to-accuracy product" undefined~~ — false alarm, Objective 4 is defined in Ch1 §1.2 (benchmarking objective, matches `.claude/rules/project-overview.md`). No fix needed; just a cross-chapter reference invisible when reading Ch3/Ch4 alone.
 
-### Resolved this session (applied directly to `fedmaq-manuscript`)
+### Resolved this session (applied directly to `fedmaq-manuscript`, main branch)
+
+- **"Soft quality function" -> "soft quality target"** (`chapter_3.tex:202`): renamed to match code and this glossary. **Applied.**
+- **"Three dimensions of awareness" reword** (`chapter_4.tex:112`, `:121`): restated as Tier 1 hard clamp (resource) vs Tier 2's two soft signals (data, state), matching Ch3's actual mechanism. **Applied.**
+- **`[Alternative 0: Resource-Only Hard Cap]` heading** (`chapter_3.tex`, after the Candidate Soft Quality Formulations intro paragraph): added for structural parity with Alternatives 1-4. **Applied.**
+- **Sixth-arm sentence deleted** (`chapter_4.tex`, formerly line 357): removed the unpursued "DynFed recursive, inertial bit-width tracker" ablation-arm proposal; no such code exists in `src/fedmaq/`. **Applied.**
 
 - **Rounding notation** (`chapter_3.tex:230`, $q_{mid} = \lfloor (q_{max}+q_{min})/2 \rceil$): mixed floor-left/ceiling-right bracket is standard round-to-nearest notation, not an error — no precedent found in `fedmaq-literature` kg (checked DynFed, QSGD, DAdaQuant), so added a defining footnote rather than replacing the notation. **Applied.**
 - **`c_unit = 512` MB derivation** (`chapter_3.tex:182`): flagged in prior session as an unresolved gap; re-checked and the existing prose already ties it qualitatively to activation maps/gradient buffers/scratch space beyond the 1.4MB/bit-level payload figure — no formula needed. **No fix required, false alarm.**
