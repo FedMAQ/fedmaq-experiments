@@ -9,6 +9,17 @@ entries below are historical and not retroactively edited.
 
 ## Historical Entries
 
+### 2026-07-12 — Ch1/2/5/6 Grilling Sweep Closes Out Manuscript-Code Drift (manuscript, literature, experiments)
+
+Completes the grill-with-docs terminology/consistency pass across the whole manuscript (Ch3/Ch4 resolved in a prior session; this closes Ch1/2/5/6). All fixes applied and pushed directly to `main` across three repos.
+
+- Split Objective 1 wording (`project-overview.md`, `fedmaq-experiments`): bandwidth/compute stay uniform, per-client memory is the heterogeneous axis feeding the Tier-1 hard clamp — Ch1/Scope had drifted from the fully-uniform phrasing.
+- Corrected two mischaracterized baselines in Ch2 (`chapter_2.tex`): DAdaQuant adapts on a global-loss moving-average plateau (not raw elapsed time); LAQ-HC adapts on a data-quality/bandwidth flag function (not delay). Narrowed the research-gap argument to gradient-norm/optimization-geometry specifically.
+- Hedged Ch5 (`chapter_5.tex`) preliminary-results prose from past to future/conditional tense — no runs were logged in `experiment_registry.md` yet.
+- Fixed a naming collision in `fedmaq-literature`'s kg: `methods/feddistill.md` conflated Jeong et al. 2023 (the mechanism actually implemented as the "FedDistill" baseline) with Song et al. 2024 (a different de-biasing algorithm). Rescoped `feddistill.md` to Jeong's mechanism, split Song's into new `methods/feddistill-debias.md`, repointed cross-references.
+- Logged all resolutions in `CONTEXT.md`'s Open Items section (`fedmaq-experiments`).
+- No ADR-worthy architectural trade-offs surfaced; Ch6 and appendices had no drift.
+
 ### 2026-07-11 — CFD Baseline Port, Paper-Faithful (experiments)
 
 Ports the last unported baseline (P11): CFD (Compressed Federated Distillation, Sattler
