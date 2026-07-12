@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -19,6 +20,8 @@ from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
     from fedmaq.core.strategy import TelemetryFedAvg
+
+logger = logging.getLogger(__name__)
 
 
 class FedKDHook(StrategyHook):
@@ -64,11 +67,12 @@ class FedKDHook(StrategyHook):
         return float(min(max(0.0, energy), 1.0))
 
     def _svd_compress_parameters(
-        self, parameters: Parameters, energy: float
+        self, parameters: Parameters, energy: float, tag: str = ""
     ) -> Parameters:
         """Apply SVD compression to model parameters for the download path."""
         ndarrays = parameters_to_ndarrays(parameters)
         reconstructed: list[np.ndarray] = []
+        rank_ratios: list[float] = []
         for arr in ndarrays:
             if arr.size == 0:
                 reconstructed.append(arr)
@@ -76,10 +80,22 @@ class FedKDHook(StrategyHook):
             orig_shape = arr.shape
             compressed = compress_tensor(arr, energy)
             if len(compressed) == 3:
+                u, sigma, _v = compressed
+                full_rank = min(arr.reshape(orig_shape[0], -1).shape)
+                rank_ratios.append(sigma.size / full_rank)
                 decompressed = decompress_tensor(compressed, orig_shape)
                 reconstructed.append(decompressed.astype(np.float32))
             else:
                 reconstructed.append(arr)
+        if rank_ratios:
+            mean_ratio = sum(rank_ratios) / len(rank_ratios)
+            logger.info(
+                "FedKD SVD [%s]: energy=%.3f mean_rank_retained=%.3f (n_layers=%d)",
+                tag,
+                energy,
+                mean_ratio,
+                len(rank_ratios),
+            )
         return ndarrays_to_parameters(reconstructed)
 
     def pre_configure_fit(
@@ -89,7 +105,9 @@ class FedKDHook(StrategyHook):
         parameters: Parameters,
     ) -> Parameters:
         self._current_energy = self._compute_energy(server_round)
-        return self._svd_compress_parameters(parameters, self._current_energy)
+        return self._svd_compress_parameters(
+            parameters, self._current_energy, tag="download"
+        )
 
     def configure_fit(
         self,
@@ -124,4 +142,4 @@ class FedKDHook(StrategyHook):
         if server_round <= 0:
             return parameters
         energy = self._compute_energy(server_round)
-        return self._svd_compress_parameters(parameters, energy)
+        return self._svd_compress_parameters(parameters, energy, tag="eval")
