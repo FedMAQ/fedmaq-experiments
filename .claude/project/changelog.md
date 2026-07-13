@@ -9,6 +9,17 @@ entries below are historical and not retroactively edited.
 
 ## Historical Entries
 
+### 2026-07-13 — 40-Round Baselines Sweep Completed; Proxy Dataset Shifted from 1600 to 3000 (experiments + manuscript)
+
+Completed the 40-round CIFAR-10 evaluation sweep across the distillation-based algorithms (CFD, FedKD, FedMD, FedDistill, FedMAQ) using 50 clients and 0.2 client fraction.
+- **FedMAQ** achieved **49.57%** test accuracy with a cumulative communication footprint of **1132.26 MB** (a **3.01x reduction** in communication versus FedDistill while gaining **9.49%** absolute accuracy).
+- **FedDistill** reached **40.08%** accuracy at a huge cost of **3410.05 MB**.
+- **FedKD** converged to **27.94%** accuracy at **33.79 MB** overhead.
+- **CFD** used **1.22 MB** of bandwidth but got **21.25%** accuracy.
+- **FedMD** reached **20.78%** accuracy at **47.73 MB** overhead.
+
+Also shifted the server-side proxy dataset size ($D_{proxy}$) from 1600 to 3000 across all configurations, tests, and manuscript chapters (1, 4, 5) to reduce distillation noise and stabilize convergence under statistical heterogeneity.
+
 ### 2026-07-13 — CFD Chance-Level Bug Root-Caused; Partial Fix Applied, Not Yet Resolved (experiments)
 
 Root-caused CFD's accuracy being pinned at chance level (~10%) across all soft-label quantization bit-widths (1/2/4/8/16, 40-round CIFAR-10 alpha=0.1 sweep). Instrumented `pre_aggregate_fit`/`_train_server_model` in `src/fedmaq/core/strategy_hooks/cfd.py` with per-round confidence/row-std/KL-loss logging: the averaged client soft-label targets were near image-independent (`targets_row_std`~0.01-0.02 across an 8-round test, vs. a healthy signal that should vary meaningfully per public image) despite individual client confidence being reasonably high and the server's KL loss dropping every round. This means the server was successfully learning to imitate a garbage, nearly-constant target — i.e., each client, trained from scratch each round on an extremely skewed (alpha=0.1) local partition, collapses to predicting its dominant local class regardless of input image, and averaging across clients just yields that round's sampled-client class-frequency prior instead of a real per-image signal.
