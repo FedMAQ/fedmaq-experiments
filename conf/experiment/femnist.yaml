@@ -12,7 +12,7 @@ weight_decay: 0.0001      # lambda
 momentum: 0.9             # beta
 client_fraction: 0.1      # C (10% per round = 20 clients per round)
 total_rounds: 100         # R per manuscript §4.3, Table 4.1
-num_public_samples: 1600  # |D_pub|
+num_public_samples: 3000  # |D_pub|
 client_gpus: 0.2
 
 bandwidth_mbps: 10.0

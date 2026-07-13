@@ -62,7 +62,7 @@ def test_algorithm_config_composes(algorithm):
     assert cfg.experiment.total_rounds > 0
     # Manuscript Table 4.1 anchors that must survive composition.
     assert cfg.experiment.batch_size == 64
-    assert cfg.experiment.num_public_samples == 1600
+    assert cfg.experiment.num_public_samples == 3000
 
 
 def test_run_cfg_smoke_fedavg(mock_dataset, tmp_path, monkeypatch):

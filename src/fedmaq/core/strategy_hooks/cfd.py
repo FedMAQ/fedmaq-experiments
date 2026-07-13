@@ -28,7 +28,7 @@ Fidelity caveats
 -----------------
 - zlib substitutes for CABAC/arithmetic coding: byte magnitudes are approximate,
   the compressibility trend is faithful.
-- The public proxy is FedMAQ's 1600-sample pool (manuscript ``D_proxy=1600``),
+- The public proxy is FedMAQ's 3000-sample pool (manuscript ``D_proxy=3000``),
   not the paper's ~80k-sample STL-10 -- matches this thesis's simulation scale.
 - Clients fresh-init each round with only the tiny upstream delta-reference
   codes persisted (via ``client.state``), faithful to the paper's design and
@@ -139,7 +139,9 @@ class CFDHook(StrategyHook):
             for images, _ in public_loader:
                 images = images.to(self.device)
                 logits = self.server_model(images)
-                probs_list.append(F.softmax(logits / self.temperature, dim=1).cpu().numpy())
+                probs_list.append(
+                    F.softmax(logits / self.temperature, dim=1).cpu().numpy()
+                )
         probs = np.concatenate(probs_list, axis=0).astype(np.float32)
 
         down_codes = constrained_quantize(probs, self.b_down)
@@ -240,7 +242,9 @@ class CFDHook(StrategyHook):
                 loss.backward()
                 optimizer.step()
 
-    def _log_server_public_accuracy(self, server_round: int, public_loader: Any) -> None:
+    def _log_server_public_accuracy(
+        self, server_round: int, public_loader: Any
+    ) -> None:
         if self._public_labels is None:
             return
         self.server_model.eval()
@@ -255,7 +259,11 @@ class CFDHook(StrategyHook):
         logger.info(
             "CFD round=%d targets_acc=%.4f server_on_public_acc=%.4f",
             server_round,
-            self._last_targets_acc if self._last_targets_acc is not None else float("nan"),
+            (
+                self._last_targets_acc
+                if self._last_targets_acc is not None
+                else float("nan")
+            ),
             acc,
         )
 
