@@ -103,6 +103,8 @@ class CFDHook(StrategyHook):
         self._last_downstream_bytes = 0
         self._pending_targets: np.ndarray | None = None
         self._public_loader: Any = None
+        self._public_labels: np.ndarray | None = None
+        self._last_targets_acc: float | None = None
 
     def _get_public_loader(self, strategy: TelemetryFedAvg) -> Any:
         if self._public_loader is None and strategy.public_indices is not None:
@@ -110,6 +112,9 @@ class CFDHook(StrategyHook):
             batch_size = int(exp_cfg.get("batch_size", 64))
             self._public_loader, _ = get_server_loaders(
                 self.dataset_name, strategy.public_indices, batch_size=batch_size
+            )
+            self._public_labels = np.concatenate(
+                [labels.numpy() for _, labels in self._public_loader]
             )
         return self._public_loader
 
@@ -167,6 +172,12 @@ class CFDHook(StrategyHook):
             probs_list.append(dequantize(codes, self.b_up))
         self._pending_targets = np.mean(probs_list, axis=0).astype(np.float32)
 
+        self._get_public_loader(strategy)
+        if self._public_labels is not None:
+            self._last_targets_acc = float(
+                (self._pending_targets.argmax(axis=1) == self._public_labels).mean()
+            )
+
         # Bypass FedAvg weight-averaging: our client "parameters" are quantized
         # soft-label codes, not model weights.
         return None, {}
@@ -183,14 +194,28 @@ class CFDHook(StrategyHook):
         if self._pending_targets is not None:
             public_loader = self._get_public_loader(strategy)
             if public_loader is not None:
-                self._train_server_model(public_loader, self._pending_targets)
+                self._train_server_model(
+                    public_loader, self._pending_targets, public_loader.batch_size
+                )
+                self._log_server_public_accuracy(server_round, public_loader)
 
         aggregated_parameters = ndarrays_to_parameters(
             get_model_parameters(self.server_model)
         )
         return aggregated_parameters, metrics
 
-    def _train_server_model(self, public_loader: Any, targets: np.ndarray) -> None:
+    def _train_server_model(
+        self, public_loader: Any, targets: np.ndarray, batch_size: int
+    ) -> None:
+        # The public loader iterates a class-sorted, unshuffled index order (shared
+        # with the predict/encode paths, which depend on that fixed order for
+        # target alignment). Training SGD+momentum directly over class-homogeneous
+        # batches in sorted sequence causes catastrophic within-epoch forgetting
+        # (the model chases whichever class it's currently seeing). Gather once and
+        # shuffle images+targets jointly here, local to the training loop only.
+        images_all = torch.cat([images for images, _ in public_loader], dim=0)
+        targets_all = torch.tensor(targets, dtype=torch.float32)
+
         alg_cfg = self._config.get("algorithm", {})
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
@@ -200,17 +225,13 @@ class CFDHook(StrategyHook):
         kl_criterion = nn.KLDivLoss(reduction="batchmean")
 
         self.server_model.train()
+        num_samples = images_all.shape[0]
         for _ in range(self.server_distill_epochs):
-            start = 0
-            for images, _ in public_loader:
-                images = images.to(self.device)
-                batch_len = len(images)
-                batch_targets = torch.tensor(
-                    targets[start : start + batch_len],
-                    dtype=torch.float32,
-                    device=self.device,
-                )
-                start += batch_len
+            perm = torch.randperm(num_samples)
+            for start in range(0, num_samples, batch_size):
+                idx = perm[start : start + batch_size]
+                images = images_all[idx].to(self.device)
+                batch_targets = targets_all[idx].to(self.device)
 
                 optimizer.zero_grad()
                 logits = self.server_model(images)
@@ -218,6 +239,25 @@ class CFDHook(StrategyHook):
                 loss = kl_criterion(log_probs, batch_targets) * (self.temperature**2)
                 loss.backward()
                 optimizer.step()
+
+    def _log_server_public_accuracy(self, server_round: int, public_loader: Any) -> None:
+        if self._public_labels is None:
+            return
+        self.server_model.eval()
+        preds = []
+        with torch.no_grad():
+            for images, _ in public_loader:
+                images = images.to(self.device)
+                logits = self.server_model(images)
+                preds.append(logits.argmax(dim=1).cpu().numpy())
+        preds = np.concatenate(preds, axis=0)
+        acc = float((preds == self._public_labels).mean())
+        logger.info(
+            "CFD round=%d targets_acc=%.4f server_on_public_acc=%.4f",
+            server_round,
+            self._last_targets_acc if self._last_targets_acc is not None else float("nan"),
+            acc,
+        )
 
     def local_train_sample_count(
         self,

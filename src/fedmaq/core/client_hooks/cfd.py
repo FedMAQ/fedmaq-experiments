@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from flwr.app import ArrayRecord
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, standard_evaluate
+from fedmaq.core.models import set_model_parameters
 from fedmaq.core.softlabel_codec import (
     codes_from_bytes,
     constrained_quantize,
@@ -57,6 +58,19 @@ class CFDFit(ClientFitStrategy):
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         momentum = float(exp_config.get("momentum", alg_cfg.get("momentum", 0.9)))
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
+
+        # CFD's protocol (Sattler et al. 2022, Sec. II-B step 2) requires clients
+        # to converge to a shared distilled theta each round before private
+        # training, achieved in the paper via seed-synchronized distillation
+        # (since real FD can't transmit weights). This simulation has the
+        # persistent server_model's weights available in-process via Flower's
+        # existing parameters channel (populated by CFDHook.aggregate_fit) --
+        # loading them here reproduces "same starting theta for all clients"
+        # directly instead of reconstructing it via many distillation epochs.
+        # Communication accounting is unaffected: CFD's uploaded/downloaded
+        # bytes are still soft-label codes only (see download_size_bytes).
+        if parameters:
+            set_model_parameters(client.model, parameters)
 
         optimizer = torch.optim.SGD(
             client.model.parameters(),
