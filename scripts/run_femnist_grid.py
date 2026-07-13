@@ -26,19 +26,6 @@ def kill_ray_processes():
             stderr=subprocess.DEVNULL,
             check=False,
         )
-    else:
-        subprocess.run(
-            ["pkill", "-9", "-f", "raylet"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        subprocess.run(
-            ["pkill", "-9", "-f", "gcs_server"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
     time.sleep(3)
 
 

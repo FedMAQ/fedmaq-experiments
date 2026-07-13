@@ -1,6 +1,5 @@
 import subprocess
 import time
-import os
 import sys
 from datetime import datetime
 
@@ -22,19 +21,6 @@ def kill_ray_processes():
         )
         subprocess.run(
             ["taskkill", "/F", "/T", "/IM", "gcs_server.exe"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    else:
-        subprocess.run(
-            ["pkill", "-9", "-f", "raylet"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        subprocess.run(
-            ["pkill", "-9", "-f", "gcs_server"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
