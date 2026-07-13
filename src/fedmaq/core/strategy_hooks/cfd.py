@@ -107,7 +107,11 @@ class CFDHook(StrategyHook):
         self._last_targets_acc: float | None = None
 
     def _get_public_loader(self, strategy: TelemetryFedAvg) -> Any:
-        if self._public_loader is None and strategy.public_indices is not None:
+        if (
+            self._public_loader is None
+            and strategy is not None
+            and strategy.public_indices is not None
+        ):
             exp_cfg = self._config.get("experiment", {})
             batch_size = int(exp_cfg.get("batch_size", 64))
             self._public_loader, _ = get_server_loaders(
