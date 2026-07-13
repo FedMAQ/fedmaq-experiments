@@ -6,6 +6,9 @@ outputs/
 references/
 scripts/analysis_output/
 
+# Temporary handoff files
+HANDOFF.md
+
 # Weights & Biases
 wandb/
 
