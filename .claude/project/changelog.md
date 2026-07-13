@@ -12,6 +12,7 @@ entries below are historical and not retroactively edited.
 ### 2026-07-13 — 40-Round Baselines Sweep Completed; Proxy Dataset Shifted from 1600 to 3000 (experiments + manuscript)
 
 Completed the 40-round CIFAR-10 evaluation sweep across the distillation-based algorithms (CFD, FedKD, FedMD, FedDistill, FedMAQ) using 50 clients and 0.2 client fraction.
+
 - **FedMAQ** achieved **49.57%** test accuracy with a cumulative communication footprint of **1132.26 MB** (a **3.01x reduction** in communication versus FedDistill while gaining **9.49%** absolute accuracy).
 - **FedDistill** reached **40.08%** accuracy at a huge cost of **3410.05 MB**.
 - **FedKD** converged to **27.94%** accuracy at **33.79 MB** overhead.
@@ -24,7 +25,7 @@ Also shifted the server-side proxy dataset size ($D_{proxy}$) from 1600 to 3000 
 
 Root-caused CFD's accuracy being pinned at chance level (~10%) across all soft-label quantization bit-widths (1/2/4/8/16, 40-round CIFAR-10 alpha=0.1 sweep). Instrumented `pre_aggregate_fit`/`_train_server_model` in `src/fedmaq/core/strategy_hooks/cfd.py` with per-round confidence/row-std/KL-loss logging: the averaged client soft-label targets were near image-independent (`targets_row_std`~0.01-0.02 across an 8-round test, vs. a healthy signal that should vary meaningfully per public image) despite individual client confidence being reasonably high and the server's KL loss dropping every round. This means the server was successfully learning to imitate a garbage, nearly-constant target — i.e., each client, trained from scratch each round on an extremely skewed (alpha=0.1) local partition, collapses to predicting its dominant local class regardless of input image, and averaging across clients just yields that round's sampled-client class-frequency prior instead of a real per-image signal.
 
-Cross-checked against the source paper (`fedmaq-literature/markdown/sattler-2022-cfd/paper.md`, Sec. II-B step 2): the FD protocol CFD builds on requires participating clients to converge to the *same* distilled theta each round (via seed-synchronized distillation to the downloaded soft-labels) before private training — functionally equivalent to a shared broadcast initialization, without transmitting weights. The port's client hook (`src/fedmaq/core/client_hooks/cfd.py`) was discarding this: `CFDFit.fit` never loaded the `parameters` argument (which Flower already populates with the persistent `server_model`'s weights via `CFDHook.aggregate_fit`) into `client.model`, instead training every client from an independent random init each round. Fixed by loading `parameters` via `set_model_parameters` at the top of `fit()`, matching the existing pattern in `feddistill.py`/`fedkd.py`/`standard.py`'s client hooks.
+Cross-checked against the source paper (`fedmaq-literature/markdown/sattler-2022-cfd/paper.md`, Sec. II-B step 2): the FD protocol CFD builds on requires participating clients to converge to the _same_ distilled theta each round (via seed-synchronized distillation to the downloaded soft-labels) before private training — functionally equivalent to a shared broadcast initialization, without transmitting weights. The port's client hook (`src/fedmaq/core/client_hooks/cfd.py`) was discarding this: `CFDFit.fit` never loaded the `parameters` argument (which Flower already populates with the persistent `server_model`'s weights via `CFDHook.aggregate_fit`) into `client.model`, instead training every client from an independent random init each round. Fixed by loading `parameters` via `set_model_parameters` at the top of `fit()`, matching the existing pattern in `feddistill.py`/`fedkd.py`/`standard.py`'s client hooks.
 
 This fix is a genuine correctness improvement (paper-faithful weight sync was simply missing) but an 8-round CIFAR-10 alpha=0.1 re-test with the same instrumentation showed it was **not sufficient alone**: `targets_row_std` and test accuracy both stayed flat/noisy around chance (acc 9.28%-12.19%, row_std 0.0098-0.0193) with no upward trend through round 5. Leading hypothesis for the next session: under alpha=0.1, the few local CE epochs each round still overwrite the freshly-synced representation before it can generalize, re-collapsing predictions to the client's local class regardless of image content — candidates are reducing local CE dominance (fewer `local_epochs` or lower LR for CFD specifically) relative to the KL-distillation step, increasing `distill_epochs` so distillation converges more before CE resumes, or addressing round 1's zero-signal bootstrap (no distillation step at all in round 1, purely private CE on skewed classes, which may poison the very first server aggregate). `DEBUG_CFD` logger.info instrumentation left in place in `src/fedmaq/core/strategy_hooks/cfd.py` for the next session. Baseline registry status downgraded from `[Complete]` to `[In Progress]`.
 
@@ -96,51 +97,3 @@ Category-D (Hybrid Q+KD) comparators, so the 201-run grid was blocked on this po
   timing contribution). 78 tests green, ruff clean, mypy no new errors. CPU end-to-end smoke
   on CIFAR-10 (2 rounds, 6 clients) completes and produces finite eval accuracy.
 - **Docs:** `baseline_registry.md` row 14 → `[Complete]`; `HANDOFF.md` P11 → `[x]`.
-
-### 2026-07-09 — Literature OKF Restructure (literature)
-
-Restructured `fedmaq-literature` from a vector-RAG pipeline into an Open Knowledge Format (OKF) knowledge graph: raw markdown layer (citable) plus curated OKF nodes, no vector store. Converted all canon papers and migrated the paper registry; removed the RAG stack and its tests.
-
-### 2026-07-09 — Deep Cleanup/Refactor + FedDistill+ Port (experiments)
-
-Phased refactor: extracted a testable simulation entrypoint, fixed several correctness bugs (a gradient-norm architecture mismatch, an unreachable-NaN quantization case, missing bounds clamping), deduplicated shared strategy logic, replaced string-dispatch with per-algorithm hook classes, and ported the FedDistill+ baseline. Full test suite green.
-
-### 2026-07-09 — Manuscript Alignment: Proxy Pool Size, Discrete Bit-Widths, FedDistill Spec (experiments + manuscript)
-
-Reconciled the codebase against updated manuscript chapters (manuscript is canon): corrected the proxy pool size default and a remainder-allocation bug, snapped FedMAQ bit-widths to the manuscript's discrete set, fixed compressor semantics for wide bit-widths, and updated baseline registry notes. Manuscript edits made in parallel.
-
-### 2026-07-09 — CLAUDE.md Relocation to Repo Root and AGENTS.md Removal
-
-Moved CLAUDE.md to repo root in experiments and manuscript; slimmed always-imported rules to a small core set with the rest routed via a table; removed the now-redundant AGENTS.md from experiments.
-
-### 2026-07-09 — Cursor to Claude Code Migration (experiments + manuscript)
-
-Migrated experiments and manuscript from Cursor config to Claude Code equivalents (rules, skills, project registries, slash commands); deleted the old Cursor config. Other repos not yet migrated at this point.
-
-### 2026-07-03 — Codebase Hardening, Optimization & Correctness (Refactor Session)
-
-Fixed partition-resolution performance, ensemble evaluation memory use, stochastic-rounding seeding, telemetry import robustness, and device-config edge cases. Full test suite passed.
-
-### 2026-07-03 — Core Codebase Refactoring & Hardening
-
-Extracted algorithm-specific strategy logic into modular hooks, fixed a quantization-level/bit-count estimation bug, added caching and vectorized metrics, and tightened typing. Full test suite passed.
-
-### 2026-07-02 — Workspace Agent Context Pruning & Slash Workflows Setup
-
-Pruned redundant content from the cross-repo handoff doc, added slash workflows for manuscript alignment/baseline addition/benchmark runs, and consolidated hyperparameter rules into the manuscript-alignment rule.
-
-### 2026-07-02 — Manuscript Alignment Rule Creation and Test Expansion
-
-Created the manuscript-alignment rule (hyperparameters, quantization formulations, simulated delays, test requirements) and expanded formulation test coverage.
-
-### 2026-07-02 — Uniform System Simulation and Preliminary Config Updates
-
-Moved to uniform bandwidth/compute across clients, decoupled simulated client and server timing, and added per-algorithm compute-penalty/pretrain-delay modeling. Resolved a test flakiness issue and validated with a multi-algorithm benchmark run.
-
-### 2026-07-01 — Manuscript Table 4.1 Hyperparameter Synchronization and Gitignore Cleanup
-
-Synchronized hyperparameters between the manuscript and codebase, implemented learning-rate decay, corrected the default proxy dataset size, and cleaned up gitignore/untracked logs.
-
-### 2026-07-01 — Full Manuscript Audit (Ch. 1--4) and Codebase Hardening
-
-Audited chapters 1-4 against the codebase and fixed several bugs (heterogeneous compute speed, unseeded stochastic rounding, config separation, dead config, stale defaults, unsafe device resolution). Flagged a manuscript hyperparameter table error and confirmed FedDistill/CFD as pending stubs at the time.
