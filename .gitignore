@@ -6,8 +6,9 @@ outputs/
 references/
 scripts/analysis_output/
 
-# Temporary handoff files
+# Antigravity temporary handoff files
 HANDOFF.md
+sequential_runner.py
 
 # Weights & Biases
 wandb/
