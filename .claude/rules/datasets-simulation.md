@@ -3,7 +3,6 @@
 **Task:** Discrete image classification only.
 
 **Benchmark datasets (§4.1):** CIFAR-10, CIFAR-100, FEMNIST.
-MNIST and FMNIST are supported in the codebase but excluded from the benchmark scope.
 
 **Statistical heterogeneity:**
 
