@@ -4,18 +4,10 @@ data/
 multirun/
 outputs/
 references/
-scripts/analysis_output/
+wandb/
 
 # Antigravity temporary handoff files
 HANDOFF.md
-sequential_runner.py
-
-# Weights & Biases
-wandb/
-
-# Local experiment telemetry logs
-experiment_log.csv
-experiment_log.jsonl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
