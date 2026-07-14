@@ -13,7 +13,7 @@ momentum: 0.9             # beta
 client_fraction: 0.1      # C (10% per round = 20 clients per round)
 total_rounds: 100         # R per manuscript §4.3, Table 4.1
 num_public_samples: 3000  # |D_pub|
-client_gpus: 0.2
+client_gpus: 1.0
 
 bandwidth_mbps: 10.0
 compute_samples_per_sec: 200.0

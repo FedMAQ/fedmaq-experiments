@@ -33,4 +33,4 @@ server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD 
 # Post-processing pipeline (§4.3): error-feedback + diff-coding + lossless zlib
 # on top of quantization. Applies to the primary CIFAR-10/100 + FEMNIST grid only,
 # not the Ablation Study.
-post_process: true
+post_process: false

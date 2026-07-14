@@ -12,3 +12,4 @@ delta_coding: true
 distill_epochs: 1
 server_distill_epochs: 1
 temperature: 1.0
+server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD delay (§3.3)

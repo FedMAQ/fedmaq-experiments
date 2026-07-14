@@ -15,7 +15,7 @@ momentum: 0.9             # beta (SGD momentum)
 client_fraction: 0.2      # C (20% per round)
 total_rounds: 10          # Preliminary staging value
 num_public_samples: 3000  # |D_pub| per manuscript §4.3, Table 4.1
-client_gpus: 0.2          # GPU resource fraction allocated per client simulator
+client_gpus: 1.0          # GPU resource fraction allocated per client simulator
 
 # Bandwidth and Compute settings (uniform)
 bandwidth_mbps: 10.0
