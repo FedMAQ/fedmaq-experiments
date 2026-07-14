@@ -1,7 +1,7 @@
 name: fedmaq
 # Bit-width bounds for the soft-quality-target interpolation range (formulations 1-4)
-q_min: 2
-q_max: 8
+q_min: 1
+q_max: 16
 
 # Permissible discrete bit-width set per manuscript §4.2 (Q). The Tier-1 memory
 # hard-cap and Tier-2 soft target are combined via min() while still raw, then the

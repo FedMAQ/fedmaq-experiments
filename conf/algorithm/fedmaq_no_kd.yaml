@@ -3,8 +3,8 @@
 # kd_epochs=0 skips the server-side distillation loop entirely.
 # Usage: uv run python scripts/run.py algorithm=fedmaq_no_kd
 name: fedmaq
-q_min: 2
-q_max: 8
+q_min: 1
+q_max: 16
 c_unit: 512.0
 bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]  # manuscript Q set (matches DEFAULT_BIT_WIDTHS)
 formulation: 3            # Gradient-Primary, Data-Modulated (full formula)

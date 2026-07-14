@@ -3,8 +3,8 @@
 # q_k = min(floor(c_k / c_unit), q_max) — purely memory-constrained.
 # Usage: uv run python scripts/run.py algorithm=fedmaq_resource_only
 name: fedmaq
-q_min: 2
-q_max: 8
+q_min: 1
+q_max: 16
 c_unit: 512.0
 bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]  # manuscript Q set (matches DEFAULT_BIT_WIDTHS)
 formulation: 0            # Resource-only: soft target = q_max, only Tier-1 constrains
