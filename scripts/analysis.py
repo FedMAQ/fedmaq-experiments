@@ -50,7 +50,9 @@ class RunRecord:
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
     """Walk multirun/<date>/<time>/<job_idx>/ dirs and join each job's resolved config."""
     runs: list[RunRecord] = []
-    for config_path in sorted(experiments_root.glob("multirun/*/*/*/.hydra/config.yaml")):
+    for config_path in sorted(
+        experiments_root.glob("multirun/*/*/*/.hydra/config.yaml")
+    ):
         job_dir = config_path.parent.parent
         csv_path = job_dir / "experiment_log.csv"
         if not csv_path.exists():
@@ -79,11 +81,17 @@ def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> f
     """90% of the mean final-round (R=100) top-1 accuracy of the uncompressed FedAvg
     reference, averaged across FedAvg's 3 seeds for this (dataset, alpha)."""
     fedavg_runs = [
-        r for r in runs if r.dataset == dataset and r.alpha == alpha and r.algorithm == "fedavg"
+        r
+        for r in runs
+        if r.dataset == dataset and r.alpha == alpha and r.algorithm == "fedavg"
     ]
     if not fedavg_runs:
-        raise ValueError(f"No FedAvg reference runs found for dataset={dataset}, alpha={alpha}")
-    final_accs = [load_round_metrics(r.csv_path)["test/accuracy"].iloc[-1] for r in fedavg_runs]
+        raise ValueError(
+            f"No FedAvg reference runs found for dataset={dataset}, alpha={alpha}"
+        )
+    final_accs = [
+        load_round_metrics(r.csv_path)["test/accuracy"].iloc[-1] for r in fedavg_runs
+    ]
     return 0.9 * (sum(final_accs) / len(final_accs))
 
 
@@ -96,7 +104,9 @@ def accuracy_at_round(run_df: pd.DataFrame, round_num: int) -> float:
     return float(run_df.iloc[-1]["test/accuracy"])
 
 
-def first_crossing(run_df: pd.DataFrame, floor: float) -> tuple[int | None, float | None]:
+def first_crossing(
+    run_df: pd.DataFrame, floor: float
+) -> tuple[int | None, float | None]:
     """First round at which test/accuracy >= floor, and cumulative MB at that round."""
     crossing = run_df[run_df["test/accuracy"] >= floor]
     if crossing.empty:
@@ -113,13 +123,19 @@ def select_winner(runs: list[RunRecord]) -> dict:
     minimizes mean cumulative-MB-to-target across seeds.
     """
     result: dict = {}
-    fedmaq_runs = [r for r in runs if r.algorithm == "fedmaq" and r.formulation is not None]
+    fedmaq_runs = [
+        r for r in runs if r.algorithm == "fedmaq" and r.formulation is not None
+    ]
     datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
 
     for dataset, alpha in datasets_alphas:
         floor = compute_target_floor(runs, dataset, alpha)
         formulations = sorted(
-            {r.formulation for r in fedmaq_runs if r.dataset == dataset and r.alpha == alpha}
+            {
+                r.formulation
+                for r in fedmaq_runs
+                if r.dataset == dataset and r.alpha == alpha
+            }
         )
 
         detail: dict[int, dict] = {}
@@ -127,7 +143,9 @@ def select_winner(runs: list[RunRecord]) -> dict:
             seed_runs = [
                 r
                 for r in fedmaq_runs
-                if r.dataset == dataset and r.alpha == alpha and r.formulation == formulation
+                if r.dataset == dataset
+                and r.alpha == alpha
+                and r.formulation == formulation
             ]
             seed_results: dict[int, dict] = {}
             disqualified = False
@@ -136,7 +154,10 @@ def select_winner(runs: list[RunRecord]) -> dict:
             for r in seed_runs:
                 run_df = load_round_metrics(r.csv_path)
                 round_num, cumulative_mb = first_crossing(run_df, floor)
-                seed_results[r.seed] = {"round": round_num, "cumulative_mb": cumulative_mb}
+                seed_results[r.seed] = {
+                    "round": round_num,
+                    "cumulative_mb": cumulative_mb,
+                }
                 r100_accs.append(accuracy_at_round(run_df, 100))
                 if round_num is None:
                     disqualified = True
@@ -160,12 +181,17 @@ def select_winner(runs: list[RunRecord]) -> dict:
             margin = None
             if len(by_mb) > 1:
                 top1, top2 = by_mb[0], by_mb[1]
-                margin = qualified[top2]["mean_cumulative_mb"] - qualified[top1]["mean_cumulative_mb"]
+                margin = (
+                    qualified[top2]["mean_cumulative_mb"]
+                    - qualified[top1]["mean_cumulative_mb"]
+                )
                 # Statistical tie-break (chapter_4.tex tie-break rule): if the MB
                 # margin between the top-2 candidates is smaller than their
                 # pooled seed-to-seed variability, it's noise, not a real gap --
                 # re-select by higher mean top-1 accuracy at R=100 instead.
-                pooled = qualified[top1]["crossing_mbs"] + qualified[top2]["crossing_mbs"]
+                pooled = (
+                    qualified[top1]["crossing_mbs"] + qualified[top2]["crossing_mbs"]
+                )
                 pooled_stdev = statistics.stdev(pooled) if len(pooled) > 1 else 0.0
                 if margin < pooled_stdev:
                     winner = max(
@@ -200,7 +226,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     winner rule already computed.
     """
     result: dict = {}
-    for key, entry in winner_result.items():
+    for entry in winner_result.values():
         if entry["winner"] is None:
             continue
         dataset, alpha, formulation, floor = (
@@ -228,7 +254,9 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
             baseline_by_seed = {
                 r.seed: r
                 for r in runs
-                if r.dataset == dataset and r.alpha == alpha and r.algorithm == baseline_algo
+                if r.dataset == dataset
+                and r.alpha == alpha
+                and r.algorithm == baseline_algo
             }
             common_seeds = sorted(set(fedmaq_by_seed) & set(baseline_by_seed))
             if not common_seeds:
@@ -271,7 +299,9 @@ def main() -> None:
     )
     parser.add_argument("--experiments-root", type=Path, default=Path.cwd())
     parser.add_argument(
-        "--output", type=Path, default=Path("scripts/analysis_output/formulation_winner.json")
+        "--output",
+        type=Path,
+        default=Path("scripts/analysis_output/formulation_winner.json"),
     )
     parser.add_argument(
         "--baseline-output",

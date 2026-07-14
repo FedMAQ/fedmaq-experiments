@@ -41,26 +41,34 @@ def resolve_partition_id(
             strategy.proxy_cid_to_partition_id[cid_str] = pid
             return pid
 
-    try:
+    import time
+
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            res = client.get_properties(
-                GetPropertiesIns(config={}), timeout=5.0, group_id=0
-            )
-        except TypeError:
-            res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
-        pid = int(res.properties["cid"])
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.info(f"Queried partition ID {pid} for Client Proxy {cid_str}")
-        return pid
-    except Exception as exc:
-        pid = hash(client.cid) % strategy.num_clients
-        strategy.proxy_cid_to_partition_id[cid_str] = pid
-        logger.warning(
-            f"Could not resolve partition ID for client {cid_str} ({exc}). "
-            f"Falling back to hash-based mapping -> partition {pid}. "
-            "Verify that GenericClient.get_properties exposes 'cid'."
-        )
-        return pid
+            try:
+                res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0, group_id=0)
+            except TypeError:
+                res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
+            pid = int(res.properties["cid"])
+            strategy.proxy_cid_to_partition_id[cid_str] = pid
+            logger.info(f"Queried partition ID {pid} for Client Proxy {cid_str}")
+            return pid
+        except Exception as exc:
+            if attempt < max_retries - 1:
+                logger.warning(
+                    f"Attempt {attempt + 1} failed to resolve partition ID for client {cid_str}: {exc}. Retrying in 1.5s..."
+                )
+                time.sleep(1.5)
+            else:
+                pid = hash(client.cid) % strategy.num_clients
+                strategy.proxy_cid_to_partition_id[cid_str] = pid
+                logger.warning(
+                    f"Could not resolve partition ID for client {cid_str} ({exc}) after {max_retries} attempts. "
+                    f"Falling back to hash-based mapping -> partition {pid}. "
+                    "Verify that GenericClient.get_properties exposes 'cid'."
+                )
+                return pid
 
 
 def partition_dataset_size(
@@ -82,7 +90,6 @@ def partition_dataset_size(
     if key_int in client_indices_dict:
         return len(client_indices_dict[key_int])
     logger.warning(
-        f"Partition ID {pid} not found in client_indices_dict. "
-        f"Defaulting size to {default}."
+        f"Partition ID {pid} not found in client_indices_dict. Defaulting size to {default}."
     )
     return default

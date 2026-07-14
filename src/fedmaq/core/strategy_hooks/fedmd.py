@@ -68,9 +68,7 @@ class FedMDHook(StrategyHook):
         if not results:
             return None, {}
         # Extract predictions from client results and perform simple average
-        predictions_list = [
-            parameters_to_ndarrays(fit_res.parameters)[0] for _, fit_res in results
-        ]
+        predictions_list = [parameters_to_ndarrays(fit_res.parameters)[0] for _, fit_res in results]
         avg_predictions = np.mean(predictions_list, axis=0)
         return ndarrays_to_parameters([avg_predictions]), {}
 
@@ -85,7 +83,5 @@ class FedMDHook(StrategyHook):
     ) -> tuple[Parameters | None, dict[str, Scalar]]:
         return aggregated_parameters, metrics
 
-    def get_eval_metrics(
-        self, strategy: TelemetryFedAvg, server_round: int
-    ) -> dict[str, Any]:
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         return {}

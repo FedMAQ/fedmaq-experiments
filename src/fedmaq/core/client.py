@@ -25,6 +25,7 @@ class LossHook:
         outputs: torch.Tensor,
         targets: torch.Tensor,
         criterion: nn.Module,
+        inputs: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute the local loss."""
         return criterion(outputs, targets)
@@ -39,9 +40,7 @@ class FedProxLossHook(LossHook):
 
     def on_train_begin(self, model: nn.Module) -> None:
         # Save a frozen copy of the initial global weights
-        self.global_params = [
-            p.clone().detach() for p in model.parameters() if p.requires_grad
-        ]
+        self.global_params = [p.clone().detach() for p in model.parameters() if p.requires_grad]
 
     def compute_loss(
         self,
@@ -49,6 +48,7 @@ class FedProxLossHook(LossHook):
         outputs: torch.Tensor,
         targets: torch.Tensor,
         criterion: nn.Module,
+        inputs: torch.Tensor | None = None,
     ) -> torch.Tensor:
         loss = criterion(outputs, targets)
         proximal_term = 0.0
@@ -72,6 +72,14 @@ def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:
     """Factory: return the appropriate LossHook for the given algorithm name."""
     if alg_name == "fedprox":
         return FedProxLossHook(mu=float(alg_cfg.get("mu", 0.01)))
+    if alg_name in {"fedmaq", "fedmaq_lite"}:
+        if alg_cfg.get("client_kd_reg", False):
+            from fedmaq.core.kd_loss_hook import ClientKDLossHook
+
+            return ClientKDLossHook(
+                alpha=float(alg_cfg.get("kd_reg_alpha", 0.5)),
+                temperature=float(alg_cfg.get("kd_reg_temp", 2.0)),
+            )
     return LossHook()
 
 
@@ -124,4 +132,3 @@ class GenericClient(fl.client.NumPyClient):
         self, parameters: list[np.ndarray], config: dict[str, Any]
     ) -> tuple[float, int, dict[str, Any]]:
         return self.fit_strategy.evaluate(self, parameters, config)
-

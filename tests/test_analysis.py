@@ -108,9 +108,7 @@ def test_select_winner_near_tie_reselects_by_accuracy(tmp_path):
     """margin_mb (0.5) < pooled stdev of top-2 candidates' crossing MBs (~0.94)
     -> near-tie -> re-select by higher mean accuracy at R=100, even though
     formulation 0 has the lower mean MB."""
-    fedavg_runs = [
-        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)
-    ]
+    fedavg_runs = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
     # floor = 0.9*0.80 = 0.72
     formulation_a = [  # mean crossing mb = 10, mean final acc = 0.80
         _write_run(tmp_path, "fedmaq", 0, 1, [0.5, 0.80], [5, 10]),
@@ -134,9 +132,7 @@ def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
     """margin_mb (20) >> pooled stdev of top-2 candidates' crossing MBs (~11)
     -> not a near-tie -> the lower-mean-MB formulation still wins even though
     the other formulation has much higher accuracy."""
-    fedavg_runs = [
-        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)
-    ]
+    fedavg_runs = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
     formulation_a = [  # mean crossing mb = 10, mean final acc = 0.80
         _write_run(tmp_path, "fedmaq", 0, 1, [0.5, 0.80], [5, 10]),
         _write_run(tmp_path, "fedmaq", 0, 2, [0.5, 0.81], [5, 11]),

@@ -32,9 +32,7 @@ class TelemetryManager:
         self.config = config
         exp_config = config.get("experiment", config)
         self.enabled = exp_config.get("telemetry", {}).get("wandb_enabled", True)
-        self.project = exp_config.get("telemetry", {}).get(
-            "project", "fedmaq-experiments"
-        )
+        self.project = exp_config.get("telemetry", {}).get("project", "fedmaq-experiments")
         self.run_name = exp_config.get("telemetry", {}).get("run_name", None)
         self.run = None
 
@@ -84,13 +82,9 @@ class TelemetryManager:
                 config=flat_config,
                 mode=exp_config.get("telemetry", {}).get("mode", "online"),
             )
-            logger.info(
-                f"WandB run initialized: {self.run.name if self.run else 'offline'}"
-            )
+            logger.info(f"WandB run initialized: {self.run.name if self.run else 'offline'}")
         except Exception as exc:
-            logger.warning(
-                f"Could not initialize WandB: {exc}. Telemetry will be console-only."
-            )
+            logger.warning(f"Could not initialize WandB: {exc}. Telemetry will be console-only.")
             self.enabled = False
 
     def log(
@@ -170,6 +164,23 @@ class TelemetryManager:
                     "system/cumulative_client_time_sec",
                     "system/server_sim_time_sec",
                     "system/cumulative_server_time_sec",
+                    "client/avg_train_loss",
+                    "client/avg_train_acc",
+                    "client/avg_local_loss",
+                    "client/avg_epochs_trained",
+                    "client/avg_q",
+                    "algorithm/fedmaq/server_kd_loss",
+                    "algorithm/fedmaq/avg_grad_norm",
+                    "algorithm/fedmaq/min_grad_norm",
+                    "algorithm/fedmaq/max_grad_norm",
+                    "algorithm/fedmaq/std_grad_norm",
+                    "algorithm/fedmaq/avg_q",
+                    "algorithm/fedmaq/min_q",
+                    "algorithm/fedmaq/max_q",
+                    "algorithm/fedmaq/std_q",
+                    "algorithm/fedavg_kd/server_kd_loss",
+                    "algorithm/fedkd/mean_rank_retained",
+                    "algorithm/fedkd/energy",
                 ]
                 seen = set(canonical)
                 fieldnames = list(canonical)

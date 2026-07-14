@@ -122,6 +122,13 @@ class FedDistillFit(ClientFitStrategy):
         kl_criterion = nn.KLDivLoss(reduction="batchmean")
         tracker = LogitTracker(num_classes)
 
+        total_loss_sum = 0.0
+        task_loss_sum = 0.0
+        distill_loss_sum = 0.0
+        correct = 0
+        total_samples = 0
+        batches = 0
+
         client.model.train()
         for _ in range(epochs):
             for images, labels in client.trainloader:
@@ -130,18 +137,33 @@ class FedDistillFit(ClientFitStrategy):
                 logits = client.model(images)
                 tracker.update(logits, labels)
 
-                loss = ce_criterion(logits, labels)
+                loss_ce = ce_criterion(logits, labels)
+                loss_reg = torch.tensor(0.0, device=client.device)
                 if global_logits is not None:
                     target_p = F.softmax(global_logits[labels], dim=1)
-                    reg_loss = kl_criterion(F.log_softmax(logits, dim=1), target_p)
-                    loss = loss + reg_alpha * reg_loss
+                    loss_reg = kl_criterion(F.log_softmax(logits, dim=1), target_p)
+                loss = loss_ce + reg_alpha * loss_reg
                 loss.backward()
                 optimizer.step()
+
+                total_loss_sum += loss.item()
+                task_loss_sum += loss_ce.item()
+                distill_loss_sum += loss_reg.item()
+                batches += 1
+
+                _, predicted = torch.max(logits.data, 1)
+                total_samples += labels.size(0)
+                correct += (predicted == labels).sum().item()
 
         # FEDDISTILL+ shares full (unquantized) weights via FedAvg.
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
         params_bytes = sum(int(p.nbytes) for p in updated_params)
+
+        avg_total_loss = total_loss_sum / batches if batches > 0 else 0.0
+        avg_task_loss = task_loss_sum / batches if batches > 0 else 0.0
+        avg_distill_loss = distill_loss_sum / batches if batches > 0 else 0.0
+        avg_train_acc = correct / total_samples if total_samples > 0 else 0.0
 
         return (
             updated_params,
@@ -149,7 +171,12 @@ class FedDistillFit(ClientFitStrategy):
             {
                 "bytes_uploaded": params_bytes + len(logit_bytes),
                 "partition_id": int(client.cid),
-                "local_loss": 0.0,
+                "local_loss": avg_total_loss,
+                "train_loss": avg_total_loss,
+                "train_acc": avg_train_acc,
+                "epochs_trained": epochs,
+                "task_loss": avg_task_loss,
+                "distill_loss": avg_distill_loss,
                 "client_logits": logit_bytes,
             },
         )

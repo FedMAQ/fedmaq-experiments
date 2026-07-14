@@ -27,15 +27,11 @@ class StandardFit(ClientFitStrategy):
       final training-batch losses.
     """
 
-    def _pretrain_local_loss(
-        self, client: GenericClient
-    ) -> float | None:
+    def _pretrain_local_loss(self, client: GenericClient) -> float | None:
         """Loss on the incoming global model before training. Default: not measured."""
         return None
 
-    def _reported_local_loss(
-        self, pretrain_loss: float | None, last_loss: float
-    ) -> float:
+    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
         """Value reported as ``local_loss``. Default: 0.0 (unused by the strategy)."""
         return 0.0
 
@@ -63,9 +59,7 @@ class StandardFit(ClientFitStrategy):
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         momentum = float(
-            exp_config.get(
-                "momentum", client.config.get("algorithm", {}).get("momentum", 0.9)
-            )
+            exp_config.get("momentum", client.config.get("algorithm", {}).get("momentum", 0.9))
         )
 
         # Setup training
@@ -81,17 +75,27 @@ class StandardFit(ClientFitStrategy):
         client.loss_hook.on_train_begin(client.model)
 
         last_loss = 0.0
+        loss_sum = 0.0
+        correct = 0
+        total = 0
+        batches = 0
         for _ in range(epochs):
             for images, labels in client.trainloader:
                 images, labels = images.to(client.device), labels.to(client.device)
                 optimizer.zero_grad()
                 outputs = client.model(images)
                 loss = client.loss_hook.compute_loss(
-                    client.model, outputs, labels, criterion
+                    client.model, outputs, labels, criterion, inputs=images
                 )
                 loss.backward()
                 optimizer.step()
                 last_loss = loss.item()
+                loss_sum += last_loss
+                batches += 1
+
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
 
         # Extract updated parameters
         updated_params = get_model_parameters(client.model)
@@ -103,18 +107,26 @@ class StandardFit(ClientFitStrategy):
         compressed_deltas, byte_size = client.compressor_hook.compress(deltas)
 
         # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [
-            o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)
-        ]
+        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)]
+
+        avg_train_loss = loss_sum / batches if batches > 0 else 0.0
+        avg_train_acc = correct / total if total > 0 else 0.0
+
+        fit_metrics = {
+            "bytes_uploaded": byte_size,
+            "partition_id": int(client.cid),
+            "local_loss": self._reported_local_loss(pretrain_loss, last_loss),
+            "train_loss": avg_train_loss,
+            "train_acc": avg_train_acc,
+            "epochs_trained": epochs,
+        }
+        if "q" in config:
+            fit_metrics["q"] = int(config["q"])
 
         return (
             reconstructed_params,
             len(client.trainloader.dataset),
-            {
-                "bytes_uploaded": byte_size,
-                "partition_id": int(client.cid),
-                "local_loss": self._reported_local_loss(pretrain_loss, last_loss),
-            },
+            fit_metrics,
         )
 
 
@@ -139,16 +151,12 @@ class DAdaQuantFit(StandardFit):
                 total_samples += len(labels)
         return loss_sum / total_samples if total_samples > 0 else 0.0
 
-    def _reported_local_loss(
-        self, pretrain_loss: float | None, last_loss: float
-    ) -> float:
+    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
         return float(pretrain_loss) if pretrain_loss is not None else 0.0
 
 
 class FedMAQFit(StandardFit):
     """Standard training that reports the final training-batch loss as ``local_loss``."""
 
-    def _reported_local_loss(
-        self, pretrain_loss: float | None, last_loss: float
-    ) -> float:
+    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
         return float(last_loss)

@@ -1,6 +1,6 @@
 import subprocess
-import time
 import sys
+import time
 from datetime import datetime
 
 
@@ -66,19 +66,19 @@ for dataset in datasets:
                 )
                 run_idx += 1
 
-print(f"==================================================")
+print("==================================================")
 print(f"Benchmark Grid Base Directory: {output_dir_base}")
 print(f"Total Scheduled Jobs: {len(runs)}")
-print(f"==================================================")
+print("==================================================")
 
 for run in runs:
     target_dir = f"{output_dir_base}/{run['index']}"
-    print(f"\n==================================================")
+    print("\n==================================================")
     print(
         f"Job {run['index'] + 1}/{len(runs)} | Starting {run['algorithm']} on {run['dataset']} ({run['heterogeneity']}) seed={run['seed']}"
     )
     print(f"Target Directory: {target_dir}")
-    print(f"==================================================")
+    print("==================================================")
 
     kill_ray_processes()
 
@@ -103,7 +103,7 @@ for run in runs:
     if res.returncode != 0:
         print(f"\n[ERROR] Job failed with exit code {res.returncode}")
     else:
-        print(f"\n[SUCCESS] Job completed successfully.")
+        print("\n[SUCCESS] Job completed successfully.")
 
     time.sleep(5)
 

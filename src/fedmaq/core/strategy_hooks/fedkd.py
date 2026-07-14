@@ -6,7 +6,12 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from flwr.common import Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
+from flwr.common import (
+    Parameters,
+    Scalar,
+    ndarrays_to_parameters,
+    parameters_to_ndarrays,
+)
 from flwr.common.typing import FitIns, FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
@@ -60,7 +65,7 @@ class FedKDHook(StrategyHook):
         """SVD-compressed download size at the current round's energy level."""
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         model_size_bytes = 0
-        for arr, ref in zip(ndarrays, reference):
+        for arr, ref in zip(ndarrays, reference, strict=True):
             if arr.size == 0:
                 continue
             delta = arr - ref
@@ -72,9 +77,7 @@ class FedKDHook(StrategyHook):
         return 1.0 / self._compute_penalty
 
     def _compute_energy(self, server_round: int) -> float:
-        energy = self._tmin + (server_round / self._total_rounds) * (
-            self._tmax - self._tmin
-        )
+        energy = self._tmin + (server_round / self._total_rounds) * (self._tmax - self._tmin)
         return float(min(max(0.0, energy), 1.0))
 
     def _svd_compress_delta(
@@ -94,7 +97,7 @@ class FedKDHook(StrategyHook):
 
         new_reference: list[np.ndarray] = []
         rank_ratios: list[float] = []
-        for arr, ref in zip(ndarrays, self._reference):
+        for arr, ref in zip(ndarrays, self._reference, strict=True):
             if arr.size == 0:
                 new_reference.append(arr)
                 continue
@@ -111,6 +114,8 @@ class FedKDHook(StrategyHook):
             new_reference.append(ref + delta_hat)
         if rank_ratios:
             mean_ratio = sum(rank_ratios) / len(rank_ratios)
+            if tag == "download":
+                self._last_mean_rank_retained = mean_ratio
             logger.info(
                 "FedKD SVD [%s]: energy=%.3f mean_rank_retained=%.3f (n_layers=%d)",
                 tag,
@@ -128,9 +133,7 @@ class FedKDHook(StrategyHook):
         parameters: Parameters,
     ) -> Parameters:
         self._current_energy = self._compute_energy(server_round)
-        reconstructed = self._svd_compress_delta(
-            parameters, self._current_energy, tag="download"
-        )
+        reconstructed = self._svd_compress_delta(parameters, self._current_energy, tag="download")
         self._last_reconstructed = reconstructed
         return reconstructed
 
@@ -173,3 +176,10 @@ class FedKDHook(StrategyHook):
             return self._last_reconstructed
         energy = self._compute_energy(server_round)
         return self._svd_compress_delta(parameters, energy, tag="eval")
+
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
+        metrics = {}
+        if hasattr(self, "_last_mean_rank_retained"):
+            metrics["algorithm/fedkd/mean_rank_retained"] = self._last_mean_rank_retained
+        metrics["algorithm/fedkd/energy"] = self._current_energy
+        return metrics

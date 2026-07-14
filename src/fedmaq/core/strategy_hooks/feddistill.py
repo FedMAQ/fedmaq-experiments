@@ -70,9 +70,7 @@ class FedDistillHook(StrategyHook):
                 matrices.append(bytes_to_logits(buf, self.num_classes))
         if matrices:
             self.global_logits = np.mean(matrices, axis=0).astype(np.float32)
-            logger.info(
-                f"FedDistill+: averaged per-class logits from {len(matrices)} clients."
-            )
+            logger.info(f"FedDistill+: averaged per-class logits from {len(matrices)} clients.")
         return aggregated_parameters, metrics
 
     def download_size_bytes(
@@ -86,7 +84,5 @@ class FedDistillHook(StrategyHook):
             base += int(self.global_logits.astype(np.float32).nbytes)
         return base
 
-    def get_eval_metrics(
-        self, strategy: TelemetryFedAvg, server_round: int
-    ) -> dict[str, Any]:
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         return {}

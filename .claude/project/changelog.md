@@ -9,6 +9,24 @@ entries below are historical and not retroactively edited.
 
 ## Historical Entries
 
+### 2026-07-15 — FedMAQ-Lite Sweeps Completed & Dual-Variant Architecture Setup (experiments)
+
+Concluded all sweeps for the FedMAQ-Lite variant (SimpleCNN, ~2.16M params) and established the dual-variant architecture to support both lightweight and standard ResNet18GN models:
+
+- **Soft-Voting Sweep (36 runs)**: Phase 1 (Ablation) confirmed soft-voting provides +2.48pp (α=0.1) and +3.96pp (α=1.0) accuracy gains at R50. Phase 2 (Grid Sweep) identified optimal parameters: `ew=4.0, pw=1.0` (α=0.1) and `ew=2.0, pw=0.5` (α=1.0) at R40.
+- **Temperature Ablation (4 runs)**: Evaluated $T \in \{1.0, 2.0\}$. Proved that $T=1.0$ is critical under severe non-IID (α=0.1, −6.57pp accuracy penalty at $T=2.0$), while $T=2.0$ behaves acceptably only under homogeneous data (α=1.0). This provides empirical validation of the default $T=1.0$ choice for quantized edge distillation.
+- **Dual-Variant Support (`fedmaq` / `fedmaq_lite`)**: Refactored model dispatching, strategy hooks, client hooks, and baselines to support both the standard ResNet18GN variant (`fedmaq`, ~11.17M params) and the lightweight SimpleCNN variant (`fedmaq_lite`, ~2.16M params). All prior sweep numbers are officially designated as the `fedmaq_lite` baseline in the documentation.
+
+### 2026-07-14 — Formulation Refinements: Soft-Voting, EMA Student, and Gradient Smoothing (experiments)
+
+Implemented three priority refinements to improve FedMAQ's distillation robustness under severe non-IID data heterogeneity, derived directly from the pilot study's per-round training analysis:
+
+- **Quantization-Aware Soft-Voting**: Configured dynamic weights for ensemble distillation based on teacher prediction confidence (entropy) and quantization bit-width (precision). Added configuration keys `soft_voting`, `entropy_weight`, and `precision_weight`.
+- **EMA Student Model**: Tracks student parameters with a configurable exponential moving average (`ema_student` and `ema_decay=0.99`), resolving the mid-to-late round accuracy regression observed in the pilot.
+- **Gradient Norm Smoothing**: Integrates a per-client running gradient norm EMA (`grad_norm_ema` and `grad_norm_beta=0.7`) to stabilize precision assignments against mini-batch sampling noise.
+- **Verification**: Created `tests/test_refinement_features.py` containing comprehensive unit tests verifying the correctness of all three features. Ran full simulation test suite with 87/87 passing tests.
+- **Documentation**: Saved detailed performance analysis to `experiments/pilot-formulation-study-7-14/comments.md` and updated priority lists in `HANDOFF.md`.
+
 ### 2026-07-13 — 40-Round Baselines Sweep Completed; Proxy Dataset Shifted from 1600 to 3000 (experiments + manuscript)
 
 Completed the 40-round CIFAR-10 evaluation sweep across the distillation-based algorithms (CFD, FedKD, FedMD, FedDistill, FedMAQ) using 50 clients and 0.2 client fraction.

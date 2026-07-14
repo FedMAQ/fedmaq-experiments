@@ -87,9 +87,7 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
     from flwr.app import ArrayRecord
 
     seeded_state = RecordDict()
-    seeded_state["fedmaq_postprocess_prev_codes"] = ArrayRecord(
-        numpy_ndarrays=[raw_codes.copy()]
-    )
+    seeded_state["fedmaq_postprocess_prev_codes"] = ArrayRecord(numpy_ndarrays=[raw_codes.copy()])
     seeded_hook = FedMAQPostProcessCompressionHook(q=8, state=seeded_state)
     _, bytes_diffed = seeded_hook.compress([delta.copy()])
 
@@ -106,17 +104,13 @@ def test_byte_count_realism():
 
     compressible = np.zeros(size, dtype=np.float32)
     compressible[0] = 1.0  # mostly-zero -> highly compressible codes
-    _, bytes_compressible = FedMAQPostProcessCompressionHook(q=bits).compress(
-        [compressible]
-    )
+    _, bytes_compressible = FedMAQPostProcessCompressionHook(q=bits).compress([compressible])
     naive_formula = int(math.ceil(bits * size / 8.0)) + 4
     assert bytes_compressible < naive_formula
 
     rng = np.random.default_rng(2)
     incompressible = rng.normal(size=size).astype(np.float32)
-    _, bytes_incompressible = FedMAQPostProcessCompressionHook(q=bits).compress(
-        [incompressible]
-    )
+    _, bytes_incompressible = FedMAQPostProcessCompressionHook(q=bits).compress([incompressible])
     assert bytes_incompressible > 0
     # zlib overhead on an incompressible int64-code payload shouldn't wildly
     # inflate beyond the raw payload size.

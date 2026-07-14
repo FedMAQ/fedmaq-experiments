@@ -104,9 +104,10 @@ def test_cfd_round2_adds_digest_phase_golden():
 def test_server_kd_sim_time_golden():
     """Server-side KD delay: proxy_size * kd_epochs * teachers / server_speed."""
     # 200 public * 1 epoch * 5 teachers / 2000 samples/sec = 0.5 s.
-    assert kd_server_sim_time(
-        num_public=200, kd_epochs=1, num_teachers=5, server_compute_speed=2000.0
-    ) == 0.5
+    assert (
+        kd_server_sim_time(num_public=200, kd_epochs=1, num_teachers=5, server_compute_speed=2000.0)
+        == 0.5
+    )
 
 
 def test_transmission_delays_algorithm_independent_golden():

@@ -36,11 +36,15 @@ class FedMDFit(ClientFitStrategy):
         model_dir.mkdir(parents=True, exist_ok=True)
         model_path = model_dir / f"client_{client.cid}.pth"
 
+        loss_sum = 0.0
+        correct = 0
+        total_samples = 0
+        batches = 0
+        epochs_trained = 0
+
         # 1. Load weights if file exists, else pre-train
         if model_path.exists():
-            client.model.load_state_dict(
-                torch.load(model_path, map_location=client.device)
-            )
+            client.model.load_state_dict(torch.load(model_path, map_location=client.device))
         else:
             # Run pre-training (Transfer Learning Phase)
             alg_cfg = client.config.get("algorithm", {})
@@ -88,17 +92,20 @@ class FedMDFit(ClientFitStrategy):
                     loss.backward()
                     optimizer.step()
 
+                    loss_sum += loss.item()
+                    batches += 1
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_samples += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+            epochs_trained += priv_pretrain_epochs
+
             # Save initial weights
             torch.save(client.model.state_dict(), model_path)
 
         # 2. Check if we received predictions (soft targets) from the server
         # (if server_round > 1)
         server_round = config.get("server_round", 1)
-        if (
-            server_round > 1
-            and len(parameters) == 1
-            and client.public_loader is not None
-        ):
+        if server_round > 1 and len(parameters) == 1 and client.public_loader is not None:
             avg_predictions = parameters[0]
             alg_cfg = client.config.get("algorithm", {})
             public_epochs = int(alg_cfg.get("public_epochs", 5))
@@ -136,9 +143,7 @@ class FedMDFit(ClientFitStrategy):
                     optimizer.step()
 
             # Revisit Phase: cross entropy loss on private dataset
-            private_epochs = int(
-                config.get("epochs", exp_config.get("local_epochs", 5))
-            )
+            private_epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
             ce_criterion = nn.CrossEntropyLoss()
             client.model.train()
             for _ in range(private_epochs):
@@ -152,6 +157,13 @@ class FedMDFit(ClientFitStrategy):
                     loss = ce_criterion(outputs, labels)
                     loss.backward()
                     optimizer.step()
+
+                    loss_sum += loss.item()
+                    batches += 1
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_samples += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+            epochs_trained += private_epochs
 
             # Save updated weights
             torch.save(client.model.state_dict(), model_path)
@@ -171,13 +183,19 @@ class FedMDFit(ClientFitStrategy):
             predictions = np.zeros((1, num_classes), dtype=np.float32)
 
         byte_size = predictions.nbytes
+        avg_train_loss = loss_sum / batches if batches > 0 else 0.0
+        avg_train_acc = correct / total_samples if total_samples > 0 else 0.0
+
         return (
             [predictions],
             len(client.trainloader.dataset),
             {
                 "bytes_uploaded": byte_size,
                 "partition_id": int(client.cid),
-                "local_loss": 0.0,
+                "local_loss": avg_train_loss,
+                "train_loss": avg_train_loss,
+                "train_acc": avg_train_acc,
+                "epochs_trained": epochs_trained,
             },
         )
 
@@ -192,7 +210,5 @@ class FedMDFit(ClientFitStrategy):
         )
         model_path = Path(persistence_dir) / f"client_{client.cid}.pth"
         if model_path.exists():
-            client.model.load_state_dict(
-                torch.load(model_path, map_location=client.device)
-            )
+            client.model.load_state_dict(torch.load(model_path, map_location=client.device))
         return standard_evaluate(client, parameters, config, load_parameters=False)

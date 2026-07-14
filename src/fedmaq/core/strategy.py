@@ -176,9 +176,7 @@ class TelemetryFedAvg(FedAvg):
         parameters = self.hook.pre_configure_fit(self, server_round, parameters)
 
         # 2. Call FedAvg client sampling
-        client_instructions = super().configure_fit(
-            server_round, parameters, client_manager
-        )
+        client_instructions = super().configure_fit(server_round, parameters, client_manager)
         if not client_instructions:
             return client_instructions
 
@@ -203,14 +201,40 @@ class TelemetryFedAvg(FedAvg):
             aggregated_parameters, metrics = pre_result
         else:
             # Standard FedAvg weighted aggregation
-            aggregated_parameters, metrics = super().aggregate_fit(
-                server_round, results, failures
-            )
+            aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
 
         # 2. Hook post-processing (server KD, loss tracking, etc.)
         aggregated_parameters, metrics = self.hook.aggregate_fit(
             self, server_round, results, failures, aggregated_parameters, metrics
         )
+
+        # Aggregate client-side training metrics
+        self.last_round_client_metrics = {}
+        total_examples = sum(fit_res.num_examples for _, fit_res in results)
+        if total_examples > 0:
+            numeric_keys = set()
+            for _, fit_res in results:
+                for k, v in fit_res.metrics.items():
+                    if isinstance(v, (int, float)) and k not in (
+                        "partition_id",
+                        "bytes_uploaded",
+                    ):
+                        numeric_keys.add(k)
+
+            for k in numeric_keys:
+                if k == "epochs_trained":
+                    # Simple average for epochs
+                    simple_sum = sum(float(fit_res.metrics.get(k, 0.0)) for _, fit_res in results)
+                    self.last_round_client_metrics[f"client/avg_{k}"] = simple_sum / len(results)
+                else:
+                    # Weighted average for other numeric metrics
+                    weighted_sum = sum(
+                        float(fit_res.metrics.get(k, 0.0)) * fit_res.num_examples
+                        for _, fit_res in results
+                    )
+                    self.last_round_client_metrics[f"client/avg_{k}"] = (
+                        weighted_sum / total_examples
+                    )
 
         if not results:
             return aggregated_parameters, metrics
@@ -229,9 +253,7 @@ class TelemetryFedAvg(FedAvg):
         exp_config = self.config.get("experiment", self.config)
         epochs = exp_config.get("local_epochs", 5)
         public_epochs = int(self.config.get("algorithm", {}).get("public_epochs", 5))
-        num_public = int(
-            self.config.get("experiment", {}).get("num_public_samples", 200)
-        )
+        num_public = int(self.config.get("experiment", {}).get("num_public_samples", 200))
         compute_scale = self.hook.compute_speed_scale()
 
         for client_proxy, fit_res in results:
@@ -239,9 +261,7 @@ class TelemetryFedAvg(FedAvg):
             if cid < 0 or cid >= self.num_clients:
                 cid = hash(client_proxy.cid) % self.num_clients
 
-            bytes_uploaded = int(
-                fit_res.metrics.get("bytes_uploaded", model_size_bytes)
-            )
+            bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
             num_samples = fit_res.num_examples
             train_sample_count = self.hook.local_train_sample_count(
                 num_samples=num_samples,
@@ -251,14 +271,12 @@ class TelemetryFedAvg(FedAvg):
                 server_round=server_round,
             )
 
-            t_download, t_train, t_upload = (
-                self.network_simulator.simulate_client_delay(
-                    cid=cid,
-                    model_size_bytes=model_size_bytes,
-                    bytes_uploaded=bytes_uploaded,
-                    train_sample_count=train_sample_count,
-                    compute_scale=compute_scale,
-                )
+            t_download, t_train, t_upload = self.network_simulator.simulate_client_delay(
+                cid=cid,
+                model_size_bytes=model_size_bytes,
+                bytes_uploaded=bytes_uploaded,
+                train_sample_count=train_sample_count,
+                compute_scale=compute_scale,
             )
 
             client_total_time = t_download + t_train + t_upload
@@ -270,9 +288,7 @@ class TelemetryFedAvg(FedAvg):
         client_sim_time = max(round_delays) if round_delays else 0.0
 
         # Server compute time: non-zero for hooks with server-side work (KD).
-        server_sim_time = self.hook.server_sim_time(
-            self, results, aggregated_parameters
-        )
+        server_sim_time = self.hook.server_sim_time(self, results, aggregated_parameters)
 
         round_time = client_sim_time + server_sim_time
         self.simulated_time += round_time
@@ -321,6 +337,10 @@ class TelemetryFedAvg(FedAvg):
             for k, v in metrics.items():
                 if k != "accuracy":
                     log_metrics[f"test/{k}"] = float(v)
+
+            # Merge client-side aggregated metrics
+            if hasattr(self, "last_round_client_metrics") and self.last_round_client_metrics:
+                log_metrics.update(self.last_round_client_metrics)
 
             # Merge algorithm-specific hook metrics (e.g. DAdaQuant q_t)
             log_metrics.update(self.hook.get_eval_metrics(self, server_round))

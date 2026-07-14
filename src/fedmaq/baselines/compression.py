@@ -49,9 +49,7 @@ def compress_tensor(tensor_np: np.ndarray, energy: float) -> CompressedTensor:
     return u_trunc, sigma_trunc, v_trunc
 
 
-def decompress_tensor(
-    compressed: CompressedTensor, orig_shape: tuple[int, ...]
-) -> np.ndarray:
+def decompress_tensor(compressed: CompressedTensor, orig_shape: tuple[int, ...]) -> np.ndarray:
     """Decompress a compressed tensor representation back to its original shape."""
     if len(compressed) == 1:
         return compressed[0]

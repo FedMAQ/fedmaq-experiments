@@ -34,3 +34,21 @@ server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD 
 # on top of quantization. Applies to the primary CIFAR-10/100 + FEMNIST grid only,
 # not the Ablation Study.
 post_process: false
+
+# --- Priority 1: Quantization-Aware Soft-Voting ---
+soft_voting: true          # Enable entropy + precision weighting in distillation
+entropy_weight: 1.0        # Scaling factor for entropy confidence weighting
+precision_weight: 1.0      # Scaling factor for bit-width precision weighting
+
+# --- Priority 2: EMA Student Model ---
+ema_student: true          # Enable exponential moving average of student params
+ema_decay: 0.7             # EMA decay factor (higher = more smoothing)
+
+# --- Priority 3: Gradient Norm Smoothing ---
+grad_norm_ema: true        # Enable per-client EMA smoothing of gradient norms
+grad_norm_beta: 0.7        # EMA smoothing factor for gradient norms (beta)
+
+# --- Client-Side KD Regularization (FedGKD-style) ---
+client_kd_reg: false       # Enable client-side KD regularization
+kd_reg_alpha: 0.5          # Blending weight: (1-alpha)*CE + alpha*KD
+kd_reg_temp: 2.0           # Softmax temperature for client-side KD

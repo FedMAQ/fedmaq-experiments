@@ -70,9 +70,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
             "========================================================================"
         )
     else:
-        logger.info(
-            f"GPU (CUDA) detected. Using device: {torch.cuda.get_device_name(0)}"
-        )
+        logger.info(f"GPU (CUDA) detected. Using device: {torch.cuda.get_device_name(0)}")
 
     # Convert Hydra config to standard Python dict
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
@@ -158,9 +156,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
                     "persistence_dir", f".data_partitions/{alg_name}_models"
                 )
                 model_dir = Path(persistence_dir)
-                client_paths = (
-                    list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
-                )
+                client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
                 if not client_paths:
                     # Fallback to random global model if no client models are saved yet
                     eval_model = get_client_model(alg_name, dataset_name, num_classes)
@@ -213,9 +209,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
     backend_config = {
         "client_resources": {
             "num_cpus": 1,
-            "num_gpus": float(
-                OmegaConf.select(cfg, "experiment.client_gpus", default=0.0)
-            ),
+            "num_gpus": float(OmegaConf.select(cfg, "experiment.client_gpus", default=0.0)),
         }
     }
 

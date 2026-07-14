@@ -68,14 +68,10 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
             implementations) and the real, zlib-measured byte size.
         """
         residual_record = self._state.get(_RESIDUAL_KEY)
-        residuals = (
-            residual_record.to_numpy_ndarrays() if residual_record is not None else None
-        )
+        residuals = residual_record.to_numpy_ndarrays() if residual_record is not None else None
         prev_codes_record = self._state.get(_PREV_CODES_KEY)
         prev_codes_list = (
-            prev_codes_record.to_numpy_ndarrays()
-            if prev_codes_record is not None
-            else None
+            prev_codes_record.to_numpy_ndarrays() if prev_codes_record is not None else None
         )
 
         out_deltas: list[np.ndarray] = []
@@ -92,9 +88,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
 
             residual = (
                 residuals[i]
-                if residuals is not None
-                and i < len(residuals)
-                and residuals[i].shape == d.shape
+                if residuals is not None and i < len(residuals) and residuals[i].shape == d.shape
                 else np.zeros_like(d, dtype=np.float32)
             )
             d_fb = d + residual
@@ -113,9 +107,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
             else:
                 codes_f = _normalize_and_round(d_fb, scale, self.levels)
                 codes = codes_f.astype(np.int64)
-                dequantized = _codes_to_float(codes_f, scale, self.levels).astype(
-                    np.float32
-                )
+                dequantized = _codes_to_float(codes_f, scale, self.levels).astype(np.float32)
 
             out_deltas.append(dequantized)
             new_residuals.append((d_fb - dequantized).astype(np.float32))

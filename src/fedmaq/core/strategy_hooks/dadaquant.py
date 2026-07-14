@@ -114,9 +114,7 @@ class DAdaQuantHook(StrategyHook):
             self.last_quantization_increase_round = 0
         else:
             history_len = len(self.moving_average_history)
-            rounds_since_increase = (
-                server_round - 1
-            ) - self.last_quantization_increase_round
+            rounds_since_increase = (server_round - 1) - self.last_quantization_increase_round
 
             if history_len >= self.phi + 1 and rounds_since_increase >= self.phi:
                 latest_loss = self.moving_average_history[-1]
@@ -140,23 +138,18 @@ class DAdaQuantHook(StrategyHook):
             sizes = [1] * len(clients)
         else:
             sizes = [
-                partition_dataset_size(
-                    client_indices_dict, resolve_partition_id(c, strategy)
-                )
+                partition_dataset_size(client_indices_dict, resolve_partition_id(c, strategy))
                 for c in clients
             ]
 
-        q_i_list = compute_dadaquant_client_q(
-            sizes, self.q_t, q_min=q_min, q_max=q_max
-        )
+        q_i_list = compute_dadaquant_client_q(sizes, self.q_t, q_min=q_min, q_max=q_max)
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), q_i in zip(client_instructions, q_i_list, strict=True):
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
             new_fit_ins.config["q"] = q_i
             updated_instructions.append((client, new_fit_ins))
             logger.info(
-                f"Client {client.cid} assigned quantization level: {q_i} "
-                f"(base q_t: {self.q_t})"
+                f"Client {client.cid} assigned quantization level: {q_i} (base q_t: {self.q_t})"
             )
 
         return updated_instructions
@@ -193,8 +186,7 @@ class DAdaQuantHook(StrategyHook):
                 self.running_average_loss = weighted_loss_sum
             else:
                 self.running_average_loss = (
-                    self.psi * self.running_average_loss
-                    + (1.0 - self.psi) * weighted_loss_sum
+                    self.psi * self.running_average_loss + (1.0 - self.psi) * weighted_loss_sum
                 )
             self.moving_average_history.append(self.running_average_loss)
             logger.info(
@@ -205,16 +197,10 @@ class DAdaQuantHook(StrategyHook):
 
         return aggregated_parameters, metrics
 
-    def get_eval_metrics(
-        self, strategy: TelemetryFedAvg, server_round: int
-    ) -> dict[str, Any]:
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         metrics: dict[str, Any] = {"algorithm/dadaquant/q_t": self.q_t}
         if self.running_average_loss is not None:
-            metrics["algorithm/dadaquant/moving_average_loss"] = (
-                self.running_average_loss
-            )
+            metrics["algorithm/dadaquant/moving_average_loss"] = self.running_average_loss
         if self.last_raw_estimated_loss:
-            metrics["algorithm/dadaquant/estimated_global_loss"] = (
-                self.last_raw_estimated_loss
-            )
+            metrics["algorithm/dadaquant/estimated_global_loss"] = self.last_raw_estimated_loss
         return metrics

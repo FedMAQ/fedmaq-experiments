@@ -49,9 +49,7 @@ class FedKDFit(ClientFitStrategy):
 
         # 2. Load teacher weights if file exists, otherwise keep random initialization
         if teacher_path.exists():
-            teacher_model.load_state_dict(
-                torch.load(teacher_path, map_location=client.device)
-            )
+            teacher_model.load_state_dict(torch.load(teacher_path, map_location=client.device))
 
         # 3. Load global student parameters
         set_model_parameters(client.model, parameters)
@@ -74,6 +72,16 @@ class FedKDFit(ClientFitStrategy):
         # 5. Local Training: Student-Teacher Mutual Distillation
         client.model.train()
         teacher_model.train()
+        total_loss_sum = 0.0
+        loss_kd_s_sum = 0.0
+        loss_kd_t_sum = 0.0
+        loss_s_task_sum = 0.0
+        loss_t_task_sum = 0.0
+        correct_s = 0
+        correct_t = 0
+        total_samples = 0
+        batches = 0
+
         for _ in range(epochs):
             for images, labels in client.trainloader:
                 images, labels = images.to(client.device), labels.to(client.device)
@@ -94,12 +102,8 @@ class FedKDFit(ClientFitStrategy):
                 outputs_t_soft = F.softmax(outputs_t / temperature, dim=1)
 
                 # Mutual Knowledge Distillation Loss (scaled by temperature^2)
-                kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (
-                    temperature**2
-                )
-                kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (
-                    temperature**2
-                )
+                kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
+                kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
 
                 # Adaptive scaling: divide by sum of task losses
                 denom = loss_s_task + loss_t_task + 1e-6
@@ -113,6 +117,20 @@ class FedKDFit(ClientFitStrategy):
 
                 total_loss.backward()
                 optimizer.step()
+
+                total_loss_sum += total_loss.item()
+                loss_kd_s_sum += loss_kd_s.item()
+                loss_kd_t_sum += loss_kd_t.item()
+                loss_s_task_sum += loss_s_task.item()
+                loss_t_task_sum += loss_t_task.item()
+                batches += 1
+
+                # Accuracies
+                _, pred_s = torch.max(outputs_s.data, 1)
+                _, pred_t = torch.max(outputs_t.data, 1)
+                total_samples += labels.size(0)
+                correct_s += (pred_s == labels).sum().item()
+                correct_t += (pred_t == labels).sum().item()
 
         # 6. Save updated teacher model parameters
         torch.save(teacher_model.state_dict(), teacher_path)
@@ -130,9 +148,15 @@ class FedKDFit(ClientFitStrategy):
         compressed_deltas, byte_size = client.compressor_hook.compress(deltas)
 
         # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [
-            o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)
-        ]
+        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)]
+
+        avg_total_loss = total_loss_sum / batches if batches > 0 else 0.0
+        avg_train_acc = correct_s / total_samples if total_samples > 0 else 0.0
+        avg_teacher_acc = correct_t / total_samples if total_samples > 0 else 0.0
+        avg_kd_loss_student = loss_kd_s_sum / batches if batches > 0 else 0.0
+        avg_kd_loss_teacher = loss_kd_t_sum / batches if batches > 0 else 0.0
+        avg_task_loss_student = loss_s_task_sum / batches if batches > 0 else 0.0
+        avg_task_loss_teacher = loss_t_task_sum / batches if batches > 0 else 0.0
 
         return (
             reconstructed_params,
@@ -140,6 +164,14 @@ class FedKDFit(ClientFitStrategy):
             {
                 "bytes_uploaded": byte_size,
                 "partition_id": int(client.cid),
-                "local_loss": 0.0,
+                "local_loss": avg_total_loss,
+                "train_loss": avg_total_loss,
+                "train_acc": avg_train_acc,
+                "epochs_trained": epochs,
+                "kd_loss_student": avg_kd_loss_student,
+                "kd_loss_teacher": avg_kd_loss_teacher,
+                "task_loss_student": avg_task_loss_student,
+                "task_loss_teacher": avg_task_loss_teacher,
+                "teacher_acc": avg_teacher_acc,
             },
         )

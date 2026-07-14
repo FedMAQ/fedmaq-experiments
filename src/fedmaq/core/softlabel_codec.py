@@ -106,7 +106,6 @@ def codes_from_bytes(buf: bytes, num_classes: int) -> np.ndarray:
     arr = np.frombuffer(buf, dtype=np.int64)
     if arr.size % num_classes != 0:
         raise ValueError(
-            f"CFD code buffer has {arr.size} ints, not divisible by "
-            f"num_classes={num_classes}."
+            f"CFD code buffer has {arr.size} ints, not divisible by num_classes={num_classes}."
         )
     return arr.reshape(-1, num_classes).copy()

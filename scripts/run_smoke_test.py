@@ -1,8 +1,7 @@
-import subprocess
-import time
-import os
-import sys
 import argparse
+import subprocess
+import sys
+import time
 from datetime import datetime
 
 
@@ -37,7 +36,7 @@ def main():
     parser.add_argument(
         "--total_rounds",
         type=int,
-        default=40,
+        default=50,
         help="Total number of communication rounds",
     )
     args = parser.parse_args()
@@ -60,30 +59,35 @@ def main():
     #     {"alg": "fedmaq", "index": 8},
     # ]
 
-    # Modify this based on your smoke test
-    # Sweep across both Dirichlet alpha regimes (0.1 and 1.0) and all 5 FedMAQ formulations (0-4)
+    # Sweep across both Dirichlet alpha regimes (0.1 and 1.0) and run without EMA
     runs = []
     idx = 0
     for het in ["dirichlet_alpha_0.1", "dirichlet_alpha_1.0"]:
-        for formulation in range(5):
-            runs.append(
-                {"alg": "fedmaq", "het": het, "formulation": formulation, "index": idx}
-            )
-            idx += 1
+        # Run: No EMA
+        runs.append(
+            {
+                "alg": "fedmaq",
+                "het": het,
+                "formulation": 3,
+                "ema_student": "false",
+                "ema_decay": 0.99,
+                "label": "no_ema",
+                "index": idx,
+            }
+        )
+        idx += 1
 
-    print(f"==================================================")
+    print("==================================================")
     print(f"Smoke Run Base Directory: {output_dir_base}")
-    print(f"Sweeping 5 FedMAQ formulations across 2 Dirichlet regimes")
+    print("Running FedMAQ Formulation 3 without EMA")
     print(f"Total Rounds: {args.total_rounds}")
-    print(f"==================================================")
+    print("==================================================")
 
     for run in runs:
         target_dir = f"{output_dir_base}/{run['index']}"
-        print(f"\n==================================================")
-        print(
-            f"Starting run for {run['alg']} (Formulation {run['formulation']}) on {run['het']} in {target_dir}"
-        )
-        print(f"==================================================")
+        print("\n==================================================")
+        print(f"Starting run for {run['alg']} ({run['label']}) on {run['het']} in {target_dir}")
+        print("==================================================")
 
         kill_ray_processes()
 
@@ -97,6 +101,8 @@ def main():
             "experiment=preliminary",
             f"algorithm={run['alg']}",
             f"algorithm.formulation={run['formulation']}",
+            f"algorithm.ema_student={run['ema_student']}",
+            f"algorithm.ema_decay={run['ema_decay']}",
             f"experiment.total_rounds={args.total_rounds}",
             "experiment.local_epochs=5",
             "seed=0",
@@ -108,11 +114,11 @@ def main():
 
         if res.returncode != 0:
             print(
-                f"\n[ERROR] Run for {run['alg']} (Formulation {run['formulation']}) on {run['het']} failed with exit code {res.returncode}"
+                f"\n[ERROR] Run for {run['alg']} ({run['label']}) on {run['het']} failed with exit code {res.returncode}"
             )
         else:
             print(
-                f"\n[SUCCESS] Run for {run['alg']} (Formulation {run['formulation']}) on {run['het']} completed successfully."
+                f"\n[SUCCESS] Run for {run['alg']} ({run['label']}) on {run['het']} completed successfully."
             )
 
         time.sleep(5)

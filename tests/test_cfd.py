@@ -167,9 +167,7 @@ def test_cfd_hook_dual_distillation_two_rounds():
         assert aggregated_parameters is not None
 
     updated_params = get_model_parameters(hook.server_model)
-    assert any(
-        not np.allclose(a, b) for a, b in zip(initial_params, updated_params, strict=True)
-    )
+    assert any(not np.allclose(a, b) for a, b in zip(initial_params, updated_params, strict=True))
 
 
 def test_cfd_hook_downstream_broadcast_skips_round1():

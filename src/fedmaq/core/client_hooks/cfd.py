@@ -82,6 +82,9 @@ class CFDFit(ClientFitStrategy):
         server_round = int(config.get("server_round", 1))
         server_labels_bytes = config.get("cfd_server_labels")
 
+        distill_loss_sum = 0.0
+        distill_batches = 0
+
         if (
             server_round > 1
             and isinstance(server_labels_bytes, bytes)
@@ -112,7 +115,14 @@ class CFDFit(ClientFitStrategy):
                     loss.backward()
                     optimizer.step()
 
+                    distill_loss_sum += loss.item()
+                    distill_batches += 1
+
         ce_criterion = nn.CrossEntropyLoss()
+        ce_loss_sum = 0.0
+        ce_batches = 0
+        correct = 0
+        total_samples = 0
         client.model.train()
         for _ in range(epochs):
             for images, labels in client.trainloader:
@@ -123,6 +133,13 @@ class CFDFit(ClientFitStrategy):
                 loss.backward()
                 optimizer.step()
 
+                ce_loss_sum += loss.item()
+                ce_batches += 1
+
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
         # Soft-label predictions on the public proxy set, sent instead of weights.
         if client.public_loader is not None:
             client.model.eval()
@@ -131,9 +148,7 @@ class CFDFit(ClientFitStrategy):
                 for images, _ in client.public_loader:
                     images = images.to(client.device)
                     logits = client.model(images)
-                    probs_list.append(
-                        F.softmax(logits / temperature, dim=1).cpu().numpy()
-                    )
+                    probs_list.append(F.softmax(logits / temperature, dim=1).cpu().numpy())
             predictions = np.concatenate(probs_list, axis=0).astype(np.float32)
         else:
             predictions = np.zeros((1, num_classes), dtype=np.float32)
@@ -152,13 +167,21 @@ class CFDFit(ClientFitStrategy):
         if state is not None:
             state[_PREV_UP_CODES_KEY] = ArrayRecord(numpy_ndarrays=[codes_for_next])
 
+        avg_ce_loss = ce_loss_sum / ce_batches if ce_batches > 0 else 0.0
+        avg_distill_loss = distill_loss_sum / distill_batches if distill_batches > 0 else 0.0
+        avg_train_acc = correct / total_samples if total_samples > 0 else 0.0
+
         return (
             [codes.astype(np.int64)],
             len(client.trainloader.dataset),
             {
                 "bytes_uploaded": nbytes,
                 "partition_id": int(client.cid),
-                "local_loss": 0.0,
+                "local_loss": avg_ce_loss,
+                "train_loss": avg_ce_loss,
+                "train_acc": avg_train_acc,
+                "epochs_trained": epochs,
+                "distill_loss": avg_distill_loss,
             },
         )
 

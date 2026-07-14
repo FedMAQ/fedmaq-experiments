@@ -39,9 +39,7 @@ def mock_dataset(monkeypatch):
     mock_labels = torch.randint(0, 10, (100,))
     mock_ds = TensorDataset(mock_data, mock_labels)
     mock_ds.targets = mock_labels
-    monkeypatch.setattr(
-        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
-    )
+    monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
     return mock_ds
 
 

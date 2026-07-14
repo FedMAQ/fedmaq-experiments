@@ -1,0 +1,54 @@
+name: fedmaq_lite
+# Bit-width bounds for the soft-quality-target interpolation range (formulations 1-4)
+q_min: 1
+q_max: 16
+
+# Permissible discrete bit-width set per manuscript §4.2 (Q). The Tier-1 memory
+# hard-cap and Tier-2 soft target are combined via min() while still raw, then the
+# combined value is floored into the largest member of this set <= it, once —
+# q_min/q_max above only bound the *interpolation* range, not the final output.
+bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
+
+# Tier 1 resource cap
+c_unit: 512.0  # MB consumed per quantization bit
+
+# Tier 2 soft quality formulation selection
+# 0: Resource-Only Hard Cap, 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
+formulation: 3
+
+# Formulation-specific parameters
+gamma1: 0.5      # Alternative 1 & 2 (gradient weight)
+gamma2: 0.5      # Alternative 1 & 2 (dataset size weight)
+lambda_val: 1.0  # Alternative 3 (dataset size modulator strength)
+tau_g: 0.5       # Alternative 4 (gradient norm threshold)
+tau_n: 0.5       # Alternative 4 (dataset size threshold)
+
+# Server-side Knowledge Distillation settings (§3.5)
+temperature: 1.0       # T — generalized softmax temperature
+kd_epochs: 1           # distillation passes over D_proxy per round
+server_kd_lr: 0.01     # SGD learning rate for global student during KD
+server_kd_momentum: 0.9  # SGD momentum for global student during KD
+server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD delay (§3.3)
+
+# Post-processing pipeline (§4.3): error-feedback + diff-coding + lossless zlib
+# on top of quantization. Applies to the primary CIFAR-10/100 + FEMNIST grid only,
+# not the Ablation Study.
+post_process: false
+
+# --- Priority 1: Quantization-Aware Soft-Voting ---
+soft_voting: true          # Enable entropy + precision weighting in distillation
+entropy_weight: 1.0        # Scaling factor for entropy confidence weighting
+precision_weight: 1.0      # Scaling factor for bit-width precision weighting
+
+# --- Priority 2: EMA Student Model ---
+ema_student: true          # Enable exponential moving average of student params
+ema_decay: 0.7             # EMA decay factor (higher = more smoothing)
+
+# --- Priority 3: Gradient Norm Smoothing ---
+grad_norm_ema: true        # Enable per-client EMA smoothing of gradient norms
+grad_norm_beta: 0.7        # EMA smoothing factor for gradient norms (beta)
+
+# --- Client-Side KD Regularization (FedGKD-style) ---
+client_kd_reg: false       # Enable client-side KD regularization
+kd_reg_alpha: 0.5          # Blending weight: (1-alpha)*CE + alpha*KD
+kd_reg_temp: 2.0           # Softmax temperature for client-side KD

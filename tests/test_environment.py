@@ -40,9 +40,7 @@ def mock_dataset(monkeypatch):
     mock_ds.targets = mock_labels
 
     # Patch load_dataset to return the mock dataset
-    monkeypatch.setattr(
-        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
-    )
+    monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
     return mock_ds
 
 
@@ -176,14 +174,10 @@ def test_public_pool_exact_size_with_remainder(tmp_path, monkeypatch):
     num_classes = 7
     samples_per_class = 20
     data = torch.randn(num_classes * samples_per_class, 1, 4, 4)
-    labels = torch.cat(
-        [torch.full((samples_per_class,), c) for c in range(num_classes)]
-    )
+    labels = torch.cat([torch.full((samples_per_class,), c) for c in range(num_classes)])
     mock_ds = TensorDataset(data, labels)
     mock_ds.targets = labels
-    monkeypatch.setattr(
-        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
-    )
+    monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
 
     from fedmaq.core.partitioning import generate_partition_indices
 
@@ -489,16 +483,12 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         def server_fn(context):
             nonlocal strategy
             global_model = get_model("mnist", num_classes=10)
-            initial_parameters = ndarrays_to_parameters(
-                get_model_parameters(global_model)
-            )
+            initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
             _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
             def evaluate_fn(server_round, parameters, config):
                 # Simple ensemble eval simulation
-                client_paths = (
-                    list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
-                )
+                client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
                 assert len(client_paths) <= 2
                 return 0.5, {"accuracy": 0.9}
 
@@ -512,9 +502,7 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 evaluate_fn=evaluate_fn,
                 initial_parameters=initial_parameters,
             )
-            return ServerAppComponents(
-                strategy=strategy, config=ServerConfig(num_rounds=2)
-            )
+            return ServerAppComponents(strategy=strategy, config=ServerConfig(num_rounds=2))
 
         server_app = ServerApp(server_fn=server_fn)
 
@@ -745,9 +733,7 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             from fedmaq.core.models import TinyCNN
 
             global_model = TinyCNN(in_channels=1, num_classes=10)
-            initial_parameters = ndarrays_to_parameters(
-                get_model_parameters(global_model)
-            )
+            initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
             _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
             def evaluate_fn(server_round, parameters, config):
@@ -763,9 +749,7 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 evaluate_fn=evaluate_fn,
                 initial_parameters=initial_parameters,
             )
-            return ServerAppComponents(
-                strategy=strategy, config=ServerConfig(num_rounds=2)
-            )
+            return ServerAppComponents(strategy=strategy, config=ServerConfig(num_rounds=2))
 
         server_app = ServerApp(server_fn=server_fn)
 
@@ -798,9 +782,7 @@ def test_fedpaq_compression_hook():
     # element_bits = 3 * 8 = 24 bits = 3 bytes + 4 bytes scale = 7 bytes
     assert byte_size == 7
     assert len(compressed) == 1
-    np.testing.assert_allclose(
-        compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32)
-    )
+    np.testing.assert_allclose(compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32))
 
 
 def test_fedpaq_no_nan_for_all_permissible_bit_widths():
@@ -868,7 +850,7 @@ def test_fedmaq_strategy_allocation():
             "total_rounds": 10,
         },
         "algorithm": {
-            "name": "fedmaq",
+            "name": "fedmaq_lite",
             "q_min": 2,
             "q_max": 8,
             "c_unit": 2048.0,
@@ -943,9 +925,7 @@ def test_fedmaq_strategy_allocation():
     strategy.public_indices = public_indices
 
     # Patch client memory for controlled testing
-    strategy.client_memory = np.array(
-        [2048.0, 16384.0]
-    )  # Client 0: Q_max=1, Client 1: Q_max=8
+    strategy.client_memory = np.array([2048.0, 16384.0])  # Client 0: Q_max=1, Client 1: Q_max=8
 
     # We patch get_client_loader in partitioning module since it is imported inside configure_fit
     original_loader = fedmaq.core.partitioning.get_client_loader
@@ -1005,7 +985,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 "num_classes": 10,
             },
             "algorithm": {
-                "name": "fedmaq",
+                "name": "fedmaq_lite",
                 "q_min": 2,
                 "q_max": 8,
                 "c_unit": 2048.0,
@@ -1052,9 +1032,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             from fedmaq.core.models import TinyCNN
 
             global_model = TinyCNN(in_channels=1, num_classes=10)
-            initial_parameters = ndarrays_to_parameters(
-                get_model_parameters(global_model)
-            )
+            initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
 
             def evaluate_fn(server_round, parameters, config):
                 return 0.5, {"accuracy": 0.9}
@@ -1071,9 +1049,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 evaluate_fn=evaluate_fn,
                 initial_parameters=initial_parameters,
             )
-            return ServerAppComponents(
-                strategy=strategy, config=ServerConfig(num_rounds=2)
-            )
+            return ServerAppComponents(strategy=strategy, config=ServerConfig(num_rounds=2))
 
         server_app = ServerApp(server_fn=server_fn)
 
@@ -1392,9 +1368,7 @@ def test_evaluation_metrics():
 
     all_preds = np.array([0, 1, 0, 1])
     all_labels = np.array([0, 1, 1, 0])
-    precision, recall, f1 = compute_precision_recall_f1(
-        all_preds, all_labels, num_classes=2
-    )
+    precision, recall, f1 = compute_precision_recall_f1(all_preds, all_labels, num_classes=2)
 
     # Class 0: tp=1, fp=1, fn=1. prec=0.5, rec=0.5, f1=0.5.
     # Class 1: tp=1, fp=1, fn=1. prec=0.5, rec=0.5, f1=0.5.
@@ -1493,9 +1467,7 @@ def test_feddistill_hook_aggregation_and_broadcast():
 
     # configure_fit broadcasts the consensus matrix as bytes.
     fit_ins = FitIns(ndarrays_to_parameters([]), {})
-    updated = hook.configure_fit(
-        None, 2, ndarrays_to_parameters([]), None, [(None, fit_ins)]
-    )
+    updated = hook.configure_fit(None, 2, ndarrays_to_parameters([]), None, [(None, fit_ins)])
     gl = updated[0][1].config["global_logits"]
     assert isinstance(gl, bytes)
     assert np.allclose(bytes_to_logits(gl, 3), 2.0)

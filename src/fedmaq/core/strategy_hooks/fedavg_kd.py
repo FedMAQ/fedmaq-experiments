@@ -66,7 +66,7 @@ class FedAvgKDHook(StrategyHook):
         alg_cfg = self._config.get("algorithm", {})
 
         # FedAvgKD uses the standard model for both teacher and student.
-        aggregated_parameters = distill_ensemble_into_global(
+        aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
             model_factory=get_model,
             aggregated_parameters=aggregated_parameters,
             results=results,
@@ -88,9 +88,7 @@ class FedAvgKDHook(StrategyHook):
         if aggregated_parameters is None:
             return 0.0
         alg_cfg = self._config.get("algorithm", {})
-        num_public = int(
-            self._config.get("experiment", {}).get("num_public_samples", 200)
-        )
+        num_public = int(self._config.get("experiment", {}).get("num_public_samples", 200))
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
@@ -98,7 +96,9 @@ class FedAvgKDHook(StrategyHook):
             server_compute_speed=float(alg_cfg.get("server_compute_speed", 2000.0)),
         )
 
-    def get_eval_metrics(
-        self, strategy: TelemetryFedAvg, server_round: int
-    ) -> dict[str, Any]:
-        return {}
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
+        metrics = {}
+        if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
+            for k, v in self._last_round_kd_metrics.items():
+                metrics[f"algorithm/fedavg_kd/{k}"] = v
+        return metrics

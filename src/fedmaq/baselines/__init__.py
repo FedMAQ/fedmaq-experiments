@@ -48,20 +48,18 @@ _COMPRESSOR_HOOKS: dict[
         CompressionHook,
     ],
 ] = {
-    "fedpaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
-        q=int(alg_cfg.get("q", 8))
-    ),
+    "fedpaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(q=int(alg_cfg.get("q", 8))),
     "dadaquant": lambda alg_cfg, rng, state: DAdaQuantCompressionHook(
         q=int(alg_cfg.get("q_min", 1)),
         rng=rng,
     ),
-    # FedMAQ's q is a true bit-width from the manuscript's discrete set
-    # {1,...,8,16,32} (see compute_fedmaq_q_k_t), so it must use FedPAQ's
-    # bit-width-faithful symmetric quantizer, not DAdaQuant's levels-per-sign
-    # semantics (which would badly misinterpret e.g. q=16 as 33 levels).
+    # FedMAQ and FedMAQ-Lite's q is a true bit-width from the manuscript's discrete set
+    # {1,...,8,16,32} (see compute_fedmaq_q_k_t), so they must use FedPAQ's
+    # bit-width-faithful symmetric quantizer.
     # Dispatch below overrides this with FedMAQPostProcessCompressionHook when
     # ``alg_cfg["post_process"]`` is true (primary benchmarking grid only).
-    "fedmaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
+    "fedmaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(q=int(alg_cfg.get("q_min", 2))),
+    "fedmaq_lite": lambda alg_cfg, rng, state: FedPAQCompressionHook(
         q=int(alg_cfg.get("q_min", 2))
     ),
     "fedkd": lambda alg_cfg, rng, state: FedKDCompressionHook(
@@ -90,7 +88,7 @@ def get_compressor_hook(
     state:
         Per-client persistent :class:`flwr.app.RecordDict` (``Context.state``).
         Only consumed when dispatching to :class:`FedMAQPostProcessCompressionHook`
-        (``alg_name == "fedmaq"`` and ``alg_cfg["post_process"]`` is true);
+        (``alg_name in {"fedmaq", "fedmaq_lite"}`` and ``alg_cfg["post_process"]`` is true);
         ignored otherwise.
 
     Returns
@@ -99,10 +97,8 @@ def get_compressor_hook(
         An identity hook for algorithms without client-side compression
         (fedavg, fedprox, fedmd, fedavg_kd, feddistill: uncompressed float32).
     """
-    if alg_name == "fedmaq" and alg_cfg.get("post_process"):
-        return FedMAQPostProcessCompressionHook(
-            q=int(alg_cfg.get("q_min", 2)), state=state
-        )
+    if alg_name in {"fedmaq", "fedmaq_lite"} and alg_cfg.get("post_process"):
+        return FedMAQPostProcessCompressionHook(q=int(alg_cfg.get("q_min", 2)), state=state)
     hook_ctor = _COMPRESSOR_HOOKS.get(alg_name)
     if hook_ctor is None:
         return CompressionHook()

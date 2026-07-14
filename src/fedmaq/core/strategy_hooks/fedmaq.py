@@ -12,6 +12,7 @@ from flwr.common import (
     FitIns,
     Parameters,
     Scalar,
+    ndarrays_to_parameters,
     parameters_to_ndarrays,
 )
 from flwr.common.typing import FitRes
@@ -22,6 +23,7 @@ from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_tim
 from fedmaq.core.models import (
     DEVICE,
     get_kd_student_model,
+    get_model,
     set_model_parameters,
 )
 from fedmaq.core.partitioning import get_client_loader
@@ -130,6 +132,9 @@ class FedMAQHook(StrategyHook):
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self._grad_norm_model: nn.Module | None = None
+        self._round_client_q: dict[str, int] = {}
+        self._ema_params: list[np.ndarray] | None = None
+        self._grad_norm_ema: dict[int, float] = {}
 
     def configure_fit(
         self,
@@ -157,12 +162,13 @@ class FedMAQHook(StrategyHook):
         device = torch.device(self._config.get("device") or DEVICE)
 
         # Lazily instantiate and cache the gradient norm model.
-        # FedMAQ's global/client model IS the KD student (TinyCNN for 1-channel,
-        # SimpleCNN for CIFAR), so the grad-norm probe must use that same
-        # architecture; using the full get_model() here loads mismatched
-        # parameters (e.g. ResNet18GN on CIFAR) and silently zeroes every norm.
+        # FedMAQ-Lite's global/client model is the KD student (TinyCNN for 1-channel,
+        # SimpleCNN for CIFAR), while FedMAQ uses the standard model (ResNet18GN on CIFAR).
+        # We pick the model architecture dynamically depending on the algorithm name.
+        alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
+        model_fn = get_kd_student_model if alg_name == "fedmaq_lite" else get_model
         if self._grad_norm_model is None:
-            self._grad_norm_model = get_kd_student_model(dataset_name, num_classes)
+            self._grad_norm_model = model_fn(dataset_name, num_classes)
             self._grad_norm_model.to(device)
         temp_model = self._grad_norm_model
         ndarrays = parameters_to_ndarrays(parameters)
@@ -171,9 +177,7 @@ class FedMAQHook(StrategyHook):
         criterion = nn.CrossEntropyLoss()
 
         # Map client proxies to partition IDs
-        client_pids = [
-            resolve_partition_id(c, strategy) for c, _ in client_instructions
-        ]
+        client_pids = [resolve_partition_id(c, strategy) for c, _ in client_instructions]
 
         # 1. Compute raw gradient norms for sampled clients
         grad_norms: list[float] = []
@@ -214,11 +218,27 @@ class FedMAQHook(StrategyHook):
 
             grad_norms.append(max(1e-8, norm))
 
+        # 1.5. Gradient Norm Smoothing (Priority 3)
+        if alg_cfg.get("grad_norm_ema", False):
+            beta = float(alg_cfg.get("grad_norm_beta", 0.7))
+            smoothed_norms = []
+            for pid, raw_norm in zip(client_pids, grad_norms, strict=True):
+                if pid in self._grad_norm_ema:
+                    smoothed = beta * self._grad_norm_ema[pid] + (1.0 - beta) * raw_norm
+                else:
+                    smoothed = raw_norm
+                self._grad_norm_ema[pid] = smoothed
+                smoothed_norms.append(smoothed)
+            grad_norms = smoothed_norms
+
+        self._last_grad_norms = grad_norms
+
         # 2. Normalize signals
         g_max = max(grad_norms) if grad_norms else 1e-8
         n_max = max(dataset_sizes) if dataset_sizes else 1
 
         # 3. Compute and inject client-specific quantization bit-widths
+        self._last_assigned_q = {}
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), pid, g_k, n_k in zip(
             client_instructions, client_pids, grad_norms, dataset_sizes, strict=True
@@ -244,11 +264,13 @@ class FedMAQHook(StrategyHook):
             # Instantiate new FitIns to prevent shared reference overwrites
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
             new_fit_ins.config["q"] = q_k_t
+            self._round_client_q[client.cid] = q_k_t
+            self._last_assigned_q[client.cid] = q_k_t
             updated_instructions.append((client, new_fit_ins))
             logger.info(
                 f"FedMAQ - Client {client.cid} (partition {pid}): "
-                f"c_k={c_k:.1f}MB, g_k={g_k:.4f} (tilde_g={g_k/g_max:.4f}), "
-                f"n_k={n_k} (tilde_n={n_k/n_max:.4f}) -> "
+                f"c_k={c_k:.1f}MB, g_k={g_k:.4f} (tilde_g={g_k / g_max:.4f}), "
+                f"n_k={n_k} (tilde_n={n_k / n_max:.4f}) -> "
                 f"Final assigned q: {q_k_t}"
             )
 
@@ -272,9 +294,19 @@ class FedMAQHook(StrategyHook):
         device = torch.device(self._config.get("device") or DEVICE)
         alg_cfg = self._config.get("algorithm", {})
 
-        # FedMAQ's student/teacher architecture is the KD student (TinyCNN/SimpleCNN).
-        aggregated_parameters = distill_ensemble_into_global(
-            model_factory=get_kd_student_model,
+        # Select student/teacher architecture factory dynamically depending on algorithm variant
+        alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
+        model_fn = get_kd_student_model if alg_name == "fedmaq_lite" else get_model
+
+        teacher_bit_widths = None
+        if alg_cfg.get("soft_voting", False):
+            teacher_bit_widths = []
+            for client_proxy, _ in results:
+                q_val = self._round_client_q.get(client_proxy.cid, int(alg_cfg.get("q_max", 8)))
+                teacher_bit_widths.append(q_val)
+
+        aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
+            model_factory=model_fn,
             aggregated_parameters=aggregated_parameters,
             results=results,
             public_indices=strategy.public_indices,
@@ -283,8 +315,46 @@ class FedMAQHook(StrategyHook):
             batch_size=batch_size,
             alg_cfg=alg_cfg,
             device=device,
+            teacher_bit_widths=teacher_bit_widths,
         )
+
+        # Apply student EMA if enabled
+        if aggregated_parameters is not None and alg_cfg.get("ema_student", False):
+            ema_decay = float(alg_cfg.get("ema_decay", 0.99))
+            new_params = parameters_to_ndarrays(aggregated_parameters)
+            if self._ema_params is None:
+                self._ema_params = [p.copy() for p in new_params]
+            else:
+                self._ema_params = [
+                    ema_decay * ema + (1.0 - ema_decay) * new
+                    for ema, new in zip(self._ema_params, new_params, strict=True)
+                ]
+            aggregated_parameters = ndarrays_to_parameters(self._ema_params)
+
         return aggregated_parameters, metrics
+
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
+        metrics = {}
+        if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
+            for k, v in self._last_round_kd_metrics.items():
+                metrics[f"algorithm/fedmaq/{k}"] = v
+
+        # Add grad norm statistics
+        if hasattr(self, "_last_grad_norms") and self._last_grad_norms:
+            metrics["algorithm/fedmaq/avg_grad_norm"] = float(np.mean(self._last_grad_norms))
+            metrics["algorithm/fedmaq/min_grad_norm"] = float(np.min(self._last_grad_norms))
+            metrics["algorithm/fedmaq/max_grad_norm"] = float(np.max(self._last_grad_norms))
+            metrics["algorithm/fedmaq/std_grad_norm"] = float(np.std(self._last_grad_norms))
+
+        # Add assigned Q statistics
+        if hasattr(self, "_last_assigned_q") and self._last_assigned_q:
+            q_vals = list(self._last_assigned_q.values())
+            metrics["algorithm/fedmaq/avg_q"] = float(np.mean(q_vals))
+            metrics["algorithm/fedmaq/min_q"] = float(np.min(q_vals))
+            metrics["algorithm/fedmaq/max_q"] = float(np.max(q_vals))
+            metrics["algorithm/fedmaq/std_q"] = float(np.std(q_vals))
+
+        return metrics
 
     def server_sim_time(
         self,
@@ -295,9 +365,7 @@ class FedMAQHook(StrategyHook):
         if aggregated_parameters is None:
             return 0.0
         alg_cfg = self._config.get("algorithm", {})
-        num_public = int(
-            self._config.get("experiment", {}).get("num_public_samples", 200)
-        )
+        num_public = int(self._config.get("experiment", {}).get("num_public_samples", 200))
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
