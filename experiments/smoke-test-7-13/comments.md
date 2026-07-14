@@ -18,6 +18,10 @@ Based on the 40-round smoke test across severe ($\alpha=0.1$) and moderate ($\al
 
 - **FedDistill+ (Pure KD):** Telemetry records a 34100.5 MB footprint, which is slightly higher than FedAvg's footprint. This indicates the execution of the stronger FedDistill+ baseline, which shares both parameters and logit vectors [\cite{zhuDataFreeKnowledgeDistillation2021}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/zhu-2021-fedgen.md). However, the accuracy is 32.94% at $\alpha=0.1$, performing worse than FedAvg. Since knowledge distillation is designed to mitigate non-IID skew, this indicates a hyperparameter misalignment (e.g. `reg_alpha` is poorly tuned) rather than a structural bug.
 
+### Untested / Faulty Implementations
+
+- **FedMD:** FedMD was commented out and not tested in the smoke tests. Based on past sweeps, it is highly likely to be faulty or misaligned, and we will need to debug it actively before proceeding to full runs.
+
 ### Over-compressed Implementations (Need Tuning)
 
 - **FedKD (Hybrid Q+KD):** Test accuracy at 14.09% and 29.17% is substantially lower than expected. The $1000\times+$ communication reduction indicates the Singular Value Decomposition (SVD) threshold is over-compressing the model, deteriorating the gradient updates before transmission [\cite{wuCommunicationefficientFederatedLearning2022}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/wu-2022-fedkd.md).
