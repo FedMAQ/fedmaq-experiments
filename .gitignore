@@ -1,6 +1,7 @@
 # Project-specific paths
 data/
 .data_partitions/
+experiments/
 multirun/
 outputs/
 references/
