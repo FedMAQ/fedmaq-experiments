@@ -2,6 +2,9 @@
 
 This directory houses all experimental sweeps, ablation studies, and hyperparameter tuning results conducted for the FedMAQ thesis.
 
+> [!IMPORTANT]
+> **All experiments below are exploratory smoke tests** (40–50 rounds, single seed). They validate the algorithm direction and identify hyperparameter sensitivity, but are **not** the formal thesis results. The formal experiment grid (multi-seed, multi-α, 100+ rounds) will be planned and executed in the next phase. See [docs/STATUS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md) for the current project state.
+
 Every experiment is self-contained within its own directory and adheres to a strict organization standard:
 
 - `results.md`: Detailed tabular data (accuracy, loss, communication footprint, simulated latency) and Hydra configuration paths.
@@ -11,7 +14,7 @@ Every experiment is self-contained within its own directory and adheres to a str
 
 ## 1. Chronological Experiment Roadmap
 
-Below is the historical sequence of experiments leading to the final optimized **FedMAQ-Lite** formulation:
+Below is the historical sequence of smoke-test experiments:
 
 | Order | Experiment Directory                                                                                                                           | Date (2026) | Description & Key Objective                                                                                                        | Major Outcome / Finding                                                                                                                                                 |
 | :---: | :--------------------------------------------------------------------------------------------------------------------------------------------- | :---------: | :--------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,27 +46,32 @@ _Note: With full optimization, FedMAQ-Lite now **outperforms the FedProx baselin
 
 ---
 
-## 3. Best-Known FedMAQ-Lite Configurations
+## 3. Accuracy Progression (FedMAQ — ResNet18GN)
 
-These parameters define the final, optimized **FedMAQ-Lite** recipe:
+The table below traces the progression of FedMAQ on the iso-architecture ResNet18GN model:
 
-| Hyperparameter     | $\alpha=0.1$ (Severe Skew) | $\alpha=1.0$ (Moderate Skew) | Purpose / Mechanism                                                     |
-| :----------------- | :------------------------: | :--------------------------: | :---------------------------------------------------------------------- |
-| `formulation`      |           **3**            |            **3**             | Gradient-primary, data-modulated soft-quality target                    |
-| `ema_student`      |           `true`           |            `true`            | Enables Exponential Moving Average student model                        |
-| `ema_decay`        |          **0.7**           |           **0.1**            | Tracks temporal parameters (higher decay smooths high non-IID variance) |
-| `soft_voting`      |           `true`           |            `true`            | Enables spatial multi-teacher logit confidence filtering                |
-| `entropy_weight`   |          **4.0**           |           **2.0**            | Suppresses uncertain, high-entropy predictions                          |
-| `precision_weight` |          **1.0**           |           **0.5**            | Discounts predictions from low-precision/quantized edge nodes           |
-| `temperature`      |          **1.0**           |           **1.0**            | Standard distillation scaling (higher T amplifies quantization noise)   |
-| `grad_norm_ema`    |           `true`           |            `true`            | Server-side per-client gradient norm smoothing                          |
-| `grad_norm_beta`   |           `0.7`            |            `0.7`             | Smoothing momentum factor                                               |
+| Step / Phase                                 | $\alpha=0.1$ (Severe Skew) | Gap to FedProx (49.71%) | $\alpha=1.0$ (Moderate Skew) | Gap to FedAvg (67.57%) |
+| :------------------------------------------- | :------------------------: | :---------------------: | :--------------------------: | :--------------------: |
+| **FedMAQ Baseline** (SimpleCNN-tuned params) |           38.36%           |        −11.35pp         |            53.04%            |        −14.53pp        |
+| **+ Client KD Reg** (Best sweep)             |       35.06% (peak)        |        −14.65pp         |            65.94%            |        −1.63pp         |
+| **+ Stacked Reg** (KD + FedProx μ=0.1)       |           41.21%           |         −8.50pp         |          **65.80%**          |      **−1.77pp**       |
+| **+ Stacked Reg, No EMA**                    |         **47.43%**         |       **−2.28pp**       |       60.69% / 64.47%        |   −6.88pp / −3.10pp    |
+
+> [!NOTE]
+> **Key finding — Capacity-EMA Duality (Experiment 9):** Disabling student EMA yields +6.22pp under severe skew because high-capacity ResNet18GN is already stabilized by client-side regularization (KD + proximal). EMA adds harmful inertia. Under moderate skew, the R40 accuracy dips but recovers by R50 (64.47%). **FedMAQ-Lite behaves oppositely** — EMA is essential for small models.
+
+> [!WARNING]
+> **ResNet18GN hyperparameters are not natively tuned.** All values above use SimpleCNN-transferred configs. The `entropy_weight=4.0` transfer failure (Experiment 7) demonstrates that other params may be suboptimal. A full re-sweep on ResNet18GN is needed before formal experiments.
 
 ---
 
-## 4. ResNet18GN Client-Side Regularization Performance
+## 4. Best-Known Configurations
 
-To address client drift on the high-capacity ResNet18GN model, we evaluated client-side logit-space KD regularization. Below is a comparison of the target regularized configurations against the unregularized baselines and other models:
+These are maintained in [docs/STATUS.md §4](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md) to avoid duplication.
+
+---
+
+## 5. Consolidated Performance Comparison
 
 | Model / Configuration                    | Dirichlet $\alpha=0.1$ (Severe Skew) | Dirichlet $\alpha=1.0$ (Moderate Skew) | Comm Footprint ($\alpha=0.1$) | Params |
 | :--------------------------------------- | :----------------------------------: | :------------------------------------: | :---------------------------: | :----: |
@@ -77,7 +85,8 @@ To address client drift on the high-capacity ResNet18GN model, we evaluated clie
 | **FedMAQ + Stacked Reg (No EMA)**        | **47.43%** (R40) / **45.55%** (R50)  |    60.69% (R40) / **64.47%** (R50)     |       25601.9 MB (R50)        | 11.17M |
 | **FedMAQ-Lite** (Tuned SimpleCNN)        |              **52.83%**              |                 63.28%                 |         **3967.4 MB**         | 2.16M  |
 
-## 5. Run execution & Context
+## 6. Run Execution & Context
 
 - **Process-Isolated Execution**: All experiments use process-isolated runner scripts under the `scripts/` directory to prevent CUDA Out-of-Memory (OOM) leaks from sequential multi-runs.
 - **Hardware Grounding**: Simulates edge client memory sizes matching **Raspberry Pi variants (2GB/4GB/8GB)** and **Jetson Edge Nodes (16GB)** capping quantization bit-widths (4/8/16/32-bit).
+- **Data Paths**: Runner scripts output to `experiments/` by default; data is manually transferred to `multirun/` after completion. Paths referencing `experiments/` in older documents may be outdated.
