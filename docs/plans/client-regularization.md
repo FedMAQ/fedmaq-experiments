@@ -36,10 +36,10 @@ $$\mathcal{L}_{\text{client}} = (1 - \alpha_{\text{reg}}) \cdot \mathcal{L}_{\te
 - Naturally complements the server-side soft-voting: client-side KD regularization reduces _input noise_ to the ensemble, while server-side soft-voting reduces the _impact_ of remaining noise
 - More principled than FedProx's weight-space L2 penalty for KD-based FL: constraining logit distributions preserves the model's ability to learn new local features while preventing representational drift
 
-### ~~Strategy 2: FedProx-style Proximal Regularization~~ — _Deferred_
+### Strategy 2: FedProx-style Proximal Regularization — _Re-evaluated for Stacking_
 
-> [!NOTE]
-> Per user direction, we focus exclusively on KD regularization to keep the sweep space tight and the thesis narrative clean. FedProx-style proximal reg can be revisited as future ablation if needed.
+> [!TIP]
+> Based on the July 15 sweep results, high-capacity ResNet18GN under severe skew ($\alpha=0.1$) suffers from parameter-space drift that logit-space KD regularization alone cannot fully anchor. Stacking a FedProx-style weight-space L2 penalty ($(\mu/2) \|w - w_{\text{global}}\|^2$) on top of KD regularization is recommended to prevent optimization valley divergence (averaging collapse) while KD regularization stabilizes representation quality.
 
 ---
 

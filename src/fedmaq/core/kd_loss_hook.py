@@ -22,10 +22,12 @@ class ClientKDLossHook:
 
         L = (1 - alpha) * CE(y_pred, y_true)
             + alpha * KL(softmax(z_global / T) || softmax(z_local / T)) * T^2
+            + (mu / 2) * sum ||w - w_global||^2
 
-    where ``z_global`` are the frozen global-model logits and ``z_local`` are
-    the current local-model logits.  The ``T^2`` factor preserves gradient
-    magnitudes when ``T > 1`` (Hinton et al. 2015).
+    where ``z_global`` are the frozen global-model logits, ``z_local`` are
+    the current local-model logits, ``w`` is the current local model parameter,
+    and ``w_global`` is the global model parameter. The ``T^2`` factor preserves
+    gradient magnitudes when ``T > 1`` (Hinton et al. 2015).
 
     Parameters
     ----------
@@ -34,12 +36,18 @@ class ClientKDLossHook:
     temperature : float
         Softmax temperature for the KD term.  ``T > 1`` softens distributions
         to reveal inter-class structure; ``T = 1`` uses raw softmax outputs.
+    mu : float
+        FedProx-style proximal weight for L2 parameter regularization.
     """
 
-    def __init__(self, alpha: float = 0.5, temperature: float = 2.0) -> None:
+    def __init__(
+        self, alpha: float = 0.5, temperature: float = 2.0, mu: float = 0.0
+    ) -> None:
         self.alpha = alpha
         self.temperature = temperature
+        self.mu = mu
         self._global_model: nn.Module | None = None
+        self.global_params: list[torch.Tensor] = []
 
     # -- LossHook interface --------------------------------------------------
 
@@ -50,6 +58,11 @@ class ClientKDLossHook:
         for p in self._global_model.parameters():
             p.requires_grad = False
 
+        if self.mu > 0.0:
+            self.global_params = [
+                p.clone().detach() for p in model.parameters() if p.requires_grad
+            ]
+
     def compute_loss(
         self,
         model: nn.Module,
@@ -58,7 +71,7 @@ class ClientKDLossHook:
         criterion: nn.Module,
         inputs: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Compute blended CE + KD regularization loss.
+        """Compute blended CE + KD regularization loss + optional proximal term.
 
         Parameters
         ----------
@@ -69,16 +82,25 @@ class ClientKDLossHook:
         """
         ce_loss = criterion(outputs, targets)
 
-        if self._global_model is None or self.alpha <= 0.0 or inputs is None:
-            return ce_loss
+        if self._global_model is not None and self.alpha > 0.0 and inputs is not None:
+            with torch.no_grad():
+                global_logits = self._global_model(inputs)
+                teacher_soft = F.softmax(global_logits / self.temperature, dim=1)
 
-        with torch.no_grad():
-            global_logits = self._global_model(inputs)
-            teacher_soft = F.softmax(global_logits / self.temperature, dim=1)
+            student_log_soft = F.log_softmax(outputs / self.temperature, dim=1)
+            kd_loss = (
+                F.kl_div(student_log_soft, teacher_soft, reduction="batchmean")
+                * self.temperature**2
+            )
+            loss = (1.0 - self.alpha) * ce_loss + self.alpha * kd_loss
+        else:
+            loss = ce_loss
 
-        student_log_soft = F.log_softmax(outputs / self.temperature, dim=1)
-        kd_loss = (
-            F.kl_div(student_log_soft, teacher_soft, reduction="batchmean") * self.temperature**2
-        )
+        if self.mu > 0.0 and self.global_params:
+            proximal_term: torch.Tensor | float = 0.0
+            params = [p for p in model.parameters() if p.requires_grad]
+            for p, gp in zip(params, self.global_params, strict=True):
+                proximal_term += torch.sum((p - gp) ** 2)
+            loss = loss + (self.mu / 2.0) * proximal_term
 
-        return (1.0 - self.alpha) * ce_loss + self.alpha * kd_loss
+        return loss

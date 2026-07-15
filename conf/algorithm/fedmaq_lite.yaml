@@ -52,3 +52,4 @@ grad_norm_beta: 0.7        # EMA smoothing factor for gradient norms (beta)
 client_kd_reg: false       # Enable client-side KD regularization
 kd_reg_alpha: 0.5          # Blending weight: (1-alpha)*CE + alpha*KD
 kd_reg_temp: 2.0           # Softmax temperature for client-side KD
+kd_prox_mu: 0.0            # Stacked proximal coefficient (FedProx-style L2 penalty)

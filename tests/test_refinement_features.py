@@ -206,19 +206,87 @@ def test_client_telemetry_aggregation():
 
     # Test weighted average calculation
     weighted_loss = (
-        sum(float(fit_res.metrics["train_loss"]) * fit_res.num_examples for _, fit_res in results)
+        sum(
+            float(fit_res.metrics["train_loss"]) * fit_res.num_examples
+            for _, fit_res in results
+        )
         / total_examples
     )
     weighted_acc = (
-        sum(float(fit_res.metrics["train_acc"]) * fit_res.num_examples for _, fit_res in results)
+        sum(
+            float(fit_res.metrics["train_acc"]) * fit_res.num_examples
+            for _, fit_res in results
+        )
         / total_examples
     )
-    simple_epochs = sum(float(fit_res.metrics["epochs_trained"]) for _, fit_res in results) / len(
-        results
-    )
+    simple_epochs = sum(
+        float(fit_res.metrics["epochs_trained"]) for _, fit_res in results
+    ) / len(results)
 
     # 10 * 0.5 + 20 * 0.2 = 5 + 4 = 9 / 30 = 0.3
     assert np.isclose(weighted_loss, 0.3)
     # 10 * 0.8 + 20 * 0.9 = 8 + 18 = 26 / 30 = 0.8666...
     assert np.isclose(weighted_acc, 26 / 30)
     assert np.isclose(simple_epochs, 5.0)
+
+
+def test_stacked_loss_regularization():
+    """Verify that ClientKDLossHook correctly stacks KD and FedProx proximal regularization."""
+    import torch.nn as nn
+    from fedmaq.core.kd_loss_hook import ClientKDLossHook
+
+    # Create model, input, and targets
+    model = SimpleCNN(in_channels=1, num_classes=3)
+
+    # Set model weights to known values so we can verify the L2 distance
+    for p in model.parameters():
+        if p.requires_grad:
+            nn.init.constant_(p, 0.5)
+
+    alpha = 0.5
+    temp = 2.0
+    mu = 0.1
+    hook = ClientKDLossHook(alpha=alpha, temperature=temp, mu=mu)
+    hook.on_train_begin(model)
+
+    # Modify model parameters to introduce distance from the global copy
+    with torch.no_grad():
+        for p in model.parameters():
+            if p.requires_grad:
+                p.add_(0.1)  # now they are 0.6, so (p - gp)^2 = 0.01
+
+    inputs = torch.randn(2, 1, 28, 28)
+    targets = torch.tensor([0, 2])
+    criterion = nn.CrossEntropyLoss()
+
+    outputs = model(inputs)
+
+    # Compute loss via hook
+    loss = hook.compute_loss(model, outputs, targets, criterion, inputs=inputs)
+
+    # Compute loss terms manually
+    ce_loss = criterion(outputs, targets)
+
+    with torch.no_grad():
+        global_logits = hook._global_model(inputs)
+        teacher_soft = torch.softmax(global_logits / temp, dim=1)
+
+    student_log_soft = torch.log_softmax(outputs / temp, dim=1)
+    kd_loss = (
+        torch.nn.functional.kl_div(
+            student_log_soft, teacher_soft, reduction="batchmean"
+        )
+        * temp**2
+    )
+
+    # L2 distance
+    proximal_term = 0.0
+    for p, gp in zip(model.parameters(), hook.global_params, strict=True):
+        if p.requires_grad:
+            proximal_term += torch.sum((p - gp) ** 2)
+
+    expected_loss = (
+        (1.0 - alpha) * ce_loss + alpha * kd_loss + (mu / 2.0) * proximal_term
+    )
+
+    assert torch.allclose(loss, expected_loss, atol=1e-5)

@@ -40,7 +40,9 @@ class FedProxLossHook(LossHook):
 
     def on_train_begin(self, model: nn.Module) -> None:
         # Save a frozen copy of the initial global weights
-        self.global_params = [p.clone().detach() for p in model.parameters() if p.requires_grad]
+        self.global_params = [
+            p.clone().detach() for p in model.parameters() if p.requires_grad
+        ]
 
     def compute_loss(
         self,
@@ -51,7 +53,7 @@ class FedProxLossHook(LossHook):
         inputs: torch.Tensor | None = None,
     ) -> torch.Tensor:
         loss = criterion(outputs, targets)
-        proximal_term = 0.0
+        proximal_term: torch.Tensor | float = 0.0
         params = [p for p in model.parameters() if p.requires_grad]
         for p, gp in zip(params, self.global_params, strict=True):
             proximal_term += torch.sum((p - gp) ** 2)
@@ -76,9 +78,10 @@ def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:
         if alg_cfg.get("client_kd_reg", False):
             from fedmaq.core.kd_loss_hook import ClientKDLossHook
 
-            return ClientKDLossHook(
+            return ClientKDLossHook(  # type: ignore[return-value]
                 alpha=float(alg_cfg.get("kd_reg_alpha", 0.5)),
                 temperature=float(alg_cfg.get("kd_reg_temp", 2.0)),
+                mu=float(alg_cfg.get("kd_prox_mu", 0.0)),
             )
     return LossHook()
 
