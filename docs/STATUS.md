@@ -12,7 +12,7 @@ Single source of truth for current project state. Updated after each experiment 
 > **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. The formal experiment grid (multi-seed, multi-α, 100+ rounds) has not been executed.
 
 > [!WARNING]
-> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for edge realism and improved communication savings. All prior ResNet18GN smoke test results (§3) are **deprecated** and need to be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
+> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression *ratio* — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see §5, Decision 1). All prior ResNet18GN smoke test results (§3) are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
 
 ---
 
@@ -89,38 +89,9 @@ FedMAQ has been formally partitioned into two variants:
 
 ---
 
-## 5. Critical Open Decisions
+## 5. Critical Decisions — RESOLVED (2026-07-16)
 
-> [!CAUTION]
->
-> ### Decision 1: Thesis Contribution Framing
->
-> ~~The ResNet18GN communication savings are only **1.7x** (vs. 8.6x for FedMAQ-Lite).~~ **Update**: Switched to MobileNetV2GN (~2.24M params), which should yield significantly better compression ratios than ResNet18GN (~11.17M). The framing question remains open pending MobileNetV2GN benchmark results:
->
-> - **(a) Stick with communication efficiency**: MobileNetV2GN's smaller size should improve compression ratios significantly vs. ResNet18GN.
-> - **(b) Frame contribution as the mechanism**: Primary contribution becomes the dual-tier precision scaling + soft-voting + capacity-EMA duality _framework_, with communication savings as a secondary benefit.
->
-> **Current leaning**: Option (b) — but option (a) is now more viable with MobileNetV2GN.
->
-> **Action**: Re-run benchmarks with MobileNetV2GN, then revisit framing.
-
-### Decision 2: MobileNetV2GN Hyperparameter Tuning
-
-MobileNetV2GN is a fresh model — all hyperparameters need native tuning from scratch:
-
-- [ ] Soft-voting grid (`entropy_weight` × `precision_weight`)
-- [ ] EMA decay values and whether to enable EMA (capacity-EMA duality may differ for ~2.24M model)
-- [ ] Formulation study (whether Formulation 3 is still optimal)
-- [ ] Client KD reg temperature and alpha
-- [ ] Learning rate and weight decay (may differ from ResNet18GN defaults)
-
-### Decision 3: Experiment Organization
-
-The next agent should help plan a clean experiment structure. Current state is messy:
-
-- Experiments were run iteratively, each building on the previous
-- Script output paths point to `experiments/` but data lives in `multirun/` after manual transfer
-- No unified execution plan for the formal experiment grid
+All framing/methodology decisions were resolved in a grilling session on 2026-07-16. Full list + rationale: **[docs/DECISIONS.md](DECISIONS.md)**. Grid design detail: [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md).
 
 ---
 
@@ -138,36 +109,19 @@ These findings should be prominently featured in the thesis, pending formal vali
 
 ---
 
-## 7. What Remains Before Formal Experiments
+## 7. What Remains
 
-### Pre-Experiment (Next Agent)
-
-- [ ] Resolve thesis contribution framing (§5, Decision 1)
-- [ ] Sweep MobileNetV2GN hyperparameters (fresh model — no prior tuning exists)
-- [ ] Plan the formal experiment grid (α values, seeds, rounds, datasets, ablations)
-- [ ] Validate FedMAQ formulation on MobileNetV2GN (may differ from SimpleCNN)
-- [ ] Design clean experiment organization and execution pipeline
-- [ ] Investigate late-round accuracy degradation (R45→R50 drop seen under ResNet18GN α=0.1; check if it recurs)
-- [ ] Add gradient-norm-smoothing isolation ablation
-
-### Formal Experiment Grid (Planned)
-
-- 100+ rounds
-- α ∈ {0.1, 0.3, 0.5, 1.0} (intermediate values for Pareto curve)
-- 3+ seeds for statistical significance (mean ± std)
-- Proper ablation table isolating each feature's contribution
-- Possibly FEMNIST as a second dataset
+See [HANDOFF.md §5](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md) for the current next-agent action list.
 
 ---
 
 ## 8. Reference Links
 
-| Document                                                                                                                                      | Purpose                                                     |
-| :-------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
+| Document                                                                                                                                      | Purpose                                                      |
+| :--------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
+| [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)                                           | Resolved decisions log (single source of truth)             |
 | [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md)                                                         | Next-agent instructions and immediate action items          |
 | [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)                         | Chronological experiment registry with per-experiment links |
 | [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md)                       | Full algorithm audit with line-level code references        |
 | [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md)           | Actionable audit recommendations with priority table        |
-| [docs/plans/fedmaq-audit-remediation.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/fedmaq-audit-remediation.md) | Phase-by-phase remediation plan                             |
-| [docs/plans/client-regularization.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/client-regularization.md)       | Client-side KD regularization design & sweep plan           |
 | [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                                         | Canonical glossary (resolves naming drift between repos)    |

@@ -2,6 +2,9 @@
 
 Full audit of the original and improved FedMAQ algorithm covering mathematical grounding, implementation correctness, literature defensibility, and potential thesis-defense vulnerabilities. Grounded in the [fedmaq-literature KG](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/) and the [fedmaq-experiments](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/) codebase.
 
+> [!NOTE]
+> Findings are architecture-independent (math/logic audit). Occurrences of ResNet18GN below are illustrative examples, not deprecated results — the MobileNetV2GN switch (see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)) does not invalidate these findings.
+
 ---
 
 ## Audit Summary: Verdicts at a Glance
