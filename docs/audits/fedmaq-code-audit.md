@@ -7,7 +7,10 @@
 (algorithm/math/paper-fidelity). This audit reconciles against those two — where a
 concern is already covered there, it is demoted to a cross-reference, not re-raised
 as new.
-**Policy:** report-only (respects explore/confirm freeze). No code edited.
+**Policy:** originally report-only (explore/confirm freeze). **Status 2026-07-16:**
+explore runs finished; findings F2/F4–F8 addressed on branch `fix/code-audit-findings`,
+F1 accepted as wontfix-thesis, F9 deferred (no-op under per-round client
+instantiation). See per-finding Resolution column in the summary table.
 
 ## Scope
 
@@ -156,16 +159,16 @@ not examine `kd_loss_hook.py`.
 
 ## Summary table
 
-| ID | Severity | Category | File:line | Status vs design audit |
-|----|----------|----------|-----------|------------------------|
-| F6 | 🟠 | robustness | fedmaq.py:216, kd_utils.py:160,186 | new |
-| F2 | 🟠 | efficiency · telemetry | fedmaq.py:202,377 | new (extends §5.4) |
-| F7 | 🟡 | hygiene | fedmaq.py:135,271 | new (sibling §10.4) |
-| F8 | 🟡 | config | fedmaq.py:148,150 | new (sibling §10.1) |
-| F4 | 🟡 | doc-drift | fedmaq.py:128 | new |
-| F5 | 🟡 | hygiene | fedmaq.py:238 | new |
-| F1 | 🟡 | convention | fedmaq.py:146 | cross-ref §1.4 |
-| F9 | 🟡 | efficiency · conditional | kd_loss_hook.py:56 | new |
+| ID | Severity | Category | File:line | Resolution (2026-07-16) |
+|----|----------|----------|-----------|-------------------------|
+| F6 | 🟠 | robustness | fedmaq.py:216, kd_utils.py:160,186 | **DONE** — re-raise `(ValueError, RuntimeError)` at KD sites (`ValueError` at grad-norm probe, already loud upstream); `dropped_teachers`/`kd_skipped` WandB counters added |
+| F2 | 🟠 | efficiency · telemetry | fedmaq.py:202,377 | **DONE** — grad-norm probe cost (`num_sampled × batch_size / speed`) added to `server_sim_time` |
+| F7 | 🟡 | hygiene | fedmaq.py:135,271 | **DONE** — `_round_client_q.clear()` at top of `configure_fit` |
+| F8 | 🟡 | config | fedmaq.py:148,150 | **DONE** — `q_min/q_max/c_unit/formulation` read fail-loud; tuning knobs keep defaults |
+| F4 | 🟡 | doc-drift | fedmaq.py:128 | **DONE** — docstring architecture-agnostic; §1.4 probe-model prose synced |
+| F5 | 🟡 | hygiene | fedmaq.py:238 | **DONE** — reported-state fields init in `__init__`; `hasattr` guards dropped |
+| F1 | 🟡 | convention | fedmaq.py:146 | **ACCEPTED** (wontfix-thesis) — idiom only, no thesis benefit; probe extraction deferred |
+| F9 | 🟡 | efficiency · conditional | kd_loss_hook.py:56 | **DEFERRED** — snapshot-once is a no-op here: Flower/Ray re-runs `client_fn` (simulation.py:98) every round, so `ClientKDLossHook` is re-instantiated and `_global_model` is always fresh → deepcopy is unavoidable without persisting the reference in `context.state`. Off in the confirm grid (`client_kd_reg=false`), so no runtime impact; revisit before any KD-reg sweep. |
 | — | — | — | fedmaq.py:186 (server-side g_k) | **covered §1.4, no new finding** |
 
 **Headline:** mechanism logic is clean, strict-checked, and well-commented. The
