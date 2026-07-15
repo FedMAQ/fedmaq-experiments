@@ -126,7 +126,7 @@ class FedMAQHook(StrategyHook):
     State
     -----
     ``_grad_norm_model`` is instantiated lazily on the first round and reused
-    thereafter, avoiding repeated ResNet18 allocation on every configure_fit call.
+    thereafter, avoiding repeated model allocation on every configure_fit call.
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
@@ -135,6 +135,10 @@ class FedMAQHook(StrategyHook):
         self._round_client_q: dict[str, int] = {}
         self._ema_params: list[np.ndarray] | None = None
         self._grad_norm_ema: dict[int, float] = {}
+        # Reported-state fields, refreshed each round (F5: init here, not lazily).
+        self._last_grad_norms: list[float] = []
+        self._last_assigned_q: dict[str, int] = {}
+        self._last_round_kd_metrics: dict[str, float] = {}
 
     def configure_fit(
         self,
@@ -144,11 +148,17 @@ class FedMAQHook(StrategyHook):
         client_manager: ClientManager,
         client_instructions: list[tuple[ClientProxy, FitIns]],
     ) -> list[tuple[ClientProxy, FitIns]]:
+        # F7: clear per-round q map so it never retains stale entries for clients
+        # not sampled this round, nor grows unbounded across the run.
+        self._round_client_q.clear()
         alg_cfg = self._config.get("algorithm", {})
-        q_min = int(alg_cfg.get("q_min", 2))
-        q_max = int(alg_cfg.get("q_max", 8))
-        c_unit = float(alg_cfg.get("c_unit", 2048.0))
-        formulation = int(alg_cfg.get("formulation", 3))
+        # F8: algorithm-defining knobs are read fail-loud (no .get default) so a
+        # missing/renamed key raises instead of silently substituting a value that
+        # would redefine the quantization behavior. Tuning knobs below keep defaults.
+        q_min = int(alg_cfg["q_min"])
+        q_max = int(alg_cfg["q_max"])
+        c_unit = float(alg_cfg["c_unit"])
+        formulation = int(alg_cfg["formulation"])
         gamma1 = float(alg_cfg.get("gamma1", 0.5))
         gamma2 = float(alg_cfg.get("gamma2", 0.5))
         lambda_val = float(alg_cfg.get("lambda_val", 1.0))
@@ -213,6 +223,10 @@ class FedMAQHook(StrategyHook):
                         if p.grad is not None
                     )
                 ).item()
+            except ValueError:
+                # F6: a shape/count mismatch (raised by set_model_parameters) is a
+                # config/architecture bug, not a transient batch fault — fail loud.
+                raise
             except Exception as exc:
                 logger.warning(
                     f"Error computing gradient norm for client partition {pid}: {exc}. "
@@ -345,12 +359,12 @@ class FedMAQHook(StrategyHook):
         self, strategy: TelemetryFedAvg, server_round: int
     ) -> dict[str, Any]:
         metrics = {}
-        if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
+        if self._last_round_kd_metrics:
             for k, v in self._last_round_kd_metrics.items():
                 metrics[f"algorithm/fedmaq/{k}"] = v
 
         # Add grad norm statistics
-        if hasattr(self, "_last_grad_norms") and self._last_grad_norms:
+        if self._last_grad_norms:
             metrics["algorithm/fedmaq/avg_grad_norm"] = float(
                 np.mean(self._last_grad_norms)
             )
@@ -365,7 +379,7 @@ class FedMAQHook(StrategyHook):
             )
 
         # Add assigned Q statistics
-        if hasattr(self, "_last_assigned_q") and self._last_assigned_q:
+        if self._last_assigned_q:
             q_vals = list(self._last_assigned_q.values())
             metrics["algorithm/fedmaq/avg_q"] = float(np.mean(q_vals))
             metrics["algorithm/fedmaq/min_q"] = float(np.min(q_vals))
@@ -386,9 +400,20 @@ class FedMAQHook(StrategyHook):
         num_public = int(
             self._config.get("experiment", {}).get("num_public_samples", 200)
         )
-        return kd_server_sim_time(
+        server_compute_speed = float(alg_cfg.get("server_compute_speed", 2000.0))
+        kd_time = kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
             num_teachers=len(results),
-            server_compute_speed=float(alg_cfg.get("server_compute_speed", 2000.0)),
+            server_compute_speed=server_compute_speed,
         )
+        # F2: account for the per-client grad-norm probe run in configure_fit — one
+        # forward+backward on one batch (batch_size samples) per sampled client — in
+        # the same sample-pass units as the KD term. Previously unmodeled, so the
+        # server-side cost of the adaptive-quantization signal was under-reported.
+        if server_compute_speed > 0.0:
+            batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
+            probe_time = (len(results) * batch_size) / server_compute_speed
+        else:
+            probe_time = 0.0
+        return kd_time + probe_time

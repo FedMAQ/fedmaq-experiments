@@ -148,6 +148,7 @@ def distill_ensemble_into_global(
 
     teachers: list[nn.Module] = []
     actual_bit_widths: list[int] = [] if teacher_bit_widths is not None else None
+    dropped_teachers = 0
     for i, (_, fit_res) in enumerate(results):
         try:
             teacher = model_factory(dataset_name, num_classes)
@@ -157,11 +158,22 @@ def distill_ensemble_into_global(
             teachers.append(teacher)
             if actual_bit_widths is not None:
                 actual_bit_widths.append(teacher_bit_widths[i])
+        except (ValueError, RuntimeError):
+            # F6: an arch/shape mismatch (what set_model_parameters' strict checks
+            # raise) is a config bug — fail loud instead of silently distilling from
+            # a degraded ensemble.
+            raise
         except Exception as exc:
+            # Genuinely transient fault: drop this teacher but record it so the
+            # silent degradation is observable in run telemetry (F6).
+            dropped_teachers += 1
             logger.warning(f"Failed to load client model from parameters: {exc}")
 
     if not (teachers and public_indices is not None):
-        return aggregated_parameters, {}
+        return aggregated_parameters, {
+            "dropped_teachers": float(dropped_teachers),
+            "kd_skipped": 1.0,
+        }
 
     try:
         public_loader, _ = get_server_loaders(dataset_name, public_indices, batch_size=batch_size)
@@ -182,7 +194,18 @@ def distill_ensemble_into_global(
         logger.info(
             f"Server-side KD: successfully distilled knowledge from {len(teachers)} teacher models."
         )
-        return updated, {"server_kd_loss": kd_loss}
+        return updated, {
+            "server_kd_loss": kd_loss,
+            "dropped_teachers": float(dropped_teachers),
+            "kd_skipped": 0.0,
+        }
+    except (ValueError, RuntimeError):
+        # F6: shape/config bug in the KD pass — fail loud, don't return an
+        # un-distilled aggregate that looks like a normal round.
+        raise
     except Exception as exc:
         logger.error(f"Error during server-side KD: {exc}")
-        return aggregated_parameters, {}
+        return aggregated_parameters, {
+            "dropped_teachers": float(dropped_teachers),
+            "kd_skipped": 1.0,
+        }

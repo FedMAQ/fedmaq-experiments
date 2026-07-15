@@ -27,6 +27,8 @@ Nine exploratory smoke-test experiments (40–50 round, single-seed) were conduc
 
 A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md). The audit found the core algorithm sound (✅) with some defensible caveats (⚠️). Actionable recommendations: [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md).
 
+A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), pending merge); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
+
 ---
 
 ## 3. Critical Decisions — RESOLVED (2026-07-16)
@@ -71,6 +73,7 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 
 1. **Run the adaptive exploration campaign** on CIFAR-10 (primary): re-sweep soft-voting (`entropy_weight` × `precision_weight`), validate Formulation 3, resolve capacity-EMA (on/off for MobileNetV2 — open question), client KD reg. Mechanisms are guides — keep/drop/revise per results.
+   - **Before enabling `client_kd_reg=true`** (code-audit F9): `ClientKDLossHook.on_train_begin` deep-copies the whole client model **every round** because Flower/Ray re-instantiates `client_fn` per round. Persist the reference model in `context.state` first if the KD-reg sweep proves hot, otherwise it pays a full-model deepcopy per client per round.
 2. **Matched light tuning** of the 8 baselines (one key HP each) on the same explore-α.
 3. **Pre-register + git-tag** the frozen FedMAQ config + baseline HP table + fixed mechanism set. This ends exploration.
 
@@ -102,6 +105,7 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 | [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)                         | Chronological experiment registry with per-experiment links                              |
 | [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md)                       | Full algorithm audit (math, implementation, literature, defense Q&A)                     |
 | [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md)           | Actionable audit recommendations with priority table                                     |
+| [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md)             | Code-level audit (craftsmanship + FL engineering); resolution status in summary table    |
 | [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                                         | Canonical glossary (resolves naming drift between repos)                                 |
 
 ### Per-Experiment Deep Dives
