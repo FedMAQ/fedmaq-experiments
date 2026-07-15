@@ -2,7 +2,7 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-07-15
+**Last updated**: 2026-07-16
 
 ---
 
@@ -34,25 +34,25 @@ FedMAQ has been formally partitioned into two variants:
 
 ---
 
-## 5. Critical Decisions — RESOLVED (2026-07-16)
+## 4. Critical Decisions — RESOLVED (2026-07-16)
 
 All framing/methodology decisions were resolved in a grilling session on 2026-07-16. Full list + rationale: **[docs/DECISIONS.md](DECISIONS.md)**. Grid design detail: [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md).
 
 ---
 
-## 6. Key Novel Findings (Smoke Tests)
+## 5. Key Novel Findings (Smoke Tests)
 
 Full list with rationale: [docs/experiments/archive/RESNET18GN-SUMMARY.md](experiments/archive/RESNET18GN-SUMMARY.md) §"Key Novel Findings". Flagged for MobileNetV2GN re-validation per [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md) §2.
 
 ---
 
-## 7. What Remains
+## 6. What Remains
 
 See [HANDOFF.md §5](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md) for the current next-agent action list.
 
 ---
 
-## 8. Reference Links
+## 7. Reference Links
 
 | Document                                                                                                                                      | Purpose                                                      |
 | :--------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |

@@ -31,7 +31,7 @@ A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](fil
 
 ## 3. Critical Decisions — RESOLVED (2026-07-16)
 
-All 13 framing/methodology decisions from the 2026-07-16 grilling session are logged in **[docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)** — read that first. Grid design detail: [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md).
+All 13 framing/methodology decisions plus 4 docs-management decisions from 2026-07-16 grilling sessions are logged in **[docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)** — read that first. Grid design detail: [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md).
 
 **Action for next agent**: Continue refining experiment details via grilling, then execute the codebase refactors/changes the plan implies (config-as-code registry, baseline matched-tuning setup, seed-determinism check). See plan §3 for deferred sub-details.
 
@@ -85,9 +85,10 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 7. **Ablation table** (additive ladder + leave-one-out) on CIFAR-10 at α ∈ {0.1, 1.0}.
 8. **Deferred sub-details** — see plan §3 (single-config selection rule, baseline key-HP list, Pareto matched-bit-budget comparison).
 
-### Priority 4: Docs Structure (in progress, 2026-07-16)
+### Priority 4: Docs Structure (resolved 2026-07-16)
 
-9. **Continue docs cleanup**. Done this session: `docs/DECISIONS.md` created as single decision log (killed 3-way duplication across STATUS/HANDOFF/plan); STATUS.md §7 (stale, self-contradicting) removed; `docs/plans/fedmaq-audit-remediation.md` and `docs/plans/client-regularization.md` deleted (completed/superseded, recoverable via git history); all 9 ResNet18GN experiment dirs moved to `docs/experiments/archive/`; audit docs got staleness caveats. **Still open**: decide long-term semantics for `docs/plans/` (active-only vs. mixed), confirm `docs/archive/` vs. per-directory `archive/` subfolders is the right pattern going forward (currently only `docs/experiments/archive/` exists, no top-level `docs/archive/` was created), and check `docs/plans/formal-experiment-plan.md` for further trim once the confirmatory grid is pre-registered (§4 of that doc flags its own structure as tentative).
+9. **Docs cleanup — conventions now settled**, logged as decisions 14–17 in `docs/DECISIONS.md`: single canonical experiment registry (`docs/experiments/README.md`; `.claude/project/experiment_registry.md` deleted), `docs/plans/` is active-only (delete on resolution, merge into `DECISIONS.md`), archive pattern is per-directory `archive/` subfolder (no top-level `docs/archive/`). Enforcement now lives in [.claude/rules/docs-management.md](.claude/rules/docs-management.md) (always-loaded conventions) and the `docs-audit` skill (on-demand full sweep, auto-fixes mechanical drift).
+10. **Next agent: run the `docs-audit` skill** as a fresh-eyes review of the whole docs system (STATUS.md, DECISIONS.md, plans, experiments registry, HANDOFF.md itself) against the newly settled conventions — confirm nothing was missed in this session's fixes, and check `docs/plans/formal-experiment-plan.md` for further trim once the confirmatory grid is pre-registered (§4 of that doc still flags its own structure as tentative).
 
 ---
 
