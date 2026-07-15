@@ -54,7 +54,7 @@ ALPHA_CONFIGS = {
         "ema_decay": 0.1,
         "entropy_weight": 2.0,
         "precision_weight": 0.5,
-        "kd_reg_alpha": 0.5,
+        "kd_reg_alpha": 0.3,
         "kd_reg_temp": 2.0,
     },
 }
