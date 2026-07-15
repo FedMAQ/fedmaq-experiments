@@ -126,7 +126,7 @@ class FedMAQHook(StrategyHook):
     State
     -----
     ``_grad_norm_model`` is instantiated lazily on the first round and reused
-    thereafter, avoiding repeated ResNet18 allocation on every configure_fit call.
+    thereafter, avoiding repeated model allocation on every configure_fit call.
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
@@ -135,6 +135,10 @@ class FedMAQHook(StrategyHook):
         self._round_client_q: dict[str, int] = {}
         self._ema_params: list[np.ndarray] | None = None
         self._grad_norm_ema: dict[int, float] = {}
+        # Reported-state fields, refreshed each round (F5: init here, not lazily).
+        self._last_grad_norms: list[float] = []
+        self._last_assigned_q: dict[str, int] = {}
+        self._last_round_kd_metrics: dict[str, float] = {}
 
     def configure_fit(
         self,
@@ -144,6 +148,9 @@ class FedMAQHook(StrategyHook):
         client_manager: ClientManager,
         client_instructions: list[tuple[ClientProxy, FitIns]],
     ) -> list[tuple[ClientProxy, FitIns]]:
+        # F7: clear per-round q map so it never retains stale entries for clients
+        # not sampled this round, nor grows unbounded across the run.
+        self._round_client_q.clear()
         alg_cfg = self._config.get("algorithm", {})
         q_min = int(alg_cfg.get("q_min", 2))
         q_max = int(alg_cfg.get("q_max", 8))
@@ -345,12 +352,12 @@ class FedMAQHook(StrategyHook):
         self, strategy: TelemetryFedAvg, server_round: int
     ) -> dict[str, Any]:
         metrics = {}
-        if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
+        if self._last_round_kd_metrics:
             for k, v in self._last_round_kd_metrics.items():
                 metrics[f"algorithm/fedmaq/{k}"] = v
 
         # Add grad norm statistics
-        if hasattr(self, "_last_grad_norms") and self._last_grad_norms:
+        if self._last_grad_norms:
             metrics["algorithm/fedmaq/avg_grad_norm"] = float(
                 np.mean(self._last_grad_norms)
             )
@@ -365,7 +372,7 @@ class FedMAQHook(StrategyHook):
             )
 
         # Add assigned Q statistics
-        if hasattr(self, "_last_assigned_q") and self._last_assigned_q:
+        if self._last_assigned_q:
             q_vals = list(self._last_assigned_q.values())
             metrics["algorithm/fedmaq/avg_q"] = float(np.mean(q_vals))
             metrics["algorithm/fedmaq/min_q"] = float(np.min(q_vals))
