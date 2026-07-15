@@ -154,7 +154,9 @@ class FedMAQHook(StrategyHook):
         lambda_val = float(alg_cfg.get("lambda_val", 1.0))
         tau_g = float(alg_cfg.get("tau_g", 0.5))
         tau_n = float(alg_cfg.get("tau_n", 0.5))
-        bit_widths = tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS))
+        bit_widths = tuple(
+            int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)
+        )
 
         dataset_name = self._config.get("dataset", {}).get("name", "mnist")
         num_classes = int(self._config.get("dataset", {}).get("num_classes", 10))
@@ -163,7 +165,7 @@ class FedMAQHook(StrategyHook):
 
         # Lazily instantiate and cache the gradient norm model.
         # FedMAQ-Lite's global/client model is the KD student (TinyCNN for 1-channel,
-        # SimpleCNN for CIFAR), while FedMAQ uses the standard model (ResNet18GN on CIFAR).
+        # SimpleCNN for CIFAR), while FedMAQ uses the standard model (MobileNetV2GN on CIFAR).
         # We pick the model architecture dynamically depending on the algorithm name.
         alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
         model_fn = get_kd_student_model if alg_name == "fedmaq_lite" else get_model
@@ -177,7 +179,9 @@ class FedMAQHook(StrategyHook):
         criterion = nn.CrossEntropyLoss()
 
         # Map client proxies to partition IDs
-        client_pids = [resolve_partition_id(c, strategy) for c, _ in client_instructions]
+        client_pids = [
+            resolve_partition_id(c, strategy) for c, _ in client_instructions
+        ]
 
         # 1. Compute raw gradient norms for sampled clients
         grad_norms: list[float] = []
@@ -302,20 +306,24 @@ class FedMAQHook(StrategyHook):
         if alg_cfg.get("soft_voting", False):
             teacher_bit_widths = []
             for client_proxy, _ in results:
-                q_val = self._round_client_q.get(client_proxy.cid, int(alg_cfg.get("q_max", 8)))
+                q_val = self._round_client_q.get(
+                    client_proxy.cid, int(alg_cfg.get("q_max", 8))
+                )
                 teacher_bit_widths.append(q_val)
 
-        aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
-            model_factory=model_fn,
-            aggregated_parameters=aggregated_parameters,
-            results=results,
-            public_indices=strategy.public_indices,
-            dataset_name=dataset_name,
-            num_classes=num_classes,
-            batch_size=batch_size,
-            alg_cfg=alg_cfg,
-            device=device,
-            teacher_bit_widths=teacher_bit_widths,
+        aggregated_parameters, self._last_round_kd_metrics = (
+            distill_ensemble_into_global(
+                model_factory=model_fn,
+                aggregated_parameters=aggregated_parameters,
+                results=results,
+                public_indices=strategy.public_indices,
+                dataset_name=dataset_name,
+                num_classes=num_classes,
+                batch_size=batch_size,
+                alg_cfg=alg_cfg,
+                device=device,
+                teacher_bit_widths=teacher_bit_widths,
+            )
         )
 
         # Apply student EMA if enabled
@@ -333,7 +341,9 @@ class FedMAQHook(StrategyHook):
 
         return aggregated_parameters, metrics
 
-    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
+    def get_eval_metrics(
+        self, strategy: TelemetryFedAvg, server_round: int
+    ) -> dict[str, Any]:
         metrics = {}
         if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
             for k, v in self._last_round_kd_metrics.items():
@@ -341,10 +351,18 @@ class FedMAQHook(StrategyHook):
 
         # Add grad norm statistics
         if hasattr(self, "_last_grad_norms") and self._last_grad_norms:
-            metrics["algorithm/fedmaq/avg_grad_norm"] = float(np.mean(self._last_grad_norms))
-            metrics["algorithm/fedmaq/min_grad_norm"] = float(np.min(self._last_grad_norms))
-            metrics["algorithm/fedmaq/max_grad_norm"] = float(np.max(self._last_grad_norms))
-            metrics["algorithm/fedmaq/std_grad_norm"] = float(np.std(self._last_grad_norms))
+            metrics["algorithm/fedmaq/avg_grad_norm"] = float(
+                np.mean(self._last_grad_norms)
+            )
+            metrics["algorithm/fedmaq/min_grad_norm"] = float(
+                np.min(self._last_grad_norms)
+            )
+            metrics["algorithm/fedmaq/max_grad_norm"] = float(
+                np.max(self._last_grad_norms)
+            )
+            metrics["algorithm/fedmaq/std_grad_norm"] = float(
+                np.std(self._last_grad_norms)
+            )
 
         # Add assigned Q statistics
         if hasattr(self, "_last_assigned_q") and self._last_assigned_q:
@@ -365,7 +383,9 @@ class FedMAQHook(StrategyHook):
         if aggregated_parameters is None:
             return 0.0
         alg_cfg = self._config.get("algorithm", {})
-        num_public = int(self._config.get("experiment", {}).get("num_public_samples", 200))
+        num_public = int(
+            self._config.get("experiment", {}).get("num_public_samples", 200)
+        )
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),

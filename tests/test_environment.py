@@ -14,6 +14,7 @@ from torch.utils.data import TensorDataset
 
 from fedmaq.core.client import CompressionHook, GenericClient, LossHook
 from fedmaq.core.models import (
+    MobileNetV2GN,
     ResNet18GN,
     SimpleCNN,
     get_model,
@@ -50,7 +51,11 @@ def test_model_factory_and_parameters():
     assert isinstance(model, SimpleCNN)
 
     cifar_model = get_model("cifar10", num_classes=10)
-    assert isinstance(cifar_model, ResNet18GN)
+    assert isinstance(cifar_model, MobileNetV2GN)
+
+    # ResNet18GN is still available via explicit model_name override
+    resnet_model = get_model("cifar10", num_classes=10, model_name="resnet18gn")
+    assert isinstance(resnet_model, ResNet18GN)
 
     # Test parameter helpers
     params = get_model_parameters(model)
@@ -89,6 +94,37 @@ def test_set_model_parameters_raises_on_mismatch():
     assert len(tiny_params) == len(simple_params)
     with pytest.raises(ValueError, match="shape mismatch"):
         set_model_parameters(simple, tiny_params)
+
+
+def test_mobilenetv2gn_architecture():
+    """Verify MobileNetV2GN forward pass, parameter count, and multi-class support."""
+    model = MobileNetV2GN(in_channels=3, num_classes=10)
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    # ~2.3M params — sanity check it's in the right ballpark (not ResNet18GN's ~11M)
+    assert 2_000_000 < total_params < 3_000_000, f"Unexpected param count: {total_params}"
+
+    # Forward pass with CIFAR-10 shaped input
+    x = torch.randn(2, 3, 32, 32)
+    y = model(x)
+    assert y.shape == (2, 10)
+
+    # CIFAR-100 variant
+    model_100 = MobileNetV2GN(in_channels=3, num_classes=100)
+    y_100 = model_100(x)
+    assert y_100.shape == (2, 100)
+
+    # get/set parameter round-trip
+    params = get_model_parameters(model)
+    model2 = MobileNetV2GN(in_channels=3, num_classes=10)
+    set_model_parameters(model2, params)
+    params2 = get_model_parameters(model2)
+    for p1, p2 in zip(params, params2, strict=True):
+        np.testing.assert_allclose(p1, p2, rtol=1e-5)
+
+    # Invalid model_name raises
+    with pytest.raises(ValueError, match="Unknown CIFAR model"):
+        get_model("cifar10", num_classes=10, model_name="nonexistent")
 
 
 def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatch):
