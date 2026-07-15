@@ -12,7 +12,7 @@ Single source of truth for current project state. Updated after each experiment 
 > **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. The formal experiment grid (multi-seed, multi-α, 100+ rounds) has not been executed.
 
 > [!WARNING]
-> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression *ratio* — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see §5, Decision 1). All prior ResNet18GN smoke test results (§3) are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
+> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression _ratio_ — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see §5, Decision 1). All prior ResNet18GN smoke test results (§3) are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
 
 ---
 
@@ -54,11 +54,11 @@ See [HANDOFF.md §5](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiment
 
 ## 7. Reference Links
 
-| Document                                                                                                                                      | Purpose                                                      |
-| :--------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
-| [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)                                           | Resolved decisions log (single source of truth)             |
-| [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md)                                                         | Next-agent instructions and immediate action items          |
-| [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)                         | Chronological experiment registry with per-experiment links |
-| [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md)                       | Full algorithm audit with line-level code references        |
-| [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md)           | Actionable audit recommendations with priority table        |
-| [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                                         | Canonical glossary (resolves naming drift between repos)    |
+| Document                                                                                                                            | Purpose                                                     |
+| :---------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
+| [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)                                 | Resolved decisions log (single source of truth)             |
+| [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md)                                               | Next-agent instructions and immediate action items          |
+| [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)               | Chronological experiment registry with per-experiment links |
+| [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md)             | Full algorithm audit with line-level code references        |
+| [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md) | Actionable audit recommendations with priority table        |
+| [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                               | Canonical glossary (resolves naming drift between repos)    |

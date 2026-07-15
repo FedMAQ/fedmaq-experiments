@@ -12,23 +12,27 @@ Every experiment is self-contained within its own directory and adheres to a str
 
 ## Archived (ResNet18GN, deprecated)
 
-| # | Experiment | Directory |
-| :-: | :--- | :--- |
-| 1 | Baseline Smoke Test | [archive/smoke-test-7-13/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/smoke-test-7-13/) |
-| 2 | Formulation Study | [archive/pilot-formulation-study-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/pilot-formulation-study-7-14/) |
-| 3 | EMA Decay Sweep | [archive/ema-decay-sweep-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/ema-decay-sweep-7-14/) |
-| 4 | Soft-Voting Sweep | [archive/soft-voting-sweep-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/soft-voting-sweep-7-14/) |
-| 5 | Temperature Ablation | [archive/temperature-ablation/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/temperature-ablation/) |
-| 6 | ResNet18GN Baselines | [archive/baseline-comparison-resnet18/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/baseline-comparison-resnet18/) |
-| 7 | Client KD Reg Sweep | [archive/client-kd-reg-sweep-7-15/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/client-kd-reg-sweep-7-15/) |
-| 8 | Stacked Reg Sweep | [archive/stacked-reg-sweep-7-15/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/stacked-reg-sweep-7-15/) |
-| 9 | No-EMA (ResNet18GN) | [archive/fedmaq-normal-no-ema-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/fedmaq-normal-no-ema-50r/) |
+|  #  | Experiment           | Directory                                                                                                                                                    |
+| :-: | :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  1  | Baseline Smoke Test  | [archive/smoke-test-7-13/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/smoke-test-7-13/)                           |
+|  2  | Formulation Study    | [archive/pilot-formulation-study-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/pilot-formulation-study-7-14/) |
+|  3  | EMA Decay Sweep      | [archive/ema-decay-sweep-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/ema-decay-sweep-7-14/)                 |
+|  4  | Soft-Voting Sweep    | [archive/soft-voting-sweep-7-14/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/soft-voting-sweep-7-14/)             |
+|  5  | Temperature Ablation | [archive/temperature-ablation/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/temperature-ablation/)                 |
+|  6  | ResNet18GN Baselines | [archive/baseline-comparison-resnet18/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/baseline-comparison-resnet18/) |
+|  7  | Client KD Reg Sweep  | [archive/client-kd-reg-sweep-7-15/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/client-kd-reg-sweep-7-15/)         |
+|  8  | Stacked Reg Sweep    | [archive/stacked-reg-sweep-7-15/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/stacked-reg-sweep-7-15/)             |
+|  9  | No-EMA (ResNet18GN)  | [archive/fedmaq-normal-no-ema-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/fedmaq-normal-no-ema-50r/)         |
 
 Consolidated historical accuracy standings and best-known configs for these runs live in [archive/RESNET18GN-SUMMARY.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/RESNET18GN-SUMMARY.md).
 
 ## Current (MobileNetV2GN)
 
-No formal MobileNetV2GN experiments logged here yet. New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
+|  #  | Experiment                     | Directory                                                                                                                      | Description                                                                      |
+| :-: | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------- |
+|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, and FedMAQ across $\alpha \in \{0.1, 1.0\}$. |
+
+New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
 
 ## Run Execution & Context
 
