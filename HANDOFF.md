@@ -20,10 +20,10 @@ FedMAQ is a communication-efficient federated learning algorithm that uses dual-
 
 Nine exploratory smoke-test experiments (40–50 round, single-seed) were conducted on CIFAR-10 between July 13–15. **These are not formal thesis results** — they were run to validate the algorithm direction and identify which hyperparameters matter. See the full chronological table in [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md).
 
-**FedMAQ has two variants:**
+**FedMAQ has two variants (ResNet18GN-era naming; see below for current status):**
 
-- **FedMAQ-Lite** (`fedmaq_lite`, SimpleCNN ~2.16M params): Smoke-test tuning complete. Best result beats FedProx by +3.12pp with 8.6x comm savings under severe non-IID (α=0.1). These configs are validated.
-- **FedMAQ** (`fedmaq`, ResNet18GN ~11.17M params): Partially tuned. Best result is 47.43% (vs. FedProx 49.71%, gap of −2.28pp) with only 1.7x comm savings. Hyperparameters were transferred from SimpleCNN and are likely suboptimal.
+- **FedMAQ-Lite** (`fedmaq_lite`, SimpleCNN ~2.16M params): Smoke-test tuning complete on ResNet18GN-era baselines. Best result beat FedProx by +3.12pp with 8.6x comm savings under severe non-IID (α=0.1). **Dropped from the formal thesis** (DECISIONS.md Decision 4) — its size-contrast story is confounded now that main FedMAQ is also ~2.24M params (MobileNetV2GN). Smoke results live on as an exploration-appendix reference only.
+- **FedMAQ** (`fedmaq`): Now trains **MobileNetV2GN** (~2.24M params, switched 2026-07-15 for edge realism — DECISIONS.md Decision 1), not ResNet18GN. Best ResNet18GN-era result was 47.43% (vs. FedProx 49.71%, gap of −2.28pp) with only 1.7x comm savings; hyperparameters were transferred from SimpleCNN and are likely suboptimal. No MobileNetV2GN results exist yet — this is the active formal-thesis variant.
 
 A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md). The audit found the core algorithm sound (✅) with some defensible caveats (⚠️). Actionable recommendations: [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md).
 
@@ -51,8 +51,8 @@ Runner scripts output to `experiments/` by default, but the actual data is manua
 
 Both variants share the same strategy hook (`FedMAQHook`) with dynamic model dispatch:
 
-- `fedmaq`: Clients train ResNet18GN, server KD is self-distillation (ResNet18GN → ResNet18GN)
-- `fedmaq_lite`: Clients train SimpleCNN, server KD is cross-architecture (SimpleCNN → SimpleCNN)
+- `fedmaq`: Clients train MobileNetV2GN (default CIFAR model), server KD is self-distillation (MobileNetV2GN → MobileNetV2GN)
+- `fedmaq_lite`: Clients train SimpleCNN, server KD is self-distillation (SimpleCNN → SimpleCNN) — dropped from formal thesis, exploration-appendix only (DECISIONS.md Decision 4)
 
 The model factory selection is driven by algorithm name in [models.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/models.py) → `get_client_model()`.
 

@@ -24,7 +24,7 @@ Every experiment is self-contained within its own directory and adheres to a str
 | 8 | Stacked Reg Sweep | [archive/stacked-reg-sweep-7-15/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/stacked-reg-sweep-7-15/) |
 | 9 | No-EMA (ResNet18GN) | [archive/fedmaq-normal-no-ema-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/fedmaq-normal-no-ema-50r/) |
 
-Historical accuracy standings and progression tables for these runs are preserved in git history (pre-2026-07-16 `docs/experiments/README.md`) and in [docs/STATUS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md) §3.
+Consolidated historical accuracy standings and best-known configs for these runs live in [archive/RESNET18GN-SUMMARY.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/RESNET18GN-SUMMARY.md).
 
 ## Current (MobileNetV2GN)
 

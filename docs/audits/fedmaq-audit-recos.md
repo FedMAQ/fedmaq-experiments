@@ -7,49 +7,11 @@ Cross-referencing every point in [fedmaq-audit.md](file:///c:/Users/Quirora/Docu
 
 ---
 
-## 1. Architecture Confounder — Switch to ResNet18GN (Audit §5.1)
+## 1. Architecture Confounder — Switch to Iso-Architecture ✅ DONE
 
-> **Verdict**: 🔴 **Do this before any final experimental grid.**
+> **Verdict**: ✅ **Applied.** Originally recommended switching FedMAQ clients to ResNet18GN; the project instead adopted **MobileNetV2GN** as the iso-architecture for all algorithms (edge-realism rationale, see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md) Decision 1). The underlying diagnosis below is still correct and explains why the change was made — only the target architecture differs from what's shown here.
 
-The audit correctly identifies that FedMAQ clients currently train **SimpleCNN** (~2.16M params) while baselines train **ResNet18GN** (~11.17M params). The 9.6× comm reduction is partly an artifact of the 5.1× smaller model, not purely from quantization. A reviewer will spot this immediately.
-
-### Recommended Changes (3 files)
-
-#### [models.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/models.py#L191-L199)
-
-Remove `"fedmaq"` from the KD-student path in `get_client_model`:
-
-```diff
- def get_client_model(alg_name: str, dataset_name: str, num_classes: int) -> nn.Module:
--    if alg_name in {"fedkd", "fedmaq"}:
-+    if alg_name in {"fedkd"}:
-         return get_kd_student_model(dataset_name, num_classes)
-     return get_model(dataset_name, num_classes)
-```
-
-This makes FedMAQ clients train **the same ResNet18GN** as FedAvg/FedProx/etc., turning server-side KD into **self-distillation** (ResNet18GN → ResNet18GN).
-
-#### [fedmaq.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L168-L170) — Grad-norm probe
-
-```diff
--from fedmaq.core.models import DEVICE, get_kd_student_model, set_model_parameters
-+from fedmaq.core.models import DEVICE, get_model, set_model_parameters
- ...
-         if self._grad_norm_model is None:
--            self._grad_norm_model = get_kd_student_model(dataset_name, num_classes)
-+            self._grad_norm_model = get_model(dataset_name, num_classes)
-```
-
-#### [fedmaq.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L303-L304) — KD student factory
-
-```diff
-         aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
--            model_factory=get_kd_student_model,
-+            model_factory=get_model,
-```
-
-> [!IMPORTANT]
-> After this switch, **all existing experimental numbers become stale**. Re-run the EMA sweep and formulation study on ResNet18GN before the final grid. Communication savings will drop from ~9× to a still-significant level (pure quantization savings) — but they will be _scientifically rigorous_ savings.
+The audit correctly identified that FedMAQ clients originally trained **SimpleCNN** (~2.16M params) while baselines trained **ResNet18GN** (~11.17M params), confounding comm-reduction numbers with model-size reduction, not purely quantization. Current code (`get_client_model` in [models.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/models.py#L380-L388)) now routes `fedmaq` through `get_model()` (default `mobilenetv2gn`), same as all baselines — only `fedkd` and `fedmaq_lite` still use the smaller KD-student path. This makes FedMAQ clients train **the same MobileNetV2GN** as FedAvg/FedProx/etc., turning server-side KD into **self-distillation** (MobileNetV2GN → MobileNetV2GN).
 
 ### Impact on Thesis Narrative
 
@@ -187,22 +149,13 @@ Add a single-line note in the thesis acknowledging the assumption: "FedMAQ assum
 
 **Recommendation**: Update `fedmaq.yaml` default to `ema_decay: 0.5` (neutral compromise) or `ema_decay: 0.7` (best for the harder/more interesting severe-skew regime).
 
-### 10.2 `get_kd_student_model` Still Referenced in Imports After Architecture Switch
+### 10.2 `get_kd_student_model` Import Cleanup — ✅ Verify Applied
 
-If you proceed with the ResNet18GN switch (Recommendation 1), the import at [fedmaq.py:L26](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L26) will have a dead import for `get_kd_student_model`. Clean up:
-
-```diff
- from fedmaq.core.models import (
-     DEVICE,
--    get_kd_student_model,
-+    get_model,
-     set_model_parameters,
- )
-```
+Recommendation 1's switch implies `fedmaq.py` no longer needs `get_kd_student_model` for its main client/grad-norm-probe/KD-factory paths. Spot-check [fedmaq.py:L26](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L26) for a dead import if not already cleaned up.
 
 ### 10.3 Evaluation Uses `get_client_model` — Correct After Switch
 
-[simulation.py:L179](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/simulation.py#L179) uses `get_client_model(alg_name, ...)` for the `evaluate_fn`. After the change in Recommendation 1, `get_client_model("fedmaq", "cifar10", 10)` will correctly return `ResNet18GN`, so the evaluation model will match the aggregated parameters. **No change needed here** — it auto-propagates.
+[simulation.py:L179](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/simulation.py#L179) uses `get_client_model(alg_name, ...)` for the `evaluate_fn`. After the switch, `get_client_model("fedmaq", "cifar10", 10)` correctly returns `MobileNetV2GN`, so the evaluation model matches the aggregated parameters. **No change needed here** — it auto-propagates.
 
 ### 10.4 `_grad_norm_ema` Unbounded Growth
 
@@ -216,7 +169,7 @@ If you proceed with the ResNet18GN switch (Recommendation 1), the import at [fed
 
 |  #   | Item                  | Action                                    |   Effort    |   Impact    |
 | :--: | :-------------------- | :---------------------------------------- | :---------: | :---------: |
-|  1   | ResNet18GN switch     | **Code change** → re-run sweeps           |    High     | 🔴 Critical |
+|  1   | Iso-arch switch       | ✅ Done (MobileNetV2GN, not ResNet18GN)   |    High     | 🔴 Critical |
 |  2   | EMA–FedAvg ordering   | **Document** defense narrative            |     Low     | 🔴 Critical |
 |  3   | EMA decay default     | **Config fix** (`0.99` → `0.5` or `0.7`)  |   Trivial   |  ⚠️ Medium  |
 |  4   | Temperature ablation  | **Run 4 experiments** ($T \times \alpha$) |     Low     |  ⚠️ Medium  |
@@ -234,10 +187,13 @@ If you proceed with the ResNet18GN switch (Recommendation 1), the import at [fed
 
 ## Recommended Execution Order
 
-1. **Fix the config default** (`ema_decay: 0.99` → `0.5`) — trivial, do immediately.
-2. **Implement the ResNet18GN switch** (Recommendation 1) — 3-file change + import cleanup.
-3. **Re-run the EMA decay sweep** on ResNet18GN (50R, same grid) — validates that the $\beta$-$\alpha$ relationship holds under the new architecture.
-4. **Wait for soft-voting sweep** to complete — analyze interaction with EMA.
-5. **Run the temperature ablation** ($T \in \{1.0, 2.0\} \times \alpha \in \{0.1, 1.0\}$) — 4 runs.
-6. **Write the EMA–FedAvg defense paragraph** in the thesis.
-7. **Launch the final 100-round grid** with all tuned hyperparameters on ResNet18GN.
+> [!NOTE]
+> Superseded by [HANDOFF.md §5](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md) and [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) as the canonical next-steps list (2026-07-16 grilling). The list below is retained for historical context on how items 1-6 were originally sequenced; items 1-6 are done. See HANDOFF §5 for current priorities on MobileNetV2GN.
+
+1. ~~Fix the config default (`ema_decay: 0.99` → `0.5`)~~ — done.
+2. ~~Implement iso-architecture switch (Recommendation 1)~~ — done, MobileNetV2GN.
+3. ~~Re-run the EMA decay sweep~~ — superseded; capacity-EMA duality re-opened as a question for MobileNetV2GN (see formal-experiment-plan.md §2).
+4. ~~Wait for soft-voting sweep~~ — done (ResNet18GN era); MobileNetV2GN re-sweep tracked in formal-experiment-plan.md §2.
+5. ~~Run the temperature ablation~~ — folded into the formal ablation table (DECISIONS.md Decision 12).
+6. ~~Write the EMA–FedAvg defense paragraph~~ — still owed, still applies (architecture-independent).
+7. ~~Launch the final 100-round grid on ResNet18GN~~ — superseded; grid now runs on MobileNetV2GN per DECISIONS.md Decision 9-10.
