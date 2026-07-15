@@ -23,6 +23,7 @@ Below is the historical sequence of experiments leading to the final optimized *
 | **6** | [`baseline-comparison-resnet18/`](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/baseline-comparison-resnet18/) |   July 15   | Baseline ResNet18GN comparison sweeps (40 rounds) under default parameters.                                                        | FedMAQ achieved 38.36% (α=0.1), outperforming FedAvg/FedDistill. α=1.0 was cancelled due to ema_decay mismatch (0.7 used instead of 0.1).                               |
 | **7** | [`client-kd-reg-sweep-7-15/`](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/client-kd-reg-sweep-7-15/)         |   July 15   | Swept client-side KD regularization parameters (alpha & temp) to mitigate client drift on ResNet18GN under both alpha values.      | Validated client regularization: kd_reg alpha=0.5, temp=2.0 under α=1.0 gets **63.65%** (+6.16pp over baseline); alpha=0.5, temp=1.0 under α=0.1 gets **33.98%**.       |
 | **8** | [`stacked-reg-sweep-7-15/`](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/stacked-reg-sweep-7-15/)             |   July 15   | Swept stacked FedProx parameter-space penalty ($\mu \in \{0.0, 0.001, 0.01, 0.1, 1.0\}$) on top of best client-side KD parameters. | Stacked regularization is highly successful: **$\mu=0.1$** is optimal for both skews, yielding **41.21%** (α=0.1) and **65.80%** (α=1.0), stabilizing late convergence. |
+| **9** | [`fedmaq-normal-no-ema-50r/`](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/fedmaq-normal-no-ema-50r/)         |   July 15   | Evaluated the performance of the full-sized FedMAQ (ResNet18GN) without student EMA for 50 rounds.                                 | Disabling EMA yields a massive **+6.22pp** boost under severe skew ($\alpha=0.1$, reaching **47.43%**), but causes a slight **-5.11pp** dip under moderate skew.        |
 
 ---
 
@@ -73,6 +74,7 @@ To address client drift on the high-capacity ResNet18GN model, we evaluated clie
 | **FedMAQ + Client KD Reg** (Target)      |    33.98% (`alpha_0.5_temp_1.0`)     |     63.65% (`alpha_0.5_temp_2.0`)      |          20195.2 MB           | 11.17M |
 | **FedMAQ + Client KD Reg** (Best Sweep)  |  35.06% (`alpha_0.3_temp_2.0` peak)  |   **65.94%** (`alpha_0.3_temp_2.0`)    |          20195.2 MB           | 11.17M |
 | **FedMAQ + Stacked Reg** (KD + Proximal) |     **41.21%** (Best: `mu=0.1`)      |      **65.80%** (Best: `mu=0.1`)       |          20195.2 MB           | 11.17M |
+| **FedMAQ + Stacked Reg (No EMA)**        | **47.43%** (R40) / **45.55%** (R50)  |    60.69% (R40) / **64.47%** (R50)     |       25601.9 MB (R50)        | 11.17M |
 | **FedMAQ-Lite** (Tuned SimpleCNN)        |              **52.83%**              |                 63.28%                 |         **3967.4 MB**         | 2.16M  |
 
 ## 5. Run execution & Context
