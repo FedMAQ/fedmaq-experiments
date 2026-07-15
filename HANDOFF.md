@@ -12,7 +12,7 @@ FedMAQ is a communication-efficient federated learning algorithm that uses dual-
 
 - **Current state document**: [docs/STATUS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md) — best configs, accuracy standings, open decisions.
 - **Glossary**: [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md) — canonical terminology shared across 5 repos.
-- **Experiment registry**: [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md) — chronological roadmap of all 9 smoke-test experiments.
+- **Experiment registry**: [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md) — 9 archived ResNet18GN smoke tests + index for new MobileNetV2GN runs.
 
 ---
 
@@ -58,7 +58,7 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 ### Key Novel Findings
 
-1. **Capacity-EMA Duality**: Student EMA helps small models but _hurts_ large models under severe skew. See [fedmaq-normal-no-ema-50r/comments.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/fedmaq-normal-no-ema-50r/comments.md).
+1. **Capacity-EMA Duality**: Student EMA helps small models but _hurts_ large models under severe skew. See [archive/fedmaq-normal-no-ema-50r/comments.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/archive/fedmaq-normal-no-ema-50r/comments.md).
 2. **Heterogeneity-EMA Inverse Relationship**: Optimal β is strongly α-dependent (β=0.7 for α=0.1, β=0.1 for α=1.0).
 3. **SimpleCNN→ResNet18GN Hyperparameter Transfer Failure**: `entropy_weight=4.0` caused voter exclusion on ResNet18GN under severe skew. Other transferred params may be similarly suboptimal.
 
@@ -84,6 +84,10 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 6. **Gradient-norm-smoothing isolation ablation** (`grad_norm_ema=false`) — still owed.
 7. **Ablation table** (additive ladder + leave-one-out) on CIFAR-10 at α ∈ {0.1, 1.0}.
 8. **Deferred sub-details** — see plan §3 (single-config selection rule, baseline key-HP list, Pareto matched-bit-budget comparison).
+
+### Priority 4: Docs Structure (in progress, 2026-07-16)
+
+9. **Continue docs cleanup**. Done this session: `docs/DECISIONS.md` created as single decision log (killed 3-way duplication across STATUS/HANDOFF/plan); STATUS.md §7 (stale, self-contradicting) removed; `docs/plans/fedmaq-audit-remediation.md` and `docs/plans/client-regularization.md` deleted (completed/superseded, recoverable via git history); all 9 ResNet18GN experiment dirs moved to `docs/experiments/archive/`; audit docs got staleness caveats. **Still open**: decide long-term semantics for `docs/plans/` (active-only vs. mixed), confirm `docs/archive/` vs. per-directory `archive/` subfolders is the right pattern going forward (currently only `docs/experiments/archive/` exists, no top-level `docs/archive/` was created), and check `docs/plans/formal-experiment-plan.md` for further trim once the confirmatory grid is pre-registered (§4 of that doc flags its own structure as tentative).
 
 ---
 
