@@ -7,6 +7,7 @@ Hydra's ``compose`` API and call :func:`run` directly.
 """
 
 import logging
+import os
 import random
 from pathlib import Path
 
@@ -34,19 +35,53 @@ from fedmaq.core.partitioning import (
     get_client_loader,
     get_server_loaders,
 )
+from fedmaq.core.client_manager import SeededPartitionClientManager
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
 logger = logging.getLogger("fedmaq")
 
 
-def set_seed(seed: int) -> None:
-    """Set global seeds for reproducibility."""
+def set_seed(seed: int, strict: bool = True) -> None:
+    """Set global seeds and (optionally) enforce deterministic kernels.
+
+    Reproducibility spine for the paired confirmatory grid: seeds
+    Python/NumPy/torch (+CUDA), pins cuDNN to deterministic mode, and requests
+    deterministic algorithms. ``strict=True`` raises when an op lacks a
+    deterministic implementation (surfacing it) rather than silently falling
+    back to a non-deterministic kernel.
+
+    ``CUBLAS_WORKSPACE_CONFIG`` must be set before the first CUDA context is
+    created for deterministic cuBLAS GEMMs; we set it here (idempotently) so it
+    is in place before any CUDA use and is inherited by Ray workers spawned
+    afterwards. Note this function is also called inside ``client_fn`` to reseed
+    each Ray worker process, since the driver's seed does not propagate across
+    process boundaries.
+    """
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
+    configure_torch_determinism(seed, strict=strict)
+
+
+def configure_torch_determinism(seed: int, strict: bool = True) -> None:
+    """Set torch RNG + deterministic-kernel flags, WITHOUT touching the global
+    ``random``/``numpy`` RNGs.
+
+    Ray client actors run in separate processes that do not inherit the driver's
+    torch determinism settings, so training there uses non-deterministic cuDNN
+    kernels unless re-pinned per worker. We call this inside ``client_fn`` to fix
+    that — but deliberately leave Python's ``random`` alone, because Flower's
+    ``ClientManager.sample()`` draws from it and reseeding in a worker would make
+    client sampling timing-dependent across Ray restarts.
+    """
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True, warn_only=not strict)
 
 
 def run(cfg: DictConfig) -> TelemetryManager:
@@ -55,8 +90,13 @@ def run(cfg: DictConfig) -> TelemetryManager:
     Returns the :class:`TelemetryManager` so callers/tests can inspect
     ``cumulative_bytes`` and the emitted JSONL/CSV logs after the run.
     """
-    # Set seed
-    set_seed(cfg.seed)
+    # Set seed. strict_determinism (default true) makes non-deterministic ops
+    # raise instead of silently degrading reproducibility; flip off only to
+    # diagnose an op that lacks a deterministic kernel.
+    strict_determinism = bool(
+        OmegaConf.select(cfg, "experiment.strict_determinism", default=True)
+    )
+    set_seed(cfg.seed, strict=strict_determinism)
 
     # Check GPU availability and warn if not detected
     if not torch.cuda.is_available():
@@ -98,10 +138,19 @@ def run(cfg: DictConfig) -> TelemetryManager:
     def client_fn(context: fl.app.Context) -> fl.client.Client:
         partition_id = context.node_config["partition-id"]
 
+        # Re-pin torch determinism inside the Ray worker process (it does not
+        # inherit the driver's flags) so cuDNN training is reproducible. This
+        # intentionally does NOT reseed global random/numpy — that would clobber
+        # Flower's server-side client sampling. The per-client seed also drives
+        # the loader generator below for a reproducible shuffle order.
+        client_seed = int(cfg.seed) + int(partition_id)
+        configure_torch_determinism(client_seed, strict=strict_determinism)
+
         train_loader = get_client_loader(
             dataset_name=dataset_name,
             client_id=partition_id,
             client_indices_dict=client_indices_dict,
+            seed=client_seed,
             batch_size=cfg.experiment.batch_size,
             train=True,
         )
@@ -200,8 +249,17 @@ def run(cfg: DictConfig) -> TelemetryManager:
             initial_parameters=initial_parameters,
         )
 
+        # Deterministic, partition-keyed sampling so *which* clients train each
+        # round is reproducible across runs (Flower's default SimpleClientManager
+        # draws from process-global random over timing-ordered node IDs).
+        client_manager = SeededPartitionClientManager(
+            seed=int(cfg.seed), num_clients=int(cfg.experiment.num_clients)
+        )
+
         server_config = ServerConfig(num_rounds=cfg.experiment.total_rounds)
-        return ServerAppComponents(strategy=strategy, config=server_config)
+        return ServerAppComponents(
+            strategy=strategy, config=server_config, client_manager=client_manager
+        )
 
     server_app = ServerApp(server_fn=server_fn)
 

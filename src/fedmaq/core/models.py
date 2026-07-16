@@ -1,5 +1,7 @@
 """Standard PyTorch model architectures and helpers for FedMAQ."""
 
+from collections.abc import Callable
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -386,3 +388,21 @@ def get_client_model(alg_name: str, dataset_name: str, num_classes: int) -> nn.M
     if alg_name in {"fedkd", "fedmaq_lite"}:
         return get_kd_student_model(dataset_name, num_classes)
     return get_model(dataset_name, num_classes)
+
+
+def get_server_model_factory(alg_name: str) -> Callable[[str, int], nn.Module]:
+    """Single source of truth for the ``(dataset_name, num_classes) -> nn.Module``
+    factory the server uses for a given algorithm's grad-norm probe and
+    self-distillation student/teacher.
+
+    FedMAQ-Lite operates on the KD student architecture (SimpleCNN/TinyCNN);
+    FedMAQ (and any other server-KD caller) uses the standard model. ``FedMAQHook``
+    must call this rather than re-deriving the choice inline — previously the two
+    inline copies keyed on ``fedmaq_lite`` only while :func:`get_client_model`
+    keyed on ``{fedkd, fedmaq_lite}``, a latent divergence. It is behavior-equivalent
+    here because ``fedkd`` never reaches ``FedMAQHook`` (it routes to ``FedKDHook``);
+    this factory intentionally scopes to its actual callers.
+    """
+    if alg_name == "fedmaq_lite":
+        return get_kd_student_model
+    return get_model

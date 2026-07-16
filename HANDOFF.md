@@ -27,7 +27,9 @@ Nine exploratory smoke-test experiments (40–50 round, single-seed) were conduc
 
 A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md). The audit found the core algorithm sound (✅) with some defensible caveats (⚠️). Actionable recommendations: [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md).
 
-A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), pending merge); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
+A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), **merged**); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
+
+A follow-on **architecture** pass (branch `feat/architecture`, off merged `main`) is in progress — see §5.5.
 
 ---
 
@@ -80,7 +82,24 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 ### Priority 2: Confirmation Infrastructure
 
 4. **Build the config-as-code registry**: manifest enumerating every formal run (algo × dataset × α × seed), hashed frozen configs, driving process-isolated runners.
-5. **Seed-determinism check**: ensure partitions are identical across paired arms (required for the paired test).
+5. **Seed-determinism check** ✅ **DONE**: partition generation is a pure function of `(dataset, num_clients, alpha, num_public_samples, seed)` with **no algorithm input** (single call site `simulation.py:124` passes the global `cfg.experiment.num_public_samples`, not a per-algorithm value), so paired arms at a matched seed see byte-identical partitions by construction. Locked by regression test `test_partition_seed_invariant_for_paired_arms` (`tests/test_environment.py`): regenerates from scratch into separate cache dirs (proving generation determinism, not just the JSON cache round-trip the older test covered) — same seed identical, distinct seed differs. Together with the deterministic ClientManager this closes the reproducibility oracle (data partition + client sampling + per-worker training all seed-pinned).
+
+### Priority 2.5: Architecture Branch (`feat/architecture`) — in progress
+
+Behavior-changing improvements made *before* the formal baseline freezes (safe window; no formal runs started). Landed commits (all tested, 92 green):
+
+- **Determinism (partial)**: torch RNG + deterministic-kernel flags now re-pinned **per Ray worker** inside `client_fn` (Ray actors don't inherit driver flags); DataLoader `generator`/`worker_init_fn` seeded; `experiment.strict_determinism` knob (default true). Training is now **bit-identical given a fixed sampled client**.
+- **Phase 2** — centralized server model-factory dispatch (`models.get_server_model_factory`), removing the duplicated inline rule in `FedMAQHook`.
+- **Phase 4** — centralized cross-hook fallback defaults (`core/config_defaults.py`) with a regression test; flagged two stale fallbacks (`num_public_samples` 200 vs conf 3000; `weight_decay` 0.0 vs conf 1e-4) left inline rather than enshrined.
+- **Phase 5** — split `FedMAQHook.configure_fit` god-method into named helpers + `_QuantParams` (F8 fail-loud preserved).
+
+**Deferred — do these before the confirmatory grid (they gate Priority 2's seed-determinism):**
+
+- **Deterministic ClientManager** ✅ **DONE** (`core/client_manager.py`, `SeededPartitionClientManager`): samples by **partition-id** with a per-round-seeded RNG, resolving each `ClientProxy` node-id → partition-id via `get_properties` (cached) and waiting for the full population before drawing. Wired into `server_fn` via `ServerAppComponents(client_manager=...)`; `TelemetryFedAvg.configure_fit` calls `set_round_seed(server_round)` before sampling. **Measured**: same config run twice at `client_fraction=0.1` now yields bit-identical per-round selection (was nondeterministic — Flower's default draws global-`random` over timing-ordered node-ids). Note: `ClientProxy.cid` is a random node-id in flwr 1.32 sim, **not** the partition-id — partition-id is only recoverable via `get_properties`. Regression test: `tests/test_client_manager.py`.
+- **Phase 3 = Priority 2 step 4** (config-as-code run registry): still owed; must encode `post_process=true` for primary-grid FedMAQ cells (headline §4.3 comm mechanism; default is `false`, a footgun the registry must own).
+- **Phase 6** (optional, only if cheap): decouple `strategy.py` `isinstance(DAdaQuantHook)` proxies; cross-layer imports.
+
+Branch is unpushed — ready to push + PR when the above scope decisions are settled.
 
 ### Priority 3: Ablations & Deferred Details
 

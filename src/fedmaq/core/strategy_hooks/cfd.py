@@ -55,6 +55,12 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.config_defaults import (
+    BATCH_SIZE,
+    DATASET_NAME,
+    NUM_CLASSES,
+    SERVER_COMPUTE_SPEED,
+)
 from fedmaq.core.kd_utils import kd_server_sim_time
 from fedmaq.core.models import DEVICE, get_client_model, get_model_parameters
 from fedmaq.core.partitioning import get_server_loaders
@@ -84,8 +90,8 @@ class CFDHook(StrategyHook):
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         dataset_cfg = config.get("dataset", {})
-        self.dataset_name = dataset_cfg.get("name", "mnist")
-        self.num_classes = int(dataset_cfg.get("num_classes", 10))
+        self.dataset_name = dataset_cfg.get("name", DATASET_NAME)
+        self.num_classes = int(dataset_cfg.get("num_classes", NUM_CLASSES))
 
         alg_cfg = config.get("algorithm", {})
         self.b_up = int(alg_cfg.get("b_up", 1))
@@ -113,7 +119,7 @@ class CFDHook(StrategyHook):
             and strategy.public_indices is not None
         ):
             exp_cfg = self._config.get("experiment", {})
-            batch_size = int(exp_cfg.get("batch_size", 64))
+            batch_size = int(exp_cfg.get("batch_size", BATCH_SIZE))
             self._public_loader, _ = get_server_loaders(
                 self.dataset_name, strategy.public_indices, batch_size=batch_size
             )
@@ -294,7 +300,7 @@ class CFDHook(StrategyHook):
             num_public=num_public,
             kd_epochs=self.server_distill_epochs,
             num_teachers=1,
-            server_compute_speed=float(alg_cfg.get("server_compute_speed", 2000.0)),
+            server_compute_speed=float(alg_cfg.get("server_compute_speed", SERVER_COMPUTE_SPEED)),
         )
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:

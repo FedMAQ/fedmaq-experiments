@@ -28,9 +28,9 @@ Consolidated historical accuracy standings and best-known configs for these runs
 
 ## Current (MobileNetV2GN)
 
-|  #  | Experiment                     | Directory                                                                                                                      | Description                                                                      |
-| :-: | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------- |
-|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, and FedMAQ across $\alpha \in \{0.1, 1.0\}$. |
+|  #  | Experiment                     | Directory                                                                                                                      | Description                                                                                                |
+| :-: | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ, and FedKD across $\alpha \in \{0.1, 1.0\}$. |
 
 New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
 

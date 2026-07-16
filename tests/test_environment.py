@@ -158,6 +158,39 @@ def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatc
         assert client_dict1[k] == client_dict2[k]
 
 
+def test_partition_seed_invariant_for_paired_arms(mock_dataset, tmp_path, monkeypatch):
+    """Partition is a pure function of (dataset, num_clients, alpha, num_public,
+    seed) with **no algorithm input** — the invariant the paired statistical test
+    relies on. Two arms (e.g. FedMAQ vs FedAvg) run at the same seed must see
+    byte-identical partitions, while distinct seeds must give distinct partitions.
+
+    Unlike ``test_deterministic_dirichlet_partitioning`` (whose second call hits the
+    JSON cache and so only proves the cache round-trips), this regenerates from
+    scratch into a *separate* cache dir, proving the generation itself — not just
+    the cache read — is reproducible. The two fresh cache dirs stand in for two
+    independently launched paired arms.
+    """
+    num_clients, alpha, num_public, seed = 3, 0.5, 10, 42
+
+    # Arm A and Arm B: same config + seed, independent cache dirs (fresh generation).
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "arm_a")
+    pub_a, clients_a = generate_partition_indices("mnist", num_clients, alpha, num_public, seed)
+
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "arm_b")
+    pub_b, clients_b = generate_partition_indices("mnist", num_clients, alpha, num_public, seed)
+
+    assert pub_a == pub_b, "Paired arms at the same seed diverged on the public pool"
+    for k in clients_a:
+        assert clients_a[k] == clients_b[k], f"Paired arms diverged on client {k}"
+
+    # A different seed (independent replicate) must produce a different partition.
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "seed_7")
+    _, clients_c = generate_partition_indices("mnist", num_clients, alpha, num_public, seed=7)
+    assert any(clients_a[k] != clients_c[k] for k in clients_a), (
+        "Distinct seeds produced identical partitions — replicates are not independent"
+    )
+
+
 def test_writer_based_partitioning(mock_dataset, tmp_path, monkeypatch):
     """Test writer-based natural partitioning (FEMNIST mode) with caching."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)

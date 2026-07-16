@@ -108,38 +108,21 @@ def test_fedmaq_hook_refinement_states():
     assert hook._ema_params is None
     assert hook._grad_norm_ema == {}
 
-    # Test grad norm EMA smoothing logic directly
+    # Grad-norm EMA smoothing lives in FedMAQHook._smooth_grad_norms; exercise the
+    # real helper (not a reimplementation) so this guards the Phase 5 extraction.
+    alg_cfg = cfg["algorithm"]
     pids = [1, 2]
-    grad_norms = [2.0, 4.0]
 
     # First round - no EMA history, should store raw norms
-    beta = 0.5
-    smoothed_norms = []
-    for pid, raw_norm in zip(pids, grad_norms, strict=True):
-        if pid in hook._grad_norm_ema:
-            smoothed = beta * hook._grad_norm_ema[pid] + (1.0 - beta) * raw_norm
-        else:
-            smoothed = raw_norm
-        hook._grad_norm_ema[pid] = smoothed
-        smoothed_norms.append(smoothed)
-
+    smoothed_norms = hook._smooth_grad_norms(pids, [2.0, 4.0], alg_cfg)
     assert smoothed_norms == [2.0, 4.0]
     assert hook._grad_norm_ema == {1: 2.0, 2: 4.0}
 
-    # Second round - should smooth with EMA
-    raw_norms_2 = [3.0, 2.0]
-    smoothed_norms_2 = []
-    for pid, raw_norm in zip(pids, raw_norms_2, strict=True):
-        if pid in hook._grad_norm_ema:
-            smoothed = beta * hook._grad_norm_ema[pid] + (1.0 - beta) * raw_norm
-        else:
-            smoothed = raw_norm
-        hook._grad_norm_ema[pid] = smoothed
-        smoothed_norms_2.append(smoothed)
-
-    # pid 1: 0.5 * 2.0 + 0.5 * 3.0 = 2.5
-    # pid 2: 0.5 * 4.0 + 0.5 * 2.0 = 3.0
+    # Second round - should smooth with EMA (beta=0.5):
+    # pid 1: 0.5 * 2.0 + 0.5 * 3.0 = 2.5 ; pid 2: 0.5 * 4.0 + 0.5 * 2.0 = 3.0
+    smoothed_norms_2 = hook._smooth_grad_norms(pids, [3.0, 2.0], alg_cfg)
     assert smoothed_norms_2 == [2.5, 3.0]
+    assert hook._grad_norm_ema == {1: 2.5, 2: 3.0}
 
     # Test Student EMA tracking
     model = SimpleCNN(in_channels=1, num_classes=10)
