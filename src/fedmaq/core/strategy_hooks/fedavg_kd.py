@@ -20,6 +20,7 @@ from fedmaq.core.config_defaults import (
     DATASET_NAME,
     NUM_CLASSES,
     SERVER_COMPUTE_SPEED,
+    require_num_public_samples,
 )
 from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import DEVICE, get_model
@@ -94,7 +95,7 @@ class FedAvgKDHook(StrategyHook):
         if aggregated_parameters is None:
             return 0.0
         alg_cfg = self._config.get("algorithm", {})
-        num_public = int(self._config.get("experiment", {}).get("num_public_samples", 200))
+        num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),

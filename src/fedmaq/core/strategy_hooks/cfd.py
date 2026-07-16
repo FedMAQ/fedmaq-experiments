@@ -60,6 +60,7 @@ from fedmaq.core.config_defaults import (
     DATASET_NAME,
     NUM_CLASSES,
     SERVER_COMPUTE_SPEED,
+    require_num_public_samples,
 )
 from fedmaq.core.kd_utils import kd_server_sim_time
 from fedmaq.core.models import DEVICE, get_client_model, get_model_parameters
@@ -295,7 +296,7 @@ class CFDHook(StrategyHook):
         if self._pending_targets is None:
             return 0.0
         alg_cfg = self._config.get("algorithm", {})
-        num_public = int(self._config.get("experiment", {}).get("num_public_samples", 200))
+        num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=self.server_distill_epochs,
