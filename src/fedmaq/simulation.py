@@ -35,6 +35,7 @@ from fedmaq.core.partitioning import (
     get_client_loader,
     get_server_loaders,
 )
+from fedmaq.core.client_manager import SeededPartitionClientManager
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
@@ -248,8 +249,17 @@ def run(cfg: DictConfig) -> TelemetryManager:
             initial_parameters=initial_parameters,
         )
 
+        # Deterministic, partition-keyed sampling so *which* clients train each
+        # round is reproducible across runs (Flower's default SimpleClientManager
+        # draws from process-global random over timing-ordered node IDs).
+        client_manager = SeededPartitionClientManager(
+            seed=int(cfg.seed), num_clients=int(cfg.experiment.num_clients)
+        )
+
         server_config = ServerConfig(num_rounds=cfg.experiment.total_rounds)
-        return ServerAppComponents(strategy=strategy, config=server_config)
+        return ServerAppComponents(
+            strategy=strategy, config=server_config, client_manager=client_manager
+        )
 
     server_app = ServerApp(server_fn=server_fn)
 

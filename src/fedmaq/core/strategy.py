@@ -175,6 +175,12 @@ class TelemetryFedAvg(FedAvg):
         # 1. Let the hook optionally compress parameters for the download path
         parameters = self.hook.pre_configure_fit(self, server_round, parameters)
 
+        # 1b. Seed the round's deterministic client draw (SeededPartitionClientManager).
+        # Done here, before super().configure_fit() calls client_manager.sample(),
+        # so the selection is reproducible and robust to sample() call count.
+        if hasattr(client_manager, "set_round_seed"):
+            client_manager.set_round_seed(server_round)
+
         # 2. Call FedAvg client sampling
         client_instructions = super().configure_fit(server_round, parameters, client_manager)
         if not client_instructions:
