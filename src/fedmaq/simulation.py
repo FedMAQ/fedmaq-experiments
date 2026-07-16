@@ -60,6 +60,21 @@ def set_seed(seed: int, strict: bool = True) -> None:
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
+    configure_torch_determinism(seed, strict=strict)
+
+
+def configure_torch_determinism(seed: int, strict: bool = True) -> None:
+    """Set torch RNG + deterministic-kernel flags, WITHOUT touching the global
+    ``random``/``numpy`` RNGs.
+
+    Ray client actors run in separate processes that do not inherit the driver's
+    torch determinism settings, so training there uses non-deterministic cuDNN
+    kernels unless re-pinned per worker. We call this inside ``client_fn`` to fix
+    that — but deliberately leave Python's ``random`` alone, because Flower's
+    ``ClientManager.sample()`` draws from it and reseeding in a worker would make
+    client sampling timing-dependent across Ray restarts.
+    """
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -122,13 +137,13 @@ def run(cfg: DictConfig) -> TelemetryManager:
     def client_fn(context: fl.app.Context) -> fl.client.Client:
         partition_id = context.node_config["partition-id"]
 
-        # Reseed inside the Ray worker: the driver's set_seed does not propagate
-        # across process boundaries. Per-client offset keeps each client's
-        # stochastic ops independent yet reproducible across runs. The client
-        # loader below is given a matching generator so its shuffle order is
-        # deterministic (identical each round) rather than driven by global RNG.
+        # Re-pin torch determinism inside the Ray worker process (it does not
+        # inherit the driver's flags) so cuDNN training is reproducible. This
+        # intentionally does NOT reseed global random/numpy — that would clobber
+        # Flower's server-side client sampling. The per-client seed also drives
+        # the loader generator below for a reproducible shuffle order.
         client_seed = int(cfg.seed) + int(partition_id)
-        set_seed(client_seed, strict=strict_determinism)
+        configure_torch_determinism(client_seed, strict=strict_determinism)
 
         train_loader = get_client_loader(
             dataset_name=dataset_name,
