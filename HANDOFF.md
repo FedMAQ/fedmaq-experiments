@@ -2,7 +2,7 @@
 
 **Purpose**: Focused handoff for the next agent. All historical experiment details, audit findings, and remediation plans live in `docs/`. This document provides orientation, current state, and immediate action items only.
 
-**Last updated**: 2026-07-16
+**Last updated**: 2026-07-16 (F10 fix landed)
 
 ---
 
@@ -29,7 +29,9 @@ A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](fil
 
 A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), **merged**); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
 
-A follow-on **architecture** pass (branch `feat/architecture`, off merged `main`) is in progress — see §5.5.
+A follow-on **architecture** pass landed: determinism + hook-decoupling ([PR #6](https://github.com/FedMAQ/fedmaq-experiments/pull/6) **merged**; [PR #7](https://github.com/FedMAQ/fedmaq-experiments/pull/7) Phase 6 **open**) — DECISIONS.md decisions 18–20, §5.5.
+
+A forward-looking **distillation-baseline direction & health audit** followed: [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). Findings F10–F14 — see Priority 0 below.
 
 ---
 
@@ -72,6 +74,15 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 > Framing/grid decisions are **already resolved** (§3, and [formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md)). Remaining work is refinement + implementation.
 
+### Priority 0: Distillation-Audit Follow-ups (gate the KD-family comparisons)
+
+From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md) — do before the KD baselines enter any formal table:
+
+0a. **F10 — FedKD near-chance (17%/32%): MECHANISM CONFIRMED, fix IMPLEMENTED + real-run validated.** `diagnosing-bugs` pass (2026-07-16): raising `tmin` alone still dips non-monotonically mid-schedule (insufficient); a **minimum-rank floor** (`min_rank_frac`) fixes it. Landed `compress_tensor(..., min_rank_frac=...)` threaded through client/server FedKD paths, `conf/algorithm/fedkd.yaml` defaults `min_rank_frac: 0.25`, regression test `tests/test_fedkd_compression.py` (102/102 suite green). A first synthetic code-path probe only showed rank recovering, not accuracy — caught by advisor review — so followed up with a real `run-minitest` (CIFAR-10/MobileNetV2GN, preliminary/10R/α=0.1/seed=0): peak accuracy 16.9%→26.3% (+9.4pp), mean 12.0%→15.1% as rank floor kicks in vs. old default staying pinned at 3.7-4.5% rank / near-chance accuracy. Noisy at minitest scale but real training, not synthetic. FedKD re-enters comparison tables once F13's full MobileNetV2GN smoke confirms this at scale. See audit F10.
+0b. **F13 — 4 of 5 KD baselines never ran on MobileNetV2GN** (FedMD, FedDistill, CFD, FedAvg+KD). Run a MobileNetV2GN smoke for the four before the freeze (`run-minitest`). Gates every KD-family comparison claim.
+0c. **F12 — `num_public_samples=200` dead-fallback** in `cfd.py:298`, `fedavg_kd.py:97`, `fedmaq.py:484` (latent; conf ships 3000). Align to 3000 or read fail-loud; bundle with code-audit F8.
+0d. **F11 — FedMAQ α=1.0 deficit is structural** (persists across models + EMA). Not a bug — a framing constraint: lead with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid must sweep.
+
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 
 1. **Run the adaptive exploration campaign** on CIFAR-10 (primary): re-sweep soft-voting (`entropy_weight` × `precision_weight`), validate Formulation 3, resolve capacity-EMA (on/off for MobileNetV2 — open question), client KD reg. Mechanisms are guides — keep/drop/revise per results.
@@ -97,9 +108,9 @@ Behavior-changing improvements made *before* the formal baseline freezes (safe w
 
 - **Deterministic ClientManager** ✅ **DONE** (`core/client_manager.py`, `SeededPartitionClientManager`): samples by **partition-id** with a per-round-seeded RNG, resolving each `ClientProxy` node-id → partition-id via `get_properties` (cached) and waiting for the full population before drawing. Wired into `server_fn` via `ServerAppComponents(client_manager=...)`; `TelemetryFedAvg.configure_fit` calls `set_round_seed(server_round)` before sampling. **Measured**: same config run twice at `client_fraction=0.1` now yields bit-identical per-round selection (was nondeterministic — Flower's default draws global-`random` over timing-ordered node-ids). Note: `ClientProxy.cid` is a random node-id in flwr 1.32 sim, **not** the partition-id — partition-id is only recoverable via `get_properties`. Regression test: `tests/test_client_manager.py`.
 - **Phase 3 = Priority 2 step 4** (config-as-code run registry): still owed; must encode `post_process=true` for primary-grid FedMAQ cells (headline §4.3 comm mechanism; default is `false`, a footgun the registry must own).
-- **Phase 6** (optional, only if cheap): decouple `strategy.py` `isinstance(DAdaQuantHook)` proxies; cross-layer imports.
+- **Phase 6** ✅ **DONE** ([PR #7](https://github.com/FedMAQ/fedmaq-experiments/pull/7), open): removed DAdaQuant backward-compat property proxies from `strategy.py`; tests now hit `strategy.hook.*`. Branch `refactor/phase6-decouple-dadaquant-proxies`.
 
-Branch is unpushed — ready to push + PR when the above scope decisions are settled.
+PR #6 (determinism + Phases 2/4/5) **merged**; PR #7 (Phase 6) open for review. Phase 3 = config-as-code registry (Priority 2 step 4) still owed.
 
 ### Priority 3: Ablations & Deferred Details
 

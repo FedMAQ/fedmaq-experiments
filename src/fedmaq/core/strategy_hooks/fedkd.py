@@ -42,6 +42,7 @@ class FedKDHook(StrategyHook):
         alg_cfg = config.get("algorithm", {})
         self._tmin = float(alg_cfg.get("tmin", 0.1))
         self._tmax = float(alg_cfg.get("tmax", 0.9))
+        self._min_rank_frac = float(alg_cfg.get("min_rank_frac", 0.0))
         self._total_rounds = int(config.get("experiment", {}).get("total_rounds", 10))
         # Dual-model (student+teacher) training slows effective client compute.
         self._compute_penalty = float(alg_cfg.get("compute_penalty", 2.5))
@@ -69,7 +70,7 @@ class FedKDHook(StrategyHook):
             if arr.size == 0:
                 continue
             delta = arr - ref
-            compressed = compress_tensor(delta, self._current_energy)
+            compressed = compress_tensor(delta, self._current_energy, self._min_rank_frac)
             model_size_bytes += svd_compressed_nbytes(compressed, arr.nbytes)
         return model_size_bytes
 
@@ -103,7 +104,7 @@ class FedKDHook(StrategyHook):
                 continue
             delta = arr - ref
             orig_shape = delta.shape
-            compressed = compress_tensor(delta, energy)
+            compressed = compress_tensor(delta, energy, self._min_rank_frac)
             if len(compressed) == 3:
                 u, sigma, _v = compressed
                 full_rank = min(delta.reshape(orig_shape[0], -1).shape)

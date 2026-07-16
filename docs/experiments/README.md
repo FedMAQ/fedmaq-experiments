@@ -32,6 +32,9 @@ Consolidated historical accuracy standings and best-known configs for these runs
 | :-: | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
 |  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ, and FedKD across $\alpha \in \{0.1, 1.0\}$. |
 
+> [!WARNING]
+> **Audit caveats on the smoke run** (see [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md)): FedKD is near-chance (17%/32%) on this run — **mechanism confirmed and fix landed (F10): SVD `mean_rank_retained` was starved to ~3.7% through the convergence window; a `min_rank_frac` floor fixes it on a code-path probe, but this smoke predates the fix and a real re-run is still owed.** The KD-family baselines **FedMD, FedDistill, CFD, FedAvg+KD have no MobileNetV2GN run yet** (F13) — no KD comparison claim is defensible until they do.
+
 New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
 
 ## Run Execution & Context

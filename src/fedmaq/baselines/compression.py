@@ -9,8 +9,17 @@ from fedmaq.core.client import CompressionHook
 CompressedTensor = tuple[np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
-def compress_tensor(tensor_np: np.ndarray, energy: float) -> CompressedTensor:
+def compress_tensor(
+    tensor_np: np.ndarray, energy: float, min_rank_frac: float = 0.0
+) -> CompressedTensor:
     """Compress a tensor using SVD if its dimension is >= 2.
+
+    ``min_rank_frac`` floors the retained rank at ``min_rank_frac * full_rank``
+    (rounded up), regardless of the energy-derived threshold. Without a floor,
+    the energy->rank mapping is non-monotonic on concentrated spectra (e.g.
+    depthwise-separable conv deltas): as the round-scheduled energy target
+    rises through the spectrum's dominant singular values, the threshold can
+    still land near rank 1 (see F10, docs/audits/distillation-direction-audit.md).
 
     Returns either ``(U, Sigma, V)`` (compressed) or ``(tensor_np,)``
     (pass-through for 1-D tensors or SVD failures).
@@ -40,6 +49,8 @@ def compress_tensor(tensor_np: np.ndarray, energy: float) -> CompressedTensor:
 
     cumsum = np.cumsum(sigma_sq)
     threshold = np.searchsorted(cumsum, energy * total_energy) + 1
+    if min_rank_frac > 0.0:
+        threshold = max(threshold, int(np.ceil(min_rank_frac * len(sigma))))
     threshold = min(max(1, threshold), len(sigma))
 
     u_trunc = u[:, :threshold]
@@ -76,15 +87,19 @@ def svd_compressed_nbytes(compressed: CompressedTensor, fallback_nbytes: int) ->
 class FedKDCompressionHook(CompressionHook):
     """SVD-based dynamic compression hook implementing FedKD."""
 
-    def __init__(self, energy: float = 0.5) -> None:
+    def __init__(self, energy: float = 0.5, min_rank_frac: float = 0.0) -> None:
         """Initialize the compression hook with the energy threshold fraction.
 
         Parameters
         ----------
         energy : float
             Energy ratio to retain in SVD singular values (0.0 to 1.0).
+        min_rank_frac : float
+            Floor on retained rank as a fraction of full rank (see
+            :func:`compress_tensor`). 0.0 disables the floor.
         """
         self.energy = energy
+        self.min_rank_frac = min_rank_frac
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using SVD.
@@ -108,7 +123,7 @@ class FedKDCompressionHook(CompressionHook):
                 continue
 
             orig_shape = d.shape
-            compressed = compress_tensor(d, self.energy)
+            compressed = compress_tensor(d, self.energy, self.min_rank_frac)
             total_bytes += svd_compressed_nbytes(compressed, d.nbytes)
 
             if len(compressed) == 3:

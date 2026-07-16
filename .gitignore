@@ -6,6 +6,8 @@ multirun/
 outputs/
 references/
 wandb/
+/experiment_log.csv
+/experiment_log.jsonl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
