@@ -1,6 +1,6 @@
 # Distillation-Baseline Direction & Health Audit
 
-**Last updated:** 2026-07-16 (F10 fix implemented + validated — `min_rank_frac`)
+**Last updated:** 2026-07-16 (F10 fix implemented + validated — `min_rank_frac`; F14 μ mislabel corrected 1.0 → 0.01 canonical)
 **Auditor:** Claude (Opus 4.8), grill-with-docs session
 **Lens:** forward-looking — *are the KD baselines + FedMAQ moving in the right
 direction, and which implementations look faulty?* Mines archived + recent
@@ -176,10 +176,11 @@ right tool.
 
 ### 🟡 F14 — FedProx α=0.1 late-round collapse is model-specific [stability · out-of-KD-scope]
 
-Recorded for completeness (not a KD hook). FedProx (μ=1.0) peaks **49.04% (R45)**
-then diverges to **24.79%** with loss **3.30** by R50 on MobileNetV2GN — yet was
-*stable and strong* on ResNet18GN (49.71%, no collapse). So the collapse is
-specific to the depthwise-separable + GroupNorm architecture, not FedProx logic.
+Recorded for completeness (not a KD hook). FedProx (μ=0.01, canonical) peaks
+**49.04% (R45)** then diverges to **24.79%** with loss **3.30** by R50 on
+MobileNetV2GN — yet was *stable and strong* on ResNet18GN (49.71%, no collapse).
+So the collapse is specific to the depthwise-separable + GroupNorm architecture,
+not FedProx logic — and it is **real at the shipped config**, not a bad-μ artifact.
 **Action:** none in this audit; flag for the formal-grid **stability watch** —
 proximal μ may need per-model tuning or the run may need convergence guards.
 
@@ -230,7 +231,7 @@ config, not headline numbers:
 | F11 | 🟠 | direction · framing | FedMAQ (mechanism)                      | not a bug; lead thesis with comm+severe-skew, treat "EMA closes α=1.0 gap" as hypothesis to sweep |
 | F12 | 🟡 | config · latent     | `cfd.py:298`,`fedavg_kd.py:97`,`fedmaq.py:484` | align fallback to 3000 or fail-loud; bundle with code-audit F8 |
 | F13 | 🟡 | coverage · gating   | FedMD, FedDistill, CFD, FedAvg+KD       | run MobileNetV2GN smoke for the 4 missing KD baselines before freeze (`run-minitest`) |
-| F14 | 🟡 | stability (out-of-KD-scope) | FedProx (μ=1.0)                 | model-specific collapse; formal-grid stability watch |
+| F14 | 🟡 | stability (out-of-KD-scope) | FedProx (μ=0.01, canonical)     | model-specific collapse; formal-grid stability watch |
 
 **Headline:** the *direction* is sound — soft-voting, T=1.0, and hybrid>pure all
 hold as trends, and FedMAQ's severe-skew robustness is the defensible mechanism
