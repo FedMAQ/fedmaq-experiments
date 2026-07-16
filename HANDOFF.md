@@ -27,7 +27,9 @@ Nine exploratory smoke-test experiments (40–50 round, single-seed) were conduc
 
 A comprehensive algorithm audit was conducted: [docs/audits/fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md). The audit found the core algorithm sound (✅) with some defensible caveats (⚠️). Actionable recommendations: [docs/audits/fedmaq-audit-recos.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit-recos.md).
 
-A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), pending merge); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
+A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs/audits/fedmaq-code-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-code-audit.md). Findings F2/F4–F8 fixed on branch `fix/code-audit-findings` ([PR #5](https://github.com/FedMAQ/fedmaq-experiments/pull/5), **merged**); F1 accepted (wontfix-thesis); **F9 deferred** — see Priority 1 caveat below. No experimental results are affected (behavior-neutral cleanups + telemetry/robustness only).
+
+A follow-on **architecture** pass (branch `feat/architecture`, off merged `main`) is in progress — see §5.5.
 
 ---
 
@@ -81,6 +83,23 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 4. **Build the config-as-code registry**: manifest enumerating every formal run (algo × dataset × α × seed), hashed frozen configs, driving process-isolated runners.
 5. **Seed-determinism check**: ensure partitions are identical across paired arms (required for the paired test).
+
+### Priority 2.5: Architecture Branch (`feat/architecture`) — in progress
+
+Behavior-changing improvements made *before* the formal baseline freezes (safe window; no formal runs started). Landed commits (all tested, 92 green):
+
+- **Determinism (partial)**: torch RNG + deterministic-kernel flags now re-pinned **per Ray worker** inside `client_fn` (Ray actors don't inherit driver flags); DataLoader `generator`/`worker_init_fn` seeded; `experiment.strict_determinism` knob (default true). Training is now **bit-identical given a fixed sampled client**.
+- **Phase 2** — centralized server model-factory dispatch (`models.get_server_model_factory`), removing the duplicated inline rule in `FedMAQHook`.
+- **Phase 4** — centralized cross-hook fallback defaults (`core/config_defaults.py`) with a regression test; flagged two stale fallbacks (`num_public_samples` 200 vs conf 3000; `weight_decay` 0.0 vs conf 1e-4) left inline rather than enshrined.
+- **Phase 5** — split `FedMAQHook.configure_fit` god-method into named helpers + `_QuantParams` (F8 fail-loud preserved).
+
+**Deferred — do these before the confirmatory grid (they gate Priority 2's seed-determinism):**
+
+- **Deterministic ClientManager** (NEW, blocks end-to-end reproducibility): *which* client trains each round is still Flower/Ray-nondeterministic (random node-IDs, timing-dependent registration, global-`random` sampling). Training is reproducible; **sampling is not**. Needs a seeded ClientManager that samples by partition-id per round. This is the real gate for a bit-identical regression oracle and for step 5 below — not yet built.
+- **Phase 3 = Priority 2 step 4** (config-as-code run registry): still owed; must encode `post_process=true` for primary-grid FedMAQ cells (headline §4.3 comm mechanism; default is `false`, a footgun the registry must own).
+- **Phase 6** (optional, only if cheap): decouple `strategy.py` `isinstance(DAdaQuantHook)` proxies; cross-layer imports.
+
+Branch is unpushed — ready to push + PR when the above scope decisions are settled.
 
 ### Priority 3: Ablations & Deferred Details
 
