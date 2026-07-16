@@ -121,8 +121,11 @@ dead-fallback (F12), 4 KD baselines unmeasured on MobileNetV2GN (F13).
     num_groups-divisible channel rounding in `MobileNetV2GN` (no-op at
     width_mult=1.0, full-model param counts unchanged); regression test
     `tests/test_models.py`. Clarifies Decision 1's blanket "every algorithm
-    trains MobileNetV2GN": FedKD/FedMAQ-Lite are deliberate compact-student
-    exceptions within the MobileNetV2 family. **Run-gated:** prior FedKD
+    trains MobileNetV2GN": FedKD is a deliberate compact-student exception.
+    The dropped FedMAQ-Lite variant keeps its **own legacy SimpleCNN student**
+    (`get_fedmaq_lite_student_model`), deliberately decoupled from FedKD's so
+    this switch does not alter FedMAQ-Lite's archived-smoke architecture
+    (Decision 4). **Run-gated:** prior FedKD
     (SimpleCNN) numbers are retired; a re-run on the new student rides the GPU
     wave (F10 re-confirm / F13). Manuscript §4.1 (F17) updated to match.
 

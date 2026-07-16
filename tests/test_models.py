@@ -14,8 +14,11 @@ import torch
 
 from fedmaq.core.models import (
     MobileNetV2GN,
+    SimpleCNN,
+    get_client_model,
     get_kd_student_model,
     get_model,
+    get_server_model_factory,
 )
 
 
@@ -44,3 +47,14 @@ def test_width_half_student_forward_pass_and_groupnorm_valid() -> None:
     student = get_kd_student_model("cifar10", 10)
     out = student(torch.randn(2, 3, 32, 32))
     assert out.shape == (2, 10)
+
+
+def test_fedmaq_lite_keeps_legacy_simplecnn_student() -> None:
+    # FedKD's student switch (DECISIONS #22) must NOT leak into fedmaq_lite,
+    # which is the SimpleCNN variant by definition (DECISIONS #4) and whose
+    # archived smoke results depend on that backbone.
+    assert isinstance(get_client_model("fedmaq_lite", "cifar10", 10), SimpleCNN)
+    server_factory = get_server_model_factory("fedmaq_lite")
+    assert isinstance(server_factory("cifar10", 10), SimpleCNN)
+    # FedKD, by contrast, gets the width-0.5 MobileNetV2GN student.
+    assert isinstance(get_client_model("fedkd", "cifar10", 10), MobileNetV2GN)

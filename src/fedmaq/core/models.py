@@ -372,18 +372,38 @@ def get_model(
 
 
 def get_kd_student_model(dataset_name: str, num_classes: int) -> nn.Module:
-    """Retrieve student model for knowledge distillation baselines (FedKD/FedMAQ).
+    """Retrieve FedKD's on-client student model.
 
     On CIFAR the student is a width-0.5 MobileNetV2GN: same depthwise-separable
     backbone as the full model (so distillation stays iso-family and the
-    SVD-compressed delta is genuinely depthwise-separable) but roughly a third
+    SVD-compressed delta is genuinely depthwise-separable) but roughly a quarter
     the parameters, preserving FedKD's compact-student communication story now
-    that the full model is only ~2.24M. FEMNIST keeps the smaller TinyCNN student
-    paired with its LeNet-scale full model.
+    that the full model is only ~2.24M (DECISIONS #22). FEMNIST keeps the smaller
+    TinyCNN student paired with its LeNet-scale full model.
+
+    Note: this is FedKD-specific. The dropped FedMAQ-Lite variant keeps its own
+    legacy SimpleCNN student via :func:`get_fedmaq_lite_student_model` — the two
+    intentionally diverged when FedKD's student moved to MobileNetV2GN.
     """
     dataset_name_lower = dataset_name.lower()
     if "cifar" in dataset_name_lower:
         return MobileNetV2GN(in_channels=3, num_classes=num_classes, width_mult=0.5)
+    else:
+        return TinyCNN(in_channels=1, num_classes=num_classes)
+
+
+def get_fedmaq_lite_student_model(dataset_name: str, num_classes: int) -> nn.Module:
+    """Legacy compact student for the dropped FedMAQ-Lite variant (SimpleCNN/TinyCNN).
+
+    FedMAQ-Lite *is* the SimpleCNN variant by definition; this preserves that
+    backbone so its archived smoke results stay reproducible (DECISIONS #4).
+    Kept distinct from :func:`get_kd_student_model` so FedKD's move to a
+    width-0.5 MobileNetV2GN student (DECISIONS #22) does not silently change
+    FedMAQ-Lite's architecture.
+    """
+    dataset_name_lower = dataset_name.lower()
+    if "cifar" in dataset_name_lower:
+        return SimpleCNN(in_channels=3, num_classes=num_classes)
     else:
         return TinyCNN(in_channels=1, num_classes=num_classes)
 
@@ -400,11 +420,14 @@ def get_kd_teacher_model(dataset_name: str, num_classes: int) -> nn.Module:
 def get_client_model(alg_name: str, dataset_name: str, num_classes: int) -> nn.Module:
     """Factory: return the appropriate local model for a given algorithm.
 
-    FedKD and FedMAQ-Lite use a smaller student model (TinyCNN / SimpleCNN) for clients;
+    FedKD uses a compact width-0.5 MobileNetV2GN student (DECISIONS #22); the
+    dropped FedMAQ-Lite variant uses its own legacy SimpleCNN/TinyCNN student;
     all other algorithms (including FedMAQ) use the full standard model.
     """
-    if alg_name in {"fedkd", "fedmaq_lite"}:
+    if alg_name == "fedkd":
         return get_kd_student_model(dataset_name, num_classes)
+    if alg_name == "fedmaq_lite":
+        return get_fedmaq_lite_student_model(dataset_name, num_classes)
     return get_model(dataset_name, num_classes)
 
 
@@ -413,14 +436,13 @@ def get_server_model_factory(alg_name: str) -> Callable[[str, int], nn.Module]:
     factory the server uses for a given algorithm's grad-norm probe and
     self-distillation student/teacher.
 
-    FedMAQ-Lite operates on the KD student architecture (SimpleCNN/TinyCNN);
-    FedMAQ (and any other server-KD caller) uses the standard model. ``FedMAQHook``
-    must call this rather than re-deriving the choice inline — previously the two
-    inline copies keyed on ``fedmaq_lite`` only while :func:`get_client_model`
-    keyed on ``{fedkd, fedmaq_lite}``, a latent divergence. It is behavior-equivalent
-    here because ``fedkd`` never reaches ``FedMAQHook`` (it routes to ``FedKDHook``);
-    this factory intentionally scopes to its actual callers.
+    FedMAQ-Lite operates on its legacy SimpleCNN/TinyCNN student; FedMAQ (and any
+    other server-KD caller) uses the standard model. ``FedMAQHook`` must call this
+    rather than re-deriving the choice inline. ``fedkd`` never reaches
+    ``FedMAQHook`` (it routes to ``FedKDHook``), so this factory intentionally
+    scopes to its actual callers and returns the FedMAQ-Lite student factory —
+    not :func:`get_kd_student_model`, which is now FedKD-specific (MobileNetV2GN).
     """
     if alg_name == "fedmaq_lite":
-        return get_kd_student_model
+        return get_fedmaq_lite_student_model
     return get_model
