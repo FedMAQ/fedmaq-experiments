@@ -17,7 +17,6 @@ from flwr.server.strategy import FedAvg
 
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
-    DAdaQuantHook,
     compute_dadaquant_client_q,  # noqa: F401 — re-exported for backward compatibility
 )
 from fedmaq.core.strategy_hooks.fedmaq import (
@@ -357,45 +356,3 @@ class TelemetryFedAvg(FedAvg):
             )
 
         return eval_res
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible property proxies for DAdaQuant hook state.      #
-    # Tests (and any external code) that access strategy.q_t,             #
-    # strategy.moving_average_history, etc. continue to work unchanged.   #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def q_t(self) -> int:
-        """Current DAdaQuant time-adaptive quantization level (proxy to hook)."""
-        if isinstance(self.hook, DAdaQuantHook):
-            return self.hook.q_t
-        return 0
-
-    @q_t.setter
-    def q_t(self, value: int) -> None:
-        if isinstance(self.hook, DAdaQuantHook):
-            self.hook.q_t = value
-
-    @property
-    def moving_average_history(self) -> list[float]:
-        """DAdaQuant EMA loss history (proxy to hook)."""
-        if isinstance(self.hook, DAdaQuantHook):
-            return self.hook.moving_average_history
-        return []
-
-    @moving_average_history.setter
-    def moving_average_history(self, value: list[float]) -> None:
-        if isinstance(self.hook, DAdaQuantHook):
-            self.hook.moving_average_history = value
-
-    @property
-    def last_quantization_increase_round(self) -> int:
-        """Round number of the most recent DAdaQuant q_t increase (proxy to hook)."""
-        if isinstance(self.hook, DAdaQuantHook):
-            return self.hook.last_quantization_increase_round
-        return 0
-
-    @last_quantization_increase_round.setter
-    def last_quantization_increase_round(self, value: int) -> None:
-        if isinstance(self.hook, DAdaQuantHook):
-            self.hook.last_quantization_increase_round = value

@@ -469,17 +469,17 @@ def test_dadaquant_strategy_allocation():
     # Simulate convergence to test time-adaptive q_t doubling
     # phi is 3, so we check convergence when we have at least phi + 1 (4) rounds of history
     # and rounds_since_increase >= 3.
-    strategy.moving_average_history = [1.0, 1.0, 1.0, 1.0]  # Plateau detected
-    strategy.last_quantization_increase_round = 0
-    strategy.q_t = 4
+    strategy.hook.moving_average_history = [1.0, 1.0, 1.0, 1.0]  # Plateau detected
+    strategy.hook.last_quantization_increase_round = 0
+    strategy.hook.q_t = 4
 
     # Run configure_fit for round 5 (checks history up to round 4)
     instructions = strategy.configure_fit(
         server_round=5, parameters=params, client_manager=client_manager
     )
     # Since a plateau is detected (latest loss 1.0 >= past loss 1.0), q_t should double from 4 to 8
-    assert strategy.q_t == 8
-    assert strategy.last_quantization_increase_round == 4
+    assert strategy.hook.q_t == 8
+    assert strategy.hook.last_quantization_increase_round == 4
 
 
 def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
