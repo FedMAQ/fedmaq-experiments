@@ -22,8 +22,7 @@ from flwr.server.client_proxy import ClientProxy
 from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import (
     DEVICE,
-    get_kd_student_model,
-    get_model,
+    get_server_model_factory,
     set_model_parameters,
 )
 from fedmaq.core.partitioning import get_client_loader
@@ -173,12 +172,11 @@ class FedMAQHook(StrategyHook):
         batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
         device = torch.device(self._config.get("device") or DEVICE)
 
-        # Lazily instantiate and cache the gradient norm model.
-        # FedMAQ-Lite's global/client model is the KD student (TinyCNN for 1-channel,
-        # SimpleCNN for CIFAR), while FedMAQ uses the standard model (MobileNetV2GN on CIFAR).
-        # We pick the model architecture dynamically depending on the algorithm name.
+        # Lazily instantiate and cache the gradient norm model. The factory
+        # (standard model for FedMAQ, KD student for FedMAQ-Lite) is resolved by
+        # get_server_model_factory — the single source of truth for this choice.
         alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
-        model_fn = get_kd_student_model if alg_name == "fedmaq_lite" else get_model
+        model_fn = get_server_model_factory(alg_name)
         if self._grad_norm_model is None:
             self._grad_norm_model = model_fn(dataset_name, num_classes)
             self._grad_norm_model.to(device)
@@ -312,9 +310,9 @@ class FedMAQHook(StrategyHook):
         device = torch.device(self._config.get("device") or DEVICE)
         alg_cfg = self._config.get("algorithm", {})
 
-        # Select student/teacher architecture factory dynamically depending on algorithm variant
+        # Select student/teacher architecture factory (single source of truth).
         alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
-        model_fn = get_kd_student_model if alg_name == "fedmaq_lite" else get_model
+        model_fn = get_server_model_factory(alg_name)
 
         teacher_bit_widths = None
         if alg_cfg.get("soft_voting", False):
