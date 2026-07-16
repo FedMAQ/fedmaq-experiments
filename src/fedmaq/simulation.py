@@ -7,6 +7,7 @@ Hydra's ``compose`` API and call :func:`run` directly.
 """
 
 import logging
+import os
 import random
 from pathlib import Path
 
@@ -40,13 +41,31 @@ from fedmaq.core.telemetry import TelemetryManager
 logger = logging.getLogger("fedmaq")
 
 
-def set_seed(seed: int) -> None:
-    """Set global seeds for reproducibility."""
+def set_seed(seed: int, strict: bool = True) -> None:
+    """Set global seeds and (optionally) enforce deterministic kernels.
+
+    Reproducibility spine for the paired confirmatory grid: seeds
+    Python/NumPy/torch (+CUDA), pins cuDNN to deterministic mode, and requests
+    deterministic algorithms. ``strict=True`` raises when an op lacks a
+    deterministic implementation (surfacing it) rather than silently falling
+    back to a non-deterministic kernel.
+
+    ``CUBLAS_WORKSPACE_CONFIG`` must be set before the first CUDA context is
+    created for deterministic cuBLAS GEMMs; we set it here (idempotently) so it
+    is in place before any CUDA use and is inherited by Ray workers spawned
+    afterwards. Note this function is also called inside ``client_fn`` to reseed
+    each Ray worker process, since the driver's seed does not propagate across
+    process boundaries.
+    """
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True, warn_only=not strict)
 
 
 def run(cfg: DictConfig) -> TelemetryManager:
@@ -55,8 +74,13 @@ def run(cfg: DictConfig) -> TelemetryManager:
     Returns the :class:`TelemetryManager` so callers/tests can inspect
     ``cumulative_bytes`` and the emitted JSONL/CSV logs after the run.
     """
-    # Set seed
-    set_seed(cfg.seed)
+    # Set seed. strict_determinism (default true) makes non-deterministic ops
+    # raise instead of silently degrading reproducibility; flip off only to
+    # diagnose an op that lacks a deterministic kernel.
+    strict_determinism = bool(
+        OmegaConf.select(cfg, "experiment.strict_determinism", default=True)
+    )
+    set_seed(cfg.seed, strict=strict_determinism)
 
     # Check GPU availability and warn if not detected
     if not torch.cuda.is_available():
@@ -98,10 +122,19 @@ def run(cfg: DictConfig) -> TelemetryManager:
     def client_fn(context: fl.app.Context) -> fl.client.Client:
         partition_id = context.node_config["partition-id"]
 
+        # Reseed inside the Ray worker: the driver's set_seed does not propagate
+        # across process boundaries. Per-client offset keeps each client's
+        # stochastic ops independent yet reproducible across runs. The client
+        # loader below is given a matching generator so its shuffle order is
+        # deterministic (identical each round) rather than driven by global RNG.
+        client_seed = int(cfg.seed) + int(partition_id)
+        set_seed(client_seed, strict=strict_determinism)
+
         train_loader = get_client_loader(
             dataset_name=dataset_name,
             client_id=partition_id,
             client_indices_dict=client_indices_dict,
+            seed=client_seed,
             batch_size=cfg.experiment.batch_size,
             train=True,
         )

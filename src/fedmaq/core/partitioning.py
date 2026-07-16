@@ -11,6 +11,7 @@ Supported partition modes:
 
 import json
 import os
+import random
 from functools import lru_cache
 from pathlib import Path
 
@@ -247,18 +248,45 @@ def generate_partition_indices(
     return public_indices, client_indices
 
 
+def _seed_worker(worker_id: int) -> None:
+    """DataLoader ``worker_init_fn`` for deterministic multi-worker shuffling.
+
+    No-op for the default ``num_workers=0`` (single-process) case, but keeps
+    shuffling reproducible if worker processes are ever enabled.
+    """
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def get_client_loader(
     dataset_name: str,
     client_id: int,
     client_indices_dict: dict[str, list[int]],
     batch_size: int = 64,
     train: bool = True,
+    seed: int | None = None,
 ) -> torch.utils.data.DataLoader:
-    """Return PyTorch DataLoader for a specific client partition."""
+    """Return PyTorch DataLoader for a specific client partition.
+
+    When ``seed`` is given and ``train`` shuffling is on, a dedicated
+    ``torch.Generator`` drives the shuffle so batch order is reproducible across
+    runs and independent of global-RNG advancement.
+    """
     dataset = _load_dataset_cached(dataset_name, train)
     indices = client_indices_dict[str(client_id)]
     client_subset = Subset(dataset, indices)
-    return torch.utils.data.DataLoader(client_subset, batch_size=batch_size, shuffle=train)
+    generator = None
+    if seed is not None and train:
+        generator = torch.Generator()
+        generator.manual_seed(int(seed))
+    return torch.utils.data.DataLoader(
+        client_subset,
+        batch_size=batch_size,
+        shuffle=train,
+        generator=generator,
+        worker_init_fn=_seed_worker,
+    )
 
 
 def get_server_loaders(

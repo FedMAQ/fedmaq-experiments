@@ -13,6 +13,11 @@ total_rounds: 100         # R per manuscript §4.3, Table 4.1
 num_public_samples: 3000  # |D_pub| per manuscript §4.3, Table 4.1
 client_gpus: 1.0          # GPU resource fraction allocated per client simulator
 
+# Reproducibility: when true, non-deterministic CUDA/torch ops raise instead of
+# silently degrading run-to-run reproducibility (see simulation.set_seed). Flip
+# off only to diagnose an op that lacks a deterministic kernel.
+strict_determinism: true
+
 # Bandwidth and Compute settings (uniform)
 bandwidth_mbps: 10.0
 compute_samples_per_sec: 200.0
