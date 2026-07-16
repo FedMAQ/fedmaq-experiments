@@ -1,6 +1,13 @@
 name: fedkd
 tmin: 0.1   # starting SVD energy cutoff (low compression)
 tmax: 0.95  # target SVD energy cutoff T_SVD per manuscript §4.3, Table 4.1
+# Floor on retained rank as a fraction of full rank. Without this, energy->rank
+# is non-monotonic on concentrated spectra (depthwise-separable conv deltas):
+# rank can collapse to ~4% mid-schedule even as energy target rises (F10,
+# docs/audits/distillation-direction-audit.md). Validated via diagnosing-bugs
+# probe: floor=0.25 removes the mid-round dip and keeps rank+accuracy
+# improving together across rounds.
+min_rank_frac: 0.25
 temperature: 2.0  # mutual KD temperature (client-side, distinct from server KD)
 compute_penalty: 2.5  # simulated client compute slowdown from joint student+teacher training
 

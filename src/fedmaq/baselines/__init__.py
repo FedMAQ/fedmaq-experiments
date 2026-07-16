@@ -63,7 +63,8 @@ _COMPRESSOR_HOOKS: dict[
         q=int(alg_cfg.get("q_min", 2))
     ),
     "fedkd": lambda alg_cfg, rng, state: FedKDCompressionHook(
-        energy=float(alg_cfg.get("tmin", 0.5))
+        energy=float(alg_cfg.get("tmin", 0.5)),
+        min_rank_frac=float(alg_cfg.get("min_rank_frac", 0.0)),
     ),
 }
 

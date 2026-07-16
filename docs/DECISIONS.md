@@ -35,6 +35,67 @@ Resolved via grilling session. Full rationale: [docs/plans/formal-experiment-pla
 
 ---
 
+## 2026-07-16 — Architecture Refactor: Determinism + Hook Decoupling (PRs #6, #7)
+
+Resolved across the autonomous architecture pass. Commits carry the mechanics;
+recorded here is the *why*. See [PR #6](https://github.com/FedMAQ/fedmaq-experiments/pull/6)
+(merged) and [PR #7](https://github.com/FedMAQ/fedmaq-experiments/pull/7).
+
+18. **Determinism oracle closed in three halves.** (a) per-Ray-worker torch-flag
+    re-pinning + seeded DataLoader (training reproducibility); (b)
+    `SeededPartitionClientManager` — client sampling keyed by *partition-id* with
+    per-round RNG, so paired arms at a matched seed draw identical clients; (c)
+    deterministic partitioning locked by `test_partition_seed_invariant_for_paired_arms`.
+    Enables the paired-seed/paired-test methodology (Decision 6) — seed variance
+    cancels, so ~3pp ablation deltas are detectable at n=3.
+19. **`generate_partition_indices` is a pure function** of `(dataset, num_clients,
+    alpha, num_public_samples, seed, partition)` with **no algorithm input**. Single
+    call site passes the *global* `cfg.experiment.num_public_samples`, so every arm
+    gets byte-identical partitions. **Footgun:** `num_public_samples` is sliced
+    *before* Dirichlet advances the RNG — divergent per-arm values would silently
+    diverge partitions. Safe only because it is one global config value; see audit
+    F12 for the related dead-fallback.
+20. **Hook-decoupled strategy (Phases 2/4/5/6).** Server model-factory dispatch
+    centralized (P2); cross-hook fallback defaults centralized in
+    `config_defaults.py` (P4); `configure_fit` god-method split into named helpers
+    with an extracted `_QuantParams` (P5); DAdaQuant backward-compat property
+    proxies removed from `strategy.py` — tests now hit `strategy.hook.*` (P6).
+    Rationale: one baseline's state must not leak into the shared strategy surface.
+
+**Open follow-ups** (not decisions — tracked in
+[distillation-direction-audit.md](audits/distillation-direction-audit.md)):
+FedKD near-chance accuracy (F10 — mechanism confirmed + fix landed 2026-07-16,
+see below), FedMAQ α=1.0 framing constraint (F11), `num_public_samples=200`
+dead-fallback (F12), 4 KD baselines unmeasured on MobileNetV2GN (F13).
+
+---
+
+## 2026-07-16 — F10 Fix: FedKD SVD Rank Floor (`diagnosing-bugs`)
+
+21. **`min_rank_frac` floor on SVD-compressed FedKD deltas.** Energy→rank was
+    non-monotonic on concentrated (depthwise-separable) spectra: retained rank
+    could collapse toward 1 even as the round-scheduled energy target rose,
+    starving the convergence-critical window (audit F10). Probed both
+    candidate fixes against the production `FedKDHook`/`compress_tensor` code
+    path (real MobileNetV2GN deltas, 15 simulated rounds): raising `tmin`
+    alone still dipped non-monotonically mid-schedule; a minimum-rank floor
+    (retained rank ≥ `min_rank_frac * full_rank`) eliminated the dip and rank
+    rose monotonically. Landed `min_rank_frac` param on `compress_tensor`,
+    threaded through both `FedKDCompressionHook` (client upload) and
+    `FedKDHook` (server download/eval); `conf/algorithm/fedkd.yaml` defaults
+    `min_rank_frac: 0.25`. Regression test `tests/test_fedkd_compression.py`.
+    A first synthetic code-path probe showed rank recovering but never measured
+    accuracy — flagged by advisor review as an incomplete gate (the near-chance
+    *accuracy* symptom, not the rank proxy, is what matters). Followed up with a
+    real `run-minitest` (CIFAR-10/MobileNetV2GN, preliminary/10R/α=0.1/seed=0):
+    peak accuracy 16.9%→26.3%, mean 12.0%→15.1% as the floor holds rank at
+    26.25% vs. the old default's 3.7-4.5% collapse. Noisy at minitest scale —
+    F13's full MobileNetV2GN smoke is still the gate before FedKD re-enters
+    comparison tables, but the fix now has real-run (not just synthetic)
+    evidence.
+
+---
+
 ## 2026-07-16 — Context-Docs Management Conventions (4 decisions)
 
 Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken section numbering, duplicate registries). Enforcement: [.claude/rules/docs-management.md](../.claude/rules/docs-management.md) + `.claude/skills/docs-audit/`.
