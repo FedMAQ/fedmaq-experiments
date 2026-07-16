@@ -2,7 +2,7 @@
 
 **Purpose**: Focused handoff for the next agent. All historical experiment details, audit findings, and remediation plans live in `docs/`. This document provides orientation, current state, and immediate action items only.
 
-**Last updated**: 2026-07-16 (F10 fix landed)
+**Last updated**: 2026-07-16 (non-run wave landed: F12/F15/F16/F17 + FedKD student → width-0.5 MobileNetV2GN)
 
 ---
 
@@ -76,12 +76,13 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 ### Priority 0: Distillation-Audit Follow-ups (gate the KD-family comparisons)
 
-From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md) — do before the KD baselines enter any formal table:
+From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). **F12/F15/F16/F17 landed this session** (PR #9, branch `docs/baseline-status-audit`) — remaining items are run-gated:
 
-0a. **F10 — FedKD near-chance (17%/32%): MECHANISM CONFIRMED, fix IMPLEMENTED + real-run validated.** `diagnosing-bugs` pass (2026-07-16): raising `tmin` alone still dips non-monotonically mid-schedule (insufficient); a **minimum-rank floor** (`min_rank_frac`) fixes it. Landed `compress_tensor(..., min_rank_frac=...)` threaded through client/server FedKD paths, `conf/algorithm/fedkd.yaml` defaults `min_rank_frac: 0.25`, regression test `tests/test_fedkd_compression.py` (102/102 suite green). A first synthetic code-path probe only showed rank recovering, not accuracy — caught by advisor review — so followed up with a real `run-minitest` (CIFAR-10/MobileNetV2GN, preliminary/10R/α=0.1/seed=0): peak accuracy 16.9%→26.3% (+9.4pp), mean 12.0%→15.1% as rank floor kicks in vs. old default staying pinned at 3.7-4.5% rank / near-chance accuracy. Noisy at minitest scale but real training, not synthetic. FedKD re-enters comparison tables once F13's full MobileNetV2GN smoke confirms this at scale. See audit F10.
-0b. **F13 — 4 of 5 KD baselines never ran on MobileNetV2GN** (FedMD, FedDistill, CFD, FedAvg+KD). Run a MobileNetV2GN smoke for the four before the freeze (`run-minitest`). Gates every KD-family comparison claim.
-0c. **F12 — `num_public_samples=200` dead-fallback** in `cfd.py:298`, `fedavg_kd.py:97`, `fedmaq.py:484` (latent; conf ships 3000). Align to 3000 or read fail-loud; bundle with code-audit F8.
+0a. **F10 — FedKD `min_rank_frac` fix landed, but the FedKD student CHANGED (DECISIONS #22).** The rank-floor fix (`compress_tensor(..., min_rank_frac=...)`, `fedkd.yaml: 0.25`, test `tests/test_fedkd_compression.py`) is architecture-agnostic and stays. But F17 replaced FedKD's CIFAR student (old SimpleCNN → **width-0.5 MobileNetV2GN**, `tests/test_models.py`), so the prior FedKD accuracy numbers (16.9%→26.3% minitest) are **retired**. **Run-gated action:** re-run FedKD on the new student before it re-enters any comparison table.
+0b. **F13 — 4 of 5 KD baselines never ran on MobileNetV2GN** (FedMD, FedDistill, CFD, FedAvg+KD) — plus the FedKD re-run in 0a. Run a MobileNetV2GN smoke for all before the freeze (`run-minitest`). Gates every KD-family comparison claim.
+0c. **F12 — `num_public_samples` dead-fallback ✅ DONE.** Replaced the silent `200` fallback at all four sites with fail-loud `require_num_public_samples()` (`core/config_defaults.py`); configs verified to supply 3000; regression test in `tests/test_config_defaults.py`.
 0d. **F11 — FedMAQ α=1.0 deficit is structural** (persists across models + EMA). Not a bug — a framing constraint: lead with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid must sweep.
+0e. **F14 — FedProx late-round collapse at canonical μ=0.01** on MobileNetV2GN is real (not a bad-μ artifact — F15 corrected that mislabel). Model-specific stability watch for the formal grid; proximal μ may need per-model tuning or convergence guards.
 
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 
