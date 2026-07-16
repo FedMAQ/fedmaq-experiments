@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -48,6 +49,43 @@ logger = logging.getLogger(__name__)
 # clients; reachability depends on c_unit and configured memory range (see
 # conf/algorithm/fedmaq.yaml).
 DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
+
+
+@dataclass(frozen=True)
+class _QuantParams:
+    """Parsed FedMAQ quantization hyperparameters for one configure_fit call.
+
+    Grouping these keeps the q-assignment helper's signature small and, via
+    ``from_cfg``, preserves the F8 fail-loud contract: the algorithm-defining
+    knobs (``q_min``/``q_max``/``c_unit``/``formulation``) are read with no
+    default so a missing/renamed key raises up front, before any probe work.
+    """
+
+    q_min: int
+    q_max: int
+    c_unit: float
+    formulation: int
+    gamma1: float
+    gamma2: float
+    lambda_val: float
+    tau_g: float
+    tau_n: float
+    bit_widths: tuple[int, ...]
+
+    @classmethod
+    def from_cfg(cls, alg_cfg: dict[str, Any]) -> _QuantParams:
+        return cls(
+            q_min=int(alg_cfg["q_min"]),
+            q_max=int(alg_cfg["q_max"]),
+            c_unit=float(alg_cfg["c_unit"]),
+            formulation=int(alg_cfg["formulation"]),
+            gamma1=float(alg_cfg.get("gamma1", 0.5)),
+            gamma2=float(alg_cfg.get("gamma2", 0.5)),
+            lambda_val=float(alg_cfg.get("lambda_val", 1.0)),
+            tau_g=float(alg_cfg.get("tau_g", 0.5)),
+            tau_n=float(alg_cfg.get("tau_n", 0.5)),
+            bit_widths=tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)),
+        )
 
 
 def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
@@ -157,50 +195,72 @@ class FedMAQHook(StrategyHook):
         # not sampled this round, nor grows unbounded across the run.
         self._round_client_q.clear()
         alg_cfg = self._config.get("algorithm", {})
-        # F8: algorithm-defining knobs are read fail-loud (no .get default) so a
-        # missing/renamed key raises instead of silently substituting a value that
-        # would redefine the quantization behavior. Tuning knobs below keep defaults.
-        q_min = int(alg_cfg["q_min"])
-        q_max = int(alg_cfg["q_max"])
-        c_unit = float(alg_cfg["c_unit"])
-        formulation = int(alg_cfg["formulation"])
-        gamma1 = float(alg_cfg.get("gamma1", 0.5))
-        gamma2 = float(alg_cfg.get("gamma2", 0.5))
-        lambda_val = float(alg_cfg.get("lambda_val", 1.0))
-        tau_g = float(alg_cfg.get("tau_g", 0.5))
-        tau_n = float(alg_cfg.get("tau_n", 0.5))
-        bit_widths = tuple(
-            int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)
-        )
+        # F8: read the algorithm-defining knobs fail-loud up front (from_cfg has no
+        # default for them) so a missing/renamed key raises before any probe work.
+        qp = _QuantParams.from_cfg(alg_cfg)
 
         dataset_name = self._config.get("dataset", {}).get("name", DATASET_NAME)
         num_classes = int(self._config.get("dataset", {}).get("num_classes", NUM_CLASSES))
         batch_size = int(self._config.get("experiment", {}).get("batch_size", BATCH_SIZE))
         device = torch.device(self._config.get("device") or DEVICE)
 
-        # Lazily instantiate and cache the gradient norm model. The factory
-        # (standard model for FedMAQ, KD student for FedMAQ-Lite) is resolved by
-        # get_server_model_factory — the single source of truth for this choice.
-        alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
-        model_fn = get_server_model_factory(alg_name)
-        if self._grad_norm_model is None:
-            self._grad_norm_model = model_fn(dataset_name, num_classes)
-            self._grad_norm_model.to(device)
-        temp_model = self._grad_norm_model
-        ndarrays = parameters_to_ndarrays(parameters)
-        set_model_parameters(temp_model, ndarrays)
-        temp_model.eval()
-        criterion = nn.CrossEntropyLoss()
+        temp_model = self._ensure_grad_norm_model(parameters, dataset_name, num_classes, device)
 
         # Map client proxies to partition IDs
         client_pids = [
             resolve_partition_id(c, strategy) for c, _ in client_instructions
         ]
 
-        # 1. Compute raw gradient norms for sampled clients
+        grad_norms, dataset_sizes = self._probe_grad_norms(
+            temp_model, client_pids, dataset_name, strategy.client_indices_dict,
+            batch_size, device,
+        )
+        grad_norms = self._smooth_grad_norms(client_pids, grad_norms, alg_cfg)
+        self._last_grad_norms = grad_norms
+
+        return self._assign_quantization(
+            strategy, client_instructions, client_pids, grad_norms, dataset_sizes, qp
+        )
+
+    def _ensure_grad_norm_model(
+        self,
+        parameters: Parameters,
+        dataset_name: str,
+        num_classes: int,
+        device: torch.device,
+    ) -> nn.Module:
+        """Lazily build + cache the grad-norm probe model, then load ``parameters``.
+
+        The factory (standard model for FedMAQ, KD student for FedMAQ-Lite) is
+        resolved by get_server_model_factory — the single source of truth.
+        """
+        alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
+        model_fn = get_server_model_factory(alg_name)
+        if self._grad_norm_model is None:
+            self._grad_norm_model = model_fn(dataset_name, num_classes)
+            self._grad_norm_model.to(device)
+        temp_model = self._grad_norm_model
+        set_model_parameters(temp_model, parameters_to_ndarrays(parameters))
+        temp_model.eval()
+        return temp_model
+
+    def _probe_grad_norms(
+        self,
+        temp_model: nn.Module,
+        client_pids: list[int],
+        dataset_name: str,
+        client_indices_dict: dict[int, list[int]],
+        batch_size: int,
+        device: torch.device,
+    ) -> tuple[list[float], list[int]]:
+        """One stochastic single-batch gradient-norm probe per sampled client.
+
+        Returns the per-client raw grad norms (floored at 1e-8) and dataset sizes,
+        aligned with ``client_pids``.
+        """
+        criterion = nn.CrossEntropyLoss()
         grad_norms: list[float] = []
         dataset_sizes: list[int] = []
-        client_indices_dict = strategy.client_indices_dict
         for pid in client_pids:
             n_k = partition_dataset_size(client_indices_dict, pid)
             dataset_sizes.append(n_k)
@@ -240,26 +300,45 @@ class FedMAQHook(StrategyHook):
 
             grad_norms.append(max(1e-8, norm))
 
-        # 1.5. Gradient Norm Smoothing (Priority 3)
-        if alg_cfg.get("grad_norm_ema", False):
-            beta = float(alg_cfg.get("grad_norm_beta", 0.7))
-            smoothed_norms = []
-            for pid, raw_norm in zip(client_pids, grad_norms, strict=True):
-                if pid in self._grad_norm_ema:
-                    smoothed = beta * self._grad_norm_ema[pid] + (1.0 - beta) * raw_norm
-                else:
-                    smoothed = raw_norm
-                self._grad_norm_ema[pid] = smoothed
-                smoothed_norms.append(smoothed)
-            grad_norms = smoothed_norms
+        return grad_norms, dataset_sizes
 
-        self._last_grad_norms = grad_norms
+    def _smooth_grad_norms(
+        self,
+        client_pids: list[int],
+        grad_norms: list[float],
+        alg_cfg: dict[str, Any],
+    ) -> list[float]:
+        """EMA-smooth per-client grad norms across rounds (Priority 3), if enabled.
 
-        # 2. Normalize signals
+        Mutates ``self._grad_norm_ema``. When ``grad_norm_ema`` is off, returns the
+        raw norms unchanged.
+        """
+        if not alg_cfg.get("grad_norm_ema", False):
+            return grad_norms
+        beta = float(alg_cfg.get("grad_norm_beta", 0.7))
+        smoothed_norms = []
+        for pid, raw_norm in zip(client_pids, grad_norms, strict=True):
+            if pid in self._grad_norm_ema:
+                smoothed = beta * self._grad_norm_ema[pid] + (1.0 - beta) * raw_norm
+            else:
+                smoothed = raw_norm
+            self._grad_norm_ema[pid] = smoothed
+            smoothed_norms.append(smoothed)
+        return smoothed_norms
+
+    def _assign_quantization(
+        self,
+        strategy: TelemetryFedAvg,
+        client_instructions: list[tuple[ClientProxy, FitIns]],
+        client_pids: list[int],
+        grad_norms: list[float],
+        dataset_sizes: list[int],
+        qp: _QuantParams,
+    ) -> list[tuple[ClientProxy, FitIns]]:
+        """Normalize the signals and inject each client's bit-width ``q`` into FitIns."""
         g_max = max(grad_norms) if grad_norms else 1e-8
         n_max = max(dataset_sizes) if dataset_sizes else 1
 
-        # 3. Compute and inject client-specific quantization bit-widths
         self._last_assigned_q = {}
         updated_instructions: list[tuple[ClientProxy, FitIns]] = []
         for (client, fit_ins), pid, g_k, n_k in zip(
@@ -268,20 +347,20 @@ class FedMAQHook(StrategyHook):
             c_k = float(strategy.client_memory[pid])
             q_k_t = compute_fedmaq_q_k_t(
                 c_k=c_k,
-                c_unit=c_unit,
+                c_unit=qp.c_unit,
                 g_k=g_k,
                 g_max=g_max,
                 n_k=n_k,
                 n_max=n_max,
-                formulation=formulation,
-                q_min=q_min,
-                q_max=q_max,
-                gamma1=gamma1,
-                gamma2=gamma2,
-                lambda_val=lambda_val,
-                tau_g=tau_g,
-                tau_n=tau_n,
-                bit_widths=bit_widths,
+                formulation=qp.formulation,
+                q_min=qp.q_min,
+                q_max=qp.q_max,
+                gamma1=qp.gamma1,
+                gamma2=qp.gamma2,
+                lambda_val=qp.lambda_val,
+                tau_g=qp.tau_g,
+                tau_n=qp.tau_n,
+                bit_widths=qp.bit_widths,
             )
             # Instantiate new FitIns to prevent shared reference overwrites
             new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
