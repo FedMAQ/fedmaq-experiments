@@ -82,7 +82,7 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 ### Priority 2: Confirmation Infrastructure
 
 4. **Build the config-as-code registry**: manifest enumerating every formal run (algo × dataset × α × seed), hashed frozen configs, driving process-isolated runners.
-5. **Seed-determinism check**: ensure partitions are identical across paired arms (required for the paired test).
+5. **Seed-determinism check** ✅ **DONE**: partition generation is a pure function of `(dataset, num_clients, alpha, num_public_samples, seed)` with **no algorithm input** (single call site `simulation.py:124` passes the global `cfg.experiment.num_public_samples`, not a per-algorithm value), so paired arms at a matched seed see byte-identical partitions by construction. Locked by regression test `test_partition_seed_invariant_for_paired_arms` (`tests/test_environment.py`): regenerates from scratch into separate cache dirs (proving generation determinism, not just the JSON cache round-trip the older test covered) — same seed identical, distinct seed differs. Together with the deterministic ClientManager this closes the reproducibility oracle (data partition + client sampling + per-worker training all seed-pinned).
 
 ### Priority 2.5: Architecture Branch (`feat/architecture`) — in progress
 
