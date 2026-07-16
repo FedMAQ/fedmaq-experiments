@@ -235,8 +235,18 @@ class MobileNetV2GN(nn.Module):
         width_mult: float = 1.0,
     ) -> None:
         super().__init__()
-        input_channels = max(int(32 * width_mult), 8)
-        last_channels = max(int(1280 * width_mult), 8)
+
+        # Round scaled channel counts to a multiple of num_groups so GroupNorm
+        # stays valid at width_mult < 1.0 (e.g. the FedKD student). No-op at
+        # width_mult=1.0, where every setting below is already a multiple of 8.
+        def _divisible(v: float) -> int:
+            rounded = max(num_groups, int(v + num_groups / 2) // num_groups * num_groups)
+            if rounded < 0.9 * v:  # never drop more than 10% of the width
+                rounded += num_groups
+            return rounded
+
+        input_channels = _divisible(32 * width_mult)
+        last_channels = _divisible(1280 * width_mult)
 
         # Initial convolution — stride 1 for CIFAR 32×32 (ImageNet uses stride 2)
         self.features = nn.Sequential(
@@ -247,7 +257,7 @@ class MobileNetV2GN(nn.Module):
 
         # Inverted residual blocks
         for t, c, n, s in self._INVERTED_RESIDUAL_SETTINGS:
-            output_channels = max(int(c * width_mult), 8)
+            output_channels = _divisible(c * width_mult)
             for i in range(n):
                 stride = s if i == 0 else 1
                 self.features.append(
@@ -362,10 +372,18 @@ def get_model(
 
 
 def get_kd_student_model(dataset_name: str, num_classes: int) -> nn.Module:
-    """Retrieve student model for knowledge distillation baselines (FedKD/FedMAQ)."""
+    """Retrieve student model for knowledge distillation baselines (FedKD/FedMAQ).
+
+    On CIFAR the student is a width-0.5 MobileNetV2GN: same depthwise-separable
+    backbone as the full model (so distillation stays iso-family and the
+    SVD-compressed delta is genuinely depthwise-separable) but roughly a third
+    the parameters, preserving FedKD's compact-student communication story now
+    that the full model is only ~2.24M. FEMNIST keeps the smaller TinyCNN student
+    paired with its LeNet-scale full model.
+    """
     dataset_name_lower = dataset_name.lower()
     if "cifar" in dataset_name_lower:
-        return SimpleCNN(in_channels=3, num_classes=num_classes)
+        return MobileNetV2GN(in_channels=3, num_classes=num_classes, width_mult=0.5)
     else:
         return TinyCNN(in_channels=1, num_classes=num_classes)
 
