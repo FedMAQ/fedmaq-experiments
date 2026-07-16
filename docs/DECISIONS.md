@@ -92,7 +92,39 @@ dead-fallback (F12), 4 KD baselines unmeasured on MobileNetV2GN (F13).
     26.25% vs. the old default's 3.7-4.5% collapse. Noisy at minitest scale —
     F13's full MobileNetV2GN smoke is still the gate before FedKD re-enters
     comparison tables, but the fix now has real-run (not just synthetic)
-    evidence.
+    evidence. **Superseded-evidence note (see Decision 22):** the real-run
+    confirmation above trained the *old* SimpleCNN student; the fix itself is
+    architecture-agnostic (it floors rank), but FedKD's accuracy numbers here
+    are retired along with the SimpleCNN student and must be re-measured on the
+    width-0.5 MobileNetV2GN student. The synthetic probe already used
+    MobileNetV2GN deltas, so "depthwise-separable spectra" now describes the
+    real FedKD student too, not just the probe.
+
+---
+
+## 2026-07-16 — F17: FedKD Student Architecture (methodology cohesion)
+
+22. **FedKD CIFAR student = width-0.5 MobileNetV2GN** (path B). The iso-arch
+    switch (Decision 1) shrank the full model to ~2.24M, leaving FedKD's old
+    SimpleCNN student (~2.16M) neither meaningfully smaller nor on the
+    depthwise-separable family the rest of the grid trains — a comparison
+    confound (is FedKD's result from SVD+distillation, or from a different
+    backbone?) and a collapsed "compact-student" communication story. Rejected:
+    (A) iso-arch student=teacher MobileNetV2GN (degenerate mutual distillation
+    between identical-capacity nets, unfaithful to Wu 2022's mentor-mentee
+    asymmetry) and (C) keep SimpleCNN and merely document the confound. Chose a
+    **width-0.5 MobileNetV2GN student (~0.59M CIFAR-10, ~0.26× the full model)**:
+    genuinely smaller, same depthwise-separable backbone, so FedKD's SVD now
+    compresses depthwise-separable deltas and the compact-student story holds.
+    Scoped to CIFAR — FEMNIST keeps its TinyCNN student paired with the
+    LeNet-scale full model. Implementation: `get_kd_student_model` +
+    num_groups-divisible channel rounding in `MobileNetV2GN` (no-op at
+    width_mult=1.0, full-model param counts unchanged); regression test
+    `tests/test_models.py`. Clarifies Decision 1's blanket "every algorithm
+    trains MobileNetV2GN": FedKD/FedMAQ-Lite are deliberate compact-student
+    exceptions within the MobileNetV2 family. **Run-gated:** prior FedKD
+    (SimpleCNN) numbers are retired; a re-run on the new student rides the GPU
+    wave (F10 re-confirm / F13). Manuscript §4.1 (F17) updated to match.
 
 ---
 

@@ -170,6 +170,9 @@ versa), the code/decision is correct and the **manuscript is out of date**.
 hyperparameter table, or record an explicit decision that it stays an
 implementation-level guard undocumented in the table. `align-manuscript` skill.
 
+> **Resolved 2026-07-16.** Added row `FedKD: Minimum Retained-Rank Fraction
+> $r_{\min}$ = 0.25` to Table 4.1 in `fedmaq-manuscript/chapter_4.tex`.
+
 ### 🟡 F17 — Manuscript §4.1 architecture (ResNet-18 / LeNet student) lags the MobileNetV2GN iso-arch decision [manuscript-follows-decision]
 
 Manuscript `chapter_4.tex` still specifies **ResNet-18 (~11.17M) teacher** and a
@@ -178,6 +181,16 @@ Manuscript `chapter_4.tex` still specifies **ResNet-18 (~11.17M) teacher** and a
 The decision is authoritative; the manuscript is behind. **Action:** update
 manuscript §4.1 model prose (and any Table 4.1-adjacent architecture text) to
 MobileNetV2GN via `align-manuscript`. Lands in `fedmaq-manuscript`, not this repo.
+
+> **Resolved 2026-07-16 (DECISIONS #22).** Auditing this surfaced that the iso-arch
+> switch made FedKD's old SimpleCNN student (~2.16M) no longer meaningfully smaller
+> than the full MobileNetV2GN (~2.24M), *and* off its depthwise-separable family —
+> a comparison confound. Resolved by switching FedKD's CIFAR student to a
+> **width-0.5 MobileNetV2GN** (~0.59M, ~0.26×; code + `tests/test_models.py`) and
+> rewriting §4.1 accordingly: full model = MobileNetV2GN; FedMAQ = full-model
+> self-distillation (un-bundled from FedKD); FedKD = compact width-0.5 student.
+> FedKD numbers are re-run-gated on the new student. Not a pure manuscript-sync
+> after all — it drove a code + design decision.
 
 ### 🟡 F12 (restated — top recommended *code* action, held this pass)
 

@@ -1,6 +1,6 @@
 # Distillation-Baseline Direction & Health Audit
 
-**Last updated:** 2026-07-16 (F10 fix implemented + validated — `min_rank_frac`; F14 μ mislabel corrected 1.0 → 0.01 canonical)
+**Last updated:** 2026-07-16 (F10 fix implemented + validated — `min_rank_frac`; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN, prior accuracy figures retired pending re-run)
 **Auditor:** Claude (Opus 4.8), grill-with-docs session
 **Lens:** forward-looking — *are the KD baselines + FedMAQ moving in the right
 direction, and which implementations look faulty?* Mines archived + recent
@@ -118,6 +118,15 @@ symptom, not just the proxy metric. Logs:
 **Action:** code fix is in and now has real-run evidence at minitest scale. FedKD
 is eligible to re-enter comparison tables once F13's full MobileNetV2GN smoke
 (more rounds, matches the other KD baselines' scale) confirms this holds up.
+
+> **Superseded arch note (2026-07-16, DECISIONS #22).** The runs above trained
+> FedKD's *old* SimpleCNN student. That student has since been replaced by a
+> width-0.5 MobileNetV2GN (genuinely smaller, depthwise-separable) to remove the
+> cross-architecture confound with the iso-arch grid. The `min_rank_frac` fix is
+> architecture-agnostic and still applies, but the FedKD *accuracy* figures in
+> this section are retired and will be re-measured on the new student in the GPU
+> re-run wave. Item 3's "depthwise-separable" framing, previously an imperfect
+> match to the SimpleCNN student, now describes the real FedKD student.
 
 ### 🟠 F11 — FedMAQ's α=1.0 accuracy deficit is real (persists across models & EMA) [direction · framing]
 
