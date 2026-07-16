@@ -294,6 +294,7 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         "client_fraction": 1.0,
         "bandwidth_mbps": 10.0,
         "compute_samples_per_sec": 200.0,
+        "num_public_samples": 10,
         "telemetry": {
             "wandb_enabled": False,
             "project": "test",
@@ -511,6 +512,7 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             "client_fraction": 1.0,
             "bandwidth_mbps": 10.0,
             "compute_samples_per_sec": 200.0,
+            "num_public_samples": 10,
             "telemetry": {
                 "wandb_enabled": False,
                 "project": "test",
@@ -759,6 +761,7 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 "weight_decay": 0.0,
                 "bandwidth_mbps": 10.0,
                 "compute_samples_per_sec": 200.0,
+                "num_public_samples": 10,
             },
             "algorithm": {
                 "name": "fedkd",

@@ -15,6 +15,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
+from fedmaq.core.config_defaults import require_num_public_samples
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     compute_dadaquant_client_q,  # noqa: F401 — re-exported for backward compatibility
@@ -258,7 +259,7 @@ class TelemetryFedAvg(FedAvg):
         exp_config = self.config.get("experiment", self.config)
         epochs = exp_config.get("local_epochs", 5)
         public_epochs = int(self.config.get("algorithm", {}).get("public_epochs", 5))
-        num_public = int(self.config.get("experiment", {}).get("num_public_samples", 200))
+        num_public = require_num_public_samples(self.config)
         compute_scale = self.hook.compute_speed_scale()
 
         for client_proxy, fit_res in results:

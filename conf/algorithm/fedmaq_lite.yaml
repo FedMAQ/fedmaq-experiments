@@ -1,3 +1,9 @@
+# EXPLORATION-APPENDIX ONLY — NOT a formal grid arm.
+# FedMAQ-Lite (SimpleCNN student) was dropped from the thesis grid: its
+# size-contrast story is confounded now that main FedMAQ is also ~2.24M params
+# (MobileNetV2GN). See docs/DECISIONS.md Decision 4. The dispatch code path is
+# retained only so the archived smoke results remain reproducible; do not add
+# this arm to any formal sweep.
 name: fedmaq_lite
 # Bit-width bounds for the soft-quality-target interpolation range (formulations 1-4)
 q_min: 1
