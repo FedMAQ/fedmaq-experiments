@@ -19,6 +19,12 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.config_defaults import (
+    BATCH_SIZE,
+    DATASET_NAME,
+    NUM_CLASSES,
+    SERVER_COMPUTE_SPEED,
+)
 from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import (
     DEVICE,
@@ -167,9 +173,9 @@ class FedMAQHook(StrategyHook):
             int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)
         )
 
-        dataset_name = self._config.get("dataset", {}).get("name", "mnist")
-        num_classes = int(self._config.get("dataset", {}).get("num_classes", 10))
-        batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
+        dataset_name = self._config.get("dataset", {}).get("name", DATASET_NAME)
+        num_classes = int(self._config.get("dataset", {}).get("num_classes", NUM_CLASSES))
+        batch_size = int(self._config.get("experiment", {}).get("batch_size", BATCH_SIZE))
         device = torch.device(self._config.get("device") or DEVICE)
 
         # Lazily instantiate and cache the gradient norm model. The factory
@@ -304,9 +310,9 @@ class FedMAQHook(StrategyHook):
         if aggregated_parameters is None:
             return aggregated_parameters, metrics
 
-        dataset_name = self._config.get("dataset", {}).get("name", "mnist")
-        num_classes = int(self._config.get("dataset", {}).get("num_classes", 10))
-        batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
+        dataset_name = self._config.get("dataset", {}).get("name", DATASET_NAME)
+        num_classes = int(self._config.get("dataset", {}).get("num_classes", NUM_CLASSES))
+        batch_size = int(self._config.get("experiment", {}).get("batch_size", BATCH_SIZE))
         device = torch.device(self._config.get("device") or DEVICE)
         alg_cfg = self._config.get("algorithm", {})
 
@@ -398,7 +404,7 @@ class FedMAQHook(StrategyHook):
         num_public = int(
             self._config.get("experiment", {}).get("num_public_samples", 200)
         )
-        server_compute_speed = float(alg_cfg.get("server_compute_speed", 2000.0))
+        server_compute_speed = float(alg_cfg.get("server_compute_speed", SERVER_COMPUTE_SPEED))
         kd_time = kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
@@ -410,7 +416,7 @@ class FedMAQHook(StrategyHook):
         # the same sample-pass units as the KD term. Previously unmodeled, so the
         # server-side cost of the adaptive-quantization signal was under-reported.
         if server_compute_speed > 0.0:
-            batch_size = int(self._config.get("experiment", {}).get("batch_size", 64))
+            batch_size = int(self._config.get("experiment", {}).get("batch_size", BATCH_SIZE))
             probe_time = (len(results) * batch_size) / server_compute_speed
         else:
             probe_time = 0.0
