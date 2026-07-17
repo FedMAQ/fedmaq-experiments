@@ -2,13 +2,13 @@
 
 **Purpose**: Focused handoff for the next agent. All historical experiment details, audit findings, and remediation plans live in `docs/`. This document provides orientation, current state, and immediate action items only.
 
-**Last updated**: 2026-07-17 (F13 closed — 3 KD baselines ran full 50R MobileNetV2GN smoke; CFD surfaced a new collapse defect, distillation-audit F15)
+**Last updated**: 2026-07-18 (F14 closed — all pre-grid gates now clear; CFD dropped Decision 26; FedAvg+KD/FedProx reclassified 🟢 via F18/F14 severe-skew findings, not defects)
 
 ---
 
 ## 1. Project Overview
 
-FedMAQ is a communication-efficient federated learning algorithm that uses dual-tier multi-adaptive quantization and knowledge distillation. This is a Master's thesis codebase (Flower, Hydra, PyTorch) implementing FedMAQ and 7 baseline algorithms.
+FedMAQ is a communication-efficient federated learning algorithm that uses dual-tier multi-adaptive quantization and knowledge distillation. This is a Master's thesis codebase (Flower, Hydra, PyTorch) implementing FedMAQ and 6 formal baseline algorithms (FedMD and CFD were dropped — Decisions 25/26 in `docs/DECISIONS.md`).
 
 - **Current state document**: [docs/STATUS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md) — best configs, accuracy standings, open decisions.
 - **Glossary**: [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md) — canonical terminology shared across 5 repos.
@@ -72,18 +72,19 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 ## 5. Immediate Next Actions for the Next Agent
 
-> Framing/grid decisions are **already resolved** (§3, and [formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md)). Remaining work is refinement + implementation.
+> Framing/grid decisions are **already resolved** (§3, and [formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md)). **All pre-grid run-gates are closed as of 2026-07-18** — remaining work is pure finalization (Priority 1–2 below), then launch.
 
-### Priority 0: Distillation-Audit Follow-ups (gate the KD-family comparisons)
+### Priority 0: Distillation-Audit Follow-ups — ALL CLOSED (2026-07-18)
 
-From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). **F10, F12, F13, F16, F17 are DONE** — remaining item is a code fix (F15), not a run-gate:
+From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md) and [baseline-status-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/baseline-status-audit.md). **No open run-gates remain** — full history below is for context only, not action items:
 
-0a. **F10 — FedKD `min_rank_frac` fix landed and re-confirmed** on the new width-0.5 MobileNetV2GN student (DECISIONS #22): full 50R re-run both α, no more near-chance collapse. Residual 15–27pp gap vs. other baselines is an open candidate-3 finding (SVD too lossy for depthwise-separable weights), not a run-gate.
-0b. **F13 — DONE 2026-07-17.** All 3 remaining KD baselines (FedDistill, CFD, FedAvg+KD; FedMD dropped per DECISIONS #25) ran full 50R MobileNetV2GN smoke via `scripts/run_kd_baselines_smoke.py`. Results in `docs/experiments/mobilenetv2-smoke-50r/results.md`. **FedDistill and FedAvg+KD are clean, ready for comparison tables.**
-0c. **NEW — F15 (distillation-audit): CFD collapses to chance (10.0%) at both α, from round 1.** Root-caused to client-side soft-vote aggregation (`strategy_hooks/cfd.py` `pre_aggregate_fit`) producing near-chance `targets_acc` from round 1 while individual clients train fine locally (50–65% train acc) — confirms a static concern flagged earlier (memory obs #695) at runtime. **This is now the only KD-family run-gate**: CFD is excluded from comparison tables until fixed. **Next agent**: inspect `dequantize(codes, self.b_up)` (`cfd.py:183`) and the client-side codec/ordering (`client_hooks/cfd.py`) for a one-hot collapse or sample-order misalignment between client encode and server aggregation.
-0d. **F12 — `num_public_samples` dead-fallback ✅ DONE.** Replaced the silent `200` fallback at all four sites with fail-loud `require_num_public_samples()` (`core/config_defaults.py`); configs verified to supply 3000; regression test in `tests/test_config_defaults.py`.
-0e. **F11 — FedMAQ α=1.0 deficit is structural** (persists across models + EMA). Not a bug — a framing constraint: lead with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid must sweep.
-0f. **F14 — FedProx late-round collapse at canonical μ=0.01** on MobileNetV2GN is real (not a bad-μ artifact — F15 in baseline-status-audit corrected that mislabel, unrelated to the CFD F15 above — the two audits' F-numbers diverge after F14, see each doc). Model-specific stability watch for the formal grid; proximal μ may need per-model tuning or convergence guards.
+- **F10 — DONE.** FedKD `min_rank_frac` fix landed and re-confirmed on width-0.5 MobileNetV2GN student (DECISIONS #22). Residual 15–27pp gap vs. other baselines is an open candidate-3 finding (SVD too lossy for depthwise-separable weights) — reported, not gating.
+- **F13 — DONE.** All KD baselines ran full 50R MobileNetV2GN smoke. FedDistill/FedAvg+KD clean; CFD collapsed (→ F15 → Decision 26 drop).
+- **F15 — RESOLVED via drop (Decision 26).** CFD's chance-level collapse root-caused to a structural production-scale defect (client-side 1-bit vote hard-commitment under tiny per-client data budgets) — not fixable, dropped from the formal stack, same disposition as FedMD.
+- **F12 — DONE.** `num_public_samples` dead-fallback replaced with fail-loud `require_num_public_samples()`; regression test in `tests/test_config_defaults.py`.
+- **F11 — REPORTED FINDING (not a bug).** FedMAQ α=1.0 deficit is structural (persists across models + EMA) — lead thesis with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid sweeps.
+- **F14 — CLOSED 2026-07-18 as a reported finding, not a defect.** FedProx late-round volatility at canonical μ=0.01 on MobileNetV2GN (severe skew only) was: (1) static-code-reviewed clean — proximal term matches the paper exactly, no implementation bug; (2) reproduced via an instrumented 50R re-run at identical config; (3) root-caused via added grad-norm/GroupNorm-affine/CE-vs-proximal instrumentation to **client drift under-restrained by μ=0.01** on this low-capacity architecture (bounded grad norm, flat tiny proximal penalty, near-zero train CE vs. elevated oscillating test loss). Same disposition as F11/F18 — supports, not undermines, the severe-skew-robustness thesis narrative. Instrumentation (`f14_grad_norm`, `f14_gn_affine_norm`, `f14_ce_loss`, `f14_prox_penalty`) is gated to FedProx only, left in `client.py`/`client_hooks/standard.py` — safe to strip before the formal grid if unwanted.
+- **F18 — DONE.** FedAvg+KD α=0.1 weakness (17.3%) reclassified as a heterogeneity-sensitivity finding, same disposition as F11 — sane at α=1.0 (51.4%), unblocked for comparison tables.
 
 ### Operational note: system RAM headroom for Flower+Ray sims on Windows
 

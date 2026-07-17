@@ -1,6 +1,6 @@
 # Baseline Status Audit — 6 baselines + FedMAQ (FedMD dropped Decision 25, CFD dropped Decision 26)
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-18 (F14 closed — instrumented re-run confirmed reproducible severe-skew client-drift finding, not a defect; all 6 baselines + FedMAQ now ready for the formal grid)
 **Auditor:** Claude (Sonnet 5), static-pass session
 **Lens:** implementation-readiness — *for each algorithm, what is its status
 (config-consistent? has a run on the current iso-arch? behaviourally sane? open
@@ -12,8 +12,10 @@ production-scale defect (client vote hard-commitment at 1-bit under a tiny
 per-client data budget), not a fixable bug — **dropped from the formal stack,
 same disposition as FedMD** (Decision 26, 2026-07-17). FedProx μ and FedKD
 re-confirm were resolved in earlier sessions. Recommended code fixes (F12) are
-applied (PR #9). F14 (FedProx late-round collapse) remains the sole open
-pre-grid gate.
+applied (PR #9). **F14 (FedProx late-round volatility) is closed** — an
+instrumented re-run confirmed it reproduces and root-caused it to severe-skew
+client drift under-restrained by canonical μ=0.01, same disposition as F11/F18
+(reportable finding, not a defect). No pre-grid gates remain open.
 
 ## Scope & relationship to existing audits
 
@@ -77,7 +79,7 @@ Status legend: 🟢 ready (run + sane + config-consistent) · 🟡 config-ready 
 | Algorithm | Group | MobileNetV2GN run? | Sane vs FedAvg? | Config vs Table 4.1 | Open findings | Status |
 | :-- | :-- | :-: | :-- | :-- | :-- | :-: |
 | **FedAvg** | Seminal | ✅ (smoke) | reference (41.4% / 66.9%) | ✅ consistent | — | 🟢 |
-| **FedProx** | Seminal | ✅ (smoke, **μ=0.01 confirmed**) | strong then **collapses late (R45→R50)** | ✅ (μ=0.01, verified vs hydra config) | **F14** (real collapse at shipped μ), **F15** (results.md mislabels μ) | 🟠 |
+| **FedProx** | Seminal | ✅ (smoke, **μ=0.01 confirmed**; reproduced via instrumented re-run, 2026-07-18) | strong then **volatile late, severe skew only** | ✅ (μ=0.01, verified vs hydra config) | **F14** (framing), **F15** (results.md mislabels μ) | 🟢‡ |
 | **FedPAQ** | Pure Quant | ✅ (smoke) | sane (40.3% / 67.0% peak) | ✅ | — | 🟢 |
 | **DAdaQuant** | Pure Quant | ✅ (smoke) | strong (47.8% / 65.1% peak, low comm) | ✅ | — | 🟢 |
 | ~~**FedMD**~~ | Pure KD | — dropped | infeasible pretrain cost | n/a | **Decision 25** | ⚫ |
@@ -100,6 +102,20 @@ not a closed investigation either.
 open defect — sane at α=1.0 (51.4%), same disposition as FedMAQ's F11
 (reportable framing constraint, not a run-gate). Ready for comparison tables.
 
+‡ FedProx upgraded 🟠→🟢 this pass (2026-07-18): **F14 closed as a
+reproducible severe-skew finding, not a defect** — an instrumented re-run
+(same config: μ=0.01, seed=0, α=0.1, MobileNetV2GN, 50R) reproduced the
+same qualitative signature (peak mid-40s, trough mid-20s by R50 after
+failing to hold peak). Static code review found no implementation defect
+(proximal term matches the paper exactly, LR schedule decaying not
+exploding). Instrumentation root-caused the mechanism: grad norm stays
+bounded (2–3.8, no explosion) and the proximal penalty stays small and flat
+(0.01–0.04, never grows) while local train CE collapses to near-zero
+(clients overfit their skewed partition) and test loss stays high and
+oscillates in lockstep with accuracy troughs — canonical **μ=0.01 is too
+weak to restrain client drift** on this low-capacity architecture at severe
+skew. Same disposition as F11/F18: report as a finding, not a run-gate.
+
 **Smoke numbers (α=0.1 / α=1.0 peak):** FedAvg 42.3 / 66.9 · FedProx 49.0 / 67.2
 · FedPAQ 40.3 / 67.0 · DAdaQuant 47.8 / 65.1 · FedMAQ **53.2** / 60.9 · FedKD 30.1 / 38.3 (post-fix)
 / 33.6 (pre-fix) · FedDistill 39.0 / 58.0 · FedAvg+KD 27.0 / 53.7 · CFD 10.7 / 10.2
@@ -114,18 +130,26 @@ Source: [`mobilenetv2-smoke-50r/results.md`](../experiments/mobilenetv2-smoke-50
 false`). Full-precision 32-bit; behaves as the anchor every other arm is judged
 against. No action.
 
-**FedProx** — 🟠 config is **correct** (μ=0.01 matches Table 4.1) **and the smoke
+**FedProx** — 🟢 config is **correct** (μ=0.01 matches Table 4.1) **and the smoke
 actually ran μ=0.01** — verified against the surviving hydra artifact
 (`multirun/2026-07-15/mobilenetv2-smoke-50r/fedprox/.../.hydra/config.yaml` resolves
 `mu: 0.01`; `overrides.yaml` carries no μ override). **`results.md`'s "μ=1.0" label
-is a documentation error (F15).** The consequence is the opposite of a
-reassurance: the **F14 late-round collapse — peak 49.0% (R45) diverging to 24.8%
-with loss 3.30 by R50 — occurred at the shipped canonical config**, not an
-off-config stress value. So F14 is a **real stability concern at μ=0.01** on the
-MobileNetV2GN (depthwise-separable + GroupNorm) architecture — it was stable on
-ResNet18GN, so it is model-specific, but it is **not** dismissible as a bad-μ
-artifact. **Consequence:** the formal grid needs a stability watch (or convergence
-guard) for FedProx on this architecture; this is the reason FedProx is 🟠, not 🟢.
+is a documentation error (F15).** **F14 closed (2026-07-18):** static code review
+of `fedprox.py`/`FedProxLossHook` found no implementation defect — proximal term
+matches the paper exactly, param snapshot is taken after that round's global
+weights load (no staleness), LR schedule decays per round (not exploding). An
+instrumented re-run (identical config, seed=0) reproduced the same qualitative
+late-round volatility at α=0.1 (peak mid-40s failing to hold, trough mid-20s by
+R50) — confirming the effect is real and reproducible, not a single-run outlier.
+Added grad-norm / GroupNorm-affine-norm / CE-vs-proximal instrumentation
+root-caused the mechanism: bounded grad norm (2–3.8, no explosion) and a small,
+flat proximal penalty (0.01–0.04, never grows) while local train CE collapses
+toward zero (severe local overfitting to the skewed partition) and global test
+loss stays elevated and oscillates in the same rounds accuracy troughs — **client
+drift under severe skew that canonical μ=0.01 is too weak to restrain** on this
+low-capacity architecture. Stable on ResNet18GN, so still model-specific, but is
+a **documented severe-skew finding, not a defect** — same disposition as F11/F18.
+Ready for comparison tables.
 
 **FedPAQ** — 🟢 fixed 8-bit quantization (`q: 8` = Table 4.1). Sane, mid-pack
 accuracy, comm between DAdaQuant and full-precision. No open findings. Ready.
@@ -280,10 +304,11 @@ call-site default; leave or align when the fix lands. Bundle with code-audit F8.
 3. ~~F10 re-confirm~~ — **DONE 2026-07-17.** Formal 50R re-run on both α confirms
    the collapse mechanism is fixed; FedKD unblocked for tables. Residual gap
    reclassified to open candidate-3 finding, not re-opened as a run-gate.
-4. **F14 — FedProx stability watch at μ=0.01. OPEN — sole remaining pre-grid
-   gate.** The collapse is at the canonical config (F15 confirms the smoke ran
-   μ=0.01); needs root-cause + fix (or convergence guard) before the formal
-   grid, confirmed via a fresh 50R re-run.
+4. ~~F14~~ — **DONE 2026-07-18.** Static code review found no implementation
+   defect; instrumented 50R re-run (identical config, seed=0) reproduced the
+   same severe-skew volatility and root-caused it to client drift
+   under-restrained by canonical μ=0.01 — reclassified to a reportable
+   finding (same disposition as F11/F18), not a run-gate.
 5. ~~F12~~ — **DONE (PR #9).** Fail-loud fix applied.
 6. **F16 / F17 — manuscript sync** (`min_rank_frac`; MobileNetV2GN architecture) —
    `align-manuscript`, lands in `fedmaq-manuscript`.
@@ -298,20 +323,20 @@ call-site default; leave or align when the fix lands. Bundle with code-audit F8.
 
 ## Bottom line
 
-**FedAvg/FedPAQ/DAdaQuant/FedDistill/FedAvg+KD are 🟢** (run, sane,
-config-consistent; FedAvg+KD's α=0.1 weakness reclassified to a reportable
-finding, F18). **FedKD is 🟡**: its F10 collapse is fixed and confirmed, but
-the residual gap vs. other baselines is reclassified to an open candidate-3
-finding, not a closed investigation. **FedProx is config-correct but 🟠**: it
-ran the canonical μ=0.01 (F15 corrects a `results.md` mislabel) and still
-collapsed late-round on MobileNetV2GN (**F14**) — a real stability concern at
-the shipped config, needing root-cause + fix before the formal grid. **CFD is
-⚫ dropped**: F13's run closed the evidence gap and surfaced a genuine collapse,
+**FedAvg/FedPAQ/DAdaQuant/FedDistill/FedAvg+KD/FedProx are 🟢** (run, sane,
+config-consistent). FedProx's severe-skew volatility (**F14**) and FedAvg+KD's
+α=0.1 weakness (**F18**) are both reclassified to reportable heterogeneity-
+sensitivity findings, not defects — F14 confirmed reproducible and root-caused
+via an instrumented re-run to client drift under-restrained by canonical
+μ=0.01 on this low-capacity architecture. **FedKD is 🟡**: its F10 collapse is
+fixed and confirmed, but the residual gap vs. other baselines is reclassified
+to an open candidate-3 finding, not a closed investigation. **CFD is ⚫
+dropped**: F13's run closed the evidence gap and surfaced a genuine collapse,
 root-caused to a structural defect (1-bit vote hard-commitment at production
 client counts) — not fixable at the current per-client data budget, so it's
 removed from the formal stack (Decision 26), same disposition as FedMD.
 Two low-severity **manuscript-sync** items (**F16**, **F17**) are resolved, one
 **doc-error correction** (**F15**) is resolved, the **code fix** (**F12**) is
-merged, and **F18** (FedAvg+KD framing) is resolved. **F13 is closed** — the
-KD-family evidence gap is gone; the **only remaining pre-grid gate is F14**
-(FedProx late-round stability).
+merged, and **F14/F18** (severe-skew framing findings) are resolved. **F13 is
+closed** — the KD-family evidence gap is gone; **no pre-grid gates remain
+open. The formal grid is unblocked.**

@@ -1,6 +1,6 @@
 # Distillation-Baseline Direction & Health Audit
 
-**Last updated:** 2026-07-17 (F13 closed — FedDistill/CFD/FedAvg+KD ran full 50R MobileNetV2GN smoke; new F15 opened — CFD collapses to chance both α, root-caused to client soft-vote aggregation; F10 collapse mechanism fixed & confirmed on formal 50R re-run, both α, width-0.5 MobileNetV2GN student — residual gap reclassified to still-open candidate 3, not resolved; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN)
+**Last updated:** 2026-07-18 (F14 closed — instrumented 50R re-run at canonical μ=0.01 reproduced the severe-skew volatility and root-caused it to client drift under-restrained by μ, reclassified to a reportable finding, not a defect; F13 closed 2026-07-17 — FedDistill/CFD/FedAvg+KD ran full 50R MobileNetV2GN smoke; new F15 opened — CFD collapses to chance both α, root-caused to client soft-vote aggregation, later dropped per Decision 26; F10 collapse mechanism fixed & confirmed on formal 50R re-run, both α, width-0.5 MobileNetV2GN student — residual gap reclassified to still-open candidate 3, not resolved; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN)
 **Auditor:** Claude (Opus 4.8), grill-with-docs session
 **Lens:** forward-looking — *are the KD baselines + FedMAQ moving in the right
 direction, and which implementations look faulty?* Mines archived + recent
@@ -251,15 +251,28 @@ and FedAvg+KD are clean enough to enter comparison tables as-is. **CFD's collaps
 is a new, separate defect (F15)** and should **not** be treated as a valid
 baseline number until F15 is resolved.
 
-### 🟡 F14 — FedProx α=0.1 late-round collapse is model-specific [stability · out-of-KD-scope]
+### 🟢 F14 — FedProx α=0.1 late-round volatility is a reproducible severe-skew finding, not a defect [stability · CLOSED 2026-07-18]
 
-Recorded for completeness (not a KD hook). FedProx (μ=0.01, canonical) peaks
-**49.04% (R45)** then diverges to **24.79%** with loss **3.30** by R50 on
+Recorded for completeness (not a KD hook). FedProx (μ=0.01, canonical) originally
+peaked **49.04% (R45)** then diverged to **24.79%** with loss **3.30** by R50 on
 MobileNetV2GN — yet was *stable and strong* on ResNet18GN (49.71%, no collapse).
-So the collapse is specific to the depthwise-separable + GroupNorm architecture,
-not FedProx logic — and it is **real at the shipped config**, not a bad-μ artifact.
-**Action:** none in this audit; flag for the formal-grid **stability watch** —
-proximal μ may need per-model tuning or the run may need convergence guards.
+**Closed this pass:** static code review of `fedprox.py`/`FedProxLossHook` found
+no implementation defect (proximal term matches the paper exactly, param
+snapshot taken after that round's global weights load, LR decays per round —
+not exploding). An instrumented 50R re-run at identical config (μ=0.01, seed=0,
+α=0.1) reproduced the same qualitative signature (peak mid-40s failing to hold,
+trough mid-20s by R50), confirming it is real and reproducible, not a one-off.
+Added instrumentation root-caused the mechanism: grad norm stays bounded
+(2–3.8, no explosion), the proximal penalty stays small and flat (0.01–0.04,
+never grows), while local train CE collapses toward zero (severe local
+overfitting to the skewed partition) and global test loss stays elevated and
+oscillates in lockstep with the accuracy troughs — **client drift under severe
+skew that canonical μ=0.01 is too weak to restrain** on this low-capacity,
+depthwise-separable + GroupNorm architecture. Stable on ResNet18GN, so still
+model-specific, but reclassified to a **reportable finding** (same disposition
+as F11/F18), not a run-gate. **Action:** none required; supports the
+mechanism-primary/severe-skew-robustness thesis narrative (FedMAQ/DAdaQuant
+stay stable where FedProx doesn't).
 
 ### 🔴 F15 — CFD collapses to chance accuracy from round 1, both α [correctness · new]
 
@@ -352,7 +365,7 @@ config, not headline numbers:
 | F11 | 🟠 | direction · framing | FedMAQ (mechanism)                      | not a bug; lead thesis with comm+severe-skew, treat "EMA closes α=1.0 gap" as hypothesis to sweep |
 | F12 | 🟡 | config · latent     | `cfd.py:298`,`fedavg_kd.py:97`,`fedmaq.py:484` | align fallback to 3000 or fail-loud; bundle with code-audit F8 |
 | F13 | ✅ | coverage · gating   | FedDistill, CFD, FedAvg+KD (FedMD dropped, Decision 25) | **CLOSED 2026-07-17** — all 3 ran full 50R smoke both α; FedDistill/FedAvg+KD clean, CFD collapsed (see F15) |
-| F14 | 🟡 | stability (out-of-KD-scope) | FedProx (μ=0.01, canonical)     | model-specific collapse; formal-grid stability watch |
+| F14 | ✅ | stability (out-of-KD-scope) | FedProx (μ=0.01, canonical)     | **CLOSED 2026-07-18** — reproduced via instrumented re-run, root-caused to client drift under-restrained by μ=0.01; reportable severe-skew finding, not a defect |
 | F15 | 🔴 | correctness · new   | `strategy_hooks/cfd.py:169-194` (`pre_aggregate_fit`) | CFD collapses to chance both α, from round 1; root-caused to client soft-vote aggregation, not server distillation. Confirms memory obs #695's flagged concern at runtime. Treat CFD numbers as broken, not a valid baseline, until fixed. |
 
 **Headline:** the *direction* is sound — soft-voting, T=1.0, and hybrid>pure all
