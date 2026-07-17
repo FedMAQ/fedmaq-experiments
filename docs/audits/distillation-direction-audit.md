@@ -1,6 +1,6 @@
 # Distillation-Baseline Direction & Health Audit
 
-**Last updated:** 2026-07-16 (F10 fix implemented + validated — `min_rank_frac`; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN, prior accuracy figures retired pending re-run)
+**Last updated:** 2026-07-17 (F10 collapse mechanism fixed & confirmed on formal 50R re-run, both α, width-0.5 MobileNetV2GN student — residual gap reclassified to still-open candidate 3, not resolved; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN)
 **Auditor:** Claude (Opus 4.8), grill-with-docs session
 **Lens:** forward-looking — *are the KD baselines + FedMAQ moving in the right
 direction, and which implementations look faulty?* Mines archived + recent
@@ -31,7 +31,7 @@ inputs to a later fix pass and to the formal grid.
 
 Severity: 🔴 high · 🟠 medium · 🟡 low.
 
-### 🟠 F10 — FedKD collapses to near-chance accuracy [correctness · mechanism CONFIRMED · fix IMPLEMENTED, awaiting formal-run confirmation]
+### 🟡 F10 — FedKD collapses to near-chance accuracy [correctness · collapse FIXED 2026-07-17, residual reclassified to candidate 3]
 
 **Symptom (CONFIRMED, recent MobileNetV2GN run).** FedKD finishes **17.09%**
 (α=0.1) / **31.78%** (α=1.0), peaking **20.80%** / **33.62%** — vs FedAvg
@@ -127,6 +127,57 @@ is eligible to re-enter comparison tables once F13's full MobileNetV2GN smoke
 > this section are retired and will be re-measured on the new student in the GPU
 > re-run wave. Item 3's "depthwise-separable" framing, previously an imperfect
 > match to the SimpleCNN student, now describes the real FedKD student.
+
+**F10 formal re-confirmation (2026-07-17, full 50R smoke, width-0.5 MobileNetV2GN
+student, `min_rank_frac=0.25`).** Full-scale rerun (not the 10R minitest above)
+on both heterogeneity arms:
+
+| Arm | acc R40 | acc R50 | peak acc | `mean_rank_retained` |
+| :-- | :-----: | :-----: | :------: | :-------------------: |
+| α=0.1 (severe skew) | 24.04% | 26.41% | 30.10% (R45) | held at 0.278 (floor) |
+| α=1.0 (moderate skew) | 34.70% | 36.29% | 38.31% (R49) | held at 0.278 (floor) |
+
+Logs: `outputs/2026-07-16/23-36-50/` (α=0.1), `outputs/2026-07-17/10-20-23/` (α=1.0).
+
+**Verdict: starvation mechanism CONFIRMED FIXED; residual gap reclassified,
+not resolved.** Two different claims here, kept separate on purpose:
+
+1. **The floor works** — this is the clean, architecture-independent claim.
+   `mean_rank_retained` never drops below 0.278 in either 50R run, matching the
+   same-model minitest A/B above (`min_rank_frac=0.0` pinned at 3.7–4.5% vs.
+   `0.25` floored at 26.25%, everything else held equal). That minitest, not
+   the 50R numbers below, is the causal evidence the fix works.
+2. **The 50R runs characterize post-fix FedKD on the production student** —
+   they are *not* a before/after comparison. The retired pre-fix figures
+   (20.80%/33.62% peak) were measured on the old SimpleCNN student
+   (see the superseded-arch note above); crediting the fix with a delta
+   against them would conflate the `min_rank_frac` change with the separate
+   student-architecture swap (DECISIONS #22). Read the table only as: this is
+   what FedKD does today, on the shipped student, with the floor active.
+
+α=1.0 climbs near-monotonically to 38.31% peak; α=0.1 stays volatile
+(±10pp round-to-round swings) but does not collapse to chance — both
+consistent with "starvation is gone" and inconsistent with "still starving."
+
+**Residual gap points at candidate 3, still open.** FedKD trails every other
+baseline by 15–27pp at both α (FedAvg 42.3%/66.9%, FedMAQ 53.2%/60.9%,
+DAdaQuant 47.8%/65.1%). `mean_rank_retained` sitting right at the 0.278
+floor in both 50R runs — not climbing past it — means the energy-truncation
+schedule *wants* to go lower and the floor is doing the work throughout,
+not just during early rounds. That is exactly candidate 3's prediction
+(SVD too lossy for depthwise-separable weights, independent of the schedule).
+**Verdict on F10 narrows to:** the schedule-starvation half of the original
+"1+3 jointly" diagnosis (candidate 1) is fixed; the lossy-SVD half
+(candidate 3) is unresolved and is the leading explanation for the residual
+gap. Uploaded comm rose to 590–740 MB — this is a floor-mandated cost, not a
+regression, and still well under FedAvg's ~8.5 GB.
+
+**Action:** FedKD is unblocked for comparison tables — the near-chance
+collapse that made it unusable is gone — but report the residual gap as an
+open finding about SVD compression on depthwise-separable weights (candidate
+3), not as a resolved defect. F13 (the 4 unmeasured KD baselines) is the
+remaining run-gate; comparing FedKD's shape against them may help isolate
+whether candidate 3 is FedKD-specific or a broader SVD-compression pattern.
 
 ### 🟠 F11 — FedMAQ's α=1.0 accuracy deficit is real (persists across models & EMA) [direction · framing]
 
@@ -236,7 +287,7 @@ config, not headline numbers:
 
 | ID  | Severity | Category            | Locus                                   | Status / action |
 | :-- | :------- | :------------------ | :-------------------------------------- | :-------------- |
-| F10 | 🟠 | correctness (mechanism confirmed, fix implemented) | `compression.py`/`fedkd.py` SVD truncation | rank starved to ~3.7% in convergence window; min-rank floor (`min_rank_frac=0.25`) landed + validated on production code path (probe, not a formal run); re-enter tables once F13 smoke confirms rank+acc recover together end-to-end |
+| F10 | 🟡 | correctness (collapse fixed, residual open) | `compression.py`/`fedkd.py` SVD truncation | rank starvation (candidate 1) eliminated by `min_rank_frac=0.25`, confirmed on formal 50R re-run (2026-07-17, both α) — no more near-chance collapse. Residual 15-27pp gap vs. other baselines reclassified as still-open candidate 3 (SVD too lossy for depthwise-separable weights): `mean_rank_retained` sits at the floor throughout, not climbing past it. Unblocked for comparison tables; candidate 3 stays a finding to report, not resolve. |
 | F11 | 🟠 | direction · framing | FedMAQ (mechanism)                      | not a bug; lead thesis with comm+severe-skew, treat "EMA closes α=1.0 gap" as hypothesis to sweep |
 | F12 | 🟡 | config · latent     | `cfd.py:298`,`fedavg_kd.py:97`,`fedmaq.py:484` | align fallback to 3000 or fail-loud; bundle with code-audit F8 |
 | F13 | 🟡 | coverage · gating   | FedMD, FedDistill, CFD, FedAvg+KD       | run MobileNetV2GN smoke for the 4 missing KD baselines before freeze (`run-minitest`) |

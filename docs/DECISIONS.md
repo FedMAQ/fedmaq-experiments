@@ -139,3 +139,34 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
 15. **`docs/plans/` is active-only**: a plan doc exists only while it has open questions. On full resolution, content merges into this file (`DECISIONS.md`) and the plan file is deleted — git history is the historical record, not a docs folder.
 16. **Archive pattern = per-directory `archive/` subfolder** (e.g. `docs/experiments/archive/`), not a single top-level `docs/archive/`. Archived content stays next to its live counterpart.
 17. **Enforcement = rule + skill**: `.claude/rules/docs-management.md` (always-loaded conventions, applied during routine edits) plus `.claude/skills/docs-audit/` (on-demand full sweep; auto-fixes mechanical issues like stale dates/numbering/dead links, flags semantic overlap/staleness for human judgment).
+
+---
+
+## 2026-07-17 — F10 collapse mechanism fixed; residual gap reclassified, not resolved
+
+23. **FedKD SVD rank-starvation fix (Decision 21) is confirmed working — but the
+    residual accuracy gap is a separate, still-open finding.** Formal 50-round
+    smoke re-run on the width-0.5 MobileNetV2GN student (Decision 22), both
+    heterogeneity arms: α=0.1 peak 30.10% (R45, final 26.41%), α=1.0 peak 38.31%
+    (R49, final 36.29%) — both well above the 10% chance line, and
+    `mean_rank_retained` held at the 0.278 floor throughout (vs. a same-model
+    minitest A/B's 3.7% unfixed baseline). **Do not compare these figures
+    against the retired pre-fix numbers (20.80%/33.62% peak)** — those were
+    measured on the old SimpleCNN student and are architecture-confounded with
+    this run; the causal evidence for the fix is the same-model minitest, not
+    a pre/post delta across the student swap. **FedKD is unblocked for
+    comparison tables** — the near-chance collapse that made it unusable is
+    gone. But `mean_rank_retained` sitting *at* the floor rather than climbing
+    past it means the original audit's candidate 3 (SVD too lossy for
+    depthwise-separable weights) is still live and is the leading explanation
+    for the remaining 15–27pp gap vs. every other baseline (FedAvg, FedProx,
+    FedMAQ, DAdaQuant, FedPAQ) — report this as an open finding, not a closed
+    investigation, until it's contextualized against the other four KD
+    baselines (F13, still run-gated). Uploaded comm rose to 589–740 MB
+    (floor-mandated cost of retaining more singular vectors) — still ~12×
+    cheaper than FedAvg's uncompressed ~8.5 GB baseline.
+    Logs: `outputs/2026-07-16/23-36-50/` (α=0.1), `outputs/2026-07-17/10-20-23/`
+    (α=1.0). Full analysis: `docs/audits/distillation-direction-audit.md` F10.
+
+    *(Note for `docs-audit`: decisions 14–17 above are numbered out of the file's
+    append order — a pre-existing drift this entry did not introduce or fix.)*
