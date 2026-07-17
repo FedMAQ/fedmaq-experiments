@@ -243,3 +243,69 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     *every* baseline, not just FedMD) — user has hit OOM with this before and
     shares the GPU with non-training workloads; needs a dedicated profiling
     pass before any global default change.
+
+---
+
+## 2026-07-17 — CFD dropped from the formal baseline stack
+
+26. **CFD removed from the baseline stack (7 → 6: FedAvg, FedProx, FedPAQ,
+    DAdaQuant, FedDistill, FedKD) + FedMAQ.** Closes distillation-audit F15
+    (CFD collapses to chance both α — see `docs/audits/distillation-direction-audit.md`
+    F15) as **structural, not fixed**. This corrects the F15 write-up's original
+    mechanism guess: the collapse is real (confirmed at both toy and
+    production scale this session) but the root cause is **not** the
+    client-side aggregation codec/ordering the audit suspected — that code
+    (`constrained_quantize`, `dequantize`, the shuffle-before-SGD fix in
+    `_train_server_model`) was probed directly this session and is correct.
+    Empirical diagnosis (three isolated repro runs, `scripts/run.py
+    algorithm=cfd` with instrumented per-round vote/loss/prediction-histogram
+    logging, since reverted):
+    1. **Server-side dual distillation is exonerated.** A discriminator run
+       (5 clients @ full participation → healthy 36–45% client-vote consensus,
+       `server_distill_epochs` raised 1→20) showed the server model tracks its
+       targets correctly (`server_on_public_acc` climbed 18%→38%→36% alongside
+       `targets_acc` 45%→46%→38%) once given enough gradient steps. An
+       earlier same-session reading that called this a *server*-side mode
+       collapse was itself a toy artifact (100 public samples ÷ batch 64 = 2
+       gradient steps/round — undertraining, not a bug) and is retracted.
+    2. **The real defect is upstream, at production client-count scale.**
+       Rerun at 50 clients / `client_fraction=0.1` (matching the smoke's
+       ~100-client, low-participation regime) reproduced the audit's
+       production symptom directly: `targets_acc` pinned near chance
+       (14/10/16/16% across 4 rounds), with individual clients one-hot-voting
+       the *same single class* for all 100 public samples from round 1
+       onward. Root cause: each client's private partition is tiny at this
+       scale (~470 samples at 100 clients on CIFAR-10's 50k-image train set
+       minus the 3000-sample public reserve) and 5 local CE epochs from a
+       fresh/reset init is enough to overfit to 1–2 dominant local classes —
+       healthy *local* train accuracy (50–65%, matching the smoke's
+       `client/avg_train_acc`) coexists with near-random generalization to
+       the disjoint, class-balanced public set. CFD's 1-bit (`b_up=1`)
+       constrained quantization then forces each client's vote to **full
+       commitment to that one class** with zero soft/hedged signal, unlike
+       the other KD baselines' temperature-scaled soft-probability averaging
+       — so a few overfit voters dominate the round's consensus outright.
+    3. **Raising the vote bit-width does not rescue it.** Tested `b_up=b_down=4`
+       (16 quantization levels, i.e. much less forced-one-hot) at the same
+       production-scale regime: `targets_acc` barely moved (14→21% across 4
+       rounds, still chance-adjacent) because the underlying client
+       *prediction* is wrong, not merely imprecisely encoded — more
+       quantization levels just transmit the same bad prediction more
+       precisely. Rules out bit-width as a config-only fix.
+    **Considered and rejected:** raising `client_fraction` to dilute
+    degenerate votes (untested, and clients still individually overfit
+    regardless of how many are sampled — no strong reason to expect it fixes
+    the per-client generalization failure); code-level mitigations (fewer
+    local epochs for CFD only, regularization, skipping round 1's contribution
+    to persistent server distillation) — all touch shared hyperparameters or
+    need their own validation pass, and none address the core mismatch
+    between CIFAR-10's per-client data budget at 100 clients and a 1-bit
+    hard-vote protocol. **Decided: drop CFD from the formal grid, same
+    disposition as FedMD (Decision 25).** Config/hook code retained
+    (`conf/algorithm/cfd.yaml`, `src/fedmaq/core/{strategy_hooks,client_hooks}/cfd.py`,
+    `src/fedmaq/core/softlabel_codec.py`) for reproducibility; CFD moves to an
+    exploration-appendix note (collapse is real and diagnosed, not a
+    baseline result) rather than a formal comparison-table entry.
+    `.claude/project/baseline_registry.md`, `.claude/rules/baselines.md`, and
+    `docs/audits/{baseline-status-audit.md,distillation-direction-audit.md}`
+    updated to match. Hybrid Q+KD group is now FedKD-only in the formal stack.
