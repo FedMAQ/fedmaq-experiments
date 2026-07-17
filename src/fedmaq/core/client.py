@@ -37,6 +37,9 @@ class FedProxLossHook(LossHook):
     def __init__(self, mu: float = 0.01) -> None:
         self.mu = mu
         self.global_params: list[torch.Tensor] = []
+        # F14 instrumentation: last-batch CE/proximal magnitudes (cheap, always-on).
+        self.last_ce: float = 0.0
+        self.last_prox: float = 0.0
 
     def on_train_begin(self, model: nn.Module) -> None:
         # Save a frozen copy of the initial global weights
@@ -52,12 +55,17 @@ class FedProxLossHook(LossHook):
         criterion: nn.Module,
         inputs: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        loss = criterion(outputs, targets)
+        ce_loss = criterion(outputs, targets)
         proximal_term: torch.Tensor | float = 0.0
         params = [p for p in model.parameters() if p.requires_grad]
         for p, gp in zip(params, self.global_params, strict=True):
             proximal_term += torch.sum((p - gp) ** 2)
-        return loss + (self.mu / 2.0) * proximal_term
+        prox_penalty = (self.mu / 2.0) * proximal_term
+        self.last_ce = float(ce_loss.item())
+        self.last_prox = (
+            float(prox_penalty.item()) if isinstance(prox_penalty, torch.Tensor) else float(prox_penalty)
+        )
+        return ce_loss + prox_penalty
 
 
 class CompressionHook:

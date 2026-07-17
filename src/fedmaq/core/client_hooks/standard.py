@@ -31,7 +31,9 @@ class StandardFit(ClientFitStrategy):
         """Loss on the incoming global model before training. Default: not measured."""
         return None
 
-    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
+    def _reported_local_loss(
+        self, pretrain_loss: float | None, last_loss: float
+    ) -> float:
         """Value reported as ``local_loss``. Default: 0.0 (unused by the strategy)."""
         return 0.0
 
@@ -59,7 +61,9 @@ class StandardFit(ClientFitStrategy):
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         momentum = float(
-            exp_config.get("momentum", client.config.get("algorithm", {}).get("momentum", 0.9))
+            exp_config.get(
+                "momentum", client.config.get("algorithm", {}).get("momentum", 0.9)
+            )
         )
 
         # Setup training
@@ -73,6 +77,13 @@ class StandardFit(ClientFitStrategy):
         criterion = nn.CrossEntropyLoss()
 
         client.loss_hook.on_train_begin(client.model)
+
+        # F14 instrumentation: only active for FedProx, negligible overhead otherwise.
+        from fedmaq.core.client import FedProxLossHook
+
+        instrument_fedprox = isinstance(client.loss_hook, FedProxLossHook)
+        grad_norm_sum = 0.0
+        grad_norm_batches = 0
 
         last_loss = 0.0
         loss_sum = 0.0
@@ -88,6 +99,13 @@ class StandardFit(ClientFitStrategy):
                     client.model, outputs, labels, criterion, inputs=images
                 )
                 loss.backward()
+                if instrument_fedprox:
+                    total_norm = 0.0
+                    for p in client.model.parameters():
+                        if p.requires_grad and p.grad is not None:
+                            total_norm += p.grad.detach().norm(2).item() ** 2
+                    grad_norm_sum += total_norm**0.5
+                    grad_norm_batches += 1
                 optimizer.step()
                 last_loss = loss.item()
                 loss_sum += last_loss
@@ -107,7 +125,9 @@ class StandardFit(ClientFitStrategy):
         compressed_deltas, byte_size = client.compressor_hook.compress(deltas)
 
         # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)]
+        reconstructed_params = [
+            o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)
+        ]
 
         avg_train_loss = loss_sum / batches if batches > 0 else 0.0
         avg_train_acc = correct / total if total > 0 else 0.0
@@ -122,6 +142,21 @@ class StandardFit(ClientFitStrategy):
         }
         if "q" in config:
             fit_metrics["q"] = int(config["q"])
+
+        if instrument_fedprox:
+            gn_affine_norm = 0.0
+            for module in client.model.modules():
+                if isinstance(module, nn.GroupNorm):
+                    if module.weight is not None:
+                        gn_affine_norm += module.weight.detach().norm(2).item() ** 2
+                    if module.bias is not None:
+                        gn_affine_norm += module.bias.detach().norm(2).item() ** 2
+            fit_metrics["f14_grad_norm"] = (
+                grad_norm_sum / grad_norm_batches if grad_norm_batches > 0 else 0.0
+            )
+            fit_metrics["f14_gn_affine_norm"] = gn_affine_norm**0.5
+            fit_metrics["f14_ce_loss"] = client.loss_hook.last_ce
+            fit_metrics["f14_prox_penalty"] = client.loss_hook.last_prox
 
         return (
             reconstructed_params,
@@ -151,12 +186,16 @@ class DAdaQuantFit(StandardFit):
                 total_samples += len(labels)
         return loss_sum / total_samples if total_samples > 0 else 0.0
 
-    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
+    def _reported_local_loss(
+        self, pretrain_loss: float | None, last_loss: float
+    ) -> float:
         return float(pretrain_loss) if pretrain_loss is not None else 0.0
 
 
 class FedMAQFit(StandardFit):
     """Standard training that reports the final training-batch loss as ``local_loss``."""
 
-    def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
+    def _reported_local_loss(
+        self, pretrain_loss: float | None, last_loss: float
+    ) -> float:
         return float(last_loss)
