@@ -76,23 +76,9 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 ### Priority 0: Distillation-Audit Follow-ups — ALL CLOSED (2026-07-18)
 
-From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md) and [baseline-status-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/baseline-status-audit.md). **No open run-gates remain** — full history below is for context only, not action items:
+F10–F18 all closed/resolved, no open run-gates. Full findings: [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md), [baseline-status-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/baseline-status-audit.md), decision log entries 22/25/26 in [DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md).
 
-- **F10 — DONE.** FedKD `min_rank_frac` fix landed and re-confirmed on width-0.5 MobileNetV2GN student (DECISIONS #22). Residual 15–27pp gap vs. other baselines is an open candidate-3 finding (SVD too lossy for depthwise-separable weights) — reported, not gating.
-- **F13 — DONE.** All KD baselines ran full 50R MobileNetV2GN smoke. FedDistill/FedAvg+KD clean; CFD collapsed (→ F15 → Decision 26 drop).
-- **F15 — RESOLVED via drop (Decision 26).** CFD's chance-level collapse root-caused to a structural production-scale defect (client-side 1-bit vote hard-commitment under tiny per-client data budgets) — not fixable, dropped from the formal stack, same disposition as FedMD.
-- **F12 — DONE.** `num_public_samples` dead-fallback replaced with fail-loud `require_num_public_samples()`; regression test in `tests/test_config_defaults.py`.
-- **F11 — REPORTED FINDING (not a bug).** FedMAQ α=1.0 deficit is structural (persists across models + EMA) — lead thesis with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid sweeps.
-- **F14 — CLOSED 2026-07-18 as a reported finding, not a defect.** FedProx late-round volatility at canonical μ=0.01 on MobileNetV2GN (severe skew only) was: (1) static-code-reviewed clean — proximal term matches the paper exactly, no implementation bug; (2) reproduced via an instrumented 50R re-run at identical config; (3) root-caused via added grad-norm/GroupNorm-affine/CE-vs-proximal instrumentation to **client drift under-restrained by μ=0.01** on this low-capacity architecture (bounded grad norm, flat tiny proximal penalty, near-zero train CE vs. elevated oscillating test loss). Same disposition as F11/F18 — supports, not undermines, the severe-skew-robustness thesis narrative. Instrumentation (`f14_grad_norm`, `f14_gn_affine_norm`, `f14_ce_loss`, `f14_prox_penalty`) is gated to FedProx only, left in `client.py`/`client_hooks/standard.py` — safe to strip before the formal grid if unwanted.
-- **F18 — DONE.** FedAvg+KD α=0.1 weakness (17.3%) reclassified as a heterogeneity-sensitivity finding, same disposition as F11 — sane at α=1.0 (51.4%), unblocked for comparison tables.
-
-### Operational note: system RAM headroom for Flower+Ray sims on Windows
-
-This session's KD-baseline smoke chain crashed repeatedly (Ray actor/raylet deaths, `SIGSEGV`, `SYSTEM_ERROR`) before completing. Two distinct causes surfaced, both worth checking first if a run dies unexpectedly:
-
-- **System RAM exhaustion** (not GPU VRAM — `nvidia-smi` showed ample headroom throughout). With only ~4GB free out of 16GB total, Ray/PyTorch init has no headroom and the node dies. Check `Get-CimInstance Win32_OperatingSystem` free memory before launching; want several GB free, not just GPU headroom.
-- **Ray agent crash unrelated to RAM**: one run died with `raylet.exe` SIGSEGV / `runtime_env_agent` failure at round 9 with 8GB+ free — a known Windows Ray instability class (Flower's own docs recommend WSL2), not fully explained by resource pressure.
-- `scripts/run_kd_baselines_smoke.py` now has `--start_at N` (resume from a completed run) and a 3-attempt retry-with-full-Ray-teardown loop per run — use these rather than restarting the whole chain from scratch.
+Windows Ray/RAM crash mitigation for Flower sims: see [.claude/rules/flower-patterns.md](.claude/rules/flower-patterns.md) — check system RAM headroom (not just GPU VRAM) before launching; use `scripts/run_kd_baselines_smoke.py --start_at N` to resume a crashed chain.
 
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 
