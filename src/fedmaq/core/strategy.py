@@ -1,6 +1,7 @@
 """Custom Flower Strategy extending FedAvg with simulated physical time tracking and telemetry."""
 
 import logging
+import time
 from typing import Any
 
 import numpy as np
@@ -111,6 +112,11 @@ class TelemetryFedAvg(FedAvg):
         self.last_round_time = 0.0
         self.last_client_time = 0.0
         self.last_server_time = 0.0
+        self.last_wall_time = 0.0
+        self.last_client_bytes_stats: dict[str, float] = {}
+
+        # Real (not simulated) wall-clock timer, measured across aggregate_fit calls.
+        self._last_wall_ts = time.perf_counter()
 
         # Seeded generator for reproducibility
         seed = config.get("seed", 42)
@@ -255,6 +261,7 @@ class TelemetryFedAvg(FedAvg):
         round_delays = []
         round_bytes_uploaded = 0
         round_bytes_downloaded = 0
+        client_bytes_uploaded: list[int] = []
 
         exp_config = self.config.get("experiment", self.config)
         epochs = exp_config.get("local_epochs", 5)
@@ -268,6 +275,7 @@ class TelemetryFedAvg(FedAvg):
                 cid = hash(client_proxy.cid) % self.num_clients
 
             bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
+            client_bytes_uploaded.append(bytes_uploaded)
             num_samples = fit_res.num_examples
             train_sample_count = self.hook.local_train_sample_count(
                 num_samples=num_samples,
@@ -307,6 +315,22 @@ class TelemetryFedAvg(FedAvg):
         self.last_client_time = client_sim_time
         self.last_server_time = server_sim_time
 
+        if client_bytes_uploaded:
+            arr = np.array(client_bytes_uploaded, dtype=np.float64)
+            self.last_client_bytes_stats = {
+                "communication/client_bytes_uploaded_mean": float(arr.mean()),
+                "communication/client_bytes_uploaded_min": float(arr.min()),
+                "communication/client_bytes_uploaded_max": float(arr.max()),
+                "communication/client_bytes_uploaded_std": float(arr.std()),
+            }
+        else:
+            self.last_client_bytes_stats = {}
+
+        # Real wall-clock elapsed since the previous round's aggregate_fit call.
+        now = time.perf_counter()
+        self.last_wall_time = now - self._last_wall_ts
+        self._last_wall_ts = now
+
         metrics["round_time"] = round_time
         metrics["round_bytes"] = round_total_bytes
 
@@ -328,6 +352,7 @@ class TelemetryFedAvg(FedAvg):
             round_time = self.last_round_time if server_round > 0 else 0.0
             client_time = self.last_client_time if server_round > 0 else 0.0
             server_time = self.last_server_time if server_round > 0 else 0.0
+            wall_time = self.last_wall_time if server_round > 0 else 0.0
 
             log_metrics: dict[str, Any] = {
                 "round": server_round,
@@ -337,7 +362,14 @@ class TelemetryFedAvg(FedAvg):
                 "system/round_time_sec": round_time,
                 "system/client_sim_time_sec": client_time,
                 "system/server_sim_time_sec": server_time,
+                "system/wall_time_sec": wall_time,
             }
+
+            # Per-client communication breakdown (min/mean/max/std) — shows the
+            # adaptive-quantization mechanism (DAdaQuant/FedMAQ) at work, not just
+            # the aggregate total.
+            if server_round > 0:
+                log_metrics.update(self.last_client_bytes_stats)
 
             # Merge other metrics returned by evaluate_fn (e.g. precision, recall, f1)
             for k, v in metrics.items():

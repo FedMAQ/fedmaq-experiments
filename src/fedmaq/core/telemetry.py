@@ -41,6 +41,7 @@ class TelemetryManager:
         self.cumulative_time: float = 0.0
         self.cumulative_client_time: float = 0.0
         self.cumulative_server_time: float = 0.0
+        self.cumulative_wall_time: float = 0.0
 
         # Local tracking setup in Hydra's output directory, falling back to current dir
         if _HYDRA_AVAILABLE:
@@ -120,6 +121,12 @@ class TelemetryManager:
         if "system/cumulative_server_time_sec" not in metrics:
             metrics["system/cumulative_server_time_sec"] = self.cumulative_server_time
 
+        # Accumulate real wall-clock time (not simulated)
+        wall_time = metrics.get("system/wall_time_sec", 0.0)
+        self.cumulative_wall_time += wall_time
+        if "system/cumulative_wall_time_sec" not in metrics:
+            metrics["system/cumulative_wall_time_sec"] = self.cumulative_wall_time
+
         # Print clean summary to console
         test_acc = metrics.get("test/accuracy", 0.0)
         test_loss = metrics.get("test/loss", 0.0)
@@ -164,6 +171,12 @@ class TelemetryManager:
                     "system/cumulative_client_time_sec",
                     "system/server_sim_time_sec",
                     "system/cumulative_server_time_sec",
+                    "system/wall_time_sec",
+                    "system/cumulative_wall_time_sec",
+                    "communication/client_bytes_uploaded_mean",
+                    "communication/client_bytes_uploaded_min",
+                    "communication/client_bytes_uploaded_max",
+                    "communication/client_bytes_uploaded_std",
                     "client/avg_train_loss",
                     "client/avg_train_acc",
                     "client/avg_local_loss",
