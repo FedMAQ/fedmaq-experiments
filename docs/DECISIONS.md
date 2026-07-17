@@ -170,3 +170,29 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
 
     *(Note for `docs-audit`: decisions 14–17 above are numbered out of the file's
     append order — a pre-existing drift this entry did not introduce or fix.)*
+
+---
+
+## 2026-07-17 — FedMD digest-epoch hyperparameter trimmed for future runs
+
+24. **`conf/algorithm/fedmd.yaml` `public_epochs` (digest phase) reduced from
+    5 to 3, effective for future runs only — the in-flight F13 minitest
+    (task `b4m2fgbfy`) kept the original value of 5.** FedMD is by design the
+    heaviest baseline: a one-time 20-epoch (10 public + 10 private) pretrain
+    per client on first contact, plus every round a digest (`public_epochs`,
+    alignment to the server's averaged public logits) and a revisit
+    (`local_epochs=5`, private cross-entropy) phase. The digest phase recurs
+    every round for every sampled client, unlike the one-time pretrain,
+    making it the dominant lever on total wall-clock (observed ~300–500s/round
+    at the default scale, escalating as more distinct clients hit
+    first-contact pretrain — see `outputs/2026-07-17/11-10-46/`). The
+    original FedMD paper (Li & Wang, 2019) uses a lightweight 1-epoch digest
+    step; going straight to 1 was rejected because earlier informal runs at 1
+    epoch stalled at chance-level accuracy (insufficient alignment signal per
+    round). 3 is a compromise: closer to the paper's intent than 5, without
+    the observed stall-at-guessing failure mode at 1. Pretrain epochs (10+10)
+    left unchanged — one-time cost per client, not the recurring bottleneck,
+    defensible as "train to convergence" per the paper. Apply the new value
+    on any future FedMD rerun (including a formal grid run); do not compare a
+    future run's per-round curve directly against the in-flight F13 minitest
+    numbers without noting the digest-epoch difference.

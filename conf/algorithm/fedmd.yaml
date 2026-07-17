@@ -1,7 +1,7 @@
 name: fedmd
 public_pretrain_epochs: 10
 private_pretrain_epochs: 10
-public_epochs: 5
+public_epochs: 3  # digest phase; 3 vs. paper's 1-epoch alignment step — compromise to avoid stall-at-guessing regression seen at 1 (2026-07-17)
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
