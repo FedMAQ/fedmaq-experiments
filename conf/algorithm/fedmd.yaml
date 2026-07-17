@@ -1,3 +1,10 @@
+# DROPPED FROM FORMAL BASELINE STACK — not a formal grid arm.
+# FedMD's pretrain cost (one-time 20-epoch transfer-learning phase per client)
+# made it infeasible on this hardware (client_gpus=1.0 forces serial actor
+# execution; ~90 distinct clients each pay the pretrain cost once). See
+# docs/DECISIONS.md Decision 25. Config retained only so the dispatch code
+# path stays reproducible if FedMD is revisited later; do not add to any
+# formal sweep.
 name: fedmd
 public_pretrain_epochs: 10
 private_pretrain_epochs: 10

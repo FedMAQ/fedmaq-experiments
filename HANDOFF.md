@@ -2,7 +2,7 @@
 
 **Purpose**: Focused handoff for the next agent. All historical experiment details, audit findings, and remediation plans live in `docs/`. This document provides orientation, current state, and immediate action items only.
 
-**Last updated**: 2026-07-17 (F13 chain aborted mid-FedMD — too slow as-is; digest epochs trimmed 5→3, pretrain still open, DECISIONS #24)
+**Last updated**: 2026-07-17 (F13 closed — 3 KD baselines ran full 50R MobileNetV2GN smoke; CFD surfaced a new collapse defect, distillation-audit F15)
 
 ---
 
@@ -31,7 +31,7 @@ A separate **code-level** audit (craftsmanship + FL engineering) followed: [docs
 
 A follow-on **architecture** pass landed: determinism + hook-decoupling ([PR #6](https://github.com/FedMAQ/fedmaq-experiments/pull/6) **merged**; [PR #7](https://github.com/FedMAQ/fedmaq-experiments/pull/7) Phase 6 **open**) — DECISIONS.md decisions 18–20, §5.5.
 
-A forward-looking **distillation-baseline direction & health audit** followed: [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). Findings F10–F14 — see Priority 0 below.
+A forward-looking **distillation-baseline direction & health audit** followed: [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). Findings F10–F15 — see Priority 0 below.
 
 ---
 
@@ -76,13 +76,22 @@ The model factory selection is driven by algorithm name in [models.py](file:///c
 
 ### Priority 0: Distillation-Audit Follow-ups (gate the KD-family comparisons)
 
-From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). **F12/F15/F16/F17 landed this session** (PR #9, branch `docs/baseline-status-audit`) — remaining items are run-gated:
+From [distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md). **F10, F12, F13, F16, F17 are DONE** — remaining item is a code fix (F15), not a run-gate:
 
-0a. **F10 — FedKD `min_rank_frac` fix landed, but the FedKD student CHANGED (DECISIONS #22).** The rank-floor fix (`compress_tensor(..., min_rank_frac=...)`, `fedkd.yaml: 0.25`, test `tests/test_fedkd_compression.py`) is architecture-agnostic and stays. But F17 replaced FedKD's CIFAR student (old SimpleCNN → **width-0.5 MobileNetV2GN**, `tests/test_models.py`), so the prior FedKD accuracy numbers (16.9%→26.3% minitest) are **retired**. **Run-gated action:** re-run FedKD on the new student before it re-enters any comparison table.
-0b. **F13 — 4 of 5 KD baselines never ran on MobileNetV2GN** (FedMD, FedDistill, CFD, FedAvg+KD) — plus the FedKD re-run in 0a. **Aborted 2026-07-17**: the chain (task `b4m2fgbfy`) was killed mid-FedMD (α=0.1, first of 8 runs) because FedMD is too slow to be feasible as-is (~300–500s/round and climbing, one-time 20-epoch pretrain per client + recurring digest/revisit each round — see `docs/DECISIONS.md` #24). No results salvaged; FedDistill/CFD/FedAvg+KD never started. **Next agent**: before re-running, finalize FedMD hyperparameters (pretrain epoch budget is the open question — digest already trimmed 5→3 per #24) via `/grill-me`, then re-launch the full F13 chain with `run-minitest`. Gates every KD-family comparison claim.
-0c. **F12 — `num_public_samples` dead-fallback ✅ DONE.** Replaced the silent `200` fallback at all four sites with fail-loud `require_num_public_samples()` (`core/config_defaults.py`); configs verified to supply 3000; regression test in `tests/test_config_defaults.py`.
-0d. **F11 — FedMAQ α=1.0 deficit is structural** (persists across models + EMA). Not a bug — a framing constraint: lead with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid must sweep.
-0e. **F14 — FedProx late-round collapse at canonical μ=0.01** on MobileNetV2GN is real (not a bad-μ artifact — F15 corrected that mislabel). Model-specific stability watch for the formal grid; proximal μ may need per-model tuning or convergence guards.
+0a. **F10 — FedKD `min_rank_frac` fix landed and re-confirmed** on the new width-0.5 MobileNetV2GN student (DECISIONS #22): full 50R re-run both α, no more near-chance collapse. Residual 15–27pp gap vs. other baselines is an open candidate-3 finding (SVD too lossy for depthwise-separable weights), not a run-gate.
+0b. **F13 — DONE 2026-07-17.** All 3 remaining KD baselines (FedDistill, CFD, FedAvg+KD; FedMD dropped per DECISIONS #25) ran full 50R MobileNetV2GN smoke via `scripts/run_kd_baselines_smoke.py`. Results in `docs/experiments/mobilenetv2-smoke-50r/results.md`. **FedDistill and FedAvg+KD are clean, ready for comparison tables.**
+0c. **NEW — F15 (distillation-audit): CFD collapses to chance (10.0%) at both α, from round 1.** Root-caused to client-side soft-vote aggregation (`strategy_hooks/cfd.py` `pre_aggregate_fit`) producing near-chance `targets_acc` from round 1 while individual clients train fine locally (50–65% train acc) — confirms a static concern flagged earlier (memory obs #695) at runtime. **This is now the only KD-family run-gate**: CFD is excluded from comparison tables until fixed. **Next agent**: inspect `dequantize(codes, self.b_up)` (`cfd.py:183`) and the client-side codec/ordering (`client_hooks/cfd.py`) for a one-hot collapse or sample-order misalignment between client encode and server aggregation.
+0d. **F12 — `num_public_samples` dead-fallback ✅ DONE.** Replaced the silent `200` fallback at all four sites with fail-loud `require_num_public_samples()` (`core/config_defaults.py`); configs verified to supply 3000; regression test in `tests/test_config_defaults.py`.
+0e. **F11 — FedMAQ α=1.0 deficit is structural** (persists across models + EMA). Not a bug — a framing constraint: lead with comm + severe-skew, treat "EMA closes the gap" as a hypothesis the grid must sweep.
+0f. **F14 — FedProx late-round collapse at canonical μ=0.01** on MobileNetV2GN is real (not a bad-μ artifact — F15 in baseline-status-audit corrected that mislabel, unrelated to the CFD F15 above — the two audits' F-numbers diverge after F14, see each doc). Model-specific stability watch for the formal grid; proximal μ may need per-model tuning or convergence guards.
+
+### Operational note: system RAM headroom for Flower+Ray sims on Windows
+
+This session's KD-baseline smoke chain crashed repeatedly (Ray actor/raylet deaths, `SIGSEGV`, `SYSTEM_ERROR`) before completing. Two distinct causes surfaced, both worth checking first if a run dies unexpectedly:
+
+- **System RAM exhaustion** (not GPU VRAM — `nvidia-smi` showed ample headroom throughout). With only ~4GB free out of 16GB total, Ray/PyTorch init has no headroom and the node dies. Check `Get-CimInstance Win32_OperatingSystem` free memory before launching; want several GB free, not just GPU headroom.
+- **Ray agent crash unrelated to RAM**: one run died with `raylet.exe` SIGSEGV / `runtime_env_agent` failure at round 9 with 8GB+ free — a known Windows Ray instability class (Flower's own docs recommend WSL2), not fully explained by resource pressure.
+- `scripts/run_kd_baselines_smoke.py` now has `--start_at N` (resume from a completed run) and a 3-attempt retry-with-full-Ray-teardown loop per run — use these rather than restarting the whole chain from scratch.
 
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 

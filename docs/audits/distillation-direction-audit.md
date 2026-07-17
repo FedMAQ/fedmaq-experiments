@@ -1,6 +1,6 @@
 # Distillation-Baseline Direction & Health Audit
 
-**Last updated:** 2026-07-17 (F10 collapse mechanism fixed & confirmed on formal 50R re-run, both α, width-0.5 MobileNetV2GN student — residual gap reclassified to still-open candidate 3, not resolved; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN)
+**Last updated:** 2026-07-17 (F13 closed — FedDistill/CFD/FedAvg+KD ran full 50R MobileNetV2GN smoke; new F15 opened — CFD collapses to chance both α, root-caused to client soft-vote aggregation; F10 collapse mechanism fixed & confirmed on formal 50R re-run, both α, width-0.5 MobileNetV2GN student — residual gap reclassified to still-open candidate 3, not resolved; F14 μ mislabel corrected 1.0 → 0.01 canonical; F17 FedKD student → width-0.5 MobileNetV2GN)
 **Auditor:** Claude (Opus 4.8), grill-with-docs session
 **Lens:** forward-looking — *are the KD baselines + FedMAQ moving in the right
 direction, and which implementations look faulty?* Mines archived + recent
@@ -175,9 +175,10 @@ regression, and still well under FedAvg's ~8.5 GB.
 **Action:** FedKD is unblocked for comparison tables — the near-chance
 collapse that made it unusable is gone — but report the residual gap as an
 open finding about SVD compression on depthwise-separable weights (candidate
-3), not as a resolved defect. F13 (the 4 unmeasured KD baselines) is the
-remaining run-gate; comparing FedKD's shape against them may help isolate
-whether candidate 3 is FedKD-specific or a broader SVD-compression pattern.
+3), not as a resolved defect. F13 (the 3 unmeasured KD baselines — FedMD
+dropped, see `docs/DECISIONS.md` Decision 25) is the remaining run-gate;
+comparing FedKD's shape against them may help isolate whether candidate 3 is
+FedKD-specific or a broader SVD-compression pattern.
 
 ### 🟠 F11 — FedMAQ's α=1.0 accuracy deficit is real (persists across models & EMA) [direction · framing]
 
@@ -221,7 +222,7 @@ code-audit **F8** (code default ≠ shipped yaml).
 **Action:** align the three fallbacks to `3000`, or read fail-loud (raising
 sentinel) so a missing key is caught, not masked. Bundle with F8's fix.
 
-### 🟡 F13 — Evidence gap: 4 of 5 KD baselines have never run on MobileNetV2GN [coverage · gating]
+### 🟡 F13 — Evidence gap: 4 of 5 KD baselines have never run on MobileNetV2GN [coverage · gating — CLOSED 2026-07-17]
 
 The recent smoke covers **FedKD** among the KD family, but **FedMD, FedDistill,
 CFD, and FedAvg+KD have zero MobileNetV2GN runs** — only deprecated ResNet18GN
@@ -234,6 +235,22 @@ smoke run on MobileNetV2GN. **Action:** extend `mobilenetv2-smoke-50r` (or a new
 smoke) to the four missing KD baselines before the freeze. `run-minitest` is the
 right tool.
 
+**Closed (2026-07-17).** FedDistill, CFD, and FedAvg+KD (FedMD dropped per
+Decision 25) ran the full 50R smoke at both α on the shipped MobileNetV2GN
+student via `scripts/run_kd_baselines_smoke.py`. Results in
+`docs/experiments/mobilenetv2-smoke-50r/results.md`:
+
+| Baseline | α=0.1 R50 acc | α=1.0 R50 acc | Verdict |
+| :------- | :-----------: | :-----------: | :------ |
+| FedDistill | 39.03% | 56.96% | healthy, mid-pack both α |
+| CFD | 10.00% (chance) | 10.00% (chance) | **collapsed both α** — see F15 |
+| FedAvg+KD | 17.28% | 51.42% | weak at severe skew, recovers at moderate skew |
+
+Evidence gap is closed — all three now have real MobileNetV2GN numbers. FedDistill
+and FedAvg+KD are clean enough to enter comparison tables as-is. **CFD's collapse
+is a new, separate defect (F15)** and should **not** be treated as a valid
+baseline number until F15 is resolved.
+
 ### 🟡 F14 — FedProx α=0.1 late-round collapse is model-specific [stability · out-of-KD-scope]
 
 Recorded for completeness (not a KD hook). FedProx (μ=0.01, canonical) peaks
@@ -243,6 +260,50 @@ So the collapse is specific to the depthwise-separable + GroupNorm architecture,
 not FedProx logic — and it is **real at the shipped config**, not a bad-μ artifact.
 **Action:** none in this audit; flag for the formal-grid **stability watch** —
 proximal μ may need per-model tuning or the run may need convergence guards.
+
+### 🔴 F15 — CFD collapses to chance accuracy from round 1, both α [correctness · new]
+
+The F13 smoke run surfaces a genuine defect, not just an evidence gap: CFD's
+global test accuracy is **pinned at ~10.0% (chance) for all 50 rounds, at both
+α=0.1 and α=1.0**. Test loss is *above* chance-level cross-entropy (2.65–3.79
+vs. ln(10)≈2.30) — this is a training failure, not merely "hasn't converged yet."
+
+**Root-caused to the client-side soft-vote aggregation, not server distillation.**
+Per-round `run.log` instrumentation (`strategy_hooks/cfd.py:262-267`) logs two
+accuracies each round: `targets_acc` (the soft-voted client predictions on the
+public set, *before* server training) and `server_on_public_acc` (the server
+model *after* training on those targets):
+
+```
+CFD round=1  targets_acc=0.1000 server_on_public_acc=0.0907
+CFD round=5  targets_acc=0.1223 server_on_public_acc=0.1000
+CFD round=50 targets_acc=0.1000 server_on_public_acc=0.1000
+```
+
+`targets_acc` is chance **from round 1** and never recovers — the server model
+is faithfully distilling noise for all 50 rounds. Meanwhile client-side local
+training is healthy: `client/avg_train_acc` in the smoke CSVs runs **50-65%**
+throughout, so individual clients *are* learning locally. The failure is
+specifically in `pre_aggregate_fit` (`strategy_hooks/cfd.py:169-194`), which
+averages `dequantize(codes, self.b_up)` across clients into `_pending_targets`
+— the per-client public-set soft-label predictions never encode meaningful
+class signal once quantized/aggregated, even though the underlying client
+models can classify.
+
+**Ties to a previously-flagged, previously-unconfirmed concern.** Memory obs
+#695 (2026-07-12) already flagged a "CFD soft-label codec one-hot quantization
+bootstrap vulnerability" in this exact code path, but that was a static-read
+concern, not runtime-confirmed. This 50R smoke is the first empirical
+confirmation that the concern is real and reproduces at scale, at both α —
+not a bootstrap-only or severe-skew-only artifact.
+
+**Action:** do not report CFD's F13 numbers as a valid baseline — treat as
+**broken pending fix**. Next session should instrument/inspect `self.b_up`
+quantization (`dequantize(codes, self.b_up)`, `cfd.py:183`) and the codec in
+`client_hooks/cfd.py` for a one-hot collapse or index-alignment bug (the
+class-sorted-unshuffled public-loader ordering noted at `cfd.py:217-222` is a
+prime suspect — if client-side encode and this aggregation don't agree on
+sample order, predictions and labels silently decorrelate into noise).
 
 ---
 
@@ -290,15 +351,17 @@ config, not headline numbers:
 | F10 | 🟡 | correctness (collapse fixed, residual open) | `compression.py`/`fedkd.py` SVD truncation | rank starvation (candidate 1) eliminated by `min_rank_frac=0.25`, confirmed on formal 50R re-run (2026-07-17, both α) — no more near-chance collapse. Residual 15-27pp gap vs. other baselines reclassified as still-open candidate 3 (SVD too lossy for depthwise-separable weights): `mean_rank_retained` sits at the floor throughout, not climbing past it. Unblocked for comparison tables; candidate 3 stays a finding to report, not resolve. |
 | F11 | 🟠 | direction · framing | FedMAQ (mechanism)                      | not a bug; lead thesis with comm+severe-skew, treat "EMA closes α=1.0 gap" as hypothesis to sweep |
 | F12 | 🟡 | config · latent     | `cfd.py:298`,`fedavg_kd.py:97`,`fedmaq.py:484` | align fallback to 3000 or fail-loud; bundle with code-audit F8 |
-| F13 | 🟡 | coverage · gating   | FedMD, FedDistill, CFD, FedAvg+KD       | run MobileNetV2GN smoke for the 4 missing KD baselines before freeze (`run-minitest`) |
+| F13 | ✅ | coverage · gating   | FedDistill, CFD, FedAvg+KD (FedMD dropped, Decision 25) | **CLOSED 2026-07-17** — all 3 ran full 50R smoke both α; FedDistill/FedAvg+KD clean, CFD collapsed (see F15) |
 | F14 | 🟡 | stability (out-of-KD-scope) | FedProx (μ=0.01, canonical)     | model-specific collapse; formal-grid stability watch |
+| F15 | 🔴 | correctness · new   | `strategy_hooks/cfd.py:169-194` (`pre_aggregate_fit`) | CFD collapses to chance both α, from round 1; root-caused to client soft-vote aggregation, not server distillation. Confirms memory obs #695's flagged concern at runtime. Treat CFD numbers as broken, not a valid baseline, until fixed. |
 
 **Headline:** the *direction* is sound — soft-voting, T=1.0, and hybrid>pure all
 hold as trends, and FedMAQ's severe-skew robustness is the defensible mechanism
-story. Two items need action before the formal grid: **F10** (FedKD mechanism
-confirmed and fix landed — a min-rank floor stops the SVD collapse on a production
-code-path probe; a real formal-grid run still needs to confirm it end-to-end) and
-**F13** (four KD baselines are unmeasured on the current model, gating every
-comparison claim). **F11** is not a defect but the single most important *framing*
-constraint. This session's code change (F10 fix) breaks from the prior
+story. **F10** (FedKD mechanism confirmed and fix landed — a min-rank floor
+stops the SVD collapse, confirmed on a full formal 50R re-run) and **F13** (the
+four KD baselines' evidence gap) are both **closed** this session. That work
+surfaced a new, unrelated defect — **F15**, CFD collapsing to chance from round
+1 at both α — which now gates CFD specifically (not the other KD baselines) from
+comparison tables until fixed. **F11** is not a defect but the single most
+important *framing* constraint. This session's code change (F10 fix) breaks from the prior
 report-only/freeze posture — see `HANDOFF.md` for why.

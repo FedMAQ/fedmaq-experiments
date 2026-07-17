@@ -6,7 +6,7 @@ Implement under `src/fedmaq/baselines/` and track in `.claude/project/baseline_r
 | ----------------- | ----------------- |
 | Seminal Controls  | FedAvg, FedProx   |
 | Pure Quantization | FedPAQ, DAdaQuant |
-| Pure KD           | FedMD, FedDistill |
+| Pure KD           | FedDistill (FedMD dropped — see `docs/DECISIONS.md` Decision 25) |
 | Hybrid Q+KD       | FedKD, CFD        |
 
 Update `baseline_registry.md` when adding or porting a baseline.

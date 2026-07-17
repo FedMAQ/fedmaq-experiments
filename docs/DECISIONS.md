@@ -196,3 +196,50 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     on any future FedMD rerun (including a formal grid run); do not compare a
     future run's per-round curve directly against the in-flight F13 minitest
     numbers without noting the digest-epoch difference.
+
+---
+
+## 2026-07-17 — FedMD dropped from the formal baseline stack
+
+25. **FedMD removed from the 8-baseline stack (now 7: FedAvg, FedProx, FedPAQ,
+    DAdaQuant, FedDistill, FedKD, CFD) + FedMAQ.** Supersedes Decision 24's
+    digest-epoch trim, which is now moot. Root cause (session 2026-07-17,
+    `outputs/2026-07-17/11-10-46/`): FedMD's one-time 20-epoch (10 public + 10
+    private) transfer-learning pretrain per client, combined with
+    `client_gpus=1.0` forcing **serial** Ray actor execution (only 1 actor
+    constructed regardless of `client_fraction`), meant ~90 distinct clients
+    each paid the pretrain cost sequentially over the course of the grid.
+    Wall-clock was tracking ~7-8.5 min/round even after the Decision 24 digest
+    trim (5→3 epochs), projecting 6+ hours for a single 50-round smoke arm —
+    infeasible to reproduce reliably across a 3-seed formal grid. A
+    convergence-based pretrain-stop (train-loss plateau, patience=5, Δ=0.5%
+    rel, min=5, cap=100 per phase) was scoped as an alternative but rejected:
+    a cap of 100 can run *longer* than the original fixed 10/10 in the worst
+    case, directly fighting the feasibility goal, and the added plateau-
+    detection code path itself needs implementation + validation — the exact
+    overhead the user was trying to escape. Considered and rejected keeping
+    FedMD via a fixed higher epoch cap or a FedMD-only reduced `num_clients`
+    scope — both still require debugging/defending a heavy, paper-deviating
+    baseline. **Decided: drop entirely.** The manuscript is an unfinalized
+    proposal, not yet a constraint — FedMD's role as the "public-labeled-
+    dataset privacy assumption" comparison point (`chapter_2.tex:317`) and its
+    mention in the analytical cost model (`chapter_4.tex:255`) will be revised
+    to reflect a 7-baseline scope rather than treated as a fixed requirement.
+    FedDistill remains the sole Pure KD baseline (also prediction/logit-based,
+    covers the "no full-weight-sharing" comparison axis, at a fraction of
+    FedMD's cost — no persisted pretrain, plain `local_epochs=5` per round).
+    **Not deleted:** `conf/algorithm/fedmd.yaml` and
+    `src/fedmaq/core/client_hooks/fedmd.py` retained (marked dropped in both
+    files/registries) in case FedMD is revisited later — same pattern as the
+    FedMAQ-Lite retirement (Decision 4). `.claude/project/baseline_registry.md`,
+    `.claude/rules/baselines.md`, and `docs/audits/baseline-status-audit.md`
+    updated to match. F13 re-scoped to the remaining 3 unmeasured KD baselines
+    (FedDistill, CFD, FedAvg+KD × α∈{0.1,1.0}); relaunched via new
+    process-isolated runner `scripts/run_kd_baselines_smoke.py` (task
+    `bg7fu46cg`), same config profile as the aborted FedMD run
+    (`experiment=default`, `total_rounds=50`, `num_clients=100`).
+    **Separately parked, not part of this decision:** lowering `client_gpus`
+    below 1.0 to allow concurrent client actors (would cut wall-clock for
+    *every* baseline, not just FedMD) — user has hit OOM with this before and
+    shares the GPU with non-training workloads; needs a dedicated profiling
+    pass before any global default change.

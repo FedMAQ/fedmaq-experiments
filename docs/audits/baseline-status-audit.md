@@ -1,13 +1,15 @@
-# Baseline Status Audit — all 8 baselines + FedMAQ
+# Baseline Status Audit — all 7 baselines + FedMAQ (FedMD dropped, Decision 25)
 
 **Last updated:** 2026-07-17
 **Auditor:** Claude (Sonnet 5), static-pass session
 **Lens:** implementation-readiness — *for each algorithm, what is its status
 (config-consistent? has a run on the current iso-arch? behaviourally sane? open
 findings?) and which need revision before the formal grid.*
-**Posture:** **static pass only — no runs, no fixes applied this pass.** All
-run-based verdicts (F13 gaps, FedProx μ, FedKD re-confirm) are deferred to a
-future run session. Recommended code fixes (F12) are documented, not applied.
+**Posture:** started as a static pass; **F13's 3 missing KD-baseline runs
+(FedDistill, CFD, FedAvg+KD) were executed and closed later the same day
+(2026-07-17)** — see per-algorithm notes below. FedProx μ and FedKD
+re-confirm were resolved in earlier sessions. Recommended code fixes (F12) are
+still documented, not applied.
 
 ## Scope & relationship to existing audits
 
@@ -74,12 +76,12 @@ Status legend: 🟢 ready (run + sane + config-consistent) · 🟡 config-ready 
 | **FedProx** | Seminal | ✅ (smoke, **μ=0.01 confirmed**) | strong then **collapses late (R45→R50)** | ✅ (μ=0.01, verified vs hydra config) | **F14** (real collapse at shipped μ), **F15** (results.md mislabels μ) | 🟠 |
 | **FedPAQ** | Pure Quant | ✅ (smoke) | sane (40.3% / 67.0% peak) | ✅ | — | 🟢 |
 | **DAdaQuant** | Pure Quant | ✅ (smoke) | strong (47.8% / 65.1% peak, low comm) | ✅ | — | 🟢 |
-| **FedMD** | Pure KD | ❌ **none** | unmeasured | not pinned (epochs configurable) | **F13** | 🟡 |
-| **FedDistill** | Pure KD | ❌ **none** | unmeasured | not pinned (`reg_alpha` configurable) | **F13** | 🟡 |
+| ~~**FedMD**~~ | Pure KD | — dropped | infeasible pretrain cost | n/a | **Decision 25** | ⚫ |
+| **FedDistill** | Pure KD | ✅ (smoke, 2026-07-17) | sane (39.0% / 57.0% final, mid-pack) | not pinned (`reg_alpha` configurable) | **F13 closed** | 🟢 |
 | **FedKD** | Hybrid Q+KD | ✅ (smoke, post-F10-fix, 2026-07-17) | weakest arm, confirmed learning, no collapse (26% / 36% final, 30% / 38% peak) | ✅ + `min_rank_frac` floor | **F10 collapse fixed**; residual gap reclassified to open candidate-3 finding (SVD too lossy for depthwise-separable weights) | 🟡* |
-| **CFD** | Hybrid Q+KD | ❌ **none** | unmeasured | b=1 paper-headline; Table 4.1 unpinned | **F13**, **F12** | 🟡 |
+| **CFD** | Hybrid Q+KD | ✅ (smoke, 2026-07-17) | **collapsed to chance both α** (10.0% / 10.0%) | b=1 paper-headline; Table 4.1 unpinned | **F13 closed**; **distillation-audit F15** (new collapse defect), **F12** | 🔴 |
 | **FedMAQ** *(contribution)* | Proposed | ✅ (smoke) | trails at α=1.0, wins at α=0.1 | ✅ | **F11** (framing), **F12** | 🟢* |
-| *FedAvg+KD* *(= Ablation Config 6)* | KD ablation | ❌ **none** | unmeasured | T=1.0 ✅ | **F13**, **F12** | 🟡 |
+| *FedAvg+KD* *(= Ablation Config 6)* | KD ablation | ✅ (smoke, 2026-07-17) | weak at α=0.1 (17.3%), sane at α=1.0 (51.4%) | T=1.0 ✅ | **F13 closed**, **F12** | 🟡 |
 
 \* FedMAQ status is 🟢 *implementation/config*; **F11** is a framing constraint on
 the thesis claim, not a defect (lead with comm-efficiency + severe-skew
@@ -91,7 +93,8 @@ not a closed investigation either.
 
 **Smoke numbers (α=0.1 / α=1.0 peak):** FedAvg 42.3 / 66.9 · FedProx 49.0 / 67.2
 · FedPAQ 40.3 / 67.0 · DAdaQuant 47.8 / 65.1 · FedMAQ **53.2** / 60.9 · FedKD 30.1 / 38.3 (post-fix)
-/ 33.6 (pre-fix). Source:
+/ 33.6 (pre-fix) · FedDistill 39.0 / 58.0 · FedAvg+KD 27.0 / 53.7 · CFD 10.7 / 10.2
+(collapsed, not a valid comparison figure — F15). Source:
 [`mobilenetv2-smoke-50r/results.md`](../experiments/mobilenetv2-smoke-50r/results.md).
 
 ---
@@ -125,11 +128,21 @@ axis FedMAQ builds on. No open findings. Ready.
 
 ## Per-algorithm notes (KD family — see distillation-direction-audit for depth)
 
-**FedMD / FedDistill** — 🟡 implementations were reviewed in the distillation audit
-and **look correct** (server-side logit/score averaging is faithful; the "no
-server-side temperature/KL" is by-design, not a missing-KD bug). **But zero
-MobileNetV2GN runs (F13)** — behavioural status is **unmeasured**; do not read
-"looks correct" as a health verdict the runs haven't earned.
+**FedMD** — ⚫ **dropped from the formal baseline stack (Decision 25, 2026-07-17).**
+Implementation was reviewed and looked correct (server-side logit averaging
+faithful to Li & Wang 2019), but the mandatory one-time 20-epoch transfer-learning
+pretrain per client proved infeasible on this hardware: `client_gpus=1.0` forces
+serial actor execution, so all ~90 distinct clients pay the pretrain cost
+sequentially over the grid, and formal 50R smoke runs were tracking multi-hour
+wall-clock with no reliable stopping criterion. Config/hook code retained
+(`conf/algorithm/fedmd.yaml`, `src/fedmaq/core/client_hooks/fedmd.py`) for
+reproducibility; excluded from all sweeps going forward.
+
+**FedDistill** — 🟢 implementation was reviewed in the distillation audit and
+**looks correct** (server-side score averaging is faithful; the "no server-side
+temperature/KL" is by-design, not a missing-KD bug). **F13 closed (2026-07-17)**:
+full 50R MobileNetV2GN smoke confirms healthy behaviour — 39.0%/57.0% final
+accuracy, mid-pack among KD baselines, no collapse at either α. Ready.
 
 **FedKD** — 🟡 F10 **collapse mechanism fixed, residual reclassified**: SVD rank
 starvation (candidate 1) confirmed fixed — `min_rank_frac=0.25` floor landed
@@ -143,11 +156,24 @@ weights) is still live and is the leading explanation for the remaining
 15-27pp gap vs. other baselines. FedKD is unblocked for comparison tables;
 the gap is a finding to report, not a closed investigation.
 
-**CFD / FedAvg+KD** — 🟡 reviewed, look sound (CFD dual-distillation is
-temperature-consistent; FedAvg+KD shares the vetted `kd_utils.py` engine). Both
-**unmeasured (F13)** and both carry **F12** (`num_public_samples` fallback). FedAvg+KD
-is **Ablation Config 6**, realized via the FedMAQ/KD path (`fedavg_kd.py`), not a
-standalone baseline config.
+**CFD** — 🔴 code review looked sound (dual-distillation is temperature-consistent),
+but **F13 closed and immediately surfaced a real defect**: the 50R MobileNetV2GN
+smoke collapses to chance accuracy (10.0%) at both α, from round 1 onward. Root
+cause is in the client-side soft-vote aggregation (`pre_aggregate_fit`), not
+server distillation — see **distillation-direction-audit F15** for the full
+diagnosis. This confirms, at runtime, a concern that static code review (memory
+obs #695) had already flagged but not verified. **Do not use CFD's smoke numbers
+as a comparison baseline** until F15 is fixed. Also carries **F12**
+(`num_public_samples` fallback).
+
+**FedAvg+KD** — 🟡 reviewed, looks sound (shares the vetted `kd_utils.py` engine
+with FedMAQ). **F13 closed (2026-07-17)**: 50R smoke is weak at severe skew
+(17.3% at α=0.1, well below every other baseline) but recovers to sane mid-pack
+accuracy at moderate skew (51.4% at α=1.0) — heterogeneity-sensitive, not
+collapsed/broken. Ready as a comparison baseline; the α=0.1 weakness is a
+finding to report, not a defect. Also carries **F12**. Is **Ablation Config 6**,
+realized via the FedMAQ/KD path (`fedavg_kd.py`), not a standalone baseline
+config.
 
 ---
 
@@ -218,18 +244,24 @@ call-site default; leave or align when the fix lands. Bundle with code-audit F8.
 
 ## What needs revision before the formal grid (prioritized)
 
-1. **F13 — run the 4 unmeasured KD baselines** (FedMD, FedDistill, CFD, FedAvg+KD)
-   on MobileNetV2GN. Gates every KD comparison claim. `run-minitest` is the tool.
-   **Only remaining run-gate.**
-2. ~~F10 re-confirm~~ — **DONE 2026-07-17.** Formal 50R re-run on both α confirms
+1. ~~F13~~ — **DONE 2026-07-17.** All 3 KD baselines (FedDistill, CFD, FedAvg+KD)
+   ran full 50R smoke on MobileNetV2GN via `scripts/run_kd_baselines_smoke.py`.
+   FedDistill/FedAvg+KD are clean and ready for comparison tables. CFD surfaced
+   a new defect (see next item) — not ready.
+2. **NEW — CFD collapse (distillation-audit F15).** CFD collapses to chance
+   accuracy (10.0%) at both α, from round 1, root-caused to client-side
+   soft-vote aggregation (`strategy_hooks/cfd.py` `pre_aggregate_fit`). Confirms
+   a previously-flagged-but-unverified static concern (memory obs #695) at
+   runtime. **New run-gate:** CFD cannot enter comparison tables until fixed.
+3. ~~F10 re-confirm~~ — **DONE 2026-07-17.** Formal 50R re-run on both α confirms
    the collapse mechanism is fixed; FedKD unblocked for tables. Residual gap
    reclassified to open candidate-3 finding, not re-opened as a run-gate.
-3. **F14 — FedProx stability watch at μ=0.01.** The collapse is at the canonical
+4. **F14 — FedProx stability watch at μ=0.01.** The collapse is at the canonical
    config (F15 confirms the smoke ran μ=0.01), so the formal grid needs a
    convergence guard or per-model μ check for FedProx on MobileNetV2GN. Doc-only
    otherwise — no code action.
-4. ~~F12~~ — **DONE (PR #9).** Fail-loud fix applied.
-5. **F16 / F17 — manuscript sync** (`min_rank_frac`; MobileNetV2GN architecture) —
+5. ~~F12~~ — **DONE (PR #9).** Fail-loud fix applied.
+6. **F16 / F17 — manuscript sync** (`min_rank_frac`; MobileNetV2GN architecture) —
    `align-manuscript`, lands in `fedmaq-manuscript`.
 
 ## Housekeeping flag
@@ -240,17 +272,18 @@ call-site default; leave or align when the fix lands. Bundle with code-audit F8.
 
 ## Bottom line
 
-**FedAvg/FedPAQ/DAdaQuant are 🟢** (run, sane, config-consistent). **FedKD is 🟡**:
-its F10 collapse is fixed and confirmed, but the residual gap vs. other
-baselines is reclassified to an open candidate-3 finding, not a closed
-investigation. **FedProx is config-correct but 🟠**: it
+**FedAvg/FedPAQ/DAdaQuant/FedDistill are 🟢** (run, sane, config-consistent).
+**FedKD is 🟡**: its F10 collapse is fixed and confirmed, but the residual gap
+vs. other baselines is reclassified to an open candidate-3 finding, not a closed
+investigation. **FedAvg+KD is 🟡**: sane at α=1.0, weak at α=0.1 —
+heterogeneity-sensitive, not broken. **FedProx is config-correct but 🟠**: it
 ran the canonical μ=0.01 (F15 corrects a `results.md` mislabel) and still
 collapsed late-round on MobileNetV2GN (**F14**) — a real stability concern at the
-shipped config, needing a formal-grid stability watch. The **remaining KD-family
-gap**: four baselines are **unmeasured (F13)** — none are *broken*, but none can
-be given a behavioural verdict until they run; this is the only run-gate left.
+shipped config, needing a formal-grid stability watch. **CFD is 🔴**: F13's
+run closed the evidence gap and immediately surfaced a genuine collapse defect
+(distillation-audit F15) — not measured-but-weak, actually broken, and the only
+baseline excluded from comparison tables pending a fix.
 Two low-severity **manuscript-sync** items (**F16**, **F17**) are resolved, one
 **doc-error correction** (**F15**) is resolved, and the **code fix** (**F12**) is
-merged — round out the
-list. No 🔴 findings — the stack is not broken, it is **under-measured** (and in
-FedProx's case, **under-guarded**); the gating work is runs, not rewrites.
+merged. **F13 is closed** — the KD-family evidence gap is gone; the remaining
+gate is the **CFD collapse (🔴)**, a code fix, not another run.

@@ -25,8 +25,17 @@ Under moderate skew ($\alpha=1.0$), client updates are relatively aligned, makin
 - **The Accuracy Gap**: FedMAQ (**60.93%**) and DAdaQuant (**64.65%**) lag behind the uncompressed baselines (FedAvg: **66.90%**, FedProx: **67.16%**) and the fixed 8-bit baseline (FedPAQ: **66.81%**).
 - **Mechanism**: This gap confirms the **Capacity-EMA Duality** found in prior SimpleCNN/ResNet18GN explorations. Smaller/medium-sized architectures like MobileNetV2GN (~2.24M parameters) require the temporal smoothing of Student EMA (`ema_student=true`) under moderate skews to filter out quantization-induced variance and settle into sharper local minima. Disabling EMA (`ema_student=false`) in this sweep exposed this variance, preventing it from matching baseline performance under $\alpha=1.0$.
 
+### C. KD-Family Baselines (F13 closure, 2026-07-17): FedDistill, CFD, FedAvg+KD
+
+Three previously-unmeasured KD baselines completed their first MobileNetV2GN runs this pass, closing the F13 evidence gap.
+
+- **FedDistill lands mid-pack, cleanly.** 39.03% (α=0.1) / 56.96% (α=1.0) final accuracy — behind the quantization baselines and FedMAQ, ahead of FedKD and collapsed CFD. No stability issues at either skew. Ready as a comparison baseline.
+- **FedAvg+KD is heterogeneity-sensitive, not broken.** Weak under severe skew (17.28% at α=0.1, trailing every other baseline) but recovers to a sane 51.42% under moderate skew — a similar shape to FedMAQ's own α=0.1/α=1.0 asymmetry, consistent with KD regularization costing accuracy when data is easy and needing more rounds/tuning when it's hard.
+- **CFD collapses to chance at both α — a genuine defect, not a tuning artifact.** Test accuracy is pinned at ~10.0% for all 50 rounds under both severe and moderate skew, with test loss *above* chance-level cross-entropy (2.65–3.79 vs. ln(10)≈2.30). Per-round telemetry shows the failure originates in the client-side soft-vote aggregation (`pre_aggregate_fit` in `strategy_hooks/cfd.py`) — the `targets_acc` metric (soft-voted client predictions on the public set, *before* server training) is chance-level from round 1 onward, even though individual clients' local training accuracy is healthy (50–65% throughout, per `client/avg_train_acc`). The server model is faithfully distilling noise for all 50 rounds; this is not an undertrained-server or bad-hyperparameter issue. This empirically confirms a static-review concern flagged earlier (memory obs #695, "CFD soft-label codec one-hot quantization bootstrap vulnerability") that had not previously been runtime-verified. **CFD's numbers here are not a valid baseline entry** — see `docs/audits/distillation-direction-audit.md` F15 for the full diagnosis and next steps.
+
 ---
 
 ## 2. Recommendation for the Formal Grid
 
 1. **EMA Configuration**: The formal experimental sweeps must document and sweep the Student EMA configuration, as it is a critical hyperparameter for MobileNetV2GN stability under moderate skews, whereas disabling it benefits extreme skews.
+2. **CFD is blocked**: do not include CFD in the formal grid until F15 (soft-vote aggregation collapse) is fixed. FedDistill and FedAvg+KD are ready to enter the formal comparison set as-is.
