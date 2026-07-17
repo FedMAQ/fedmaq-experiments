@@ -2,7 +2,7 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-07-16
+**Last updated**: 2026-07-18 (Decisions 14–26 landed since; see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md) — CFD dropped, F10–F18 closed)
 
 ---
 

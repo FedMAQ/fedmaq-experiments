@@ -1,5 +1,7 @@
 # FedMAQ Audit — Actionable Recommendations
 
+**Last updated**: 2026-07-16
+
 Cross-referencing every point in [fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md) and [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md), plus additional findings from the codebase.
 
 > [!NOTE]

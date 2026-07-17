@@ -1,5 +1,7 @@
 # FedMAQ Comprehensive Audit
 
+**Last updated**: 2026-07-16
+
 Full audit of the original and improved FedMAQ algorithm covering mathematical grounding, implementation correctness, literature defensibility, and potential thesis-defense vulnerabilities. Grounded in the [fedmaq-literature KG](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/) and the [fedmaq-experiments](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/) codebase.
 
 > [!NOTE]

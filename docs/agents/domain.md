@@ -1,5 +1,7 @@
 # Domain Docs
 
+**Last updated**: 2026-07-18
+
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
 ## Before exploring, read these
