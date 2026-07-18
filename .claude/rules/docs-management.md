@@ -7,5 +7,4 @@ Conventions for `docs/`, `HANDOFF.md`, `.claude/project/`. Full sweep + auto-fix
 - **Archive pattern = per-directory `archive/` subfolder** (e.g. `docs/experiments/archive/`), not a top-level `docs/archive/`. Archived content stays next to its live counterpart.
 - **`docs/DECISIONS.md` is append-only**: single source of truth for resolved decisions, dated entries. `STATUS.md`/`HANDOFF.md`/plans link to it instead of repeating content.
 - **When editing any doc with a "Last updated" header, update the date to the current session date.**
-- **When editing a doc with numbered sections, re-check the numbering is contiguous** (no skipped numbers from a deleted section).
 - **`HANDOFF.md` is next-agent orientation only** — action items, not history. Detailed findings/audits go in `docs/`.
