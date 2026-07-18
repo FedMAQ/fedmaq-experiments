@@ -20,13 +20,13 @@ The mechanisms below are **guides, not commitments** — they were tuned for Sim
 
 | Mechanism | Prior status | MobileNetV2GN question | Pass |
 | :-- | :-- | :-- | :-- |
-| Soft-voting (entropy × precision weights) | Tuned per α | Re-sweep natively; entropy_weight transfer failed on ResNet18GN | 1 — **running** |
+| Soft-voting (entropy × precision weights) | Tuned per α | Re-sweep natively; entropy_weight transfer failed on ResNet18GN | 1 — **done, provisional** (ew=2.0/pw=0.5/sv_on, pending multi-seed re-verification) |
 | Capacity-EMA duality | Helps small (SimpleCNN), hurts large (ResNet18GN) | **Open**: MobileNetV2 is small-but-deep — EMA on or off? | 2 |
 | Grad-norm smoothing (β=0.7) | Keep (measurement noise, not dynamics) | Isolation ablation still owed | 2 |
 | Client KD reg + proximal (μ=0.1) | Stacked reg best on ResNet18GN | Still needed at lower capacity? | 2 |
 | Dual-tier precision scaling (Formulation 3) | Robustly optimal (SimpleCNN/ResNet) | Still optimal at this capacity? | 3 |
 
-Pass order + explore-α=0.3 + decision rule: `DECISIONS.md` 2026-07-18 entry (29–30). Pass 1 launched 2026-07-18 (`scripts/run_soft_voting_explore.py`, `multirun/2026-07-18/...-soft-voting-explore-mobilenetv2/`).
+Pass order + explore-α=0.3 + decision rule: `DECISIONS.md` 2026-07-18 entry (29–30). Pass 1 complete 2026-07-18 (`scripts/run_soft_voting_explore.py`, `multirun/2026-07-18/03-30-59-soft-voting-explore-mobilenetv2/`) — results + tentative pick: `DECISIONS.md` entries 33–35.
 
 **Early signal (2026-07-16)**: FedMAQ first 40 rounds on MobileNetV2GN look promising — preliminary mechanism validation. FedAvg, FedProx smoke tests finished.
 
