@@ -135,14 +135,20 @@ for idiom, **not** a correctness defect (see cross-reference section).
 **Recommendation:** none required for the thesis; if ever refactored, the
 grad-norm probe is the natural thing to move out of `configure_fit`.
 
-### 🟡 F9 — Per-round full-model deepcopy in client KD hook [efficiency · conditional]
+### 🟢 F9 — Per-round full-model deepcopy in client KD hook [efficiency · conditional] — WONTFIX (2026-07-18)
 
 `kd_loss_hook.py:56`. `on_train_begin` `copy.deepcopy`s the whole client model
-every round; active only when `client_kd_reg=true` (off by default), so no impact
-on the current grid — noted for when the KD-reg sweep runs. The design audit does
-not examine `kd_loss_hook.py`.
-
-**Recommendation:** if the reg sweep becomes hot, snapshot once and reload weights.
+every round. Re-examined ahead of the Priority 1 KD-reg sweep and closed as
+wontfix, not fixed: a cross-round cache (keyed by client partition-id, to
+survive `client_fn` re-instantiation) was prototyped and reverted — it
+defeats the per-round GC that currently frees the deepcopy, keeping a
+GPU-resident model copy alive per client per Ray worker for the whole run.
+That's exactly the Ray/PyTorch VRAM-accumulation class the process-isolated
+runners (`hydra-config.md`, `flower-patterns.md`) exist to prevent, and cache
+hit-rate isn't even guaranteed (flwr sim doesn't pin partitions to actors).
+The cost being "fixed" is ~9MB copied once per client per round — single-digit
+seconds over a 50R run, negligible against GPU training time. No action
+needed; deepcopy stays.
 
 ## Positives (no action — noted to prevent regressions)
 
@@ -168,7 +174,7 @@ not examine `kd_loss_hook.py`.
 | F4 | 🟡 | doc-drift | fedmaq.py:128 | **DONE** — docstring architecture-agnostic; §1.4 probe-model prose synced |
 | F5 | 🟡 | hygiene | fedmaq.py:238 | **DONE** — reported-state fields init in `__init__`; `hasattr` guards dropped |
 | F1 | 🟡 | convention | fedmaq.py:146 | **ACCEPTED** (wontfix-thesis) — idiom only, no thesis benefit; probe extraction deferred |
-| F9 | 🟡 | efficiency · conditional | kd_loss_hook.py:56 | **DEFERRED** — snapshot-once is a no-op here: Flower/Ray re-runs `client_fn` (simulation.py:98) every round, so `ClientKDLossHook` is re-instantiated and `_global_model` is always fresh → deepcopy is unavoidable without persisting the reference in `context.state`. Off in the confirm grid (`client_kd_reg=false`), so no runtime impact; revisit before any KD-reg sweep. |
+| F9 | 🟢 | efficiency · conditional | kd_loss_hook.py:56 | **WONTFIX** (2026-07-18) — caching the teacher across rounds accumulates GPU-resident model copies per Ray worker (the documented OOM class); cost of the deepcopy itself is negligible (~9MB/client/round) |
 | — | — | — | fedmaq.py:186 (server-side g_k) | **covered §1.4, no new finding** |
 
 **Headline:** mechanism logic is clean, strict-checked, and well-commented. The

@@ -309,3 +309,20 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     `.claude/project/baseline_registry.md`, `.claude/rules/baselines.md`, and
     `docs/audits/{baseline-status-audit.md,distillation-direction-audit.md}`
     updated to match. Hybrid Q+KD group is now FedKD-only in the formal stack.
+
+---
+
+## 2026-07-18 — Priority 1 Exploration Campaign Scoped (grilling session)
+
+Resolves the deferred process questions in [formal-experiment-plan.md](plans/formal-experiment-plan.md) §2–§3 (mechanism sweep order, decision rule, baseline-tuning budget). Does not resolve the mechanisms themselves (capacity-EMA on/off, Formulation 3, etc.) — those await Pass 1–3 results.
+
+27. **Explore-α = 0.3** for all Priority 1 exploration-phase runs. Distinct from the confirmatory report grid {0.1, 1.0} (Decision 10) so the single frozen config isn't selected on the exact α values it will later be reported on. `conf/heterogeneity/dirichlet_alpha_0.3.yaml` added.
+28. **Exploration run budget**: 50 rounds, single seed (seed=0), per sweep run — matches prior smoke-test convention, cheap enough for repeated passes. Confirmatory grid (multi-seed, 100+ rounds, Decision 9) is unaffected; exploration only picks direction.
+29. **Mechanism sweep structure**: grouped into passes rather than one full joint factorial (cost) or pure sequential coordinate-descent (misses interactions). Every mechanism setting includes its control/off arm.
+    - Pass 1: soft-voting weights (`entropy_weight` × `precision_weight`), joint — coupled by design.
+    - Pass 2: capacity-EMA on/off, grad-norm-smoothing (β=0.7) isolation, client-KD-reg+proximal (μ) — grouped, largely orthogonal.
+    - Pass 3: Formulation 3 (dual-tier precision scaling) — still optimal at this capacity?
+    - FedMAQ mechanisms fully resolved (all 3 passes) before baseline matched-tuning starts — baseline HPs don't depend on FedMAQ's mechanism choices, so sequential ordering costs nothing and avoids redoing baseline tuning if a later pass changes the FedMAQ config.
+30. **Decision rule per mechanism pass**: keep/drop/revise only if the delta clears a noise margin, not just whichever setting scores highest in a single-seed run. Single-seed exploration has no variance estimate, so picking the literal best risks chasing noise.
+31. **Baseline matched-tuning budget**: one key HP each (FedProx μ, FedPAQ bit-width, DAdaQuant schedule, FedDistill/FedKD distillation temp — FedMD/CFD already dropped, Decisions 25/26), grid capped at 5 values per baseline, matched to FedMAQ's own per-mechanism sweep run count (equal-budget parity, Decision 7).
+32. **F9 (code-audit, client-KD-reg deepcopy) closed WONTFIX, not fixed.** Re-examined ahead of Pass 2 since it gated `client_kd_reg=true`. A cross-round teacher-shell cache (keyed by client partition-id, to survive `client_fn` re-instantiation) was prototyped and reverted: it keeps a GPU-resident model copy alive per client per Ray worker for the whole run, which is exactly the Ray/PyTorch VRAM-accumulation class the process-isolated runners (`hydra-config.md`, `flower-patterns.md`) exist to prevent, and cache hit-rate isn't even guaranteed (flwr sim doesn't pin partitions to actors). The cost being optimized is ~9MB copied once per client per round — negligible against per-round GPU training time. `client_kd_reg=true` runs as-is in Pass 2; no code change needed. `docs/audits/fedmaq-code-audit.md` F9 entry updated to WONTFIX.

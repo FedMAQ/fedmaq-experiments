@@ -2,7 +2,7 @@
 
 **Purpose**: Focused handoff for the next agent. All historical experiment details, audit findings, and remediation plans live in `docs/`. This document provides orientation, current state, and immediate action items only.
 
-**Last updated**: 2026-07-18 (F14 closed — all pre-grid gates now clear; CFD dropped Decision 26; FedAvg+KD/FedProx reclassified 🟢 via F18/F14 severe-skew findings, not defects)
+**Last updated**: 2026-07-18 (Priority 1 exploration campaign grilled and scoped — explore-α, sweep-pass structure, decision rule, baseline-tuning budget; F9 code-audit finding closed wontfix ahead of the KD-reg sweep — deepcopy cost negligible, caching it would accumulate GPU memory)
 
 ---
 
@@ -82,9 +82,12 @@ Windows Ray/RAM crash mitigation for Flower sims: see [.claude/rules/flower-patt
 
 ### Priority 1: Exploration Phase (MobileNetV2GN)
 
-1. **Run the adaptive exploration campaign** on CIFAR-10 (primary): re-sweep soft-voting (`entropy_weight` × `precision_weight`), validate Formulation 3, resolve capacity-EMA (on/off for MobileNetV2 — open question), client KD reg. Mechanisms are guides — keep/drop/revise per results.
-   - **Before enabling `client_kd_reg=true`** (code-audit F9): `ClientKDLossHook.on_train_begin` deep-copies the whole client model **every round** because Flower/Ray re-instantiates `client_fn` per round. Persist the reference model in `context.state` first if the KD-reg sweep proves hot, otherwise it pays a full-model deepcopy per client per round.
-2. **Matched light tuning** of the 8 baselines (one key HP each) on the same explore-α.
+1. **Run the adaptive exploration campaign** on CIFAR-10 (primary), grilled and scoped 2026-07-18: explore-α=0.3 (distinct from report grid {0.1, 1.0}), 50R single-seed per sweep run, keep/drop/revise decided against a noise margin (not just best single run, since single-seed). Sequenced in ≥2 passes, each mechanism setting including its control/off arm, FedMAQ mechanisms fully resolved before baseline matched-tuning starts:
+   - **Pass 1**: soft-voting weights (`entropy_weight` × `precision_weight`), joint sweep (coupled by design).
+   - **Pass 2**: capacity-EMA on/off, grad-norm-smoothing (β=0.7) isolation ablation, client-KD-reg+proximal (μ) — grouped, largely orthogonal.
+   - **Pass 3**: Formulation 3 (dual-tier precision scaling) — still optimal at this capacity?
+   - **F9 (code-audit) is now WONTFIX** (2026-07-18) — re-examined ahead of pass 2; a cross-round teacher-shell cache was prototyped and reverted, since it keeps a GPU-resident model copy alive per client per Ray worker across the whole run (the VRAM-accumulation class the process-isolated runners exist to prevent). The deepcopy cost itself is negligible (~9MB/client/round). `client_kd_reg=true` runs as-is; no change needed before pass 2.
+2. **Matched light tuning** of the baselines (one key HP each: FedProx μ, FedPAQ bit-width, DAdaQuant schedule, FedDistill/FedKD distillation temp — FedMD/CFD dropped, Decisions 25/26) on the same explore-α, after FedMAQ mechanisms freeze. Grid capped at 5 values per baseline, matched to FedMAQ's own per-mechanism sweep run count.
 3. **Pre-register + git-tag** the frozen FedMAQ config + baseline HP table + fixed mechanism set. This ends exploration.
 
 ### Priority 2: Confirmation Infrastructure

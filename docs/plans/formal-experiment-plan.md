@@ -1,6 +1,6 @@
 # FedMAQ Formal Experiment Plan
 
-**Status**: Aligned via grilling session, 2026-07-16. Pre-confirmation (exploration phase in progress).
+**Status**: Aligned via grilling session, 2026-07-16; exploration-campaign process scoped via grilling session, 2026-07-18 (see §3). Pre-confirmation (exploration phase in progress).
 **Supersedes**: ad-hoc smoke-test progression. All prior ResNet18GN standings deprecated.
 
 > [!IMPORTANT]
@@ -10,7 +10,7 @@
 
 ## 1. Settled Decisions
 
-See [docs/DECISIONS.md](../DECISIONS.md) (2026-07-16 entry) for the full list of 13 resolved decisions.
+See [docs/DECISIONS.md](../DECISIONS.md) — full resolved-decisions log (framing/grid, architecture refactor, baseline drops, exploration-campaign scoping).
 
 ---
 
@@ -18,13 +18,15 @@ See [docs/DECISIONS.md](../DECISIONS.md) (2026-07-16 entry) for the full list of
 
 The mechanisms below are **guides, not commitments** — they were tuned for SimpleCNN / ResNet18GN and may not all earn their place on MobileNetV2GN (deep but small, ~2.24M ≈ SimpleCNN param count). Exploration decides keep/drop/revise per mechanism.
 
-| Mechanism | Prior status | MobileNetV2GN question |
-| :-- | :-- | :-- |
-| Dual-tier precision scaling (Formulation 3) | Robustly optimal (SimpleCNN/ResNet) | Still optimal at this capacity? |
-| Soft-voting (entropy × precision weights) | Tuned per α | Re-sweep natively; entropy_weight transfer failed on ResNet18GN |
-| Capacity-EMA duality | Helps small (SimpleCNN), hurts large (ResNet18GN) | **Open**: MobileNetV2 is small-but-deep — EMA on or off? |
-| Grad-norm smoothing (β=0.7) | Keep (measurement noise, not dynamics) | Isolation ablation still owed |
-| Client KD reg + proximal (μ=0.1) | Stacked reg best on ResNet18GN | Still needed at lower capacity? |
+| Mechanism | Prior status | MobileNetV2GN question | Pass |
+| :-- | :-- | :-- | :-- |
+| Soft-voting (entropy × precision weights) | Tuned per α | Re-sweep natively; entropy_weight transfer failed on ResNet18GN | 1 — **running** |
+| Capacity-EMA duality | Helps small (SimpleCNN), hurts large (ResNet18GN) | **Open**: MobileNetV2 is small-but-deep — EMA on or off? | 2 |
+| Grad-norm smoothing (β=0.7) | Keep (measurement noise, not dynamics) | Isolation ablation still owed | 2 |
+| Client KD reg + proximal (μ=0.1) | Stacked reg best on ResNet18GN | Still needed at lower capacity? | 2 |
+| Dual-tier precision scaling (Formulation 3) | Robustly optimal (SimpleCNN/ResNet) | Still optimal at this capacity? | 3 |
+
+Pass order + explore-α=0.3 + decision rule: `DECISIONS.md` 2026-07-18 entry (29–30). Pass 1 launched 2026-07-18 (`scripts/run_soft_voting_explore.py`, `multirun/2026-07-18/...-soft-voting-explore-mobilenetv2/`).
 
 **Early signal (2026-07-16)**: FedMAQ first 40 rounds on MobileNetV2GN look promising — preliminary mechanism validation. FedAvg, FedProx smoke tests finished.
 
@@ -32,12 +34,10 @@ The mechanisms below are **guides, not commitments** — they were tuned for Sim
 
 ## 3. Deferred Sub-Details
 
-Design-level open questions this plan still owes an answer to (the *what to decide*, not *what to do next* — for the task list, see [HANDOFF.md §5](../../HANDOFF.md), which is canonical for next-agent action items):
+Process questions (selection rule, sweep structure, decision rule, baseline-tuning budget) are resolved — see [DECISIONS.md](../DECISIONS.md) 2026-07-18 entry (27–32). Still open, pending Pass 1–3 results:
 
-- **Single-config selection rule**: pick config maximizing mean accuracy over the sweep; ideally selected on a validation α distinct from the reported {0.1, 1.0} so even the "single config" isn't fit to the reported grid.
-- **Baseline key-HP enumeration** for symmetric matched tuning: FedProx μ, FedPAQ bit-width, DAdaQuant schedule, FedMD/FedDistill/FedKD/CFD distillation temps. One key HP each, equal budget.
-- **Pareto plot**: compare FedMAQ vs pure-quant baselines (FedPAQ, DAdaQuant) at **matched bit budgets**, else accuracy-vs-compression frontier is apples-to-oranges.
-- **Capacity-EMA resolution**: exploration answers whether EMA is in the frozen config.
+- **Capacity-EMA resolution**: Pass 2 answers whether EMA is in the frozen config.
+- **Pareto plot**: compare FedMAQ vs pure-quant baselines (FedPAQ, DAdaQuant) at **matched bit budgets**, else accuracy-vs-compression frontier is apples-to-oranges. Not yet built.
 
 ---
 
