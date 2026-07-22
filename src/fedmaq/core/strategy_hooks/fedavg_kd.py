@@ -109,3 +109,6 @@ class FedAvgKDHook(StrategyHook):
             for k, v in self._last_round_kd_metrics.items():
                 metrics[f"algorithm/fedavg_kd/{k}"] = v
         return metrics
+
+    def metric_keys(self) -> list[str]:
+        return ["algorithm/fedavg_kd/server_kd_loss"]

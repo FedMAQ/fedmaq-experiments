@@ -184,3 +184,6 @@ class FedKDHook(StrategyHook):
             metrics["algorithm/fedkd/mean_rank_retained"] = self._last_mean_rank_retained
         metrics["algorithm/fedkd/energy"] = self._current_energy
         return metrics
+
+    def metric_keys(self) -> list[str]:
+        return ["algorithm/fedkd/mean_rank_retained", "algorithm/fedkd/energy"]

@@ -4,9 +4,16 @@ import csv
 import json
 import logging
 import os
+import time
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 from pathlib import Path
-from typing import Any
+
+import numpy as np
+from flwr.common import FitRes, Parameters, parameters_to_ndarrays
+from flwr.server.client_proxy import ClientProxy
+
+from fedmaq.core.config_defaults import require_num_public_samples
 
 try:
     import wandb
@@ -23,6 +30,42 @@ try:
     _HYDRA_AVAILABLE = True
 except Exception:
     _HYDRA_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from fedmaq.core.strategy import TelemetryFedAvg
+
+# Metric keys every algorithm may emit, independent of which hook is active.
+# Algorithm-specific keys (e.g. ``algorithm/fedmaq/avg_q``) are supplied by the
+# active hook's ``metric_keys()`` and composed in below — see
+# ``register_hook_metric_keys`` and ``_write_local_logs``.
+_COMMON_CSV_FIELDNAMES: list[str] = [
+    "round",
+    "test/loss",
+    "test/accuracy",
+    "test/precision",
+    "test/recall",
+    "test/f1",
+    "communication/round_bytes",
+    "communication/cumulative_bytes",
+    "communication/cumulative_mb",
+    "system/round_time_sec",
+    "system/cumulative_time_sec",
+    "system/client_sim_time_sec",
+    "system/cumulative_client_time_sec",
+    "system/server_sim_time_sec",
+    "system/cumulative_server_time_sec",
+    "system/wall_time_sec",
+    "system/cumulative_wall_time_sec",
+    "communication/client_bytes_uploaded_mean",
+    "communication/client_bytes_uploaded_min",
+    "communication/client_bytes_uploaded_max",
+    "communication/client_bytes_uploaded_std",
+    "client/avg_train_loss",
+    "client/avg_train_acc",
+    "client/avg_local_loss",
+    "client/avg_epochs_trained",
+    "client/avg_q",
+]
 
 
 class TelemetryManager:
@@ -42,6 +85,23 @@ class TelemetryManager:
         self.cumulative_client_time: float = 0.0
         self.cumulative_server_time: float = 0.0
         self.cumulative_wall_time: float = 0.0
+
+        # Per-round fit snapshots, read back by the strategy's evaluate(). See
+        # ``record_fit_round`` (called from ``aggregate_fit``).
+        self.last_round_bytes = 0
+        self.last_round_time = 0.0
+        self.last_client_time = 0.0
+        self.last_server_time = 0.0
+        self.last_wall_time = 0.0
+        self.last_client_bytes_stats: dict[str, float] = {}
+        self.last_round_client_metrics: dict[str, float] = {}
+
+        # Real (not simulated) wall-clock timer, measured across aggregate_fit calls.
+        self._last_wall_ts = time.perf_counter()
+
+        # Algorithm-specific CSV keys declared by the active hook (see
+        # ``register_hook_metric_keys``), composed into the stable schema below.
+        self._hook_metric_keys: list[str] = []
 
         # Local tracking setup in Hydra's output directory, falling back to current dir
         if _HYDRA_AVAILABLE:
@@ -87,6 +147,141 @@ class TelemetryManager:
         except Exception as exc:
             logger.warning(f"Could not initialize WandB: {exc}. Telemetry will be console-only.")
             self.enabled = False
+
+    def register_hook_metric_keys(self, keys: list[str]) -> None:
+        """Declare the algorithm-specific metric keys the active hook may emit.
+
+        Must be called once, before the first :meth:`log`, so the CSV header
+        stays stable even when a key (e.g. FedMAQ's grad-norm stats) only
+        appears starting round 1 rather than round 0.
+        """
+        self._hook_metric_keys = list(keys)
+
+    def record_fit_round(
+        self,
+        strategy: "TelemetryFedAvg",
+        server_round: int,
+        results: list[tuple[ClientProxy, FitRes]],
+        aggregated_parameters: Parameters | None,
+    ) -> tuple[float, int]:
+        """Compute this round's simulated delays, byte counts, and client-metric
+        aggregates from the raw fit results, and snapshot them for the strategy's
+        ``evaluate()`` to read back via ``last_round_*``.
+
+        Returns ``(round_time, round_total_bytes)`` for the caller's ``metrics``
+        dict. When ``results`` is empty, only ``last_round_client_metrics`` is
+        reset and ``(0.0, 0)`` is returned — the caller should not set
+        ``round_time``/``round_bytes`` on ``metrics`` in that case (matching the
+        pre-refactor behavior of skipping those keys entirely).
+        """
+        # Aggregate client-side training metrics (weighted mean, simple mean for
+        # epochs_trained), reported by the client hooks in fit() metrics.
+        self.last_round_client_metrics = {}
+        total_examples = sum(fit_res.num_examples for _, fit_res in results)
+        if total_examples > 0:
+            numeric_keys = set()
+            for _, fit_res in results:
+                for k, v in fit_res.metrics.items():
+                    if isinstance(v, (int, float)) and k not in (
+                        "partition_id",
+                        "bytes_uploaded",
+                    ):
+                        numeric_keys.add(k)
+
+            for k in numeric_keys:
+                if k == "epochs_trained":
+                    simple_sum = sum(float(fit_res.metrics.get(k, 0.0)) for _, fit_res in results)
+                    self.last_round_client_metrics[f"client/avg_{k}"] = simple_sum / len(results)
+                else:
+                    weighted_sum = sum(
+                        float(fit_res.metrics.get(k, 0.0)) * fit_res.num_examples
+                        for _, fit_res in results
+                    )
+                    self.last_round_client_metrics[f"client/avg_{k}"] = (
+                        weighted_sum / total_examples
+                    )
+
+        if not results:
+            return 0.0, 0
+
+        # Model download size in bytes (hook may compress it, e.g. FedKD's SVD path).
+        if aggregated_parameters is not None:
+            ndarrays = parameters_to_ndarrays(aggregated_parameters)
+            model_size_bytes = strategy.hook.download_size_bytes(strategy, ndarrays)
+        else:
+            model_size_bytes = 0
+
+        round_delays = []
+        round_bytes_uploaded = 0
+        round_bytes_downloaded = 0
+        client_bytes_uploaded: list[int] = []
+
+        exp_config = strategy.config.get("experiment", strategy.config)
+        epochs = exp_config.get("local_epochs", 5)
+        public_epochs = int(strategy.config.get("algorithm", {}).get("public_epochs", 5))
+        num_public = require_num_public_samples(strategy.config)
+        compute_scale = strategy.hook.compute_speed_scale()
+
+        for client_proxy, fit_res in results:
+            cid = int(fit_res.metrics.get("partition_id", -1))
+            if cid < 0 or cid >= strategy.num_clients:
+                cid = hash(client_proxy.cid) % strategy.num_clients
+
+            bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
+            client_bytes_uploaded.append(bytes_uploaded)
+            num_samples = fit_res.num_examples
+            train_sample_count = strategy.hook.local_train_sample_count(
+                num_samples=num_samples,
+                epochs=epochs,
+                num_public=num_public,
+                public_epochs=public_epochs,
+                server_round=server_round,
+            )
+
+            t_download, t_train, t_upload = strategy.network_simulator.simulate_client_delay(
+                cid=cid,
+                model_size_bytes=model_size_bytes,
+                bytes_uploaded=bytes_uploaded,
+                train_sample_count=train_sample_count,
+                compute_scale=compute_scale,
+            )
+
+            client_total_time = t_download + t_train + t_upload
+            round_delays.append(client_total_time)
+            round_bytes_downloaded += model_size_bytes
+            round_bytes_uploaded += bytes_uploaded
+
+        # Decouple client and server simulated delays
+        client_sim_time = max(round_delays) if round_delays else 0.0
+
+        # Server compute time: non-zero for hooks with server-side work (KD).
+        server_sim_time = strategy.hook.server_sim_time(strategy, results, aggregated_parameters)
+
+        round_time = client_sim_time + server_sim_time
+        round_total_bytes = round_bytes_downloaded + round_bytes_uploaded
+
+        self.last_round_bytes = round_total_bytes
+        self.last_round_time = round_time
+        self.last_client_time = client_sim_time
+        self.last_server_time = server_sim_time
+
+        if client_bytes_uploaded:
+            arr = np.array(client_bytes_uploaded, dtype=np.float64)
+            self.last_client_bytes_stats = {
+                "communication/client_bytes_uploaded_mean": float(arr.mean()),
+                "communication/client_bytes_uploaded_min": float(arr.min()),
+                "communication/client_bytes_uploaded_max": float(arr.max()),
+                "communication/client_bytes_uploaded_std": float(arr.std()),
+            }
+        else:
+            self.last_client_bytes_stats = {}
+
+        # Real wall-clock elapsed since the previous round's aggregate_fit call.
+        now = time.perf_counter()
+        self.last_wall_time = now - self._last_wall_ts
+        self._last_wall_ts = now
+
+        return round_time, round_total_bytes
 
     def log(
         self,
@@ -155,46 +350,7 @@ class TelemetryManager:
         #    are written as empty strings to keep columns aligned.
         try:
             if self._csv_fieldnames is None:
-                canonical = [
-                    "round",
-                    "test/loss",
-                    "test/accuracy",
-                    "test/precision",
-                    "test/recall",
-                    "test/f1",
-                    "communication/round_bytes",
-                    "communication/cumulative_bytes",
-                    "communication/cumulative_mb",
-                    "system/round_time_sec",
-                    "system/cumulative_time_sec",
-                    "system/client_sim_time_sec",
-                    "system/cumulative_client_time_sec",
-                    "system/server_sim_time_sec",
-                    "system/cumulative_server_time_sec",
-                    "system/wall_time_sec",
-                    "system/cumulative_wall_time_sec",
-                    "communication/client_bytes_uploaded_mean",
-                    "communication/client_bytes_uploaded_min",
-                    "communication/client_bytes_uploaded_max",
-                    "communication/client_bytes_uploaded_std",
-                    "client/avg_train_loss",
-                    "client/avg_train_acc",
-                    "client/avg_local_loss",
-                    "client/avg_epochs_trained",
-                    "client/avg_q",
-                    "algorithm/fedmaq/server_kd_loss",
-                    "algorithm/fedmaq/avg_grad_norm",
-                    "algorithm/fedmaq/min_grad_norm",
-                    "algorithm/fedmaq/max_grad_norm",
-                    "algorithm/fedmaq/std_grad_norm",
-                    "algorithm/fedmaq/avg_q",
-                    "algorithm/fedmaq/min_q",
-                    "algorithm/fedmaq/max_q",
-                    "algorithm/fedmaq/std_q",
-                    "algorithm/fedavg_kd/server_kd_loss",
-                    "algorithm/fedkd/mean_rank_retained",
-                    "algorithm/fedkd/energy",
-                ]
+                canonical = _COMMON_CSV_FIELDNAMES + self._hook_metric_keys
                 seen = set(canonical)
                 fieldnames = list(canonical)
                 for key in sorted(metrics.keys()):

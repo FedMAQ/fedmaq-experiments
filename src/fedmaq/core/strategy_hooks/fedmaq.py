@@ -460,6 +460,19 @@ class FedMAQHook(StrategyHook):
 
         return metrics
 
+    def metric_keys(self) -> list[str]:
+        return [
+            "algorithm/fedmaq/server_kd_loss",
+            "algorithm/fedmaq/avg_grad_norm",
+            "algorithm/fedmaq/min_grad_norm",
+            "algorithm/fedmaq/max_grad_norm",
+            "algorithm/fedmaq/std_grad_norm",
+            "algorithm/fedmaq/avg_q",
+            "algorithm/fedmaq/min_q",
+            "algorithm/fedmaq/max_q",
+            "algorithm/fedmaq/std_q",
+        ]
+
     def server_sim_time(
         self,
         strategy: TelemetryFedAvg,

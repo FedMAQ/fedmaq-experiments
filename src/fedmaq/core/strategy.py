@@ -1,7 +1,6 @@
 """Custom Flower Strategy extending FedAvg with simulated physical time tracking and telemetry."""
 
 import logging
-import time
 from typing import Any
 
 import numpy as np
@@ -10,13 +9,11 @@ from flwr.common import (
     FitRes,
     Parameters,
     Scalar,
-    parameters_to_ndarrays,
 )
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
-from fedmaq.core.config_defaults import require_num_public_samples
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     compute_dadaquant_client_q,  # noqa: F401 — re-exported for backward compatibility
@@ -103,20 +100,7 @@ class TelemetryFedAvg(FedAvg):
         # Simulation parameters
         exp_config = config.get("experiment", config)
         self.num_clients = exp_config.get("num_clients", 10)
-        self.simulated_time = 0.0
         self.alg_name: str = config.get("algorithm", {}).get("name", "")
-
-        # Per-round telemetry snapshots, read back in evaluate(). Initialized here
-        # so the first evaluate() call (round 0) has defined values without getattr.
-        self.last_round_bytes = 0
-        self.last_round_time = 0.0
-        self.last_client_time = 0.0
-        self.last_server_time = 0.0
-        self.last_wall_time = 0.0
-        self.last_client_bytes_stats: dict[str, float] = {}
-
-        # Real (not simulated) wall-clock timer, measured across aggregate_fit calls.
-        self._last_wall_ts = time.perf_counter()
 
         # Seeded generator for reproducibility
         seed = config.get("seed", 42)
@@ -166,6 +150,10 @@ class TelemetryFedAvg(FedAvg):
         # Instantiate the per-algorithm strategy hook
         self.hook: StrategyHook = get_strategy_hook(self.alg_name, config)
 
+        # Declare this hook's metric keys so the CSV header stays stable even
+        # when a key only appears starting round 1 (e.g. FedMAQ grad-norm stats).
+        self.telemetry_manager.register_hook_metric_keys(self.hook.metric_keys())
+
         logger.info(
             f"Initialized TelemetryFedAvg for {self.num_clients} clients. "
             f"Algorithm: {self.alg_name}. "
@@ -174,6 +162,16 @@ class TelemetryFedAvg(FedAvg):
             f"Memory: {memory_desc}. "
             f"Hook: {type(self.hook).__name__}"
         )
+
+    @property
+    def simulated_time(self) -> float:
+        """Cumulative simulated round time (client + server) across all rounds.
+
+        Delegates to ``TelemetryManager``, which owns the accumulation (see
+        ``telemetry.py``); kept as a passthrough since external callers read
+        ``strategy.simulated_time`` directly.
+        """
+        return self.telemetry_manager.cumulative_time
 
     def configure_fit(
         self, server_round: int, parameters: Parameters, client_manager: ClientManager
@@ -220,116 +218,14 @@ class TelemetryFedAvg(FedAvg):
             self, server_round, results, failures, aggregated_parameters, metrics
         )
 
-        # Aggregate client-side training metrics
-        self.last_round_client_metrics = {}
-        total_examples = sum(fit_res.num_examples for _, fit_res in results)
-        if total_examples > 0:
-            numeric_keys = set()
-            for _, fit_res in results:
-                for k, v in fit_res.metrics.items():
-                    if isinstance(v, (int, float)) and k not in (
-                        "partition_id",
-                        "bytes_uploaded",
-                    ):
-                        numeric_keys.add(k)
-
-            for k in numeric_keys:
-                if k == "epochs_trained":
-                    # Simple average for epochs
-                    simple_sum = sum(float(fit_res.metrics.get(k, 0.0)) for _, fit_res in results)
-                    self.last_round_client_metrics[f"client/avg_{k}"] = simple_sum / len(results)
-                else:
-                    # Weighted average for other numeric metrics
-                    weighted_sum = sum(
-                        float(fit_res.metrics.get(k, 0.0)) * fit_res.num_examples
-                        for _, fit_res in results
-                    )
-                    self.last_round_client_metrics[f"client/avg_{k}"] = (
-                        weighted_sum / total_examples
-                    )
+        # 3. Telemetry: client-metric aggregation + simulated delay/byte accounting,
+        # relocated behind TelemetryManager (see telemetry.py:record_fit_round).
+        round_time, round_total_bytes = self.telemetry_manager.record_fit_round(
+            self, server_round, results, aggregated_parameters
+        )
 
         if not results:
             return aggregated_parameters, metrics
-
-        # 3. Telemetry: compute model download size in bytes (hook may compress it)
-        if aggregated_parameters is not None:
-            ndarrays = parameters_to_ndarrays(aggregated_parameters)
-            model_size_bytes = self.hook.download_size_bytes(self, ndarrays)
-        else:
-            model_size_bytes = 0
-
-        round_delays = []
-        round_bytes_uploaded = 0
-        round_bytes_downloaded = 0
-        client_bytes_uploaded: list[int] = []
-
-        exp_config = self.config.get("experiment", self.config)
-        epochs = exp_config.get("local_epochs", 5)
-        public_epochs = int(self.config.get("algorithm", {}).get("public_epochs", 5))
-        num_public = require_num_public_samples(self.config)
-        compute_scale = self.hook.compute_speed_scale()
-
-        for client_proxy, fit_res in results:
-            cid = int(fit_res.metrics.get("partition_id", -1))
-            if cid < 0 or cid >= self.num_clients:
-                cid = hash(client_proxy.cid) % self.num_clients
-
-            bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
-            client_bytes_uploaded.append(bytes_uploaded)
-            num_samples = fit_res.num_examples
-            train_sample_count = self.hook.local_train_sample_count(
-                num_samples=num_samples,
-                epochs=epochs,
-                num_public=num_public,
-                public_epochs=public_epochs,
-                server_round=server_round,
-            )
-
-            t_download, t_train, t_upload = self.network_simulator.simulate_client_delay(
-                cid=cid,
-                model_size_bytes=model_size_bytes,
-                bytes_uploaded=bytes_uploaded,
-                train_sample_count=train_sample_count,
-                compute_scale=compute_scale,
-            )
-
-            client_total_time = t_download + t_train + t_upload
-            round_delays.append(client_total_time)
-            round_bytes_downloaded += model_size_bytes
-            round_bytes_uploaded += bytes_uploaded
-
-        # Decouple client and server simulated delays
-        client_sim_time = max(round_delays) if round_delays else 0.0
-
-        # Server compute time: non-zero for hooks with server-side work (KD).
-        server_sim_time = self.hook.server_sim_time(self, results, aggregated_parameters)
-
-        round_time = client_sim_time + server_sim_time
-        self.simulated_time += round_time
-
-        # TelemetryManager owns cumulative byte/time accounting (see telemetry.py);
-        # the strategy only snapshots the latest round for evaluate() logging.
-        round_total_bytes = round_bytes_downloaded + round_bytes_uploaded
-        self.last_round_bytes = round_total_bytes
-        self.last_round_time = round_time
-        self.last_client_time = client_sim_time
-        self.last_server_time = server_sim_time
-
-        if client_bytes_uploaded:
-            arr = np.array(client_bytes_uploaded, dtype=np.float64)
-            self.last_client_bytes_stats = {
-                "communication/client_bytes_uploaded_mean": float(arr.mean()),
-                "communication/client_bytes_uploaded_min": float(arr.min()),
-                "communication/client_bytes_uploaded_max": float(arr.max()),
-                "communication/client_bytes_uploaded_std": float(arr.std()),
-            }
-        else:
-            self.last_client_bytes_stats = {}
-
-        # Real wall-clock elapsed since the previous round's aggregate_fit call.
-        now = time.perf_counter()
-        self.last_wall_time = now - self._last_wall_ts
-        self._last_wall_ts = now
 
         metrics["round_time"] = round_time
         metrics["round_bytes"] = round_total_bytes
@@ -348,11 +244,12 @@ class TelemetryFedAvg(FedAvg):
             loss, metrics = eval_res
             acc = float(metrics.get("accuracy", 0.0))
 
-            round_bytes = self.last_round_bytes if server_round > 0 else 0
-            round_time = self.last_round_time if server_round > 0 else 0.0
-            client_time = self.last_client_time if server_round > 0 else 0.0
-            server_time = self.last_server_time if server_round > 0 else 0.0
-            wall_time = self.last_wall_time if server_round > 0 else 0.0
+            tm = self.telemetry_manager
+            round_bytes = tm.last_round_bytes if server_round > 0 else 0
+            round_time = tm.last_round_time if server_round > 0 else 0.0
+            client_time = tm.last_client_time if server_round > 0 else 0.0
+            server_time = tm.last_server_time if server_round > 0 else 0.0
+            wall_time = tm.last_wall_time if server_round > 0 else 0.0
 
             log_metrics: dict[str, Any] = {
                 "round": server_round,
@@ -369,7 +266,7 @@ class TelemetryFedAvg(FedAvg):
             # adaptive-quantization mechanism (DAdaQuant/FedMAQ) at work, not just
             # the aggregate total.
             if server_round > 0:
-                log_metrics.update(self.last_client_bytes_stats)
+                log_metrics.update(tm.last_client_bytes_stats)
 
             # Merge other metrics returned by evaluate_fn (e.g. precision, recall, f1)
             for k, v in metrics.items():
@@ -377,8 +274,8 @@ class TelemetryFedAvg(FedAvg):
                     log_metrics[f"test/{k}"] = float(v)
 
             # Merge client-side aggregated metrics
-            if hasattr(self, "last_round_client_metrics") and self.last_round_client_metrics:
-                log_metrics.update(self.last_round_client_metrics)
+            if tm.last_round_client_metrics:
+                log_metrics.update(tm.last_round_client_metrics)
 
             # Merge algorithm-specific hook metrics (e.g. DAdaQuant q_t)
             log_metrics.update(self.hook.get_eval_metrics(self, server_round))

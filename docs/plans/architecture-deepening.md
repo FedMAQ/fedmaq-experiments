@@ -5,7 +5,7 @@
 **Scope decided**: Candidates B (telemetry) + A (client skeleton). Candidate C (loss-hook deepcopy) **closed** — structural, not a defect (ADR-0001). Candidate D (StrategyHook seam) **out** — speculative, highest risk, deferred past thesis.
 
 > [!IMPORTANT]
-> **Hard timing constraint — freeze gap only.** This plan executes in the window **after exploration finishes, before the confirm-phase freeze** — so all formal-grid runs share one code version. **Never interleave with a live campaign.** Pass 1 exploration is running as of this writing; do not start any code change here until the exploration campaign is complete. See `DECISIONS.md` (explore/confirm freeze).
+> **Hard timing constraint — freeze gap only.** This plan executes in the window **after exploration finishes, before the confirm-phase freeze** — so all formal-grid runs share one code version. **Never interleave with a live campaign.** As of 2026-07-23, Pass 2 exploration is **paused (not complete)** at run 3/6 pending datacenter compute (local machine underpowered for the remaining sweeps) — no campaign is actively running, so the interleaving risk this gate exists to prevent is moot for now, and Step 1/2 work below may proceed. Re-check this note before resuming Pass 2/3: if a sweep is live again, stop code changes here until it finishes. See `DECISIONS.md` (explore/confirm freeze).
 
 ---
 
@@ -24,13 +24,12 @@ Every candidate is *meant* to be behavior-preserving. Behavior-preserving in int
 
 ## Sequencing (safe → risky)
 
-### Step 1 · Candidate B — Telemetry seam (~1 Sonnet 5 session)
-Isolated from FL math, do first.
-- Relocate byte/wall-clock **measurement** out of `strategy.py:223-337` (the ~115L inline block in `aggregate_fit`) behind the `TelemetryManager` interface, which already owns accumulation + emission.
-- Replace the hardcoded 40-key CSV schema (`telemetry.py:158-197`) with a per-baseline **metric registry**: each hook declares the keys it emits; telemetry composes the schema.
-- **Formula must stay identical** — byte-count and wall-clock math unchanged, only relocated. Verify: one run's `communication/*` and wall-clock numbers match pre-refactor.
-- `aggregate_fit` shrinks back to hook dispatch only.
-- Gate: telemetry tests green + assert unknown-key → stable CSV header (currently untested, `extrasaction="ignore"`).
+### Step 1 · Candidate B — Telemetry seam — **DONE (2026-07-23)**
+- Relocated the client-metric-averaging + byte/delay-simulation block out of `strategy.aggregate_fit` into `TelemetryManager.record_fit_round()`; `aggregate_fit` now only dispatches to hooks and calls this one method. `evaluate()` reads `last_round_*` snapshots off `telemetry_manager` instead of `self`.
+- Replaced the hardcoded per-algorithm CSV key list with `StrategyHook.metric_keys()`: each hook declares its own keys (FedMAQ, FedAvg+KD, FedKD, DAdaQuant — the last was previously missing from the schema entirely, a real gap this closed), registered via `TelemetryManager.register_hook_metric_keys()` in `TelemetryFedAvg.__init__`. The CSV header now only carries the *active* algorithm's columns instead of every baseline's.
+- Validated via a pre/post-refactor `ci_test` matrix diff (fedavg + fedmaq, 2R): `communication/*` bytes and `system/cumulative_time_sec`/`client_time`/`server_time` (the deterministic simulated-time columns) are byte-identical. Only real `wall_time_sec` and model test-loss/accuracy (GPU/cuDNN non-determinism, untouched by this refactor) vary between runs, as expected.
+- Added `tests/test_telemetry.py` covering the previously-untested gate: a hook-declared key reserves its column before it first appears, and an undeclared key is folded in once and never duplicates/reorders the header. Full suite green (111 passed).
+- Restored `TelemetryFedAvg.simulated_time` as a read-only property delegating to `telemetry_manager.cumulative_time` — it looked like dead state (write-only in `src/`) but `tests/test_environment.py` reads it directly as a public signal in 4 tests.
 
 ### Step 2 · Candidate A — Client training skeleton (~2 Sonnet 5 sessions)
 Highest value, gated behind golden validation. **This is the hot path of the sweep — freeze-gap only.**
@@ -50,7 +49,7 @@ Grilled 2026-07-18. The "widen the `LossHook` contract" framing collapses into t
 ---
 
 ## Session budget
-- Scope (B + A): **~3 Sonnet 5 sessions**. (Candidate C closed → no session.)
+- Scope (B + A): **~3 Sonnet 5 sessions**. (Candidate C closed → no session.) Step 1 done in 1 session as scoped; Step 2 (~2 sessions) remains.
 - Golden-validation is baked into Step 2, not a separate session — but it is the merge gate.
 
 ## Resolution

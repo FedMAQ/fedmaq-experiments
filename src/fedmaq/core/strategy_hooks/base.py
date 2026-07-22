@@ -112,6 +112,16 @@ class StrategyHook(ABC):
         """
         return {}
 
+    def metric_keys(self) -> list[str]:
+        """Declare every key this hook's :meth:`get_eval_metrics` may emit.
+
+        ``TelemetryManager`` composes the stable CSV header from these plus its
+        own algorithm-independent columns, so a key that only appears starting
+        round 1 (e.g. FedMAQ's grad-norm stats) doesn't get silently dropped
+        because it was absent from round 0. Default: none (no extra metrics).
+        """
+        return []
+
     # ------------------------------------------------------------------ #
     # Simulated time / communication model contributions.                #
     # These keep NetworkSimulator and the telemetry path free of         #

@@ -204,3 +204,10 @@ class DAdaQuantHook(StrategyHook):
         if self.last_raw_estimated_loss:
             metrics["algorithm/dadaquant/estimated_global_loss"] = self.last_raw_estimated_loss
         return metrics
+
+    def metric_keys(self) -> list[str]:
+        return [
+            "algorithm/dadaquant/q_t",
+            "algorithm/dadaquant/moving_average_loss",
+            "algorithm/dadaquant/estimated_global_loss",
+        ]
