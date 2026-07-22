@@ -93,9 +93,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
     # Set seed. strict_determinism (default true) makes non-deterministic ops
     # raise instead of silently degrading reproducibility; flip off only to
     # diagnose an op that lacks a deterministic kernel.
-    strict_determinism = bool(
-        OmegaConf.select(cfg, "experiment.strict_determinism", default=True)
-    )
+    strict_determinism = bool(OmegaConf.select(cfg, "experiment.strict_determinism", default=True))
     set_seed(cfg.seed, strict=strict_determinism)
 
     # Check GPU availability and warn if not detected

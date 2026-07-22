@@ -189,22 +189,16 @@ def test_client_telemetry_aggregation():
 
     # Test weighted average calculation
     weighted_loss = (
-        sum(
-            float(fit_res.metrics["train_loss"]) * fit_res.num_examples
-            for _, fit_res in results
-        )
+        sum(float(fit_res.metrics["train_loss"]) * fit_res.num_examples for _, fit_res in results)
         / total_examples
     )
     weighted_acc = (
-        sum(
-            float(fit_res.metrics["train_acc"]) * fit_res.num_examples
-            for _, fit_res in results
-        )
+        sum(float(fit_res.metrics["train_acc"]) * fit_res.num_examples for _, fit_res in results)
         / total_examples
     )
-    simple_epochs = sum(
-        float(fit_res.metrics["epochs_trained"]) for _, fit_res in results
-    ) / len(results)
+    simple_epochs = sum(float(fit_res.metrics["epochs_trained"]) for _, fit_res in results) / len(
+        results
+    )
 
     # 10 * 0.5 + 20 * 0.2 = 5 + 4 = 9 / 30 = 0.3
     assert np.isclose(weighted_loss, 0.3)
@@ -256,10 +250,7 @@ def test_stacked_loss_regularization():
 
     student_log_soft = torch.log_softmax(outputs / temp, dim=1)
     kd_loss = (
-        torch.nn.functional.kl_div(
-            student_log_soft, teacher_soft, reduction="batchmean"
-        )
-        * temp**2
+        torch.nn.functional.kl_div(student_log_soft, teacher_soft, reduction="batchmean") * temp**2
     )
 
     # L2 distance
@@ -268,8 +259,6 @@ def test_stacked_loss_regularization():
         if p.requires_grad:
             proximal_term += torch.sum((p - gp) ** 2)
 
-    expected_loss = (
-        (1.0 - alpha) * ce_loss + alpha * kd_loss + (mu / 2.0) * proximal_term
-    )
+    expected_loss = (1.0 - alpha) * ce_loss + alpha * kd_loss + (mu / 2.0) * proximal_term
 
     assert torch.allclose(loss, expected_loss, atol=1e-5)

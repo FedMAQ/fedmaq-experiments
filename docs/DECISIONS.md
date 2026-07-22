@@ -371,3 +371,18 @@ Supersedes the peak-GFLOPS-based values in the original Decision 36. Full deriva
 38. **`q_max=16` and `bit_widths=[1,2,3,4,5,6,7,8,16,32]` formally documented**:
     - **`q_max=16`**: The Tier-2 soft quality target interpolation range is $[1, 16]$. The quality formulation never assigns FP32 precision — FP16→FP32 gains are marginal for FL accuracy (local SGD gradient noise exceeds FP16 quantization noise) while doubling communication cost. Consequence: 8GB and 16GB Pi 5 clients are functionally identical in achievable precision (both cap at 16-bit). Intentional, not an oversight.
     - **`bit_widths` set**: The gap between 8 and 16 (no 9–15 bit options) is **hardware-aligned** — real quantization formats with silicon support are power-of-2 (INT4, INT8, FP16, FP32). Fine granularity at 1–8 bits captures the most impactful precision range for resource-constrained clients; the 8→16→32 jumps reflect the physical hardware landscape. Standard practice in mixed-precision quantization literature (HAWQ, HAQ, MBQ). Adding 9–15 would introduce non-standard bit-widths for negligible accuracy gain while complicating the precision-allocation narrative.
+
+---
+
+## 2026-07-22 — Canonical Experiment Taxonomy & Declarative Matrix Runner Infrastructure
+
+39. **Standardization of Output Paths & Declarative Matrix Sweeps**:
+    - **Single Canonical Output Root (`outputs/`)**: All future experiment artifacts land strictly under `outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<heterogeneity>/seed_<seed>/` (eliminating path ambiguity between `experiments/`, `multirun/`, and `outputs/`).
+    - **Phases & Standardized Round Counts**:
+      - `ci`: Fast integration checks ($R = 2$).
+      - `smoke`: Short validation sweeps ($R = 50$, single seed).
+      - `explore`: Mechanism & hyperparameter exploration ($R = 50$, single seed).
+      - `formal`: Confirmatory thesis runs ($R = 100$, 3 seeds: 0, 42, 123).
+    - **Declarative YAML Matrices (`conf/matrix/*.yaml`)**: Replaced 17 single-purpose ad-hoc Python runner scripts with declarative YAML manifests (`ci_test.yaml`, `mobilenetv2_smoke_50r.yaml`, `pass2_explore.yaml`, `benchmark_grid.yaml`).
+    - **Unified Execution Driver (`scripts/run_matrix.py` + `scripts/common.py`)**: Centralized cross-platform Ray cleanup (`kill_ray_processes()`), process-isolated execution, dry-run support (`--dry_run`), and start-index resumption (`--start_at N`).
+    - **Script Cleanup**: Obsolete ad-hoc `run_*.py` scripts deleted from `scripts/`.

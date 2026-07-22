@@ -1,0 +1,31 @@
+# Matrix specification for MobileNetV2GN 50-round smoke tests
+phase: smoke
+experiment_group: mobilenetv2_smoke_50r
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 50
+client_gpus: 1.0
+seeds: [0]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedavg
+    label: fedavg
+  - alg: fedprox
+    label: fedprox
+  - alg: fedpaq
+    label: fedpaq
+  - alg: dadaquant
+    label: dadaquant
+  - alg: feddistill
+    label: feddistill
+  - alg: fedkd
+    label: fedkd
+  - alg: fedmaq
+    label: fedmaq-no-ema-kd-reg
+    overrides:
+      - algorithm.ema_student=false
+      - algorithm.client_kd_reg=true
+      - algorithm.kd_prox_mu=0.0

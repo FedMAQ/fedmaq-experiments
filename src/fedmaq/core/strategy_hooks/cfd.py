@@ -150,9 +150,7 @@ class CFDHook(StrategyHook):
             for images, _ in public_loader:
                 images = images.to(self.device)
                 logits = self.server_model(images)
-                probs_list.append(
-                    F.softmax(logits / self.temperature, dim=1).cpu().numpy()
-                )
+                probs_list.append(F.softmax(logits / self.temperature, dim=1).cpu().numpy())
         probs = np.concatenate(probs_list, axis=0).astype(np.float32)
 
         down_codes = constrained_quantize(probs, self.b_down)
@@ -212,14 +210,10 @@ class CFDHook(StrategyHook):
                 )
                 self._log_server_public_accuracy(server_round, public_loader)
 
-        aggregated_parameters = ndarrays_to_parameters(
-            get_model_parameters(self.server_model)
-        )
+        aggregated_parameters = ndarrays_to_parameters(get_model_parameters(self.server_model))
         return aggregated_parameters, metrics
 
-    def _train_server_model(
-        self, public_loader: Any, targets: np.ndarray, batch_size: int
-    ) -> None:
+    def _train_server_model(self, public_loader: Any, targets: np.ndarray, batch_size: int) -> None:
         # The public loader iterates a class-sorted, unshuffled index order (shared
         # with the predict/encode paths, which depend on that fixed order for
         # target alignment). Training SGD+momentum directly over class-homogeneous
@@ -253,9 +247,7 @@ class CFDHook(StrategyHook):
                 loss.backward()
                 optimizer.step()
 
-    def _log_server_public_accuracy(
-        self, server_round: int, public_loader: Any
-    ) -> None:
+    def _log_server_public_accuracy(self, server_round: int, public_loader: Any) -> None:
         if self._public_labels is None:
             return
         self.server_model.eval()
@@ -270,11 +262,7 @@ class CFDHook(StrategyHook):
         logger.info(
             "CFD round=%d targets_acc=%.4f server_on_public_acc=%.4f",
             server_round,
-            (
-                self._last_targets_acc
-                if self._last_targets_acc is not None
-                else float("nan")
-            ),
+            (self._last_targets_acc if self._last_targets_acc is not None else float("nan")),
             acc,
         )
 
@@ -316,7 +304,5 @@ class CFDHook(StrategyHook):
             server_compute_speed=resolve_server_compute_speed(self._config),
         )
 
-    def get_eval_metrics(
-        self, strategy: TelemetryFedAvg, server_round: int
-    ) -> dict[str, Any]:
+    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         return {}

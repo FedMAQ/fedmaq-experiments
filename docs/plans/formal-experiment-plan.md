@@ -5,13 +5,13 @@
 
 ---
 
-## 1. Settled Decisions & Scope
+## Settled Decisions & Scope
 
 See **[docs/DECISIONS.md](../DECISIONS.md)** for full decision history (Decisions 1–35), including framing, architecture, baseline drops (FedMD, CFD), and exploration scoping.
 
 ---
 
-## 2. Exploration Phase Mechanisms (MobileNetV2GN)
+## Exploration Phase Mechanisms (MobileNetV2GN)
 
 | Mechanism                                           | Status / Disposition                                                                            | Pass |
 | :-------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :--- |
@@ -23,7 +23,7 @@ See **[docs/DECISIONS.md](../DECISIONS.md)** for full decision history (Decision
 
 ---
 
-## 3. Deferred Sub-Details
+## Deferred Sub-Details
 
 Process questions (selection rule, sweep structure, decision rule, baseline-tuning budget) are resolved — see [DECISIONS.md](../DECISIONS.md) 2026-07-18 entry (27–32). Still open, pending Pass 1–3 results:
 
@@ -32,9 +32,9 @@ Process questions (selection rule, sweep structure, decision rule, baseline-tuni
 
 ---
 
-## 4. Execution Structure (tentative)
+## Execution Structure (tentative)
 
-Two-phase, freeze-enforced — design summary only; concrete build steps (config-as-code registry, seed-determinism check) are tracked in [HANDOFF.md §5](../../HANDOFF.md).
+Two-phase, freeze-enforced — design summary only; concrete build steps (config-as-code registry, seed-determinism check) are tracked in [HANDOFF.md](../../HANDOFF.md) ("Immediate Next Actions").
 
 - **Exploration phase** (now): adaptive, single-seed, mechanisms in flux. Output = one pre-registered frozen config (CIFAR-10) + baseline HP table + fixed mechanism set. Git-tag the pre-registration.
 - **Confirmation phase**: config-as-code manifest → process-isolated runners → WandB (fixed project/group/tag scheme). Read-only configs after launch (hashed in manifest).
@@ -43,6 +43,6 @@ Open for restructuring: directory layout (`exploration/` vs `formal/`), manifest
 
 ---
 
-## 5. Metrics (per `evaluation-metrics.md`)
+## Metrics (per `evaluation-metrics.md`)
 
 Top-1 accuracy; CE + distillation loss; macro P/R/F1; cumulative comm (MB/GB per-client + aggregate); wall-clock; convergence curves (acc vs rounds, acc vs transmitted bytes).

@@ -1,0 +1,19 @@
+# Matrix specification for CI / quick sanity checks (2 rounds)
+phase: ci
+experiment_group: ci_test
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 2
+client_gpus: 1.0
+seeds: [0]
+heterogeneities:
+  - dirichlet_alpha_0.1
+
+runs:
+  - alg: fedavg
+    label: fedavg
+  - alg: fedmaq
+    label: fedmaq
+    overrides:
+      - algorithm.ema_student=false
+      - algorithm.client_kd_reg=true

@@ -6,7 +6,7 @@
 
 ---
 
-## 1. Quick Pointers & Primary Resources
+## Quick Pointers & Primary Resources
 
 - **Current State & Standings**: [docs/STATUS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/STATUS.md)
 - **Resolved Methodology & Framing Decisions**: [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)
@@ -15,7 +15,7 @@
 
 ---
 
-## 2. Current Project State Summary
+## Current Project State Summary
 
 FedMAQ trains **MobileNetV2GN** (~2.24M params) on CIFAR-10 as its primary thesis model.
 
@@ -26,7 +26,7 @@ FedMAQ trains **MobileNetV2GN** (~2.24M params) on CIFAR-10 as its primary thesi
 
 ---
 
-## 3. Immediate Next Actions
+## Immediate Next Actions
 
 ### Priority 1: MobileNetV2GN Exploration & Baseline Tuning
 
@@ -42,7 +42,7 @@ FedMAQ trains **MobileNetV2GN** (~2.24M params) on CIFAR-10 as its primary thesi
 
 ---
 
-## 4. Key Operational Controls
+## Key Operational Controls
 
-- **Subprocess Runner Mandate**: Hydra `--multirun` causes CUDA VRAM leaks. Always launch sweeps using process-isolated runners in `scripts/` (e.g. `python scripts/run_soft_voting_explore.py`).
-- **RAM Headroom & Crash Recovery**: Check system RAM headroom before Flower simulations. Resume crashed chains using `--start_at N`.
+- **Declarative Matrix Runner Mandate**: Hydra `--multirun` causes CUDA VRAM leaks. Always launch sweeps using declarative matrix configs with `uv run python scripts/run_matrix.py --matrix <name>` (e.g. `uv run python scripts/run_matrix.py --matrix pass2_explore`).
+- **RAM Headroom & Crash Recovery**: Check system RAM headroom before Flower simulations. Resume crashed matrix sweeps using `--start_at N`.

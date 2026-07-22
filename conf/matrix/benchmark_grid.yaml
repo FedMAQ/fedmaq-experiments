@@ -1,0 +1,27 @@
+# Matrix specification for formal confirmatory benchmark grid (100 rounds, 3 seeds)
+phase: formal
+experiment_group: benchmark_grid
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedavg
+    label: fedavg
+  - alg: fedprox
+    label: fedprox
+  - alg: fedpaq
+    label: fedpaq
+  - alg: dadaquant
+    label: dadaquant
+  - alg: feddistill
+    label: feddistill
+  - alg: fedkd
+    label: fedkd
+  - alg: fedmaq
+    label: fedmaq

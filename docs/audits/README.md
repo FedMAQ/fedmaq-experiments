@@ -24,3 +24,4 @@ Detailed historical audit logs and line-by-line analyses are archived in **[docs
 | [fedmaq-audit.md](archive/fedmaq-audit.md)                                 | Comprehensive FedMAQ mathematical & architectural audit        |
 | [fedmaq-audit-recos.md](archive/fedmaq-audit-recos.md)                     | Priority table for formulation and algorithmic recommendations |
 | [fedmaq-code-audit.md](archive/fedmaq-code-audit.md)                       | FL engineering & code quality audit (F1–F9)                    |
+| [telemetry-audit.md](archive/telemetry-audit.md)                           | Hardware telemetry grounding & simulation speed audit          |

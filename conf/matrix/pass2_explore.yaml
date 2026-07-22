@@ -1,0 +1,30 @@
+# Matrix specification for Priority 1 Pass 2 Exploration sweeps (50 rounds)
+phase: explore
+experiment_group: pass2_exploration
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 50
+client_gpus: 1.0
+seeds: [0]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  # Capacity EMA Exploration (on vs off)
+  - alg: fedmaq
+    label: fedmaq-ema-on
+    overrides:
+      - algorithm.ema_student=true
+      - algorithm.client_kd_reg=true
+  - alg: fedmaq
+    label: fedmaq-ema-off
+    overrides:
+      - algorithm.ema_student=false
+      - algorithm.client_kd_reg=true
+  # Client KD Regularization Exploration
+  - alg: fedmaq
+    label: fedmaq-kd-reg-off
+    overrides:
+      - algorithm.ema_student=false
+      - algorithm.client_kd_reg=false

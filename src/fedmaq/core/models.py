@@ -62,17 +62,13 @@ class BasicBlock(nn.Module):
 
     expansion = 1
 
-    def __init__(
-        self, in_planes: int, planes: int, stride: int = 1, num_groups: int = 32
-    ) -> None:
+    def __init__(self, in_planes: int, planes: int, stride: int = 1, num_groups: int = 32) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(
             in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
         self.gn1 = nn.GroupNorm(min(num_groups, planes), planes)
-        self.conv2 = nn.Conv2d(
-            planes, planes, kernel_size=3, stride=1, padding=1, bias=False
-        )
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.gn2 = nn.GroupNorm(min(num_groups, planes), planes)
 
         self.shortcut = nn.Sequential()
@@ -85,9 +81,7 @@ class BasicBlock(nn.Module):
                     stride=stride,
                     bias=False,
                 ),
-                nn.GroupNorm(
-                    min(num_groups, self.expansion * planes), self.expansion * planes
-                ),
+                nn.GroupNorm(min(num_groups, self.expansion * planes), self.expansion * planes),
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -101,17 +95,13 @@ class BasicBlock(nn.Module):
 class ResNet18GN(nn.Module):
     """ResNet-18 architecture with Group Normalization instead of Batch Normalization."""
 
-    def __init__(
-        self, in_channels: int = 3, num_classes: int = 10, num_groups: int = 32
-    ) -> None:
+    def __init__(self, in_channels: int = 3, num_classes: int = 10, num_groups: int = 32) -> None:
         super().__init__()
         self.in_planes = 64
         self.num_groups = num_groups
 
         # Small 3x3 conv at the start (standard for CIFAR-10/100 32x32 resolution)
-        self.conv1 = nn.Conv2d(
-            in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
-        )
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.gn1 = nn.GroupNorm(num_groups, 64)
 
         self.layer1 = self._make_layer(BasicBlock, 64, 2, stride=1)
@@ -261,9 +251,7 @@ class MobileNetV2GN(nn.Module):
             for i in range(n):
                 stride = s if i == 0 else 1
                 self.features.append(
-                    InvertedResidualGN(
-                        input_channels, output_channels, stride, t, num_groups
-                    )
+                    InvertedResidualGN(input_channels, output_channels, stride, t, num_groups)
                 )
                 input_channels = output_channels
 
@@ -304,9 +292,7 @@ class MobileNetV2GN(nn.Module):
 
 def get_model_parameters(model: nn.Module) -> list[np.ndarray]:
     """Extract model parameters as a list of NumPy arrays."""
-    return [
-        val.cpu().detach().numpy() for val in model.parameters() if val.requires_grad
-    ]
+    return [val.cpu().detach().numpy() for val in model.parameters() if val.requires_grad]
 
 
 def set_model_parameters(model: nn.Module, parameters: list[np.ndarray]) -> None:
@@ -344,9 +330,7 @@ _CIFAR_MODELS: dict[str, type[nn.Module]] = {
 DEFAULT_CIFAR_MODEL: str = "mobilenetv2gn"
 
 
-def get_model(
-    dataset_name: str, num_classes: int, model_name: str | None = None
-) -> nn.Module:
+def get_model(dataset_name: str, num_classes: int, model_name: str | None = None) -> nn.Module:
     """Factory function to get appropriate model architecture for a dataset.
 
     Args:

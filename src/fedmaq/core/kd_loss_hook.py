@@ -40,9 +40,7 @@ class ClientKDLossHook:
         FedProx-style proximal weight for L2 parameter regularization.
     """
 
-    def __init__(
-        self, alpha: float = 0.5, temperature: float = 2.0, mu: float = 0.0
-    ) -> None:
+    def __init__(self, alpha: float = 0.5, temperature: float = 2.0, mu: float = 0.0) -> None:
         self.alpha = alpha
         self.temperature = temperature
         self.mu = mu
@@ -59,9 +57,7 @@ class ClientKDLossHook:
             p.requires_grad = False
 
         if self.mu > 0.0:
-            self.global_params = [
-                p.clone().detach() for p in model.parameters() if p.requires_grad
-            ]
+            self.global_params = [p.clone().detach() for p in model.parameters() if p.requires_grad]
 
     def compute_loss(
         self,

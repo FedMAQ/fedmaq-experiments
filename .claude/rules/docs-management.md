@@ -8,3 +8,4 @@ Conventions for `docs/`, `HANDOFF.md`, `.claude/project/`. Full sweep + auto-fix
 - **`docs/DECISIONS.md` is append-only**: single source of truth for resolved decisions, dated entries. `STATUS.md`/`HANDOFF.md`/plans link to it instead of repeating content.
 - **When editing any doc with a "Last updated" header, update the date to the current session date.**
 - **`HANDOFF.md` is next-agent orientation only** — action items, not history. Detailed findings/audits go in `docs/`.
+- **No section numbers in heading titles**: Do not prefix Markdown section headers with numbers (e.g. use `## Important Context`, not `## 1. Important Context`). This avoids renumbering churn and broken anchor links when reordering sections. Always retain explicit IDs for decisions (e.g. `Decision 36`), audit findings (e.g. `F10`), and manuscript cross-references (e.g. `§4.1`).

@@ -28,18 +28,21 @@ Consolidated historical accuracy standings and best-known configs for these runs
 
 ## Current (MobileNetV2GN)
 
-|  #  | Experiment                     | Directory                                                                                                                      | Description                                                                                                |
-| :-: | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
-|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ, and FedKD across $\alpha \in \{0.1, 1.0\}$. |
-|  2  | Soft-Voting Explore (Pass 1) | [soft-voting-explore-mobilenetv2/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/soft-voting-explore-mobilenetv2/) | Priority 1 exploration Pass 1: `entropy_weight` × `precision_weight` sweep + soft-voting ablation, explore-α=0.3, 50R single-seed. Provisional pick ew=2.0/pw=0.5/sv_on, pending multi-seed re-verification. |
+|  #  | Experiment                     | Directory                                                                                                                                          | Description                                                                                                                                                                                                  |
+| :-: | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/mobilenetv2-smoke-50r/)                     | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ, and FedKD across $\alpha \in \{0.1, 1.0\}$.                                                                                                   |
+|  2  | Soft-Voting Explore (Pass 1)   | [soft-voting-explore-mobilenetv2/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/soft-voting-explore-mobilenetv2/) | Priority 1 exploration Pass 1: `entropy_weight` × `precision_weight` sweep + soft-voting ablation, explore-α=0.3, 50R single-seed. Provisional pick ew=2.0/pw=0.5/sv_on, pending multi-seed re-verification. |
 
 > [!NOTE]
 > **Smoke-run caveats, resolved as of 2026-07-18** (see [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md)): FedKD's near-chance smoke result was a rank-starvation bug (F10), fixed and re-confirmed on a real 50R MobileNetV2GN run — FedKD is unblocked for comparison tables. F13 (KD-baseline coverage gap) closed 2026-07-17: FedDistill/FedAvg+KD ran clean; CFD collapsed to chance both α and was **dropped from the formal stack** (F15, structural — `docs/DECISIONS.md` Decision 26), same disposition as **FedMD** (infeasible pretrain cost, Decision 25). Formal baseline stack is now 6 + FedMAQ.
 
 New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
 
-## Run Execution & Context
+## Run Execution & Declarative Matrix Runner
 
-- **Process-Isolated Execution**: All experiments use process-isolated runner scripts under the `scripts/` directory to prevent CUDA Out-of-Memory (OOM) leaks from sequential multi-runs.
-- **Hardware Grounding**: Simulates edge client memory sizes matching **Raspberry Pi variants (2GB/4GB/8GB)** and **Jetson Edge Nodes (16GB)** capping quantization bit-widths (4/8/16/32-bit).
-- **Data Paths**: Runner scripts output to `experiments/` by default; data is manually transferred to `multirun/` after completion. Paths referencing `experiments/` in older documents may be outdated.
+- **Declarative Matrix Runner**: All sweeps are defined in YAML manifests (`conf/matrix/*.yaml`) and executed using `uv run python scripts/run_matrix.py --matrix <name>`.
+- **Process-Isolated Execution**: `scripts/run_matrix.py` enforces process isolation and calls `kill_ray_processes()` between runs to eliminate CUDA VRAM leaks and Ray worker accumulation.
+- **Hardware Grounding**: Simulates edge client memory sizes matching **Raspberry Pi variants (2GB/4GB/8GB)** and **Jetson Edge Nodes (16GB)** capping quantization bit-widths (1–16 bits).
+- **Canonical Output Hierarchy**: All raw experiment logs and Hydra configs land strictly in:
+  `outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<heterogeneity>/seed_<seed>/`
+  _(Phases: `ci` [2R], `smoke` [50R], `explore` [50R], `formal` [100R])._

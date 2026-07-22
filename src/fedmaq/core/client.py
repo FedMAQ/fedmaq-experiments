@@ -43,9 +43,7 @@ class FedProxLossHook(LossHook):
 
     def on_train_begin(self, model: nn.Module) -> None:
         # Save a frozen copy of the initial global weights
-        self.global_params = [
-            p.clone().detach() for p in model.parameters() if p.requires_grad
-        ]
+        self.global_params = [p.clone().detach() for p in model.parameters() if p.requires_grad]
 
     def compute_loss(
         self,
@@ -63,7 +61,9 @@ class FedProxLossHook(LossHook):
         prox_penalty = (self.mu / 2.0) * proximal_term
         self.last_ce = float(ce_loss.item())
         self.last_prox = (
-            float(prox_penalty.item()) if isinstance(prox_penalty, torch.Tensor) else float(prox_penalty)
+            float(prox_penalty.item())
+            if isinstance(prox_penalty, torch.Tensor)
+            else float(prox_penalty)
         )
         return ce_loss + prox_penalty
 
