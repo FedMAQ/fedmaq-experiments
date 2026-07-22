@@ -17,7 +17,7 @@ Resolved via grilling session. Full rationale: [docs/plans/formal-experiment-pla
 
 ### Methodology
 
-5. **Single fixed config per dataset**, held across α. β–α regime dependence reported as a *sensitivity study*, never exploited in headline numbers.
+5. **Single fixed config per dataset**, held across α. β–α regime dependence reported as a _sensitivity study_, never exploited in headline numbers.
 6. **Paired seeds + paired test**: all arms share the same 3 seeds with **identical partitions**; report per-seed deltas + CIs (paired t / Wilcoxon). Cancels seed variance so ~3pp ablation deltas are detectable at n=3.
 7. **Baseline parity = matched light tuning**: each baseline gets an equal small budget on its key HP, frozen before confirmation.
 8. **Hard explore/confirm freeze**: exploration is adaptive (mechanisms up for debate, single-seed, cheap). It ends by **pre-registering** (git tag) a frozen config + fixed mechanism set. Confirmatory grid runs frozen. Surprises during confirmation become documented findings or a new labeled exploration round — never silent edits.
@@ -38,21 +38,21 @@ Resolved via grilling session. Full rationale: [docs/plans/formal-experiment-pla
 ## 2026-07-16 — Architecture Refactor: Determinism + Hook Decoupling (PRs #6, #7)
 
 Resolved across the autonomous architecture pass. Commits carry the mechanics;
-recorded here is the *why*. See [PR #6](https://github.com/FedMAQ/fedmaq-experiments/pull/6)
+recorded here is the _why_. See [PR #6](https://github.com/FedMAQ/fedmaq-experiments/pull/6)
 (merged) and [PR #7](https://github.com/FedMAQ/fedmaq-experiments/pull/7).
 
 18. **Determinism oracle closed in three halves.** (a) per-Ray-worker torch-flag
     re-pinning + seeded DataLoader (training reproducibility); (b)
-    `SeededPartitionClientManager` — client sampling keyed by *partition-id* with
+    `SeededPartitionClientManager` — client sampling keyed by _partition-id_ with
     per-round RNG, so paired arms at a matched seed draw identical clients; (c)
     deterministic partitioning locked by `test_partition_seed_invariant_for_paired_arms`.
     Enables the paired-seed/paired-test methodology (Decision 6) — seed variance
     cancels, so ~3pp ablation deltas are detectable at n=3.
 19. **`generate_partition_indices` is a pure function** of `(dataset, num_clients,
-    alpha, num_public_samples, seed, partition)` with **no algorithm input**. Single
-    call site passes the *global* `cfg.experiment.num_public_samples`, so every arm
+alpha, num_public_samples, seed, partition)` with **no algorithm input**. Single
+    call site passes the _global_ `cfg.experiment.num_public_samples`, so every arm
     gets byte-identical partitions. **Footgun:** `num_public_samples` is sliced
-    *before* Dirichlet advances the RNG — divergent per-arm values would silently
+    _before_ Dirichlet advances the RNG — divergent per-arm values would silently
     diverge partitions. Safe only because it is one global config value; see audit
     F12 for the related dead-fallback.
 20. **Hook-decoupled strategy (Phases 2/4/5/6).** Server model-factory dispatch
@@ -86,14 +86,14 @@ dead-fallback (F12), 4 KD baselines unmeasured on MobileNetV2GN (F13).
     `min_rank_frac: 0.25`. Regression test `tests/test_fedkd_compression.py`.
     A first synthetic code-path probe showed rank recovering but never measured
     accuracy — flagged by advisor review as an incomplete gate (the near-chance
-    *accuracy* symptom, not the rank proxy, is what matters). Followed up with a
+    _accuracy_ symptom, not the rank proxy, is what matters). Followed up with a
     real `run-minitest` (CIFAR-10/MobileNetV2GN, preliminary/10R/α=0.1/seed=0):
     peak accuracy 16.9%→26.3%, mean 12.0%→15.1% as the floor holds rank at
     26.25% vs. the old default's 3.7-4.5% collapse. Noisy at minitest scale —
     F13's full MobileNetV2GN smoke is still the gate before FedKD re-enters
     comparison tables, but the fix now has real-run (not just synthetic)
     evidence. **Superseded-evidence note (see Decision 22):** the real-run
-    confirmation above trained the *old* SimpleCNN student; the fix itself is
+    confirmation above trained the _old_ SimpleCNN student; the fix itself is
     architecture-agnostic (it floors rank), but FedKD's accuracy numbers here
     are retired along with the SimpleCNN student and must be re-measured on the
     width-0.5 MobileNetV2GN student. The synthetic probe already used
@@ -156,7 +156,7 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     this run; the causal evidence for the fix is the same-model minitest, not
     a pre/post delta across the student swap. **FedKD is unblocked for
     comparison tables** — the near-chance collapse that made it unusable is
-    gone. But `mean_rank_retained` sitting *at* the floor rather than climbing
+    gone. But `mean_rank_retained` sitting _at_ the floor rather than climbing
     past it means the original audit's candidate 3 (SVD too lossy for
     depthwise-separable weights) is still live and is the leading explanation
     for the remaining 15–27pp gap vs. every other baseline (FedAvg, FedProx,
@@ -168,8 +168,8 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     Logs: `outputs/2026-07-16/23-36-50/` (α=0.1), `outputs/2026-07-17/10-20-23/`
     (α=1.0). Full analysis: `docs/audits/distillation-direction-audit.md` F10.
 
-    *(Note for `docs-audit`: decisions 14–17 above are numbered out of the file's
-    append order — a pre-existing drift this entry did not introduce or fix.)*
+    _(Note for `docs-audit`: decisions 14–17 above are numbered out of the file's
+    append order — a pre-existing drift this entry did not introduce or fix.)_
 
 ---
 
@@ -214,7 +214,7 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     infeasible to reproduce reliably across a 3-seed formal grid. A
     convergence-based pretrain-stop (train-loss plateau, patience=5, Δ=0.5%
     rel, min=5, cap=100 per phase) was scoped as an alternative but rejected:
-    a cap of 100 can run *longer* than the original fixed 10/10 in the worst
+    a cap of 100 can run _longer_ than the original fixed 10/10 in the worst
     case, directly fighting the feasibility goal, and the added plateau-
     detection code path itself needs implementation + validation — the exact
     overhead the user was trying to escape. Considered and rejected keeping
@@ -240,7 +240,7 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     (`experiment=default`, `total_rounds=50`, `num_clients=100`).
     **Separately parked, not part of this decision:** lowering `client_gpus`
     below 1.0 to allow concurrent client actors (would cut wall-clock for
-    *every* baseline, not just FedMD) — user has hit OOM with this before and
+    _every_ baseline, not just FedMD) — user has hit OOM with this before and
     shares the GPU with non-training workloads; needs a dedicated profiling
     pass before any global default change.
 
@@ -258,40 +258,37 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     (`constrained_quantize`, `dequantize`, the shuffle-before-SGD fix in
     `_train_server_model`) was probed directly this session and is correct.
     Empirical diagnosis (three isolated repro runs, `scripts/run.py
-    algorithm=cfd` with instrumented per-round vote/loss/prediction-histogram
-    logging, since reverted):
-    1. **Server-side dual distillation is exonerated.** A discriminator run
-       (5 clients @ full participation → healthy 36–45% client-vote consensus,
-       `server_distill_epochs` raised 1→20) showed the server model tracks its
-       targets correctly (`server_on_public_acc` climbed 18%→38%→36% alongside
-       `targets_acc` 45%→46%→38%) once given enough gradient steps. An
-       earlier same-session reading that called this a *server*-side mode
-       collapse was itself a toy artifact (100 public samples ÷ batch 64 = 2
-       gradient steps/round — undertraining, not a bug) and is retracted.
-    2. **The real defect is upstream, at production client-count scale.**
-       Rerun at 50 clients / `client_fraction=0.1` (matching the smoke's
-       ~100-client, low-participation regime) reproduced the audit's
-       production symptom directly: `targets_acc` pinned near chance
-       (14/10/16/16% across 4 rounds), with individual clients one-hot-voting
-       the *same single class* for all 100 public samples from round 1
-       onward. Root cause: each client's private partition is tiny at this
-       scale (~470 samples at 100 clients on CIFAR-10's 50k-image train set
-       minus the 3000-sample public reserve) and 5 local CE epochs from a
-       fresh/reset init is enough to overfit to 1–2 dominant local classes —
-       healthy *local* train accuracy (50–65%, matching the smoke's
-       `client/avg_train_acc`) coexists with near-random generalization to
-       the disjoint, class-balanced public set. CFD's 1-bit (`b_up=1`)
-       constrained quantization then forces each client's vote to **full
-       commitment to that one class** with zero soft/hedged signal, unlike
-       the other KD baselines' temperature-scaled soft-probability averaging
-       — so a few overfit voters dominate the round's consensus outright.
-    3. **Raising the vote bit-width does not rescue it.** Tested `b_up=b_down=4`
-       (16 quantization levels, i.e. much less forced-one-hot) at the same
-       production-scale regime: `targets_acc` barely moved (14→21% across 4
-       rounds, still chance-adjacent) because the underlying client
-       *prediction* is wrong, not merely imprecisely encoded — more
-       quantization levels just transmit the same bad prediction more
-       precisely. Rules out bit-width as a config-only fix.
+algorithm=cfd` with instrumented per-round vote/loss/prediction-histogram
+    logging, since reverted): 1. **Server-side dual distillation is exonerated.** A discriminator run
+    (5 clients @ full participation → healthy 36–45% client-vote consensus,
+    `server_distill_epochs` raised 1→20) showed the server model tracks its
+    targets correctly (`server_on_public_acc` climbed 18%→38%→36% alongside
+    `targets_acc` 45%→46%→38%) once given enough gradient steps. An
+    earlier same-session reading that called this a _server_-side mode
+    collapse was itself a toy artifact (100 public samples ÷ batch 64 = 2
+    gradient steps/round — undertraining, not a bug) and is retracted. 2. **The real defect is upstream, at production client-count scale.**
+    Rerun at 50 clients / `client_fraction=0.1` (matching the smoke's
+    ~100-client, low-participation regime) reproduced the audit's
+    production symptom directly: `targets_acc` pinned near chance
+    (14/10/16/16% across 4 rounds), with individual clients one-hot-voting
+    the _same single class_ for all 100 public samples from round 1
+    onward. Root cause: each client's private partition is tiny at this
+    scale (~470 samples at 100 clients on CIFAR-10's 50k-image train set
+    minus the 3000-sample public reserve) and 5 local CE epochs from a
+    fresh/reset init is enough to overfit to 1–2 dominant local classes —
+    healthy _local_ train accuracy (50–65%, matching the smoke's
+    `client/avg_train_acc`) coexists with near-random generalization to
+    the disjoint, class-balanced public set. CFD's 1-bit (`b_up=1`)
+    constrained quantization then forces each client's vote to **full
+    commitment to that one class** with zero soft/hedged signal, unlike
+    the other KD baselines' temperature-scaled soft-probability averaging
+    — so a few overfit voters dominate the round's consensus outright. 3. **Raising the vote bit-width does not rescue it.** Tested `b_up=b_down=4`
+    (16 quantization levels, i.e. much less forced-one-hot) at the same
+    production-scale regime: `targets_acc` barely moved (14→21% across 4
+    rounds, still chance-adjacent) because the underlying client
+    _prediction_ is wrong, not merely imprecisely encoded — more
+    quantization levels just transmit the same bad prediction more
+    precisely. Rules out bit-width as a config-only fix.
     **Considered and rejected:** raising `client_fraction` to dilute
     degenerate votes (untested, and clients still individually overfit
     regardless of how many are sampled — no strong reason to expect it fixes
@@ -338,3 +335,39 @@ Round-50 top-1 accuracy: sweep-grid (16 cells) ranges 0.4601-0.5179 (median 0.49
 33. **No numeric noise margin was ever sourced for Decision 30's rule** (single-seed runs give no variance estimate, and no prior repeated-seed characterization on MobileNetV2GN exists). Resolved pragmatically: the empirical cluster band (~1.6pp) observed across the 14 non-outlier sweep cells stands in as the noise floor for this pass only.
 34. **Pass 1 tentative pick: `entropy_weight=2.0`, `precision_weight=0.5`, `soft_voting=true`** (run index 10, 0.5179 top-1, +1.6-3.4pp over the cluster band — clears the empirical margin). **Flagged provisional**, not frozen: single-seed result, no repeated-seed confirmation yet. User has agreed to a future multi-seed re-verification pass (repeat idx10 plus 1-2 other cells with 2-3 more seeds) before this is treated as load-bearing for the confirmatory grid.
 35. Run 17 (ew=4.0, pw=4.0, 0.4601, the sweep floor) is flagged lower-confidence than the other 17 runs given its rocky completion history (5 crash-retries, post-hoc CSV dedup) — not excluded, but not to be over-interpreted as a clean "high ew+pw hurts" signal without a rerun.
+
+---
+
+## 2026-07-22 — Hardware & Telemetry Grounding (Late-2023 Coherent Era)
+
+Resolves telemetry calibration for physical execution time and communication energy modeling (§4.1, §4.3). Replaces former placeholder constants (`bandwidth_mbps: 10.0`, `compute_samples_per_sec: 200.0`, `server_compute_speed: 2000.0`) with a mathematically grounded, temporally aligned Late-2023 hardware ecosystem (see [docs/adr/0002-hardware-telemetry-grounding.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md)).
+
+36. **Late-2023 Hardware Standardization**:
+    - **Edge Clients**: **Raspberry Pi 5 Series** (launched Oct 2023, Broadcom BCM2712 Quad Cortex-A76 @ 2.4 GHz). Memory sampling $c_k \sim \mathcal{U}(2048, 16384)$ MB with $c_{\text{unit}}=512$ MB maps to Pi 5 RAM variants (2GB $\rightarrow$ 4-bit, 4GB $\rightarrow$ 8-bit, 8GB $\rightarrow$ 16-bit, 16GB $\rightarrow$ FP32).
+    - **Wireless Link**: `bandwidth_mbps: 10.0` based on integrated Dual-Band 802.11ac Wi-Fi® under edge channel contention and distance path loss.
+    - **Client Compute Speed ($v_{\text{client}}$)**: Grounded in Quad Cortex-A76 @ 2.4 GHz **sustained** FP32 throughput (~18.0 GFLOPS, ~57% of 31.5 GFLOPS peak — see Decision 37):
+      - **CIFAR-10/100 (`MobileNetV2GN`)**: `compute_samples_per_sec: 20.0` (based on $0.90\text{ GFLOPs/sample}$ fwd+bwd).
+      - **FEMNIST (`SimpleCNN`)**: `compute_samples_per_sec: 600.0` (based on $0.015\text{ GFLOPs/sample}$ fwd+bwd, capped for DataLoader overhead).
+    - **Central FL Server**: **High-Density Enterprise Server Node** (launched Late 2023: 24-Core Intel Xeon 5th Gen Emerald Rapids CPU, 1× NVIDIA L40S 48GB Universal GPU, 64 GB DDR5-4800 ECC System RAM).
+    - **Server Compute Speed ($v_{\text{server}}$)**: Per-dataset (see Decision 37): `5000.0` s/s (CIFAR MobileNetV2GN), `10000.0` s/s (FEMNIST SimpleCNN).
+
+---
+
+## 2026-07-22 — Sustained-Throughput Telemetry Revision & Per-Dataset Server Speed
+
+Supersedes the peak-GFLOPS-based values in the original Decision 36. Full derivation chains in [ADR-0002](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md).
+
+37. **Sustained-throughput revision (client + server)**:
+    - **Client 35.0 → 20.0 s/s** (CIFAR MobileNetV2GN). Peak FP32 GEMM on Pi 5 is ~31.5 GFLOPS; sustained efficiency is ~57% ($P_{\text{sustained}} = 18.0$ GFLOPS) due to PyTorch eager-mode dispatch overhead, Python GIL contention, non-optimized ARM NEON codegen, and LPDDR4X memory bandwidth sharing. $v_{\text{client}} = 18.0 / 0.90 = 20.0$ s/s. FEMNIST SimpleCNN stays at 600 s/s (DataLoader-capped: theoretical 1,200 s/s > 600 cap, so compute speed is not the binding constraint).
+    - **Server 4500 → 5000 s/s** (CIFAR) / **10,000 s/s** (FEMNIST). Derived from L40S memory-bandwidth roofline ($B_{\text{mem}} \times I_{\text{arith}} = 864 \times 22 = 19{,}008$ GFLOPS effective) × 8% framework efficiency (kernel-launch-limited regime for small 2.24M-param model on 48GB GPU) / $F_{\text{fwd}}$. SimpleCNN has ~25 CUDA kernels per forward pass (vs MobileNetV2GN's ~120), yielding ~2× faster per-batch processing in the overhead-limited regime.
+    - **Per-dataset server speed**: `server_compute_speed` is now resolved via `resolve_server_compute_speed()` (experiment config → algorithm config → module fallback). FEMNIST experiment config overrides the algorithm default (5000 → 10000) so a single `experiment=femnist` is sufficient.
+    - **Impact**: Client training time increases from 67s to 118s per round (CIFAR), making computation even more dominant relative to communication (~8:1 ratio). This is **conservative for thesis claims** — the real-world advantage of FedMAQ's communication compression is at least as large as simulated. Server time has <5% sensitivity on round time.
+    - **Manuscript note**: §4.1 and §4.3 will be updated to reflect these values once the formal experiment configuration is frozen and pre-registered.
+
+---
+
+## 2026-07-22 — Quantization Precision Bounds Documented as Intentional
+
+38. **`q_max=16` and `bit_widths=[1,2,3,4,5,6,7,8,16,32]` formally documented**:
+    - **`q_max=16`**: The Tier-2 soft quality target interpolation range is $[1, 16]$. The quality formulation never assigns FP32 precision — FP16→FP32 gains are marginal for FL accuracy (local SGD gradient noise exceeds FP16 quantization noise) while doubling communication cost. Consequence: 8GB and 16GB Pi 5 clients are functionally identical in achievable precision (both cap at 16-bit). Intentional, not an oversight.
+    - **`bit_widths` set**: The gap between 8 and 16 (no 9–15 bit options) is **hardware-aligned** — real quantization formats with silicon support are power-of-2 (INT4, INT8, FP16, FP32). Fine granularity at 1–8 bits captures the most impactful precision range for resource-constrained clients; the 8→16→32 jumps reflect the physical hardware landscape. Standard practice in mixed-precision quantization literature (HAWQ, HAQ, MBQ). Adding 9–15 would introduce non-standard bit-widths for negligible accuracy gain while complicating the precision-allocation narrative.

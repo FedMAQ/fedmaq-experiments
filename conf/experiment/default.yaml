@@ -18,9 +18,10 @@ client_gpus: 1.0          # GPU resource fraction allocated per client simulator
 # off only to diagnose an op that lacks a deterministic kernel.
 strict_determinism: true
 
-# Bandwidth and Compute settings (uniform)
+# Bandwidth and Compute settings (uniform, grounded in ADR-0002 Late-2023 specs)
 bandwidth_mbps: 10.0
-compute_samples_per_sec: 200.0
+compute_samples_per_sec: 20.0  # Raspberry Pi 5 Quad Cortex-A76 @ 2.4GHz sustained (~57% of 31.5 GFLOPS peak) for MobileNetV2GN (ADR-0002)
+
 
 # Telemetry settings
 telemetry:

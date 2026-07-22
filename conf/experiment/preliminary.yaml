@@ -17,9 +17,10 @@ total_rounds: 10          # Preliminary staging value
 num_public_samples: 3000  # |D_pub| per manuscript §4.3, Table 4.1
 client_gpus: 1.0          # GPU resource fraction allocated per client simulator
 
-# Bandwidth and Compute settings (uniform)
+# Bandwidth and Compute settings (uniform, grounded in ADR-0002 Late-2023 specs)
 bandwidth_mbps: 10.0
-compute_samples_per_sec: 200.0
+compute_samples_per_sec: 20.0  # Raspberry Pi 5 Quad Cortex-A76 @ 2.4GHz sustained (~57% of 31.5 GFLOPS peak) for MobileNetV2GN (ADR-0002)
+
 
 # Telemetry settings
 telemetry:

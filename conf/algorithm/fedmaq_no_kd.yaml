@@ -18,7 +18,7 @@ temperature: 1.0
 kd_epochs: 0              # 0 = disable server-side KD
 server_kd_lr: 0.01
 server_kd_momentum: 0.9
-server_compute_speed: 2000.0  # simulated server samples/sec for server-side KD delay (§3.3)
+server_compute_speed: 5000.0  # simulated server samples/sec for MobileNetV2GN KD (NVIDIA L40S 48GB GPU, ADR-0002)
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

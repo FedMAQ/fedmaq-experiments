@@ -6,11 +6,14 @@ into a valid config, and that the decorator-free :func:`fedmaq.simulation.run` e
 point drives the real ``client_fn``/``server_fn`` wiring end-to-end.
 """
 
+from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from hydra import compose, initialize
+from hydra import compose, initialize_config_dir
 from torch.utils.data import TensorDataset
+
+CONF_DIR = str((Path(__file__).parent.parent / "conf").resolve())
 
 # Every selectable algorithm config (including the FedDistill/CFD stubs, whose YAML
 # must still compose even though their hooks are not yet implemented).
@@ -39,7 +42,9 @@ def mock_dataset(monkeypatch):
     mock_labels = torch.randint(0, 10, (100,))
     mock_ds = TensorDataset(mock_data, mock_labels)
     mock_ds.targets = mock_labels
-    monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
+    monkeypatch.setattr(
+        "fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds
+    )
     return mock_ds
 
 
@@ -50,7 +55,7 @@ def test_algorithm_config_composes(algorithm):
     A malformed ``conf/algorithm/*.yaml`` (or a broken default/interpolation) is
     otherwise invisible to the suite, since the unit tests build cfg dicts inline.
     """
-    with initialize(config_path="../conf", version_base="1.3"):
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
         cfg = compose(config_name="config", overrides=[f"algorithm={algorithm}"])
 
     # Composition wiring: the four config groups + a resolvable algorithm name.
@@ -74,7 +79,7 @@ def test_run_cfg_smoke_fedavg(mock_dataset, tmp_path, monkeypatch):
 
     from fedmaq.simulation import run
 
-    with initialize(config_path="../conf", version_base="1.3"):
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
         cfg = compose(
             config_name="config",
             overrides=[
@@ -111,7 +116,7 @@ def test_run_cfg_smoke_feddistill_two_rounds(mock_dataset, tmp_path, monkeypatch
 
     from fedmaq.simulation import run
 
-    with initialize(config_path="../conf", version_base="1.3"):
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
         cfg = compose(
             config_name="config",
             overrides=[
@@ -146,7 +151,7 @@ def test_run_cfg_smoke_cfd_two_rounds(mock_dataset, tmp_path, monkeypatch):
 
     from fedmaq.simulation import run
 
-    with initialize(config_path="../conf", version_base="1.3"):
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
         cfg = compose(
             config_name="config",
             overrides=[

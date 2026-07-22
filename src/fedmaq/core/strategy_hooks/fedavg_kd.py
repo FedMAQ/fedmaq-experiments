@@ -19,8 +19,8 @@ from fedmaq.core.config_defaults import (
     BATCH_SIZE,
     DATASET_NAME,
     NUM_CLASSES,
-    SERVER_COMPUTE_SPEED,
     require_num_public_samples,
+    resolve_server_compute_speed,
 )
 from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
 from fedmaq.core.models import DEVICE, get_model
@@ -100,7 +100,7 @@ class FedAvgKDHook(StrategyHook):
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
             num_teachers=len(results),
-            server_compute_speed=float(alg_cfg.get("server_compute_speed", SERVER_COMPUTE_SPEED)),
+            server_compute_speed=resolve_server_compute_speed(self._config),
         )
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:

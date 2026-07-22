@@ -24,6 +24,26 @@ via :func:`require_num_public_samples`, which fails loud on a missing key.
 # every conf/algorithm/*.yaml that defines it, so this fallback is safe.
 SERVER_COMPUTE_SPEED: float = 2000.0
 
+
+def resolve_server_compute_speed(config: dict) -> float:
+    """Resolve server compute speed, preferring experiment-level override.
+
+    The experiment config can carry a per-dataset ``server_compute_speed``
+    (e.g. FEMNIST's SimpleCNN is ~2× faster than MobileNetV2GN on the L40S).
+    When present it takes priority over the algorithm-level default so that
+    a single ``experiment=femnist`` override is sufficient — no manual
+    ``algorithm.server_compute_speed=…`` CLI override needed.
+    """
+    exp_cfg = config.get("experiment", config) if isinstance(config, dict) else {}
+    alg_cfg = config.get("algorithm", {}) if isinstance(config, dict) else {}
+    return float(
+        exp_cfg.get(
+            "server_compute_speed",
+            alg_cfg.get("server_compute_speed", SERVER_COMPUTE_SPEED),
+        )
+    )
+
+
 # Mini-batch size B. Matches conf/experiment/default.yaml.
 BATCH_SIZE: int = 64
 
