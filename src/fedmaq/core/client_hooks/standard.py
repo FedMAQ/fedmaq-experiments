@@ -9,6 +9,11 @@ import torch
 import torch.nn as nn
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.training_skeleton import (
+    StepResult,
+    compress_and_reconstruct,
+    run_epochs,
+)
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 
 if TYPE_CHECKING:
@@ -81,57 +86,49 @@ class StandardFit(ClientFitStrategy):
         grad_norm_sum = 0.0
         grad_norm_batches = 0
 
-        last_loss = 0.0
-        loss_sum = 0.0
-        correct = 0
-        total = 0
-        batches = 0
-        for _ in range(epochs):
-            for images, labels in client.trainloader:
-                images, labels = images.to(client.device), labels.to(client.device)
-                optimizer.zero_grad()
-                outputs = client.model(images)
-                loss = client.loss_hook.compute_loss(
-                    client.model, outputs, labels, criterion, inputs=images
-                )
-                loss.backward()
-                if instrument_fedprox:
-                    total_norm = 0.0
-                    for p in client.model.parameters():
-                        if p.requires_grad and p.grad is not None:
-                            total_norm += p.grad.detach().norm(2).item() ** 2
-                    grad_norm_sum += total_norm**0.5
-                    grad_norm_batches += 1
-                optimizer.step()
-                last_loss = loss.item()
-                loss_sum += last_loss
-                batches += 1
+        def step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+            outputs = client.model(images)
+            loss = client.loss_hook.compute_loss(
+                client.model, outputs, labels, criterion, inputs=images
+            )
+            _, predicted = torch.max(outputs.data, 1)
+            return StepResult(
+                loss=loss,
+                correct=(predicted == labels).sum().item(),
+                total=labels.size(0),
+            )
 
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+        def on_after_backward() -> None:
+            nonlocal grad_norm_sum, grad_norm_batches
+            total_norm = 0.0
+            for p in client.model.parameters():
+                if p.requires_grad and p.grad is not None:
+                    total_norm += p.grad.detach().norm(2).item() ** 2
+            grad_norm_sum += total_norm**0.5
+            grad_norm_batches += 1
 
-        # Extract updated parameters
+        result = run_epochs(
+            model=client.model,
+            loader=client.trainloader,
+            optimizer=optimizer,
+            epochs=epochs,
+            step_fn=step_fn,
+            device=client.device,
+            on_after_backward=on_after_backward if instrument_fedprox else None,
+        )
+
+        # Extract updated parameters and run the shared delta->compress->reconstruct tail
         updated_params = get_model_parameters(client.model)
-
-        # Compute delta = w_new - w_old
-        deltas = [u - o for u, o in zip(updated_params, parameters, strict=True)]
-
-        # Compress updates
-        compressed_deltas, byte_size = client.compressor_hook.compress(deltas)
-
-        # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)]
-
-        avg_train_loss = loss_sum / batches if batches > 0 else 0.0
-        avg_train_acc = correct / total if total > 0 else 0.0
+        reconstructed_params, byte_size = compress_and_reconstruct(
+            parameters, updated_params, client.compressor_hook
+        )
 
         fit_metrics = {
             "bytes_uploaded": byte_size,
             "partition_id": int(client.cid),
-            "local_loss": self._reported_local_loss(pretrain_loss, last_loss),
-            "train_loss": avg_train_loss,
-            "train_acc": avg_train_acc,
+            "local_loss": self._reported_local_loss(pretrain_loss, result.last_loss),
+            "train_loss": result.avg_loss,
+            "train_acc": result.accuracy if result.accuracy is not None else 0.0,
             "epochs_trained": epochs,
         }
         if "q" in config:

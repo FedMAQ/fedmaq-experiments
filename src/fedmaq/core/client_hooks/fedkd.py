@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.training_skeleton import compress_and_reconstruct
 from fedmaq.core.models import (
     get_kd_teacher_model,
     get_model_parameters,
@@ -135,20 +136,17 @@ class FedKDFit(ClientFitStrategy):
         # 6. Save updated teacher model parameters
         torch.save(teacher_model.state_dict(), teacher_path)
 
-        # 7. Extract updated student model parameters and compute delta
-        updated_params = get_model_parameters(client.model)
-        deltas = [u - o for u, o in zip(updated_params, parameters, strict=True)]
-
-        # 8. Update compressor hook with dynamic energy if provided in configuration
+        # 7. Update compressor hook with dynamic energy if provided in configuration
         if "energy" in config:
             if hasattr(client.compressor_hook, "energy"):
                 client.compressor_hook.energy = float(config["energy"])
 
-        # 9. Compress updates
-        compressed_deltas, byte_size = client.compressor_hook.compress(deltas)
-
-        # Reconstruct parameter update: w_new_reconstructed = w_old + compressed_deltas
-        reconstructed_params = [o + cd for o, cd in zip(parameters, compressed_deltas, strict=True)]
+        # 8. Extract updated student model parameters and run the shared
+        # delta->compress->reconstruct tail
+        updated_params = get_model_parameters(client.model)
+        reconstructed_params, byte_size = compress_and_reconstruct(
+            parameters, updated_params, client.compressor_hook
+        )
 
         avg_total_loss = total_loss_sum / batches if batches > 0 else 0.0
         avg_train_acc = correct_s / total_samples if total_samples > 0 else 0.0

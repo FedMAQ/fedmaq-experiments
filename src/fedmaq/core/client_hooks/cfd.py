@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from flwr.app import ArrayRecord
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, standard_evaluate
+from fedmaq.core.client_hooks.training_skeleton import StepResult, run_epochs
 from fedmaq.core.models import set_model_parameters
 from fedmaq.core.softlabel_codec import (
     codes_from_bytes,
@@ -95,50 +96,62 @@ class CFDFit(ClientFitStrategy):
             server_probs = dequantize(server_codes, b_down)
 
             kl_criterion = nn.KLDivLoss(reduction="batchmean")
-            client.model.train()
-            for _ in range(distill_epochs):
-                start = 0
-                for images, _ in client.public_loader:
-                    images = images.to(client.device)
+
+            # Batch offset into server_probs resets each epoch (paper's protocol);
+            # distill_loss_sum/distill_batches accumulate across all epochs into a
+            # single average, so they're tracked manually in the exact same
+            # left-to-right order as the original nested loop -- run_epochs' own
+            # per-call averaging would reassociate the float sum across epochs and
+            # risk a non-bit-exact result under Decision 40's golden-diff gate.
+            def make_distill_step_fn(start_box: list[int]):
+                def step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+                    nonlocal distill_loss_sum, distill_batches
                     batch_len = len(images)
                     batch_targets = torch.tensor(
-                        server_probs[start : start + batch_len],
+                        server_probs[start_box[0] : start_box[0] + batch_len],
                         dtype=torch.float32,
                         device=client.device,
                     )
-                    start += batch_len
-
-                    optimizer.zero_grad()
+                    start_box[0] += batch_len
                     logits = client.model(images)
                     log_probs = F.log_softmax(logits / temperature, dim=1)
                     loss = kl_criterion(log_probs, batch_targets) * (temperature**2)
-                    loss.backward()
-                    optimizer.step()
-
                     distill_loss_sum += loss.item()
                     distill_batches += 1
+                    return StepResult(loss=loss)
+
+                return step_fn
+
+            for _ in range(distill_epochs):
+                run_epochs(
+                    model=client.model,
+                    loader=client.public_loader,
+                    optimizer=optimizer,
+                    epochs=1,
+                    step_fn=make_distill_step_fn([0]),
+                    device=client.device,
+                )
 
         ce_criterion = nn.CrossEntropyLoss()
-        ce_loss_sum = 0.0
-        ce_batches = 0
-        correct = 0
-        total_samples = 0
-        client.model.train()
-        for _ in range(epochs):
-            for images, labels in client.trainloader:
-                images, labels = images.to(client.device), labels.to(client.device)
-                optimizer.zero_grad()
-                outputs = client.model(images)
-                loss = ce_criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
 
-                ce_loss_sum += loss.item()
-                ce_batches += 1
+        def ce_step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+            outputs = client.model(images)
+            loss = ce_criterion(outputs, labels)
+            _, predicted = torch.max(outputs.data, 1)
+            return StepResult(
+                loss=loss,
+                correct=(predicted == labels).sum().item(),
+                total=labels.size(0),
+            )
 
-                _, predicted = torch.max(outputs.data, 1)
-                total_samples += labels.size(0)
-                correct += (predicted == labels).sum().item()
+        ce_result = run_epochs(
+            model=client.model,
+            loader=client.trainloader,
+            optimizer=optimizer,
+            epochs=epochs,
+            step_fn=ce_step_fn,
+            device=client.device,
+        )
 
         # Soft-label predictions on the public proxy set, sent instead of weights.
         if client.public_loader is not None:
@@ -167,9 +180,9 @@ class CFDFit(ClientFitStrategy):
         if state is not None:
             state[_PREV_UP_CODES_KEY] = ArrayRecord(numpy_ndarrays=[codes_for_next])
 
-        avg_ce_loss = ce_loss_sum / ce_batches if ce_batches > 0 else 0.0
+        avg_ce_loss = ce_result.avg_loss
         avg_distill_loss = distill_loss_sum / distill_batches if distill_batches > 0 else 0.0
-        avg_train_acc = correct / total_samples if total_samples > 0 else 0.0
+        avg_train_acc = ce_result.accuracy if ce_result.accuracy is not None else 0.0
 
         return (
             [codes.astype(np.int64)],

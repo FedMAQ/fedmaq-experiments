@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, standard_evaluate
+from fedmaq.core.client_hooks.training_skeleton import StepResult, run_epochs
 
 if TYPE_CHECKING:
     from fedmaq.core.client import GenericClient
@@ -63,40 +64,46 @@ class FedMDFit(ClientFitStrategy):
             )
             criterion = nn.CrossEntropyLoss()
 
+            def no_metrics_step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+                outputs = client.model(images)
+                return StepResult(loss=criterion(outputs, labels))
+
             # a. Pre-train on public dataset
             if client.public_loader is not None:
-                client.model.train()
-                for _ in range(pub_pretrain_epochs):
-                    for images, labels in client.public_loader:
-                        images, labels = (
-                            images.to(client.device),
-                            labels.to(client.device),
-                        )
-                        optimizer.zero_grad()
-                        outputs = client.model(images)
-                        loss = criterion(outputs, labels)
-                        loss.backward()
-                        optimizer.step()
+                run_epochs(
+                    model=client.model,
+                    loader=client.public_loader,
+                    optimizer=optimizer,
+                    epochs=pub_pretrain_epochs,
+                    step_fn=no_metrics_step_fn,
+                    device=client.device,
+                )
 
-            # b. Pre-train on private dataset
-            client.model.train()
-            for _ in range(priv_pretrain_epochs):
-                for images, labels in client.trainloader:
-                    images, labels = (
-                        images.to(client.device),
-                        labels.to(client.device),
-                    )
-                    optimizer.zero_grad()
-                    outputs = client.model(images)
-                    loss = criterion(outputs, labels)
-                    loss.backward()
-                    optimizer.step()
+            # b. Pre-train on private dataset. loss_sum/batches/correct/total_samples
+            # are shared with the revisit phase below (same running accumulator as
+            # the original code), so they're tracked manually here rather than via
+            # run_epochs' own per-call averaging -- combining two already-divided
+            # averages would reassociate the float sum and risk a non-bit-exact
+            # result under Decision 40's golden-diff gate.
+            def priv_pretrain_step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+                nonlocal loss_sum, batches, correct, total_samples
+                outputs = client.model(images)
+                loss = criterion(outputs, labels)
+                loss_sum += loss.item()
+                batches += 1
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                correct += (predicted == labels).sum().item()
+                return StepResult(loss=loss)
 
-                    loss_sum += loss.item()
-                    batches += 1
-                    _, predicted = torch.max(outputs.data, 1)
-                    total_samples += labels.size(0)
-                    correct += (predicted == labels).sum().item()
+            run_epochs(
+                model=client.model,
+                loader=client.trainloader,
+                optimizer=optimizer,
+                epochs=priv_pretrain_epochs,
+                step_fn=priv_pretrain_step_fn,
+                device=client.device,
+            )
             epochs_trained += priv_pretrain_epochs
 
             # Save initial weights
@@ -122,47 +129,59 @@ class FedMDFit(ClientFitStrategy):
             )
             l1_criterion = nn.L1Loss()
 
-            # Digest Phase: L1 loss against public soft targets
-            client.model.train()
-            for _ in range(public_epochs):
-                start_idx = 0
-                for images, _ in client.public_loader:
-                    images = images.to(client.device)
+            # Digest Phase: L1 loss against public soft targets. The batch offset
+            # into avg_predictions resets each epoch, so (like CFD's distill phase)
+            # this is driven one epoch at a time rather than via a single
+            # epochs=public_epochs call.
+            def make_digest_step_fn(start_box: list[int]):
+                def step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
                     batch_len = len(images)
                     batch_targets = torch.tensor(
-                        avg_predictions[start_idx : start_idx + batch_len],
+                        avg_predictions[start_box[0] : start_box[0] + batch_len],
                         dtype=torch.float32,
                         device=client.device,
                     )
-                    start_idx += batch_len
-
-                    optimizer.zero_grad()
+                    start_box[0] += batch_len
                     outputs = client.model(images)
-                    loss = l1_criterion(outputs, batch_targets)
-                    loss.backward()
-                    optimizer.step()
+                    return StepResult(loss=l1_criterion(outputs, batch_targets))
 
-            # Revisit Phase: cross entropy loss on private dataset
+                return step_fn
+
+            for _ in range(public_epochs):
+                run_epochs(
+                    model=client.model,
+                    loader=client.public_loader,
+                    optimizer=optimizer,
+                    epochs=1,
+                    step_fn=make_digest_step_fn([0]),
+                    device=client.device,
+                )
+
+            # Revisit Phase: cross entropy loss on private dataset. Shares
+            # loss_sum/batches/correct/total_samples with the priv-pretrain phase
+            # above (see comment there re: manual accumulation for bit-exactness).
             private_epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
             ce_criterion = nn.CrossEntropyLoss()
-            client.model.train()
-            for _ in range(private_epochs):
-                for images, labels in client.trainloader:
-                    images, labels = (
-                        images.to(client.device),
-                        labels.to(client.device),
-                    )
-                    optimizer.zero_grad()
-                    outputs = client.model(images)
-                    loss = ce_criterion(outputs, labels)
-                    loss.backward()
-                    optimizer.step()
 
-                    loss_sum += loss.item()
-                    batches += 1
-                    _, predicted = torch.max(outputs.data, 1)
-                    total_samples += labels.size(0)
-                    correct += (predicted == labels).sum().item()
+            def revisit_step_fn(images: torch.Tensor, labels: torch.Tensor) -> StepResult:
+                nonlocal loss_sum, batches, correct, total_samples
+                outputs = client.model(images)
+                loss = ce_criterion(outputs, labels)
+                loss_sum += loss.item()
+                batches += 1
+                _, predicted = torch.max(outputs.data, 1)
+                total_samples += labels.size(0)
+                correct += (predicted == labels).sum().item()
+                return StepResult(loss=loss)
+
+            run_epochs(
+                model=client.model,
+                loader=client.trainloader,
+                optimizer=optimizer,
+                epochs=private_epochs,
+                step_fn=revisit_step_fn,
+                device=client.device,
+            )
             epochs_trained += private_epochs
 
             # Save updated weights
