@@ -1,7 +1,7 @@
 """Custom Flower Strategy extending FedAvg with simulated physical time tracking and telemetry."""
 
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 from flwr.common import (
@@ -26,8 +26,25 @@ from fedmaq.core.telemetry import TelemetryManager
 logger = logging.getLogger(__name__)
 
 
-class NetworkSimulator:
-    """Simulates communication delays and training delays for FL rounds."""
+class ClientDelay(NamedTuple):
+    """Per-client simulated round delay, in seconds. Unpacks as a 3-tuple for
+    call sites that pre-date the named form (``t_download, t_train, t_upload = ...``)."""
+
+    t_download: float
+    t_train: float
+    t_upload: float
+
+
+class PhysicalCostModel:
+    """Owns the per-client bandwidth/compute/memory simulation for a run.
+
+    Built once from resolved config via :meth:`from_config`, which absorbs the
+    array-build previously scattered across ``TelemetryFedAvg.__init__``.
+    :meth:`client_round_delay` turns per-client byte/sample counts into simulated
+    seconds; per-algorithm timing contributions (compute-scale, upload/download
+    size) stay behind ``StrategyHook`` (see ``strategy_hooks/base.py``) — this
+    model only prices what the hook hands it, carrying no per-algorithm branching.
+    """
 
     def __init__(
         self,
@@ -35,21 +52,85 @@ class NetworkSimulator:
         client_download_bw: np.ndarray,
         client_comp_speed: np.ndarray,
         num_clients: int,
+        client_memory: np.ndarray | None = None,
+        bandwidth_mbps: float | None = None,
+        compute_samples_per_sec: float | None = None,
+        memory_desc: str = "",
     ) -> None:
         self.client_upload_bw = client_upload_bw
         self.client_download_bw = client_download_bw
         self.client_comp_speed = client_comp_speed
         self.num_clients = num_clients
+        self.client_memory = client_memory
+        self.bandwidth_mbps = bandwidth_mbps
+        self.compute_samples_per_sec = compute_samples_per_sec
+        self.memory_desc = memory_desc
 
-    def simulate_client_delay(
+    @classmethod
+    def from_config(cls, config: dict[str, Any], num_clients: int) -> "PhysicalCostModel":
+        """Resolve bandwidth/compute/memory arrays from a run's config.
+
+        Bandwidth and compute are uniform across clients (§4.1 control group);
+        memory is either a fixed control-group value or heterogeneous
+        ``U(2048, 16384)`` MB, seeded from ``config["seed"]`` for reproducibility.
+        """
+        exp_config = config.get("experiment", config)
+        seed = config.get("seed", 42)
+        rng = np.random.default_rng(seed)
+
+        if "bandwidth_mbps" in exp_config:
+            bandwidth_mbps = float(exp_config["bandwidth_mbps"])
+        else:
+            bw_cfg = exp_config.get("heterogeneity", {}).get("bandwidth", {})
+            bandwidth_mbps = float(bw_cfg.get("min_mbps", 10.0))
+
+        if "compute_samples_per_sec" in exp_config:
+            compute_samples_per_sec = float(exp_config["compute_samples_per_sec"])
+        else:
+            comp_cfg = exp_config.get("heterogeneity", {}).get("compute", {})
+            compute_samples_per_sec = float(comp_cfg.get("min_samples_per_sec", 200.0))
+
+        client_upload_bw = np.full(num_clients, bandwidth_mbps)
+        client_download_bw = np.full(num_clients, bandwidth_mbps)
+        client_comp_speed = np.full(num_clients, compute_samples_per_sec)
+
+        # Memory: uniform fixed value (control group) or heterogeneous U(2048, 16384) MB (§4.1)
+        uniform_mb = None
+        for cfg_source in [exp_config, config]:
+            if isinstance(cfg_source, dict):
+                h_cfg = cfg_source.get("heterogeneity", {})
+                if isinstance(h_cfg, dict):
+                    uniform_mb = h_cfg.get("uniform_memory_mb", None)
+                    if uniform_mb is not None:
+                        break
+
+        if uniform_mb is not None:
+            client_memory = np.full(num_clients, float(uniform_mb))
+            memory_desc = f"fixed {uniform_mb} MB (control group)"
+        else:
+            client_memory = rng.uniform(2048.0, 16384.0, size=num_clients)
+            memory_desc = "U(2048, 16384) MB"
+
+        return cls(
+            client_upload_bw=client_upload_bw,
+            client_download_bw=client_download_bw,
+            client_comp_speed=client_comp_speed,
+            num_clients=num_clients,
+            client_memory=client_memory,
+            bandwidth_mbps=bandwidth_mbps,
+            compute_samples_per_sec=compute_samples_per_sec,
+            memory_desc=memory_desc,
+        )
+
+    def client_round_delay(
         self,
         cid: int,
         model_size_bytes: int,
         bytes_uploaded: int,
         train_sample_count: float,
         compute_scale: float = 1.0,
-    ) -> tuple[float, float, float]:
-        """Return (t_download, t_train, t_upload) for a single client.
+    ) -> ClientDelay:
+        """Return simulated (t_download, t_train, t_upload) for a single client.
 
         ``train_sample_count`` is the effective number of sample-epochs processed
         during local training and ``compute_scale`` a multiplicative factor on the
@@ -65,7 +146,7 @@ class NetworkSimulator:
         t_upload = bytes_uploaded / upload_speed
         t_train = train_sample_count / comp_speed
 
-        return t_download, t_train, t_upload
+        return ClientDelay(t_download, t_train, t_upload)
 
 
 class TelemetryFedAvg(FedAvg):
@@ -102,50 +183,7 @@ class TelemetryFedAvg(FedAvg):
         self.num_clients = exp_config.get("num_clients", 10)
         self.alg_name: str = config.get("algorithm", {}).get("name", "")
 
-        # Seeded generator for reproducibility
-        seed = config.get("seed", 42)
-        rng = np.random.default_rng(seed)
-
-        # Bandwidth and Compute are uniform
-        if "bandwidth_mbps" in exp_config:
-            bandwidth_mbps = float(exp_config["bandwidth_mbps"])
-        else:
-            bw_cfg = exp_config.get("heterogeneity", {}).get("bandwidth", {})
-            bandwidth_mbps = float(bw_cfg.get("min_mbps", 10.0))
-
-        if "compute_samples_per_sec" in exp_config:
-            compute_samples_per_sec = float(exp_config["compute_samples_per_sec"])
-        else:
-            comp_cfg = exp_config.get("heterogeneity", {}).get("compute", {})
-            compute_samples_per_sec = float(comp_cfg.get("min_samples_per_sec", 200.0))
-
-        self.client_upload_bw = np.full(self.num_clients, bandwidth_mbps)
-        self.client_download_bw = np.full(self.num_clients, bandwidth_mbps)
-        self.client_comp_speed = np.full(self.num_clients, compute_samples_per_sec)
-
-        # Memory: uniform fixed value (control group) or heterogeneous U(2048, 16384) MB (§4.1)
-        uniform_mb = None
-        for cfg_source in [exp_config, config]:
-            if isinstance(cfg_source, dict):
-                h_cfg = cfg_source.get("heterogeneity", {})
-                if isinstance(h_cfg, dict):
-                    uniform_mb = h_cfg.get("uniform_memory_mb", None)
-                    if uniform_mb is not None:
-                        break
-
-        if uniform_mb is not None:
-            self.client_memory = np.full(self.num_clients, float(uniform_mb))
-            memory_desc = f"fixed {uniform_mb} MB (control group)"
-        else:
-            self.client_memory = rng.uniform(2048.0, 16384.0, size=self.num_clients)
-            memory_desc = "U(2048, 16384) MB"
-
-        self.network_simulator = NetworkSimulator(
-            client_upload_bw=self.client_upload_bw,
-            client_download_bw=self.client_download_bw,
-            client_comp_speed=self.client_comp_speed,
-            num_clients=self.num_clients,
-        )
+        self.cost_model = PhysicalCostModel.from_config(config, self.num_clients)
 
         # Instantiate the per-algorithm strategy hook
         self.hook: StrategyHook = get_strategy_hook(self.alg_name, config)
@@ -157,9 +195,9 @@ class TelemetryFedAvg(FedAvg):
         logger.info(
             f"Initialized TelemetryFedAvg for {self.num_clients} clients. "
             f"Algorithm: {self.alg_name}. "
-            f"Bandwidth (uniform): {bandwidth_mbps} Mbps. "
-            f"Compute (uniform): {compute_samples_per_sec} samples/s. "
-            f"Memory: {memory_desc}. "
+            f"Bandwidth (uniform): {self.cost_model.bandwidth_mbps} Mbps. "
+            f"Compute (uniform): {self.cost_model.compute_samples_per_sec} samples/s. "
+            f"Memory: {self.cost_model.memory_desc}. "
             f"Hook: {type(self.hook).__name__}"
         )
 

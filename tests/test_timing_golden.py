@@ -2,13 +2,13 @@
 
 Simulated runtime and communication overhead are logged thesis metrics
 (``evaluation-metrics.md``). Phase 3 of the refactor relocated the algorithm-specific
-magic numbers baked into ``NetworkSimulator`` (FedKD compute penalty ``2.5``; FedMD
+magic numbers baked into ``PhysicalCostModel`` (FedKD compute penalty ``2.5``; FedMD
 round-1 pretraining ``10`` epochs; server-side KD speed ``2000.0``) behind
 ``StrategyHook`` methods / config keys.
 
 These tests pin the exact numeric behavior of the *composed* algorithm -> number
 facts: they drive ``train_sample_count`` / ``compute_scale`` through the real hook
-methods into ``NetworkSimulator`` and assert the same delays the pre-refactor
+methods into ``PhysicalCostModel`` and assert the same delays the pre-refactor
 ``simulate_client_delay(..., alg_name=...)`` produced. If any golden number shifts,
 that is the drift these tests exist to catch -- do not edit the expected values.
 """
@@ -16,7 +16,7 @@ that is the drift these tests exist to catch -- do not edit the expected values.
 import numpy as np
 
 from fedmaq.core.kd_utils import kd_server_sim_time
-from fedmaq.core.strategy import NetworkSimulator
+from fedmaq.core.strategy import PhysicalCostModel
 from fedmaq.core.strategy_hooks import (
     CFDHook,
     FedKDHook,
@@ -30,12 +30,12 @@ DOWNLOAD_BW = np.array([20.0])  # Mbps -> 2.5 MB/s
 COMP_SPEED = np.array([100.0])  # samples/sec
 
 
-def _sim() -> NetworkSimulator:
-    return NetworkSimulator(UPLOAD_BW, DOWNLOAD_BW, COMP_SPEED, num_clients=1)
+def _sim() -> PhysicalCostModel:
+    return PhysicalCostModel(UPLOAD_BW, DOWNLOAD_BW, COMP_SPEED, num_clients=1)
 
 
 def _delay(hook, num_samples, epochs, num_public, public_epochs, server_round):
-    """Drive a hook's time-model contributions through NetworkSimulator."""
+    """Drive a hook's time-model contributions through PhysicalCostModel."""
     train_sample_count = hook.local_train_sample_count(
         num_samples=num_samples,
         epochs=epochs,
@@ -43,7 +43,7 @@ def _delay(hook, num_samples, epochs, num_public, public_epochs, server_round):
         public_epochs=public_epochs,
         server_round=server_round,
     )
-    return _sim().simulate_client_delay(
+    return _sim().client_round_delay(
         cid=0,
         model_size_bytes=1_000_000,
         bytes_uploaded=500_000,

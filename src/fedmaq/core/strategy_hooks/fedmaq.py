@@ -68,7 +68,7 @@ class FedMAQHook(StrategyHook):
             client_pids,
             client_cids,
             strategy.client_indices_dict,
-            strategy.client_memory,
+            strategy.cost_model.client_memory,
             ctx,
             ctx.alg_cfg,
         )

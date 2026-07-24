@@ -238,7 +238,7 @@ class TelemetryManager:
                 server_round=server_round,
             )
 
-            t_download, t_train, t_upload = strategy.network_simulator.simulate_client_delay(
+            t_download, t_train, t_upload = strategy.cost_model.client_round_delay(
                 cid=cid,
                 model_size_bytes=model_size_bytes,
                 bytes_uploaded=bytes_uploaded,

@@ -997,7 +997,9 @@ def test_fedmaq_strategy_allocation():
     strategy.public_indices = public_indices
 
     # Patch client memory for controlled testing
-    strategy.client_memory = np.array([2048.0, 16384.0])  # Client 0: Q_max=1, Client 1: Q_max=8
+    strategy.cost_model.client_memory = np.array(
+        [2048.0, 16384.0]
+    )  # Client 0: Q_max=1, Client 1: Q_max=8
 
     # We patch get_client_loader in partitioning module since it is imported inside configure_fit
     original_loader = fedmaq.core.partitioning.get_client_loader
@@ -1401,18 +1403,18 @@ def test_compute_dadaquant_client_q_clamps_to_range():
 
 
 def test_network_simulator():
-    """Test NetworkSimulator delay calculation."""
+    """Test PhysicalCostModel delay calculation."""
     import numpy as np
 
-    from fedmaq.core.strategy import NetworkSimulator
+    from fedmaq.core.strategy import PhysicalCostModel
 
     upload_bw = np.array([10.0])  # 10 Mbps
     download_bw = np.array([20.0])  # 20 Mbps
     comp_speed = np.array([100.0])  # 100 samples/sec
 
-    sim = NetworkSimulator(upload_bw, download_bw, comp_speed, num_clients=1)
+    sim = PhysicalCostModel(upload_bw, download_bw, comp_speed, num_clients=1)
 
-    t_download, t_train, t_upload = sim.simulate_client_delay(
+    t_download, t_train, t_upload = sim.client_round_delay(
         cid=0,
         model_size_bytes=1000000,  # 1 MB
         bytes_uploaded=500000,  # 0.5 MB

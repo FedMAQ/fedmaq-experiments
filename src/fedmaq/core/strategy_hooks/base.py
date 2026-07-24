@@ -124,7 +124,7 @@ class StrategyHook(ABC):
 
     # ------------------------------------------------------------------ #
     # Simulated time / communication model contributions.                #
-    # These keep NetworkSimulator and the telemetry path free of         #
+    # These keep PhysicalCostModel and the telemetry path free of        #
     # ``if alg_name == ...`` dispatch; each hook supplies its own model.  #
     # ------------------------------------------------------------------ #
 
