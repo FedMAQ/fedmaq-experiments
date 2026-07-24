@@ -57,13 +57,12 @@ from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
     BATCH_SIZE,
-    DATASET_NAME,
-    NUM_CLASSES,
     require_num_public_samples,
+    resolve_run_context,
     resolve_server_compute_speed,
 )
 from fedmaq.core.kd_utils import kd_server_sim_time
-from fedmaq.core.models import DEVICE, get_client_model, get_model_parameters
+from fedmaq.core.models import get_client_model, get_model_parameters
 from fedmaq.core.partitioning import get_server_loaders
 from fedmaq.core.softlabel_codec import (
     codes_to_bytes,
@@ -90,9 +89,9 @@ class CFDHook(StrategyHook):
 
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
-        dataset_cfg = config.get("dataset", {})
-        self.dataset_name = dataset_cfg.get("name", DATASET_NAME)
-        self.num_classes = int(dataset_cfg.get("num_classes", NUM_CLASSES))
+        ctx = resolve_run_context(config)
+        self.dataset_name = ctx.dataset_name
+        self.num_classes = ctx.num_classes
 
         alg_cfg = config.get("algorithm", {})
         self.b_up = int(alg_cfg.get("b_up", 1))
@@ -102,7 +101,7 @@ class CFDHook(StrategyHook):
         self.temperature = float(alg_cfg.get("temperature", 1.0))
         self.delta_coding = bool(alg_cfg.get("delta_coding", True))
 
-        self.device = torch.device(config.get("device") or DEVICE)
+        self.device = ctx.device
         self.server_model = get_client_model("cfd", self.dataset_name, self.num_classes)
         self.server_model.to(self.device)
 
