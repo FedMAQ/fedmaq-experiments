@@ -24,6 +24,24 @@ from fedmaq.core.partitioning import get_server_loaders
 logger = logging.getLogger(__name__)
 
 
+def kd_distill_step(
+    student_model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    kl_criterion: nn.Module,
+    images: torch.Tensor,
+    teacher_soft_preds: torch.Tensor,
+    temperature: float,
+) -> float:
+    """One SGD step distilling ``teacher_soft_preds`` into ``student_model`` via KL divergence."""
+    optimizer.zero_grad()
+    student_logits = student_model(images)
+    student_log_soft = F.log_softmax(student_logits / temperature, dim=1)
+    loss = kl_criterion(student_log_soft, teacher_soft_preds) * (temperature**2)
+    loss.backward()
+    optimizer.step()
+    return loss.item()
+
+
 def run_server_side_kd(
     student_model: nn.Module,
     teachers: list[nn.Module],
@@ -87,15 +105,9 @@ def run_server_side_kd(
                 else:
                     teacher_soft_preds = torch.stack(teacher_soft_preds_list).mean(dim=0)
 
-            optimizer.zero_grad()
-            student_logits = student_model(images)
-            student_log_soft = F.log_softmax(student_logits / temperature, dim=1)
-
-            # Distillation loss
-            loss = kl_criterion(student_log_soft, teacher_soft_preds) * (temperature**2)
-            loss.backward()
-            optimizer.step()
-            loss_sum += loss.item()
+            loss_sum += kd_distill_step(
+                student_model, optimizer, kl_criterion, images, teacher_soft_preds, temperature
+            )
             batches += 1
 
     return loss_sum / batches if batches > 0 else 0.0

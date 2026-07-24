@@ -283,28 +283,23 @@ class TelemetryFedAvg(FedAvg):
             acc = float(metrics.get("accuracy", 0.0))
 
             tm = self.telemetry_manager
-            round_bytes = tm.last_round_bytes if server_round > 0 else 0
-            round_time = tm.last_round_time if server_round > 0 else 0.0
-            client_time = tm.last_client_time if server_round > 0 else 0.0
-            server_time = tm.last_server_time if server_round > 0 else 0.0
-            wall_time = tm.last_wall_time if server_round > 0 else 0.0
+            snapshot = tm.snapshot_for_round(server_round)
 
             log_metrics: dict[str, Any] = {
                 "round": server_round,
                 "test/loss": loss,
                 "test/accuracy": acc,
-                "communication/round_bytes": round_bytes,
-                "system/round_time_sec": round_time,
-                "system/client_sim_time_sec": client_time,
-                "system/server_sim_time_sec": server_time,
-                "system/wall_time_sec": wall_time,
+                "communication/round_bytes": snapshot.round_bytes,
+                "system/round_time_sec": snapshot.round_time,
+                "system/client_sim_time_sec": snapshot.client_time,
+                "system/server_sim_time_sec": snapshot.server_time,
+                "system/wall_time_sec": snapshot.wall_time,
             }
 
             # Per-client communication breakdown (min/mean/max/std) — shows the
             # adaptive-quantization mechanism (DAdaQuant/FedMAQ) at work, not just
-            # the aggregate total.
-            if server_round > 0:
-                log_metrics.update(tm.last_client_bytes_stats)
+            # the aggregate total. Empty at round 0, so this is a no-op then.
+            log_metrics.update(snapshot.client_bytes_stats)
 
             # Merge other metrics returned by evaluate_fn (e.g. precision, recall, f1)
             for k, v in metrics.items():
@@ -312,8 +307,8 @@ class TelemetryFedAvg(FedAvg):
                     log_metrics[f"test/{k}"] = float(v)
 
             # Merge client-side aggregated metrics
-            if tm.last_round_client_metrics:
-                log_metrics.update(tm.last_round_client_metrics)
+            if snapshot.round_client_metrics:
+                log_metrics.update(snapshot.round_client_metrics)
 
             # Merge algorithm-specific hook metrics (e.g. DAdaQuant q_t)
             log_metrics.update(self.hook.get_eval_metrics(self, server_round))

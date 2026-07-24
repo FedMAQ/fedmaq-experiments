@@ -6,8 +6,9 @@ import logging
 import os
 import time
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from flwr.common import FitRes, Parameters, parameters_to_ndarrays
@@ -68,6 +69,23 @@ _COMMON_CSV_FIELDNAMES: list[str] = [
 ]
 
 
+@dataclass(frozen=True)
+class RoundSnapshot:
+    """Simulated delay/byte-accounting for one fit round, read back by ``evaluate()``.
+
+    Round-0 zeroing is decided once by :meth:`TelemetryManager.snapshot_for_round`
+    rather than repeated per-field at each call site.
+    """
+
+    round_bytes: int = 0
+    round_time: float = 0.0
+    client_time: float = 0.0
+    server_time: float = 0.0
+    wall_time: float = 0.0
+    client_bytes_stats: dict[str, float] = field(default_factory=dict)
+    round_client_metrics: dict[str, float] = field(default_factory=dict)
+
+
 class TelemetryManager:
     """Manages telemetry logging to WandB, local files, and console."""
 
@@ -86,15 +104,10 @@ class TelemetryManager:
         self.cumulative_server_time: float = 0.0
         self.cumulative_wall_time: float = 0.0
 
-        # Per-round fit snapshots, read back by the strategy's evaluate(). See
-        # ``record_fit_round`` (called from ``aggregate_fit``).
-        self.last_round_bytes = 0
-        self.last_round_time = 0.0
-        self.last_client_time = 0.0
-        self.last_server_time = 0.0
-        self.last_wall_time = 0.0
-        self.last_client_bytes_stats: dict[str, float] = {}
-        self.last_round_client_metrics: dict[str, float] = {}
+        # Per-round fit snapshot, read back by the strategy's evaluate(). See
+        # ``record_fit_round`` (called from ``aggregate_fit``) and
+        # ``snapshot_for_round``.
+        self._last_snapshot = RoundSnapshot()
 
         # Real (not simulated) wall-clock timer, measured across aggregate_fit calls.
         self._last_wall_ts = time.perf_counter()
@@ -166,17 +179,18 @@ class TelemetryManager:
     ) -> tuple[float, int]:
         """Compute this round's simulated delays, byte counts, and client-metric
         aggregates from the raw fit results, and snapshot them for the strategy's
-        ``evaluate()`` to read back via ``last_round_*``.
+        ``evaluate()`` to read back via :meth:`snapshot_for_round`.
 
         Returns ``(round_time, round_total_bytes)`` for the caller's ``metrics``
-        dict. When ``results`` is empty, only ``last_round_client_metrics`` is
-        reset and ``(0.0, 0)`` is returned — the caller should not set
-        ``round_time``/``round_bytes`` on ``metrics`` in that case (matching the
-        pre-refactor behavior of skipping those keys entirely).
+        dict. When ``results`` is empty, only the snapshot's
+        ``round_client_metrics`` is reset and ``(0.0, 0)`` is returned — the
+        caller should not set ``round_time``/``round_bytes`` on ``metrics`` in
+        that case (matching the pre-refactor behavior of skipping those keys
+        entirely).
         """
         # Aggregate client-side training metrics (weighted mean, simple mean for
         # epochs_trained), reported by the client hooks in fit() metrics.
-        self.last_round_client_metrics = {}
+        round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
         if total_examples > 0:
             numeric_keys = set()
@@ -191,17 +205,18 @@ class TelemetryManager:
             for k in numeric_keys:
                 if k == "epochs_trained":
                     simple_sum = sum(float(fit_res.metrics.get(k, 0.0)) for _, fit_res in results)
-                    self.last_round_client_metrics[f"client/avg_{k}"] = simple_sum / len(results)
+                    round_client_metrics[f"client/avg_{k}"] = simple_sum / len(results)
                 else:
                     weighted_sum = sum(
                         float(fit_res.metrics.get(k, 0.0)) * fit_res.num_examples
                         for _, fit_res in results
                     )
-                    self.last_round_client_metrics[f"client/avg_{k}"] = (
-                        weighted_sum / total_examples
-                    )
+                    round_client_metrics[f"client/avg_{k}"] = weighted_sum / total_examples
 
         if not results:
+            self._last_snapshot = replace(
+                self._last_snapshot, round_client_metrics=round_client_metrics
+            )
             return 0.0, 0
 
         # Model download size in bytes (hook may compress it, e.g. FedKD's SVD path).
@@ -260,28 +275,43 @@ class TelemetryManager:
         round_time = client_sim_time + server_sim_time
         round_total_bytes = round_bytes_downloaded + round_bytes_uploaded
 
-        self.last_round_bytes = round_total_bytes
-        self.last_round_time = round_time
-        self.last_client_time = client_sim_time
-        self.last_server_time = server_sim_time
-
         if client_bytes_uploaded:
             arr = np.array(client_bytes_uploaded, dtype=np.float64)
-            self.last_client_bytes_stats = {
+            client_bytes_stats = {
                 "communication/client_bytes_uploaded_mean": float(arr.mean()),
                 "communication/client_bytes_uploaded_min": float(arr.min()),
                 "communication/client_bytes_uploaded_max": float(arr.max()),
                 "communication/client_bytes_uploaded_std": float(arr.std()),
             }
         else:
-            self.last_client_bytes_stats = {}
+            client_bytes_stats = {}
 
         # Real wall-clock elapsed since the previous round's aggregate_fit call.
         now = time.perf_counter()
-        self.last_wall_time = now - self._last_wall_ts
+        wall_time = now - self._last_wall_ts
         self._last_wall_ts = now
 
+        self._last_snapshot = RoundSnapshot(
+            round_bytes=round_total_bytes,
+            round_time=round_time,
+            client_time=client_sim_time,
+            server_time=server_sim_time,
+            wall_time=wall_time,
+            client_bytes_stats=client_bytes_stats,
+            round_client_metrics=round_client_metrics,
+        )
+
         return round_time, round_total_bytes
+
+    def snapshot_for_round(self, server_round: int) -> RoundSnapshot:
+        """Round-0 zeroing, decided once here rather than per-field at each call site.
+
+        ``round_client_metrics`` is carried through unguarded for round 0 (matching
+        pre-refactor behavior, where that field was never gated by ``server_round``).
+        """
+        if server_round > 0:
+            return self._last_snapshot
+        return RoundSnapshot(round_client_metrics=self._last_snapshot.round_client_metrics)
 
     def log(
         self,
