@@ -104,25 +104,26 @@ def test_fedmaq_hook_refinement_states():
     }
 
     hook = FedMAQHook(cfg)
-    assert hook._round_client_q == {}
+    assert hook._current_plan.client_q == {}
     assert hook._ema_params is None
-    assert hook._grad_norm_ema == {}
+    assert hook._planner._grad_norm_ema == {}
 
-    # Grad-norm EMA smoothing lives in FedMAQHook._smooth_grad_norms; exercise the
-    # real helper (not a reimplementation) so this guards the Phase 5 extraction.
+    # Grad-norm EMA smoothing lives in QuantizationPlanner._smooth_grad_norms;
+    # exercise the real helper (not a reimplementation) so this guards the
+    # Candidate A extraction (Phase 5's original guard, now on the planner).
     alg_cfg = cfg["algorithm"]
     pids = [1, 2]
 
     # First round - no EMA history, should store raw norms
-    smoothed_norms = hook._smooth_grad_norms(pids, [2.0, 4.0], alg_cfg)
+    smoothed_norms = hook._planner._smooth_grad_norms(pids, [2.0, 4.0], alg_cfg)
     assert smoothed_norms == [2.0, 4.0]
-    assert hook._grad_norm_ema == {1: 2.0, 2: 4.0}
+    assert hook._planner._grad_norm_ema == {1: 2.0, 2: 4.0}
 
     # Second round - should smooth with EMA (beta=0.5):
     # pid 1: 0.5 * 2.0 + 0.5 * 3.0 = 2.5 ; pid 2: 0.5 * 4.0 + 0.5 * 2.0 = 3.0
-    smoothed_norms_2 = hook._smooth_grad_norms(pids, [3.0, 2.0], alg_cfg)
+    smoothed_norms_2 = hook._planner._smooth_grad_norms(pids, [3.0, 2.0], alg_cfg)
     assert smoothed_norms_2 == [2.5, 3.0]
-    assert hook._grad_norm_ema == {1: 2.5, 2: 3.0}
+    assert hook._planner._grad_norm_ema == {1: 2.5, 2: 3.0}
 
     # Test Student EMA tracking
     model = SimpleCNN(in_channels=1, num_classes=10)

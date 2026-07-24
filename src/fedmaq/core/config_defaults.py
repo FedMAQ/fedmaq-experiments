@@ -20,6 +20,13 @@ silent ``200`` fallback corrupts the public-proxy pool size (F12). Resolve it
 via :func:`require_num_public_samples`, which fails loud on a missing key.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+
 # Server-side KD delay model (§3.3): simulated samples/sec. Matches the value in
 # every conf/algorithm/*.yaml that defines it, so this fallback is safe.
 SERVER_COMPUTE_SPEED: float = 2000.0
@@ -72,3 +79,39 @@ def require_num_public_samples(config) -> int:
             "resolved config before constructing KD hooks."
         )
     return int(experiment["num_public_samples"])
+
+
+@dataclass(frozen=True)
+class RunContext:
+    """The dataset/device/batch knobs every KD-ish hook re-derives from ``config``.
+
+    Collapses the ``dataset_name``/``num_classes``/``batch_size``/``device``/
+    ``alg_cfg`` quintuple that ``fedmaq.py``, ``fedavg_kd.py``, and ``cfd.py`` each
+    independently pulled out of the resolved config, into one resolve call.
+    """
+
+    dataset_name: str
+    num_classes: int
+    batch_size: int
+    device: torch.device
+    alg_cfg: dict[str, Any]
+
+
+def resolve_run_context(config: dict[str, Any]) -> RunContext:
+    """Resolve a :class:`RunContext` from a hook's stored ``config`` dict.
+
+    Mirrors the fallback rules each hook applied inline: dataset/batch-size
+    fallbacks from this module, device from ``config["device"]`` else
+    :data:`fedmaq.core.models.DEVICE`.
+    """
+    from fedmaq.core.models import DEVICE
+
+    dataset_cfg = config.get("dataset", {})
+    experiment_cfg = config.get("experiment", {})
+    return RunContext(
+        dataset_name=dataset_cfg.get("name", DATASET_NAME),
+        num_classes=int(dataset_cfg.get("num_classes", NUM_CLASSES)),
+        batch_size=int(experiment_cfg.get("batch_size", BATCH_SIZE)),
+        device=torch.device(config.get("device") or DEVICE),
+        alg_cfg=config.get("algorithm", {}),
+    )

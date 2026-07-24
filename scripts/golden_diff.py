@@ -10,9 +10,17 @@ Usage:
     uv run python scripts/golden_diff.py compare   # run AFTER each migration step
 
 The golden set covers one config per ``standard.py`` branch (S2a) plus ``fedkd``,
-``feddistill``, ``cfd``, and ``fedmd`` (S2b). See ADR-0003: a plain-FedAvg-only
-diff would never exercise FedProx's post-backward instrumentation or the
-KD/DAdaQuant/FedMAQ loss-hook paths.
+``feddistill``, and ``cfd`` (S2b). See ADR-0003: a plain-FedAvg-only diff would
+never exercise FedProx's post-backward instrumentation or the KD/DAdaQuant/FedMAQ
+loss-hook paths.
+
+``fedmd`` is deliberately excluded from this default set (Decision 45): it was
+already dropped from the formal baseline stack (Decision 25) and its disk-persisted
+multi-phase training (pub/priv pretrain + digest + revisit, up to 4x ``run_epochs``
+per round) makes it by far the slowest config here (~9 min for 2 rounds on this
+machine) for a baseline unlikely to reappear in future experiments. Its hook code
+is untouched by candidate work to date; re-add it to ``GOLDEN_SET`` only for a
+refactor that actually touches ``fedmd.py``/``kd_utils.py``'s FedMD path.
 """
 
 import csv
@@ -38,7 +46,7 @@ GOLDEN_SET: list[str] = [
     "fedkd",  # joint student+teacher loop, compress_and_reconstruct only
     "feddistill",  # run_epochs x1 + LogitTracker side-channel, no compression
     "cfd",  # run_epochs x2 (distill phase + CE phase), no compress/reconstruct tail
-    "fedmd",  # run_epochs x up to 4 (pub/priv pretrain, digest, revisit), disk-persisted
+    # "fedmd" intentionally excluded — see Decision 45 in the module docstring.
 ]
 
 # Real-wall-clock columns excluded from the bit-exact comparison (Decision 40).

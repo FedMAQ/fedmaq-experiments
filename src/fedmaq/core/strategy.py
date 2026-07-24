@@ -14,12 +14,12 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
+from fedmaq.core.quantization_planner import (
+    compute_fedmaq_q_k_t,  # noqa: F401 — re-exported for backward compatibility
+)
 from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     compute_dadaquant_client_q,  # noqa: F401 — re-exported for backward compatibility
-)
-from fedmaq.core.strategy_hooks.fedmaq import (
-    compute_fedmaq_q_k_t,  # noqa: F401 — re-exported for backward compatibility
 )
 from fedmaq.core.telemetry import TelemetryManager
 

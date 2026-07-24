@@ -11,6 +11,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.quantization_planner import inject_client_q
 from fedmaq.core.strategy_hooks._partition import (
     partition_dataset_size,
     resolve_partition_id,
@@ -143,16 +144,17 @@ class DAdaQuantHook(StrategyHook):
             ]
 
         q_i_list = compute_dadaquant_client_q(sizes, self.q_t, q_min=q_min, q_max=q_max)
-        updated_instructions: list[tuple[ClientProxy, FitIns]] = []
-        for (client, fit_ins), q_i in zip(client_instructions, q_i_list, strict=True):
-            new_fit_ins = FitIns(fit_ins.parameters, dict(fit_ins.config))
-            new_fit_ins.config["q"] = q_i
-            updated_instructions.append((client, new_fit_ins))
+        client_q = {
+            client.cid: q_i
+            for (client, _), q_i in zip(client_instructions, q_i_list, strict=True)
+        }
+        for client, _ in client_instructions:
             logger.info(
-                f"Client {client.cid} assigned quantization level: {q_i} (base q_t: {self.q_t})"
+                f"Client {client.cid} assigned quantization level: "
+                f"{client_q[client.cid]} (base q_t: {self.q_t})"
             )
 
-        return updated_instructions
+        return inject_client_q(client_instructions, client_q)
 
     def aggregate_fit(
         self,

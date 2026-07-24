@@ -1296,8 +1296,8 @@ def test_compute_fedmaq_q_k_t():
 def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
     """Manuscript §4.2's Q = {1,...,8,16,32} must always be respected, including
     when the soft-target range or memory cap would otherwise land off-set."""
+    from fedmaq.core.quantization_planner import DEFAULT_BIT_WIDTHS
     from fedmaq.core.strategy import compute_fedmaq_q_k_t
-    from fedmaq.core.strategy_hooks.fedmaq import DEFAULT_BIT_WIDTHS
 
     # Soft target interpolates within [q_min, q_max] = [1, 20]; formulation 0 forces
     # q_hat = q_max = 20, which is not in Q and must floor to the largest member <= 20 (16).
