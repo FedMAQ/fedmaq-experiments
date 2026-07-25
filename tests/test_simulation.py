@@ -6,11 +6,14 @@ into a valid config, and that the decorator-free :func:`fedmaq.simulation.run` e
 point drives the real ``client_fn``/``server_fn`` wiring end-to-end.
 """
 
+import json
 from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
 from hydra import compose, initialize_config_dir
+from omegaconf import OmegaConf
 from torch.utils.data import TensorDataset
 
 CONF_DIR = str((Path(__file__).parent.parent / "conf").resolve())
@@ -45,6 +48,118 @@ def mock_dataset(monkeypatch):
     mock_ds.targets = mock_labels
     monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
     return mock_ds
+
+
+# Manuscript §4.3.7 defines the ablation as a leave-one-out design: each arm is
+# full FedMAQ with exactly one thing removed. That property is what makes an
+# arm's delta against Configuration 7 attributable to the component it drops.
+# It lives entirely in YAML, so nothing else in the suite can catch a config edit
+# that quietly reintroduces a second difference — which is the defect that made
+# the pre-2026-07-25 arms unattributable. Each entry below is the complete set of
+# keys an arm may differ from ``fedmaq.yaml`` in.
+ABLATION_ARM_DIFFS = {
+    # Configuration 2: Tier-1 memory ceiling lifted.
+    "fedmaq_no_resource": {"resource_aware"},
+    # Configuration 3: Formulation 3's data modulator removed at kappa = 0.
+    # One key, because the arm stays on the winner's formulation.
+    "fedmaq_no_data": {"lambda_val"},
+    # Configuration 4: the pre-registered fallback arm. Formulation 3 carries no
+    # weight on the gradient term and cannot express state-awareness removal, so
+    # this arm alone changes formulation, and is anchored to the formulation
+    # study's own Formulation 1 runs rather than to Configuration 7.
+    "fedmaq_no_state": {"formulation", "gamma1", "gamma2"},
+    # Configuration 5: KD removed. soft_voting goes with it as INAPPLICABLE
+    # (it weights teacher logits, and this arm distills nothing).
+    "fedmaq_no_kd": {"kd_epochs", "soft_voting"},
+    # Configuration 8: the frozen refinement layer removed.
+    "fedmaq_no_refinements": {"soft_voting", "ema_student", "grad_norm_ema"},
+}
+
+
+def _algorithm_cfg(algorithm):
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(config_name="config", overrides=[f"algorithm={algorithm}"])
+    return OmegaConf.to_container(cfg.algorithm, resolve=True)
+
+
+@pytest.mark.parametrize("arm,expected_diff", sorted(ABLATION_ARM_DIFFS.items()))
+def test_ablation_arm_is_one_removal_from_full_fedmaq(arm, expected_diff):
+    """Each §4.3.7 arm must differ from full FedMAQ in exactly its declared keys.
+
+    Both directions matter. An *extra* difference makes the arm's delta
+    unattributable; a *missing* one means the arm no longer removes what it
+    claims to and is silently a duplicate of Configuration 7.
+    """
+    full = _algorithm_cfg("fedmaq")
+    arm_cfg = _algorithm_cfg(arm)
+
+    assert arm_cfg.keys() == full.keys(), (
+        f"{arm} has a different key set than fedmaq.yaml; parity is only "
+        f"checkable when both carry every knob explicitly. "
+        f"Only in arm: {arm_cfg.keys() - full.keys()}. "
+        f"Missing from arm: {full.keys() - arm_cfg.keys()}"
+    )
+
+    actual_diff = {k for k in full if full[k] != arm_cfg[k]}
+    assert actual_diff == expected_diff, (
+        f"{arm} is not one removal from full FedMAQ.\n"
+        f"  unexpected differences: {actual_diff - expected_diff}\n"
+        f"  declared but absent:    {expected_diff - actual_diff}\n"
+        f"If a new difference is intentional, it must be justified in "
+        f"chapter_4.tex §4.3.7 first, then declared in ABLATION_ARM_DIFFS."
+    )
+
+
+def test_ablation_arms_share_one_refinement_layer():
+    """§4.3.7 requires an identical refinement layer across every arm.
+
+    The exceptions are recorded rather than silently disabled, so this asserts
+    the exception list itself: only the two mechanisms that have no signal to act
+    on may deviate, and only in the arms that remove that signal.
+    """
+    refinements = ("soft_voting", "ema_student", "grad_norm_ema")
+    full = _algorithm_cfg("fedmaq")
+    # Arms that remove an awareness signal must carry the layer untouched.
+    for arm in ("fedmaq_no_resource", "fedmaq_no_data", "fedmaq_no_state"):
+        arm_cfg = _algorithm_cfg(arm)
+        for flag in refinements:
+            assert arm_cfg[flag] == full[flag], (
+                f"{arm} deviates from the shared refinement layer on {flag}; "
+                f"§4.3.7 requires the difference between arms to be the "
+                f"awareness signal alone."
+            )
+
+    # ema_student is quantization-independent, so the no-quantization arm carries
+    # it too. The other two act on a quantization signal it never produces.
+    fedavg_kd = _algorithm_cfg("fedavg_kd")
+    assert fedavg_kd["ema_student"] is True
+    assert fedavg_kd["soft_voting"] is False
+    assert fedavg_kd["grad_norm_ema"] is False
+
+
+def test_run_manifest_hashes_the_resolved_config(tmp_path):
+    """§4.3.1: config content is hashed into the run manifest for verification.
+
+    The hash must key on what a run *executed*, so an override that changes the
+    algorithm must change the digest, while a cosmetic re-ordering must not.
+    """
+    from fedmaq.core.manifest import MANIFEST_FILENAME, config_sha256, write_run_manifest
+
+    base = _algorithm_cfg("fedmaq")
+    reordered = dict(reversed(list(base.items())))
+    assert config_sha256(base) == config_sha256(reordered), (
+        "digest must be order-independent, or the same configuration reached by "
+        "different override spellings would look like two configurations"
+    )
+    assert config_sha256(base) != config_sha256(_algorithm_cfg("fedmaq_no_data"))
+
+    path = write_run_manifest({"algorithm": base, "seed": 42}, tmp_path)
+    assert path == tmp_path / MANIFEST_FILENAME
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    assert manifest["run"]["seed"] == 42
+    assert len(manifest["config_sha256"]) == 64
+    # Provenance fields §4.3.1's freeze depends on being able to check.
+    assert "commit" in manifest["git"] and "dirty" in manifest["git"]
 
 
 @pytest.mark.parametrize("algorithm", ALGORITHM_CONFIGS)

@@ -1,0 +1,50 @@
+# Exploration-phase PRE-FREEZE CONFIRMATION, manuscript §4.3.1.
+#
+# Stage 3 of 3, and the last thing that runs before the freeze. §4.3.1: "Exploration
+# ends by pre-registering a frozen configuration, preceded by a final confirmation
+# of the surviving mechanism set against the unrefined configuration at three seeds
+# and the full R = 100 round budget, so that no mechanism enters the freeze having
+# been judged only on a truncated horizon."
+#
+# Stages 1 and 2 both run at R=50. This stage exists because a mechanism can help
+# early and stop helping (or start hurting) by round 100 — an EMA in particular
+# trades early stability for late-phase lag. Two arms only, at the full budget:
+# the surviving set against the unrefined reference.
+#
+# BEFORE RUNNING: replace the placeholder overrides in `fedmaq-surviving-set`
+# with the actual surviving set from
+# scripts/analysis_output/exploration_margin.json ("surviving_refinement_set").
+# The values below are the current fedmaq.yaml defaults and are NOT a prediction
+# of what will survive.
+#
+# AFTER RUNNING: if the surviving set still clears the margin at R=100, write
+# those values into conf/algorithm/fedmaq.yaml and every §4.3.7 ablation arm
+# (tests/test_simulation.py::test_ablation_arms_share_one_refinement_layer
+# enforces that they stay identical), then tag the commit. Chapter 6 §6.2
+# promises that tag as the recoverable frozen configuration.
+#
+# Not counted among the 177 confirmatory runs.
+phase: explore
+experiment_group: pass3_freeze_confirm
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.3
+
+runs:
+  - alg: fedmaq
+    label: fedmaq-unrefined
+    overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: fedmaq-surviving-set
+    overrides:
+      # PLACEHOLDER — set from exploration_margin.json before dispatch.
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=true
+      - algorithm.grad_norm_ema=true

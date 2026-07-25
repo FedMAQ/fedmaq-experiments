@@ -8,7 +8,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from analysis import RunRecord, accuracy_at_round, compare_to_baselines, select_winner
+from analysis import (
+    RunRecord,
+    accuracy_at_round,
+    compare_to_baselines,
+    exploration_noise_margin,
+    select_winner,
+)
 
 
 def _df(rounds, accs, mbs):
@@ -149,3 +155,88 @@ def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
     entry = result["cifar10_alpha_0.5"]
     assert entry["margin_mb"] == pytest.approx(20.0, abs=1e-6)
     assert entry["winner"] == 0
+
+
+def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3):
+    """One exploration-phase run at the held-out skew, with its refinement flags."""
+    job_dir = tmp_path / f"{label}_{seed}"
+    job_dir.mkdir()
+    csv_path = job_dir / "experiment_log.csv"
+    _df([1, 2, 50], [0.3, 0.5, final_acc], [10, 20, 30]).to_csv(csv_path, index=False)
+    return RunRecord(
+        job_dir=job_dir,
+        dataset="cifar10",
+        alpha=alpha,
+        algorithm="fedmaq",
+        formulation=3,
+        seed=seed,
+        csv_path=csv_path,
+        refinements=refinements,
+    )
+
+
+OFF = (False, False, False)
+SOFT_VOTING_ON = (True, False, False)
+EMA_ON = (False, True, False)
+
+
+def test_exploration_margin_is_scaled_above_sigma_not_equal_to_it(tmp_path):
+    """§4.3.1: the margin a delta must clear is sqrt(2)*sigma, not sigma.
+
+    The distinction is the whole point of the rule, so it is asserted against a
+    mechanism whose delta sits deliberately *between* sigma and the margin: it
+    would be retained under the wrong rule and must be dropped under the right
+    one.
+    """
+    # Unrefined cell: 0.70 / 0.72 / 0.74 -> sigma = 0.02, margin = 0.0283.
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74))
+    ]
+    # Mean 0.7450 -> delta 0.0250. Above sigma (0.02), below the margin (0.0283).
+    runs += [
+        _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
+        for s, acc in zip((0, 42, 123), (0.735, 0.745, 0.755))
+    ]
+    # Mean 0.7800 -> delta 0.0600, clears the margin.
+    runs += [
+        _explore_run(tmp_path, "ema", s, acc, EMA_ON)
+        for s, acc in zip((0, 42, 123), (0.77, 0.78, 0.79))
+    ]
+
+    result = exploration_noise_margin(runs)
+
+    assert result["sigma_unrefined"] == pytest.approx(0.02, abs=1e-9)
+    assert result["noise_margin"] == pytest.approx(0.02 * 2**0.5, abs=1e-9)
+    assert result["verdicts"]["soft_voting"]["retained"] is False
+    assert result["verdicts"]["ema_student"]["retained"] is True
+    assert result["surviving_refinement_set"] == ["ema_student"]
+    assert result["discarded"] == ["soft_voting"]
+
+
+def test_exploration_margin_flags_contamination_from_reported_skews(tmp_path):
+    """A run at a confirmatory skew must be reported, not averaged in.
+
+    This is the guard behind §4.3.1's held-out-skew claim. conf/matrix has been
+    wrong about this before: it ran exploration at alpha 0.1 and 1.0, exactly the
+    two skews the thesis reports on.
+    """
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74))
+    ]
+    runs.append(_explore_run(tmp_path, "leak", 0, 0.71, OFF, alpha=0.1))
+
+    result = exploration_noise_margin(runs)
+
+    assert result["other_skews_present"] == [0.1]
+    # The contaminating run must not move sigma.
+    assert result["sigma_unrefined"] == pytest.approx(0.02, abs=1e-9)
+
+
+def test_exploration_margin_refuses_to_guess_when_reference_is_underpowered(tmp_path):
+    """No sigma means no keep-or-drop call; §4.3.1 requires three seeds."""
+    runs = [_explore_run(tmp_path, "off", 0, 0.70, OFF)]
+    result = exploration_noise_margin(runs)
+    assert "error" in result
+    assert "sigma" not in result

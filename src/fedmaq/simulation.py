@@ -36,6 +36,7 @@ from fedmaq.core.partitioning import (
     get_server_loaders,
 )
 from fedmaq.core.client_manager import SeededPartitionClientManager
+from fedmaq.core.manifest import write_run_manifest
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
@@ -131,6 +132,12 @@ def run(cfg: DictConfig) -> TelemetryManager:
     # 2. Setup Telemetry
     telemetry = TelemetryManager(cfg_dict)
     telemetry.init_wandb()
+
+    # Provenance: hash the resolved config into a manifest beside the telemetry
+    # logs (manuscript §4.3.1). Written after the log dir is settled so both land
+    # together, and before any training work so a crashed run still leaves a
+    # record of what it was attempting.
+    write_run_manifest(cfg_dict, telemetry.log_dir)
 
     # 3. Define client app components
     def client_fn(context: fl.app.Context) -> fl.client.Client:

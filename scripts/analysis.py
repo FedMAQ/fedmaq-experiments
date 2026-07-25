@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,12 +46,30 @@ class RunRecord:
     formulation: int | None
     seed: int
     csv_path: Path
+    # Refinement-flag state, needed to identify the unrefined reference cell that
+    # defines the exploration noise margin (§4.3.1).
+    refinements: tuple[bool, bool, bool] = (False, False, False)
 
 
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
-    """Walk multirun/<date>/<time>/<job_idx>/ dirs and join each job's resolved config."""
+    """Join every run's telemetry CSV against its resolved Hydra config.
+
+    Two layouts must both be found. ``--multirun`` sweeps (the confirmatory grid)
+    land under ``multirun/<date>/<time>/<job_idx>/``; ``scripts/run_matrix.py``
+    (the exploration phase, §4.3.1) sets ``hydra.run.dir`` explicitly and lands
+    under ``outputs/<phase>/.../seed_N/`` at an unrelated depth. Globbing only
+    the former silently hides every exploration run from
+    :func:`exploration_noise_margin`, which is the analysis that decides the
+    surviving refinement set.
+    """
     runs: list[RunRecord] = []
-    for config_path in sorted(experiments_root.glob("multirun/*/*/*/.hydra/config.yaml")):
+    config_paths = sorted(
+        {
+            *experiments_root.glob("multirun/*/*/*/.hydra/config.yaml"),
+            *experiments_root.glob("outputs/**/.hydra/config.yaml"),
+        }
+    )
+    for config_path in config_paths:
         job_dir = config_path.parent.parent
         csv_path = job_dir / "experiment_log.csv"
         if not csv_path.exists():
@@ -65,9 +84,101 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 formulation=cfg["algorithm"].get("formulation"),
                 seed=int(cfg["seed"]),
                 csv_path=csv_path,
+                refinements=(
+                    bool(cfg["algorithm"].get("soft_voting", False)),
+                    bool(cfg["algorithm"].get("ema_student", False)),
+                    bool(cfg["algorithm"].get("grad_norm_ema", False)),
+                ),
             )
         )
     return runs
+
+
+REFINEMENT_NAMES = ("soft_voting", "ema_student", "grad_norm_ema")
+EXPLORATION_ALPHA = 0.3
+
+
+def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_ALPHA) -> dict:
+    """Measure the exploration phase's noise margin and apply the keep-or-drop rule.
+
+    Implements chapter_4.tex §4.3.1 directly, which requires the margin to be
+    "measured rather than asserted":
+
+    1. Characterize the seed-to-seed standard deviation ``sigma`` of the
+       *unrefined* FedMAQ configuration (all three refinements off) at the
+       held-out exploration skew, across its three seeds.
+    2. Scale the margin above sigma, because a delta between two runs carries the
+       variance of both: sd(A - B) = sqrt(2) * sigma for independent runs of
+       equal variance. Comparing a delta against bare sigma would be the error
+       §4.3.1 explicitly guards against.
+    3. Retain a mechanism only when its delta *clears* that margin. A mechanism
+       that merely scores highest is not retained -- selecting the best of
+       several noisy measurements manufactures winners.
+
+    Only runs at ``alpha`` are considered. §4.3.1 holds exploration at a held-out
+    skew, so a confirmatory-skew run appearing here means the sweep config
+    drifted from the manuscript and the verdict would be contaminated; that case
+    is reported rather than silently averaged in.
+    """
+    candidates = [r for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) < 1e-9]
+    contaminated = sorted(
+        {r.alpha for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) >= 1e-9}
+    )
+
+    by_cell: dict[tuple[bool, bool, bool], list[float]] = {}
+    for r in candidates:
+        acc = accuracy_at_round(load_round_metrics(r.csv_path), 10**9)
+        by_cell.setdefault(r.refinements, []).append(acc)
+
+    unrefined = by_cell.get((False, False, False), [])
+    if len(unrefined) < 2:
+        return {
+            "alpha": alpha,
+            "error": (
+                "cannot measure sigma: the unrefined cell (all refinements off) has "
+                f"{len(unrefined)} seed(s); §4.3.1 requires three."
+            ),
+            "other_skews_present": contaminated,
+        }
+
+    sigma = statistics.stdev(unrefined)
+    margin = sigma * math.sqrt(2.0)
+    baseline_mean = statistics.fmean(unrefined)
+
+    verdicts = {}
+    for cell, accs in sorted(by_cell.items()):
+        if cell == (False, False, False):
+            continue
+        delta = statistics.fmean(accs) - baseline_mean
+        active = [n for n, on in zip(REFINEMENT_NAMES, cell) if on]
+        verdicts["+".join(active) or "none"] = {
+            "active": active,
+            "seeds": len(accs),
+            "mean_accuracy": statistics.fmean(accs),
+            "delta_vs_unrefined": delta,
+            "clears_margin": delta > margin,
+            "retained": delta > margin,
+        }
+
+    return {
+        "alpha": alpha,
+        "sigma_unrefined": sigma,
+        "noise_margin": margin,
+        "margin_rule": "sqrt(2) * sigma — a delta carries the variance of both runs",
+        "unrefined_mean_accuracy": baseline_mean,
+        "unrefined_seeds": len(unrefined),
+        "verdicts": verdicts,
+        "surviving_refinement_set": sorted(
+            {m for v in verdicts.values() if v["retained"] for m in v["active"]}
+        ),
+        # A mechanism retained in any cell is not "discarded" merely because some
+        # other cell containing it failed; the factorial can pair it with a loser.
+        "discarded": sorted(
+            {m for v in verdicts.values() if not v["retained"] for m in v["active"]}
+            - {m for v in verdicts.values() if v["retained"] for m in v["active"]}
+        ),
+        "other_skews_present": contaminated,
+    }
 
 
 def load_round_metrics(csv_path: Path) -> pd.DataFrame:
@@ -283,6 +394,11 @@ def main() -> None:
         type=Path,
         default=Path("scripts/analysis_output/baseline_comparison.json"),
     )
+    parser.add_argument(
+        "--exploration-output",
+        type=Path,
+        default=Path("scripts/analysis_output/exploration_margin.json"),
+    )
     args = parser.parse_args()
 
     runs = discover_runs(args.experiments_root)
@@ -298,6 +414,20 @@ def main() -> None:
     with open(args.baseline_output, "w", encoding="utf-8") as f:
         json.dump(baseline_result, f, indent=2)
     print(f"Wrote baseline-comparison report to {args.baseline_output}")
+
+    # Exploration-phase margin and keep-or-drop verdicts (§4.3.1). Chapter 5 §5.1
+    # reports sigma, the derived margin, and the surviving set from this file.
+    exploration = exploration_noise_margin(runs)
+    args.exploration_output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.exploration_output, "w", encoding="utf-8") as f:
+        json.dump(exploration, f, indent=2)
+    print(f"Wrote exploration noise-margin verdict to {args.exploration_output}")
+    if exploration.get("other_skews_present"):
+        print(
+            "  WARNING: FedMAQ runs found at non-exploration skews "
+            f"{exploration['other_skews_present']}. §4.3.1 holds exploration at "
+            f"alpha={EXPLORATION_ALPHA}; check conf/matrix/pass2_explore.yaml."
+        )
 
 
 if __name__ == "__main__":

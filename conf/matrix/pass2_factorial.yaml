@@ -1,0 +1,80 @@
+# Exploration-phase KEEP-OR-DROP factorial, manuscript §4.3.1.
+#
+# Stage 2 of 3. Screening (conf/matrix/pass2_explore.yaml) locates a promising
+# region at R=50 on one seed; this file makes the actual keep-or-drop calls,
+# which §4.3.1 requires be "decided at three seeds, under a fully crossed
+# factorial over the candidate refinements in which every mechanism appears in
+# both its active and inactive state".
+#
+# Fully crossed over the three disclosed mechanisms: 2^3 = 8 cells x 3 seeds =
+# 24 runs. Held at the same held-out alpha = 0.3 as every other exploration run.
+# These runs are NOT part of the 177-run confirmatory grid (§4.5).
+#
+# Each mechanism's own hyperparameters stay at the neutral point of its range
+# (ema_decay 0.7, grad_norm_beta 0.7, entropy/precision weight 1.0) so the
+# factorial isolates "does this help at all" from "how should it be tuned".
+# §4.3.1 records the resulting limitation: a mechanism inert at its neutral
+# setting but valuable when tuned is discarded before the grid sees it.
+#
+# The (false, false, false) cell is the unrefined reference. Its seed-to-seed
+# spread IS the sigma that scripts/analysis.py:exploration_noise_margin measures,
+# and every delta below is judged against sqrt(2)*sigma, not against sigma.
+phase: explore
+experiment_group: pass2_factorial
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 50
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.3
+
+runs:
+  - alg: fedmaq
+    label: sv0-ema0-gne0   # unrefined reference; defines sigma
+    overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: sv1-ema0-gne0
+    overrides:
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: sv0-ema1-gne0
+    overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=true
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: sv0-ema0-gne1
+    overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=true
+  - alg: fedmaq
+    label: sv1-ema1-gne0
+    overrides:
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=true
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: sv1-ema0-gne1
+    overrides:
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=true
+  - alg: fedmaq
+    label: sv0-ema1-gne1
+    overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=true
+      - algorithm.grad_norm_ema=true
+  - alg: fedmaq
+    label: sv1-ema1-gne1
+    overrides:
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=true
+      - algorithm.grad_norm_ema=true
