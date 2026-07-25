@@ -1,0 +1,69 @@
+# Formulation study, manuscript §4.3.6. The five candidate multi-adaptive
+# quantization formulations on CIFAR-10 at both skews, three seeds: 30 runs.
+#
+# WHY THIS IS A MATRIX AND NOT A RAW --multirun
+#
+# It used to be a hand-typed command in a conf/config.yaml comment, which put its
+# runs in a date-keyed multirun/ tree with no experiment_group. That is a problem
+# beyond tidiness: the Formulation 1 cell of this study is Ablation
+# Configuration 4's parity anchor under §4.3.7's pre-registered fallback rule, and
+# an anchor that analysis cannot address is not an anchor.
+#
+# Every run here is `algorithm=fedmaq` differing only by an override, so each
+# carries a `variant` — the canonical output path keys on the algorithm, not the
+# run label, and without the variant all five formulations would write into one
+# directory and only the last would survive.
+#
+# NO RUN HERE MAY SET algorithm.post_process=true. §4.3.6 withholds the pipeline
+# so the formulations are judged on their mathematical merit alone, and §4.3.7
+# depends on that: Configuration 4's anchor has to sit in the same pipeline-free
+# regime as the ablation arms it is compared beside. tests/test_simulation.py
+# enforces it.
+#
+# BEFORE DISPATCH: the exploration phase must have completed (§4.5). These runs
+# carry its surviving refinement layer, and Configuration 4's anchor only anchors
+# if it carries the same layer as the arm.
+phase: formal
+experiment_group: formulation_study
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  # Formulation 0: Resource-Only Hard Cap. No Tier-2 soft target.
+  - alg: fedmaq
+    label: formulation0-resource-only
+    variant: f0
+    overrides:
+      - algorithm.formulation=0
+  # Formulation 1: Normalized Linear Weighted Sum (omega1 = omega2 = 0.5).
+  # This cell is Ablation Configuration 4's parity anchor.
+  - alg: fedmaq
+    label: formulation1-linear-sum
+    variant: f1
+    overrides:
+      - algorithm.formulation=1
+  # Formulation 2: Normalized Multiplicative Scaling (omega1 = omega2 = 0.5).
+  - alg: fedmaq
+    label: formulation2-multiplicative
+    variant: f2
+    overrides:
+      - algorithm.formulation=2
+  # Formulation 3: Gradient-Primary, Data-Modulated (kappa = 1.0). The current
+  # implementation default, pending this study's verdict.
+  - alg: fedmaq
+    label: formulation3-gradient-primary
+    variant: f3
+    overrides:
+      - algorithm.formulation=3
+  # Formulation 4: Threshold-Based Staged Rule (tau_g = tau_n = 0.5).
+  - alg: fedmaq
+    label: formulation4-threshold
+    variant: f4
+    overrides:
+      - algorithm.formulation=4

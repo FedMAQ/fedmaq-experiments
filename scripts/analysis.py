@@ -58,6 +58,10 @@ class RunRecord:
     # the only field that separates Ablation Configuration 7 from FedMAQ's
     # primary-grid rows, since the two differ in nothing else the analysis reads.
     experiment_group: str | None = None
+    # ``explore`` or ``formal``. §4.3.1 separates the exploration phase from the
+    # confirmatory grid; this is what tells them apart without enumerating the
+    # exploration matrices by name.
+    phase: str | None = None
     # §4.3's post-processing pipeline. A per-matrix override, so it is a property
     # of the run and not of the algorithm config; the ablation table reports it as
     # a regime note.
@@ -93,21 +97,21 @@ def algorithm_config_name(job_dir: Path, fallback: str) -> str:
     return str(choice) if choice is not None else fallback
 
 
-def experiment_group_of(job_dir: Path, experiments_root: Path) -> str | None:
-    """The matrix group segment of a canonical output path, or ``None``.
+def phase_and_group_of(job_dir: Path, experiments_root: Path) -> tuple[str | None, str | None]:
+    """The phase and matrix-group segments of a canonical output path.
 
     ``scripts/common.get_canonical_output_dir`` lays runs out as
     ``outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<het>/seed_<n>``.
-    Raw ``--multirun`` jobs (the formulation study) carry no group and return
-    ``None``.
+    Runs from outside a matrix (a bare ``scripts/run.py`` invocation) carry
+    neither and return ``(None, None)``.
     """
     try:
         parts = job_dir.resolve().relative_to(experiments_root.resolve()).parts
     except ValueError:
-        return None
+        return None, None
     if len(parts) == 7 and parts[0] == "outputs":
-        return parts[3]
-    return None
+        return parts[1], parts[3]
+    return None, None
 
 
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
@@ -135,6 +139,7 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
             continue
         cfg = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
         algorithm = cfg["algorithm"]["name"]
+        phase, group = phase_and_group_of(job_dir, experiments_root)
         runs.append(
             RunRecord(
                 job_dir=job_dir,
@@ -150,7 +155,8 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                     bool(cfg["algorithm"].get("grad_norm_ema", False)),
                 ),
                 algorithm_config=algorithm_config_name(job_dir, algorithm),
-                experiment_group=experiment_group_of(job_dir, experiments_root),
+                experiment_group=group,
+                phase=phase,
                 post_process=bool(cfg["algorithm"].get("post_process", False)),
             )
         )
@@ -178,6 +184,9 @@ def confirmatory_runs(runs: list[RunRecord]) -> list[RunRecord]:
 
 REFINEMENT_NAMES = ("soft_voting", "ema_student", "grad_norm_ema")
 EXPLORATION_ALPHA = 0.3
+# The ``phase:`` every conf/matrix exploration file declares (pass2_explore,
+# pass2_factorial, pass3_freeze_confirm). Confirmatory matrices declare ``formal``.
+EXPLORATION_PHASE = "explore"
 
 
 def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_ALPHA) -> dict:
@@ -202,9 +211,13 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
     drifted from the manuscript and the verdict would be contaminated; that case
     is reported rather than silently averaged in.
     """
-    # The ablation runs at alpha 0.1/1.0 also declare ``name: fedmaq``; without the
-    # group filter every one of them is reported as a contaminating skew.
-    runs = confirmatory_runs(runs)
+    # Scope to the exploration phase before anything else. Every confirmatory
+    # FedMAQ run -- benchmark grid, formulation study, six of the seven ablation
+    # arms -- also declares ``name: fedmaq`` at alpha 0.1/1.0, so an
+    # algorithm-level filter reports all of them as contaminating skews and buries
+    # the one case the warning exists to catch: an *exploration* matrix that
+    # drifted onto a reported skew.
+    runs = [r for r in runs if r.phase == EXPLORATION_PHASE]
     candidates = [r for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) < 1e-9]
     contaminated = sorted(
         {r.alpha for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) >= 1e-9}

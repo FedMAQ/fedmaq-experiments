@@ -33,13 +33,16 @@ hydra:
 # K=100; cfd's 1-bit hard vote collapses to chance at this client scale). Their
 # configs are retained for reproducibility of that finding, not for the grid.
 #
-# Pilot formulation study (§4.3): CIFAR-10, both alpha regimes, variable memory, all 5 formulations (0-4):
-#   uv run python scripts/run.py --multirun \
-#     dataset=cifar10 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 algorithm=fedmaq \
-#     algorithm.post_process=false algorithm.formulation=0,1,2,3,4 seed=0,42,123
+# Formulation study (§4.3.6): CIFAR-10, both alpha regimes, variable memory, all
+# 5 formulations (0-4), 30 runs. Dispatch it through its matrix file:
+#   uv run python scripts/run_matrix.py --matrix formulation_study
 #
-# The Formulation 1 cell of that study doubles as the parity anchor for Ablation
-# Configuration 4 under the §4.3.7 fallback rule — see fedmaq_no_state.yaml.
+# It was a raw --multirun here until 2026-07-26. That put its runs in a date-keyed
+# multirun/ tree with no experiment_group, which matters because the Formulation 1
+# cell is the parity anchor for Ablation Configuration 4 under the §4.3.7 fallback
+# rule (see fedmaq_no_state.yaml), and scripts/analysis.py has to be able to find
+# it. Each run carries a `variant` because the canonical output path keys on the
+# algorithm config, not the run label, and all five are algorithm=fedmaq.
 #
 # Ablation study (§4.3.7), 7 net-new leave-one-out arms, both alpha, 3 seeds.
 # Dispatch it through its matrix file, which carries the regime constraints:

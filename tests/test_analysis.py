@@ -173,6 +173,8 @@ def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3):
         seed=seed,
         csv_path=csv_path,
         refinements=refinements,
+        experiment_group="pass2_exploration",
+        phase="explore",
     )
 
 
@@ -466,3 +468,20 @@ def test_ablation_table_flags_a_fallback_arm_with_no_anchor(tmp_path):
     table = build_ablation_table(_full_ablation_grid(tmp_path, include_anchor=False))
     assert not table["parity"]["attributable"]
     assert any("parity anchor" in v for v in table["parity"]["violations"])
+
+
+def test_exploration_margin_ignores_confirmatory_runs_entirely(tmp_path):
+    """The contamination warning names conf/matrix/pass2_explore.yaml, so it must
+    only fire on exploration runs. Every confirmatory FedMAQ run sits at a
+    reported skew and declares ``name: fedmaq``; if those counted, the warning
+    would fire on a correct grid and be trained away as noise."""
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    runs += _full_ablation_grid(tmp_path)
+
+    result = exploration_noise_margin(runs)
+
+    assert result["other_skews_present"] == []
+    assert result["unrefined_seeds"] == 3

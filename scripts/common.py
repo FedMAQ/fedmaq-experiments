@@ -50,13 +50,25 @@ def get_canonical_output_dir(
     algorithm: str,
     heterogeneity: str,
     seed: int,
+    variant: str = "",
 ) -> Path:
     """Construct canonical output directory path matching thesis taxonomy:
 
     ``outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<heterogeneity>/seed_<seed>/``
+
+    ``variant`` disambiguates several runs of the *same* algorithm config within
+    one matrix, appended to the algorithm segment as ``<algorithm>__<variant>``.
+    The path keys on the algorithm rather than the run label, so without it a
+    matrix that sweeps an override (the formulation study's five formulations of
+    ``fedmaq``) silently writes every run into one directory and keeps only the
+    last. That has bitten once already, in the uniform-memory control arm, which
+    was worked around by splitting the heterogeneity config per alpha. Depth is
+    unchanged, so ``analysis.experiment_group_of`` still reads the group.
     """
+    algorithm_segment = f"{algorithm}__{variant}" if variant else algorithm
     return Path(
-        f"outputs/{phase}/{dataset}_{model}/{exp_group}/{algorithm}/{heterogeneity}/seed_{seed}"
+        f"outputs/{phase}/{dataset}_{model}/{exp_group}/{algorithm_segment}/"
+        f"{heterogeneity}/seed_{seed}"
     )
 
 

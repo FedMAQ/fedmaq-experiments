@@ -101,6 +101,9 @@ def main() -> None:
                 alg = run_item.get("alg")
                 label = run_item.get("label", alg)
                 overrides = list(run_item.get("overrides", []))
+                # Set this whenever two runs in one matrix share an ``alg`` but
+                # differ by override, or they collide on the output directory.
+                variant = run_item.get("variant", "")
 
                 output_dir = get_canonical_output_dir(
                     phase=phase,
@@ -110,6 +113,7 @@ def main() -> None:
                     algorithm=alg,
                     heterogeneity=het,
                     seed=seed,
+                    variant=variant,
                 )
 
                 cmd = build_run_command(

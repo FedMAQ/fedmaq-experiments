@@ -516,3 +516,52 @@ Closes the architecture-deepening candidate this session named "A" (Decision 20'
       not run. Read `fedmaq.yaml`'s current flag values as defaults, not as
       findings, and do not cite Decision 34's `entropy_weight=2.0` /
       `precision_weight=0.5` pick as settled.
+
+## 2026-07-26 — Run Identity, and the Formulation Study Gets a Matrix
+
+54. **A run is identified by the config file it composed and the matrix that
+    dispatched it, never by `algorithm.name`.** Every §4.3.7 ablation arm declares
+    `name: fedmaq` so they all dispatch the same strategy hook, which means
+    `algorithm.name` names the *hook* and collapses six of the seven net-new arms
+    onto one value. `scripts/analysis.py` keyed on it, so §4.3.7's table could not
+    be built at all — and, worse, the arms sit on the winning formulation at the
+    reported skews and seeds, so `select_winner` counted each of them as a
+    formulation-study candidate and `compare_to_baselines` let one silently stand
+    in for FedMAQ (its `{seed: run}` maps are dict comprehensions; last write
+    wins, ordered by directory glob). `RunRecord` now carries `algorithm_config`
+    (Hydra's `runtime.choices.algorithm`, read from `.hydra/hydra.yaml`),
+    `experiment_group` and `phase` (segments of the canonical output path), and
+    `post_process`. Cross-study analyses filter on the group, not the algorithm:
+    Configuration 6 is `fedavg_kd` and Configuration 7 is `fedmaq`, both names the
+    benchmark grid also uses, so an algorithm-level filter cannot separate them.
+    `manifest.py`'s `_algorithm_config_name` field, never populated by anything
+    since it was added, now carries the same value — §5.4 asks the reader to
+    confirm arm parity from the run manifests.
+
+55. **`build_ablation_table()` assembles §4.3.7's table, and refuses to report it
+    when the design does not hold.** Eight configurations at both skews, accuracy
+    and cumulative MB as mean ± seed SD, the per-arm formulation column so
+    Configuration 4's fallback is visible in the table rather than only in the
+    prose, and the pipeline regime as a note. `parity.attributable` goes false on
+    a pipelined arm, a refinement-layer deviation not recorded as inapplicable, a
+    missing seed, or a fallback arm whose formulation-study anchor does not exist
+    yet. That last check is what §4.5's calendar ordering exists to guarantee, now
+    verified rather than assumed.
+
+56. **The formulation study is dispatched by `conf/matrix/formulation_study.yaml`,
+    not a hand-typed `--multirun`.** It had been a comment in `conf/config.yaml`,
+    which put its 30 runs in a date-keyed `multirun/` tree with no
+    `experiment_group` — in tension with Decision 13, which makes the declarative
+    matrix runner mandatory. The Formulation 1 cell is Ablation Configuration 4's
+    parity anchor, and an anchor analysis cannot address is not an anchor.
+
+57. **`get_canonical_output_dir` takes an optional `variant`, appended as
+    `<algorithm>__<variant>`.** The path keys on the algorithm config rather than
+    the run label, so any matrix listing one `alg` twice under different overrides
+    writes every such run into one directory and keeps only the last, silently.
+    This had already bitten the uniform-memory control arm, worked around there by
+    splitting the heterogeneity config per alpha; the formulation study's five
+    formulations of `fedmaq` would have been the second occurrence. A
+    parametrized guard now asserts output-directory uniqueness across every
+    confirmatory matrix, so the next occurrence fails in CI rather than at
+    analysis time.

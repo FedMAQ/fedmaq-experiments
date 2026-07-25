@@ -226,6 +226,76 @@ def test_uniform_memory_control_arm_matches_its_comparison_partner():
     assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 6
 
 
+def test_formulation_study_never_turns_the_post_process_pipeline_on():
+    """§4.3.6 judges the five formulations on their mathematical merit alone.
+
+    Fourth site of the same rule, and the one with a second dependency: the
+    Formulation 1 cell is Ablation Configuration 4's parity anchor under §4.3.7's
+    fallback rule, so if the pipeline appeared here that arm would be compared
+    against a run in a different regime from every other arm in its own study.
+    """
+    matrix = _matrix("formulation_study")
+    enabled = _post_process_overrides(matrix)
+    assert not any(enabled.values()), (
+        f"conf/matrix/formulation_study.yaml enables the post-processing pipeline "
+        f"on {sorted(k for k, v in enabled.items() if v)}."
+    )
+    formulations = {
+        int(o.partition("=")[2])
+        for run in matrix["runs"]
+        for o in run.get("overrides") or []
+        if o.startswith("algorithm.formulation=")
+    }
+    assert formulations == {0, 1, 2, 3, 4}, (
+        "§4.3.6 evaluates all five candidate formulations; the study's winner "
+        "rule is not pre-registrable over a subset chosen after the fact."
+    )
+    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 30
+
+
+@pytest.mark.parametrize(
+    "matrix_name",
+    ["benchmark_grid", "ablation", "uniform_memory_control", "formulation_study"],
+)
+def test_matrix_runs_never_collide_on_an_output_directory(matrix_name):
+    """Two runs writing to one directory means one of them is silently discarded.
+
+    The canonical path keys on the algorithm config, not the run label, so any
+    matrix listing the same ``alg`` twice needs a ``variant`` to separate them.
+    This has bitten twice: the uniform-memory control arm (worked around by
+    splitting the heterogeneity config per alpha) and the formulation study's five
+    formulations of ``fedmaq``. Neither failed loudly -- the sweep completes and
+    the missing runs simply are not there at analysis time.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    from scripts.common import get_canonical_output_dir
+
+    matrix = _matrix(matrix_name)
+    dirs = [
+        get_canonical_output_dir(
+            phase=matrix.get("phase", "smoke"),
+            dataset=matrix.get("dataset", "cifar10"),
+            model=matrix.get("model", "mobilenetv2"),
+            exp_group=matrix.get("experiment_group", matrix_name),
+            algorithm=run["alg"],
+            heterogeneity=het,
+            seed=seed,
+            variant=run.get("variant", ""),
+        )
+        for het in matrix["heterogeneities"]
+        for seed in matrix["seeds"]
+        for run in matrix["runs"]
+    ]
+    duplicates = {d for d in dirs if dirs.count(d) > 1}
+    assert not duplicates, (
+        f"conf/matrix/{matrix_name}.yaml maps more than one run onto "
+        f"{sorted(str(d) for d in duplicates)}. Give the colliding runs a "
+        f"`variant`, or the later run overwrites the earlier one."
+    )
+
+
 def test_run_manifest_hashes_the_resolved_config(tmp_path):
     """§4.3.1: config content is hashed into the run manifest for verification.
 
