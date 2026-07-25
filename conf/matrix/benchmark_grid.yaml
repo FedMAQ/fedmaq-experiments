@@ -1,4 +1,10 @@
 # Matrix specification for formal confirmatory benchmark grid (100 rounds, 3 seeds)
+#
+# This is the ONLY stage that runs FedMAQ with the §4.3 post-processing pipeline
+# (error feedback + difference coding + lossless zlib). The flag lives here and
+# not in conf/algorithm/fedmaq.yaml because that same file is the formulation
+# study's config and Ablation Configuration 7, neither of which may carry the
+# pipeline. See the header of fedmaq.yaml and conf/matrix/ablation.yaml.
 phase: formal
 experiment_group: benchmark_grid
 dataset: cifar10
@@ -25,3 +31,5 @@ runs:
     label: fedkd
   - alg: fedmaq
     label: fedmaq
+    overrides:
+      - algorithm.post_process=true

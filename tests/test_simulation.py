@@ -137,6 +137,70 @@ def test_ablation_arms_share_one_refinement_layer():
     assert fedavg_kd["grad_norm_ema"] is False
 
 
+def _matrix(name):
+    return OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR).parent / "conf" / "matrix" / f"{name}.yaml"),
+        resolve=True,
+    )
+
+
+def _post_process_overrides(matrix):
+    """Map run label -> the post_process value that run's overrides set, if any."""
+    found = {}
+    for run in matrix["runs"]:
+        for override in run.get("overrides") or []:
+            key, _, value = override.partition("=")
+            if key.strip() == "algorithm.post_process":
+                found[run["label"]] = value.strip().lower() == "true"
+    return found
+
+
+def test_primary_grid_turns_the_post_process_pipeline_on():
+    """§4.3 applies difference coding, error compensation, and lossless encoding
+    to FedMAQ for primary benchmarking.
+
+    ``post_process`` ships false in every conf/algorithm/*.yaml, deliberately, so
+    the only thing standing between the manuscript's promise and a grid that
+    silently reports uncompressed payload numbers is this override. A comment is
+    not a guard; a plausible-looking communication table is exactly the kind of
+    defect nobody questions after the fact.
+    """
+    enabled = _post_process_overrides(_matrix("benchmark_grid"))
+    assert enabled.get("fedmaq") is True, (
+        "conf/matrix/benchmark_grid.yaml must run FedMAQ with "
+        "algorithm.post_process=true. Without it the primary grid measures "
+        "communication without the §4.3 pipeline and reports it as if it had."
+    )
+
+
+def test_ablation_grid_never_turns_the_post_process_pipeline_on():
+    """The mirror guard, and the one that actually costs six runs.
+
+    The pipeline is downstream of every awareness signal. If any ablation arm
+    carried it while its reference did not (or the reverse), that arm would be
+    two removals from its reference rather than one, and its delta -- especially
+    on the communication axis -- would attribute to the coding pipeline rather
+    than to the signal the arm names. Configuration 7 is listed in the ablation
+    matrix rather than inherited from the benchmark grid for exactly this reason.
+    """
+    matrix = _matrix("ablation")
+    enabled = _post_process_overrides(matrix)
+    assert not any(enabled.values()), (
+        f"conf/matrix/ablation.yaml enables the post-processing pipeline on "
+        f"{sorted(k for k, v in enabled.items() if v)}. Every §4.3.7 arm must "
+        f"run in the same regime as its parity anchor."
+    )
+    assert any(run["alg"] == "fedmaq" for run in matrix["runs"]), (
+        "Configuration 7 (full FedMAQ) must be dispatched by the ablation "
+        "matrix. Inheriting it from benchmark_grid.yaml reintroduces the "
+        "pipeline as a second removal in every other arm."
+    )
+    assert len(matrix["runs"]) == 7, (
+        "§4.3.7 dispatches 7 net-new arms (42 runs); only Configuration 1, "
+        "uncompressed FedAvg, is inherited from the primary grid."
+    )
+
+
 def test_run_manifest_hashes_the_resolved_config(tmp_path):
     """§4.3.1: config content is hashed into the run manifest for verification.
 

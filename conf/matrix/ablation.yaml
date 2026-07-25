@@ -1,0 +1,71 @@
+# Ablation study, manuscript §4.3.7. Leave-one-out: each arm is full FedMAQ with
+# exactly one component removed. 7 net-new arms x 2 alpha x 3 seeds = 42 runs.
+#
+# WHY CONFIGURATION 7 IS LISTED HERE AND NOT INHERITED
+#
+# It used to be inherited from conf/matrix/benchmark_grid.yaml. That grid runs
+# FedMAQ with the §4.3 post-processing pipeline (error feedback, difference
+# coding, lossless zlib); no ablation arm does. Inheriting it would have made
+# every arm two removals from its own reference -- its awareness signal plus the
+# coding pipeline -- which is the exact confound the leave-one-out rebuild
+# existed to remove, reintroduced through the inheritance rather than through any
+# arm's config.
+#
+# The pipeline compresses payloads far harder than any single awareness signal
+# shifts them, so the damage would have landed almost entirely on the
+# communication axis, which is the axis the ablation's claims rest on.
+#
+# So Configuration 7 runs here, without the pipeline, as the study's own parity
+# anchor. Six extra runs; the grid is 183 rather than 177. NOTHING IN THIS FILE
+# MAY SET algorithm.post_process=true -- tests/test_simulation.py enforces it.
+#
+# Configuration 1 (uncompressed FedAvg) is still inherited from the benchmark
+# grid: it has no compression stage for the pipeline to attach to, so its
+# telemetry is identical in either regime.
+#
+# Configuration 4 (fedmaq_no_state) is the pre-registered fallback arm and is
+# compared against the formulation study's own Formulation 1 runs, not against
+# Configuration 7. Those runs are also pipeline-free, so the anchor stays valid
+# and stays free. See conf/algorithm/fedmaq_no_state.yaml.
+#
+# BEFORE DISPATCH: the arms are pinned to formulation 3 pending the formulation
+# study. If Formulation 1 or 2 wins, fedmaq_no_data's removal becomes gamma2=0
+# and fedmaq_no_state stops being the fallback arm. Revisit all four arm configs
+# and ABLATION_ARM_DIFFS first. Exploration must also have completed, since the
+# arms carry its surviving refinement layer.
+phase: formal
+experiment_group: ablation
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  # Configuration 2: Tier-1 memory ceiling lifted (memory-blind condition).
+  - alg: fedmaq_no_resource
+    label: config2-no-resource
+  # Configuration 3: data-richness term removed (kappa = 0). DynFed-style
+  # reference point.
+  - alg: fedmaq_no_data
+    label: config3-no-data
+  # Configuration 4: state awareness removed. Fallback arm, Formulation 1.
+  - alg: fedmaq_no_state
+    label: config4-no-state
+  # Configuration 5: server-side distillation removed.
+  - alg: fedmaq_no_kd
+    label: config5-no-kd
+  # Configuration 6: quantization removed. The post-processing pipeline is
+  # inapplicable here rather than merely off -- it acts on quantized codes and
+  # this arm produces none.
+  - alg: fedavg_kd
+    label: config6-no-quantization
+  # Configuration 7: full FedMAQ, pipeline-free. The study's parity anchor.
+  - alg: fedmaq
+    label: config7-full-fedmaq
+  # Configuration 8: frozen refinement layer removed.
+  - alg: fedmaq_no_refinements
+    label: config8-no-refinements

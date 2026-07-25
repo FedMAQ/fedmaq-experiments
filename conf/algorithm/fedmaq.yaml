@@ -33,7 +33,15 @@ server_compute_speed: 5000.0  # simulated server samples/sec for MobileNetV2GN K
 
 # Post-processing pipeline (§4.3): error-feedback + diff-coding + lossless zlib
 # on top of quantization. Applies to the primary CIFAR-10/100 + FEMNIST grid only,
-# not the Ablation Study.
+# and is turned on THERE, by conf/matrix/benchmark_grid.yaml, not here.
+#
+# It ships false in this file deliberately. fedmaq.yaml is also the formulation
+# study's config and Ablation Configuration 7, and both of those are run without
+# the pipeline: the formulation study to judge the formulas on their own merit,
+# the ablation because the pipeline is downstream of every awareness signal and
+# would otherwise make each arm two removals from its reference rather than one.
+# Flipping this to true silently confounds the entire ablation. If you want the
+# pipeline for a new grid, override it in that grid's matrix file.
 post_process: false
 
 # --- Priority 1: Quantization-Aware Soft-Voting ---

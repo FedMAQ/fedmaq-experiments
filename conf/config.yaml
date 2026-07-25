@@ -41,18 +41,23 @@ hydra:
 # The Formulation 1 cell of that study doubles as the parity anchor for Ablation
 # Configuration 4 under the §4.3.7 fallback rule — see fedmaq_no_state.yaml.
 #
-# Ablation study (§4.3.7), 6 net-new leave-one-out arms, both alpha, 3 seeds.
-# Configurations 1 and 7 are inherited from the main grid above:
-#   uv run python scripts/run.py --multirun \
-#     dataset=cifar10 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 \
-#     algorithm=fedmaq_no_resource,fedmaq_no_data,fedmaq_no_state,fedmaq_no_kd,fedavg_kd,fedmaq_no_refinements \
-#     seed=0,42,123
+# Ablation study (§4.3.7), 7 net-new leave-one-out arms, both alpha, 3 seeds.
+# Dispatch it through its matrix file, which carries the regime constraints:
+#   uv run python scripts/run_matrix.py --matrix ablation
+#
+# Only Configuration 1 (uncompressed FedAvg) is inherited from the main grid.
+# Configuration 7 is NOT: the main grid runs FedMAQ with the post-processing
+# pipeline and no ablation arm does, so inheriting it would make every arm two
+# removals from its own reference. See conf/matrix/ablation.yaml.
 #
 # Exploration phase (§4.3.1) runs at the held-out alpha=0.3 and is NOT part of
 # the confirmatory grid — see conf/matrix/pass2_explore.yaml.
 #
 # ``algorithm.post_process`` (§4.3) gates FedMAQ's error-feedback/diff-coding/zlib
-# pipeline on top of quantization. It currently ships false in every config,
-# including fedmaq.yaml; §4.3 applies it after the formulation study, so flip it
-# on for the primary benchmarking and FEMNIST grids at that point.
+# pipeline on top of quantization. It ships false in every conf/algorithm file and
+# is turned on per-grid instead: conf/matrix/benchmark_grid.yaml overrides it to
+# true for FedMAQ, and the FEMNIST sweep above must do the same when it runs.
+# The formulation study and every ablation arm stay pipeline-free by design --
+# see the headers of fedmaq.yaml and conf/matrix/ablation.yaml before changing
+# this. Both directions are enforced in tests/test_simulation.py.
 seed: 42
