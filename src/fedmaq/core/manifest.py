@@ -70,6 +70,24 @@ def _git_provenance(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def resolve_algorithm_config_name() -> str | None:
+    """Which ``conf/algorithm/*.yaml`` Hydra composed for this run.
+
+    ``algorithm.name`` does not answer this. Every §4.3.7 ablation arm declares
+    ``name: fedmaq`` so they all dispatch the same hook, which means the manifest
+    cannot say *which arm* a run is without the composed config's file name.
+    §5.4 asks the reader to confirm arm parity "from the run manifests", so the
+    manifest has to carry the identity that check keys on.
+    """
+    try:
+        from hydra.core.hydra_config import HydraConfig
+
+        choice = HydraConfig.get().runtime.choices.get("algorithm")
+    except Exception:
+        return None
+    return str(choice) if choice is not None else None
+
+
 def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> dict[str, Any]:
     """Assemble the manifest record for one run."""
     if repo_root is None:
@@ -95,7 +113,8 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "run": {
             "algorithm": algorithm.get("name"),
-            "algorithm_config": cfg_dict.get("_algorithm_config_name"),
+            "algorithm_config": cfg_dict.get("_algorithm_config_name")
+            or resolve_algorithm_config_name(),
             "dataset": dataset.get("name"),
             "alpha": heterogeneity.get("alpha"),
             "seed": cfg_dict.get("seed"),

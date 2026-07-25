@@ -49,6 +49,65 @@ class RunRecord:
     # Refinement-flag state, needed to identify the unrefined reference cell that
     # defines the exploration noise margin (§4.3.1).
     refinements: tuple[bool, bool, bool] = (False, False, False)
+    # Which conf/algorithm/*.yaml the run composed. NOT the same thing as
+    # ``algorithm`` above: every §4.3.7 FedMAQ ablation arm sets ``name: fedmaq``,
+    # so ``algorithm`` collapses six of the seven net-new arms onto one value and
+    # cannot identify an arm. See :func:`algorithm_config_name`.
+    algorithm_config: str = ""
+    # Which matrix produced the run, read off the canonical output path. This is
+    # the only field that separates Ablation Configuration 7 from FedMAQ's
+    # primary-grid rows, since the two differ in nothing else the analysis reads.
+    experiment_group: str | None = None
+    # §4.3's post-processing pipeline. A per-matrix override, so it is a property
+    # of the run and not of the algorithm config; the ablation table reports it as
+    # a regime note.
+    post_process: bool = False
+
+    def __post_init__(self) -> None:
+        # A record built without an explicit config name (a hand-constructed
+        # fixture, or a run predating .hydra/hydra.yaml) falls back to the
+        # algorithm name, which is correct for every config whose file name and
+        # ``name:`` field agree -- i.e. everything except the ablation arms.
+        if not self.algorithm_config:
+            self.algorithm_config = self.algorithm
+
+
+def algorithm_config_name(job_dir: Path, fallback: str) -> str:
+    """The ``conf/algorithm/*.yaml`` name the run composed.
+
+    ``algorithm.name`` cannot serve here. ``fedmaq_no_resource``,
+    ``fedmaq_no_data``, ``fedmaq_no_state``, ``fedmaq_no_kd`` and
+    ``fedmaq_no_refinements`` all declare ``name: fedmaq`` (deliberately -- they
+    dispatch the same hook), so keying on it makes the §4.3.7 arms
+    indistinguishable from full FedMAQ and from each other. Hydra records the
+    chosen config file under ``hydra.runtime.choices`` in ``.hydra/hydra.yaml``,
+    which is written for every run in both layouts.
+    """
+    hydra_path = job_dir / ".hydra" / "hydra.yaml"
+    if not hydra_path.exists():
+        return fallback
+    try:
+        choice = OmegaConf.select(OmegaConf.load(hydra_path), "hydra.runtime.choices.algorithm")
+    except Exception:
+        return fallback
+    return str(choice) if choice is not None else fallback
+
+
+def experiment_group_of(job_dir: Path, experiments_root: Path) -> str | None:
+    """The matrix group segment of a canonical output path, or ``None``.
+
+    ``scripts/common.get_canonical_output_dir`` lays runs out as
+    ``outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<het>/seed_<n>``.
+    Raw ``--multirun`` jobs (the formulation study) carry no group and return
+    ``None``.
+    """
+    try:
+        parts = job_dir.resolve().relative_to(experiments_root.resolve()).parts
+    except ValueError:
+        return None
+    if len(parts) == 7 and parts[0] == "outputs":
+        return parts[3]
+    return None
 
 
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
@@ -75,12 +134,13 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
         if not csv_path.exists():
             continue
         cfg = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
+        algorithm = cfg["algorithm"]["name"]
         runs.append(
             RunRecord(
                 job_dir=job_dir,
                 dataset=cfg["dataset"]["name"],
                 alpha=float(cfg["heterogeneity"]["alpha"]),
-                algorithm=cfg["algorithm"]["name"],
+                algorithm=algorithm,
                 formulation=cfg["algorithm"].get("formulation"),
                 seed=int(cfg["seed"]),
                 csv_path=csv_path,
@@ -89,9 +149,31 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                     bool(cfg["algorithm"].get("ema_student", False)),
                     bool(cfg["algorithm"].get("grad_norm_ema", False)),
                 ),
+                algorithm_config=algorithm_config_name(job_dir, algorithm),
+                experiment_group=experiment_group_of(job_dir, experiments_root),
+                post_process=bool(cfg["algorithm"].get("post_process", False)),
             )
         )
     return runs
+
+
+# The §4.3.7 ablation runs share a dataset, both skews, all three seeds, and
+# ``algorithm.name`` with the runs the formulation study and the headline
+# baseline comparison read. They must therefore be excluded from both by group,
+# not by algorithm: Configuration 7 is ``fedmaq`` on the winning formulation and
+# Configuration 6 is ``fedavg_kd``, so an algorithm-level filter admits both.
+ABLATION_GROUP = "ablation"
+
+
+def confirmatory_runs(runs: list[RunRecord]) -> list[RunRecord]:
+    """Runs eligible for the formulation study and the baseline comparison.
+
+    Without this filter, ``select_winner`` counts every Formulation-3 ablation arm
+    as a Formulation-3 formulation-study candidate, and ``compare_to_baselines``
+    builds its ``{seed: run}`` maps by overwriting -- so an arm silently stands in
+    for FedMAQ or for a baseline depending on directory iteration order.
+    """
+    return [r for r in runs if r.experiment_group != ABLATION_GROUP]
 
 
 REFINEMENT_NAMES = ("soft_voting", "ema_student", "grad_norm_ema")
@@ -120,6 +202,9 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
     drifted from the manuscript and the verdict would be contaminated; that case
     is reported rather than silently averaged in.
     """
+    # The ablation runs at alpha 0.1/1.0 also declare ``name: fedmaq``; without the
+    # group filter every one of them is reported as a contaminating skew.
+    runs = confirmatory_runs(runs)
     candidates = [r for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) < 1e-9]
     contaminated = sorted(
         {r.alpha for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) >= 1e-9}
@@ -224,7 +309,10 @@ def select_winner(runs: list[RunRecord]) -> dict:
     minimizes mean cumulative-MB-to-target across seeds.
     """
     result: dict = {}
-    fedmaq_runs = [r for r in runs if r.algorithm == "fedmaq" and r.formulation is not None]
+    runs = confirmatory_runs(runs)
+    # ``algorithm_config``, not ``algorithm``: the ablation arms declare
+    # ``name: fedmaq`` and would otherwise be counted as formulation candidates.
+    fedmaq_runs = [r for r in runs if r.algorithm_config == "fedmaq" and r.formulation is not None]
     datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
 
     for dataset, alpha in datasets_alphas:
@@ -314,6 +402,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     winner rule already computed.
     """
     result: dict = {}
+    runs = confirmatory_runs(runs)
     for entry in winner_result.values():
         if entry["winner"] is None:
             continue
@@ -328,7 +417,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
             for r in runs
             if r.dataset == dataset
             and r.alpha == alpha
-            and r.algorithm == "fedmaq"
+            and r.algorithm_config == "fedmaq"
             and r.formulation == formulation
         }
         baseline_algorithms = sorted(
@@ -379,6 +468,203 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     return result
 
 
+# Manuscript §4.3.7's eight configurations, mapped to the algorithm config each
+# one dispatches. Configuration 1 is the only inherited arm: it is read from the
+# primary benchmark grid rather than re-run, because it has no compression stage
+# for the post-processing pipeline to attach to and its telemetry is therefore
+# identical in either regime.
+ABLATION_CONFIGURATIONS: dict[int, tuple[str, str]] = {
+    1: ("fedavg", "Uncompressed FedAvg (control, inherited from the primary grid)"),
+    2: ("fedmaq_no_resource", "FedMAQ without resource awareness"),
+    3: ("fedmaq_no_data", "FedMAQ without data awareness (DynFed-style reference point)"),
+    4: ("fedmaq_no_state", "FedMAQ without state awareness (pre-registered fallback arm)"),
+    5: ("fedmaq_no_kd", "FedMAQ without knowledge distillation"),
+    6: ("fedavg_kd", "FedMAQ without quantization"),
+    7: ("fedmaq", "Full FedMAQ (the study's parity anchor)"),
+    8: ("fedmaq_no_refinements", "Full FedMAQ without the frozen refinement layer"),
+}
+
+INHERITED_CONFIGURATIONS = {1}
+
+# §4.3.7 records a mechanism as inapplicable, rather than disabled, where an arm
+# leaves it with no signal to act on. These are the only permitted deviations
+# from the shared refinement layer; anything else is a parity violation.
+REFINEMENT_EXCEPTIONS: dict[int, set[str]] = {
+    5: {"soft_voting"},  # nothing is distilled, so there are no teacher logits to weight
+    6: {"soft_voting", "grad_norm_ema"},  # nothing is quantized
+    8: set(),  # removing the layer *is* this arm's removal; handled separately
+}
+
+
+def _mean_sd(values: list[float]) -> dict:
+    return {
+        "mean": statistics.fmean(values) if values else None,
+        "sd": statistics.stdev(values) if len(values) > 1 else None,
+        "n": len(values),
+    }
+
+
+def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
+    """Assemble the §4.3.7 / §5.4 ablation matrix from run telemetry.
+
+    Emits, per configuration and skew, the final-round top-1 accuracy and
+    cumulative communication as mean and seed-to-seed SD, alongside the two
+    design facts the manuscript's table note must carry: each arm's formulation
+    (so Configuration 4's fallback to Formulation 1 is visible in the table rather
+    than only in the prose) and the post-processing regime.
+
+    ``parity`` is the check §5.4 requires *before* any delta is attributed to an
+    awareness signal: that every arm carried the identical frozen refinement layer
+    and the identical pipeline regime. A non-empty ``violations`` list means the
+    contrasts are not attributable and the table must not be reported.
+    """
+    by_config: dict[int, dict] = {}
+    violations: list[str] = []
+
+    for config_num, (alg_config, description) in ABLATION_CONFIGURATIONS.items():
+        expected_group = None if config_num in INHERITED_CONFIGURATIONS else ABLATION_GROUP
+        matched = [
+            r
+            for r in runs
+            if r.dataset == dataset
+            and r.algorithm_config == alg_config
+            and (
+                r.experiment_group == ABLATION_GROUP
+                if expected_group == ABLATION_GROUP
+                else r.experiment_group != ABLATION_GROUP
+            )
+        ]
+
+        cells: dict[str, dict] = {}
+        for alpha in sorted({r.alpha for r in matched}):
+            seed_runs = sorted((r for r in matched if r.alpha == alpha), key=lambda r: r.seed)
+            accs, mbs = [], []
+            for r in seed_runs:
+                df = load_round_metrics(r.csv_path)
+                accs.append(accuracy_at_round(df, 100))
+                mbs.append(float(df["communication/cumulative_mb"].iloc[-1]))
+            cells[f"alpha_{alpha}"] = {
+                "seeds": [r.seed for r in seed_runs],
+                "accuracy_r100": _mean_sd(accs),
+                "cumulative_mb": _mean_sd(mbs),
+            }
+            if len(seed_runs) != 3:
+                violations.append(
+                    f"Configuration {config_num} ({alg_config}) has {len(seed_runs)} "
+                    f"seed(s) at alpha={alpha}; §4.3.7 specifies three."
+                )
+
+        by_config[config_num] = {
+            "algorithm_config": alg_config,
+            "description": description,
+            "inherited": config_num in INHERITED_CONFIGURATIONS,
+            "formulation": next((r.formulation for r in matched), None),
+            "post_process": next((r.post_process for r in matched), None),
+            "refinements": next((r.refinements for r in matched), None),
+            "cells": cells,
+        }
+        if not matched:
+            violations.append(
+                f"Configuration {config_num} ({alg_config}) has no runs; "
+                f"expected them in the "
+                f"{'primary grid' if expected_group is None else ABLATION_GROUP} group."
+            )
+
+    # Regime: §4.3.7 withholds the pipeline from every arm, Configuration 1
+    # excepted because it is inherited and has no compression stage at all.
+    for config_num, entry in by_config.items():
+        if config_num in INHERITED_CONFIGURATIONS or entry["post_process"] is None:
+            continue
+        if entry["post_process"]:
+            violations.append(
+                f"Configuration {config_num} ran with the §4.3 post-processing "
+                f"pipeline on. §4.3.7 withholds it from every arm, or each arm is "
+                f"two removals from its reference rather than one."
+            )
+
+    # Refinement-layer parity, against Configuration 7 as the anchor.
+    anchor = by_config.get(7, {}).get("refinements")
+    if anchor is not None:
+        for config_num, entry in by_config.items():
+            if config_num in INHERITED_CONFIGURATIONS or config_num in (7, 8):
+                continue
+            arm = entry["refinements"]
+            if arm is None:
+                continue
+            deviating = {
+                name for name, a, b in zip(REFINEMENT_NAMES, anchor, arm, strict=True) if a != b
+            }
+            unexplained = deviating - REFINEMENT_EXCEPTIONS.get(config_num, set())
+            if unexplained:
+                violations.append(
+                    f"Configuration {config_num} deviates from the frozen refinement "
+                    f"layer on {sorted(unexplained)} without §4.3.7 recording those "
+                    f"mechanisms as inapplicable to it."
+                )
+
+    # Configuration 4 is anchored to the formulation study's own runs on its
+    # formulation, not to Configuration 7 (§4.3.7's pre-registered fallback rule).
+    # Reading its delta against Configuration 7 would price the formulation change
+    # rather than the removed signal, so the anchor is resolved here rather than
+    # left to whoever writes §5.4.
+    config4 = by_config.get(4, {})
+    if config4.get("formulation") is not None and config4["formulation"] != by_config.get(
+        7, {}
+    ).get("formulation"):
+        anchor_cells: dict[str, dict] = {}
+        for alpha_key in config4["cells"]:
+            alpha = float(alpha_key.removeprefix("alpha_"))
+            anchor_runs = sorted(
+                (
+                    r
+                    for r in runs
+                    if r.dataset == dataset
+                    and r.alpha == alpha
+                    and r.algorithm_config == "fedmaq"
+                    and r.experiment_group != ABLATION_GROUP
+                    and r.formulation == config4["formulation"]
+                    and not r.post_process
+                ),
+                key=lambda r: r.seed,
+            )
+            if not anchor_runs:
+                violations.append(
+                    f"Configuration 4 runs on Formulation {config4['formulation']} but "
+                    f"the formulation study's own Formulation {config4['formulation']} "
+                    f"runs at alpha={alpha} are not discoverable; §4.3.7's fallback "
+                    f"rule leaves the arm without a parity anchor."
+                )
+                continue
+            accs = [accuracy_at_round(load_round_metrics(r.csv_path), 100) for r in anchor_runs]
+            anchor_cells[alpha_key] = {
+                "seeds": [r.seed for r in anchor_runs],
+                "accuracy_r100": _mean_sd(accs),
+            }
+        config4["parity_anchor"] = {
+            "source": "formulation study",
+            "formulation": config4["formulation"],
+            "cells": anchor_cells,
+            "note": (
+                "compared against this, not against Configuration 7 -- the winning "
+                "formulation cannot express the removal of state awareness"
+            ),
+        }
+
+    return {
+        "dataset": dataset,
+        "configurations": by_config,
+        "parity": {
+            "refinement_anchor": anchor,
+            "pipeline_regime": (
+                "withheld from every arm; inapplicable to Configuration 6, which "
+                "produces no quantized codes for it to act on"
+            ),
+            "violations": violations,
+            "attributable": not violations,
+        },
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Formulation-study winner selection + headline baseline comparison"
@@ -398,6 +684,11 @@ def main() -> None:
         "--exploration-output",
         type=Path,
         default=Path("scripts/analysis_output/exploration_margin.json"),
+    )
+    parser.add_argument(
+        "--ablation-output",
+        type=Path,
+        default=Path("scripts/analysis_output/ablation_table.json"),
     )
     args = parser.parse_args()
 
@@ -427,6 +718,20 @@ def main() -> None:
             "  WARNING: FedMAQ runs found at non-exploration skews "
             f"{exploration['other_skews_present']}. §4.3.1 holds exploration at "
             f"alpha={EXPLORATION_ALPHA}; check conf/matrix/pass2_explore.yaml."
+        )
+
+    # §4.3.7 / §5.4 ablation matrix.
+    ablation = build_ablation_table(runs)
+    args.ablation_output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.ablation_output, "w", encoding="utf-8") as f:
+        json.dump(ablation, f, indent=2)
+    print(f"Wrote ablation matrix to {args.ablation_output}")
+    for violation in ablation["parity"]["violations"]:
+        print(f"  PARITY VIOLATION: {violation}")
+    if ablation["parity"]["violations"]:
+        print(
+            "  The §5.4 contrasts are NOT attributable while any violation stands; "
+            "resolve them before reporting the table."
         )
 
 
