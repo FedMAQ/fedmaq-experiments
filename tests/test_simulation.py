@@ -27,9 +27,10 @@ ALGORITHM_CONFIGS = [
     "fedavg_kd",
     "fedmaq",
     "fedmaq_no_kd",
-    "fedmaq_state_only",
-    "fedmaq_data_only",
-    "fedmaq_resource_only",
+    "fedmaq_no_state",
+    "fedmaq_no_data",
+    "fedmaq_no_resource",
+    "fedmaq_no_refinements",
     "feddistill",
     "cfd",
 ]

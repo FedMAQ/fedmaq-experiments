@@ -24,6 +24,36 @@ from fedmaq.core.partitioning import get_server_loaders
 logger = logging.getLogger(__name__)
 
 
+def apply_student_ema(
+    aggregated_parameters: Parameters,
+    ema_params: list[Any] | None,
+    alg_cfg: dict[str, Any],
+) -> tuple[Parameters, list[Any] | None]:
+    """Smooth the post-distillation global student with an EMA across rounds.
+
+    Shared by every hook that runs server-side KD. The refinement is independent
+    of quantization, so manuscript §4.3.7's parity requirement applies it to the
+    no-quantization arm (Configuration 6) as well as to the FedMAQ arms; keeping
+    one implementation is what makes that parity checkable rather than asserted.
+
+    Returns the (possibly smoothed) parameters and the updated EMA state, so the
+    caller owns the per-run state without duplicating the update rule.
+    """
+    if not alg_cfg.get("ema_student", False):
+        return aggregated_parameters, ema_params
+
+    ema_decay = float(alg_cfg.get("ema_decay", 0.99))
+    new_params = parameters_to_ndarrays(aggregated_parameters)
+    if ema_params is None:
+        ema_params = [p.copy() for p in new_params]
+    else:
+        ema_params = [
+            ema_decay * ema + (1.0 - ema_decay) * new
+            for ema, new in zip(ema_params, new_params, strict=True)
+        ]
+    return ndarrays_to_parameters(ema_params), ema_params
+
+
 def kd_distill_step(
     student_model: nn.Module,
     optimizer: torch.optim.Optimizer,

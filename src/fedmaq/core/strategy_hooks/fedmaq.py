@@ -23,7 +23,11 @@ from fedmaq.core.config_defaults import (
     resolve_run_context,
     resolve_server_compute_speed,
 )
-from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
+from fedmaq.core.kd_utils import (
+    apply_student_ema,
+    distill_ensemble_into_global,
+    kd_server_sim_time,
+)
 from fedmaq.core.models import get_server_model_factory
 from fedmaq.core.quantization_planner import QuantizationPlanner, QuantPlan, inject_client_q
 from fedmaq.core.strategy_hooks._partition import resolve_partition_id
@@ -116,17 +120,10 @@ class FedMAQHook(StrategyHook):
         )
 
         # Apply student EMA if enabled
-        if aggregated_parameters is not None and alg_cfg.get("ema_student", False):
-            ema_decay = float(alg_cfg.get("ema_decay", 0.99))
-            new_params = parameters_to_ndarrays(aggregated_parameters)
-            if self._ema_params is None:
-                self._ema_params = [p.copy() for p in new_params]
-            else:
-                self._ema_params = [
-                    ema_decay * ema + (1.0 - ema_decay) * new
-                    for ema, new in zip(self._ema_params, new_params, strict=True)
-                ]
-            aggregated_parameters = ndarrays_to_parameters(self._ema_params)
+        if aggregated_parameters is not None:
+            aggregated_parameters, self._ema_params = apply_student_ema(
+                aggregated_parameters, self._ema_params, alg_cfg
+            )
 
         return aggregated_parameters, metrics
 

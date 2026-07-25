@@ -1,4 +1,4 @@
-# Ablation Arm 6: Server-Side KD WITHOUT Quantization (FedAvgKD).
+# Ablation Configuration 6 (manuscript §4.3.7): FedMAQ minus quantization (FedAvgKD).
 # Standard FedAvg weight aggregation + server-side ensemble distillation.
 # Isolates the KD module's capacity to mitigate non-IID weight divergence.
 # Clients use identity compression (no quantization); server runs KD as in FedMAQ.
@@ -12,3 +12,13 @@ server_compute_speed: 5000.0  # simulated server samples/sec for MobileNetV2GN K
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
+
+# Refinement layer, §4.3.7 parity. Two of the three are recorded as INAPPLICABLE
+# rather than silently disabled, since both act on a quantization signal that
+# this arm does not produce. ema_student is quantization-independent (a
+# server-side EMA over the student's parameters) and is therefore carried here
+# for parity with every other arm.
+soft_voting: false        # INAPPLICABLE (weights teacher logits by bit-width; nothing is quantized)
+grad_norm_ema: false      # INAPPLICABLE (smooths the signal feeding the quantization planner)
+ema_student: true
+ema_decay: 0.7

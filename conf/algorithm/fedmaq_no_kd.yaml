@@ -1,12 +1,18 @@
-# Ablation Arm 5: Full Multi-Adaptive Quantization WITHOUT Server-Side KD.
-# Isolates the contribution of quantization noise (math noise degradation) independently.
-# kd_epochs=0 skips the server-side distillation loop entirely.
+# Ablation Configuration 5 (manuscript §4.3.7): FedMAQ minus knowledge distillation.
+# Multi-adaptive quantization retained in full; server-side KD removed
+# (kd_epochs=0 skips the distillation loop entirely). Isolates the accuracy that
+# distillation recovers from quantization noise. Paired with Configuration 7 to
+# test the falsifiable prediction that KD's benefit grows with skew.
+# Leave-one-out: identical to fedmaq.yaml except kd_epochs and soft_voting.
 # Usage: uv run python scripts/run.py algorithm=fedmaq_no_kd
 name: fedmaq
 q_min: 1
 q_max: 16
-c_unit: 512.0
 bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]  # manuscript Q set (matches DEFAULT_BIT_WIDTHS)
+c_unit: 512.0
+
+resource_aware: true
+
 formulation: 3            # Gradient-Primary, Data-Modulated (full formula)
 gamma1: 0.5
 gamma2: 0.5
@@ -15,10 +21,24 @@ tau_g: 0.5
 tau_n: 0.5
 
 temperature: 1.0
-kd_epochs: 0              # 0 = disable server-side KD
+kd_epochs: 0              # <-- the single removal defining this arm
 server_kd_lr: 0.01
 server_kd_momentum: 0.9
 server_compute_speed: 5000.0  # simulated server samples/sec for MobileNetV2GN KD (NVIDIA L40S 48GB GPU, ADR-0002)
 
-# Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
+
+# Refinement layer, §4.3.7 parity. soft_voting is recorded as INAPPLICABLE here
+# rather than silently disabled: it weights teacher logits during distillation,
+# and this arm performs none. ema_student and grad_norm_ema both still apply.
+soft_voting: false        # INAPPLICABLE (no distillation to weight)
+entropy_weight: 1.0
+precision_weight: 1.0
+ema_student: true
+ema_decay: 0.7
+grad_norm_ema: true
+grad_norm_beta: 0.7
+client_kd_reg: false
+kd_reg_alpha: 0.5
+kd_reg_temp: 2.0
+kd_prox_mu: 0.0

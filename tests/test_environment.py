@@ -1144,6 +1144,48 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             shutil.rmtree(persistence_dir)
 
 
+def test_ablation_leave_one_out_arms():
+    """The §4.3.7 arms must each be one removal away from full FedMAQ.
+
+    Two properties the ablation's attributability rests on, asserted directly
+    rather than left to config review:
+
+    1. resource_aware=False lifts the Tier-1 ceiling (Configuration 2).
+    2. Formulation 3 at kappa=0 removes data awareness exactly (Configuration 3),
+       which is why that arm shares the winner's formulation instead of
+       substituting a different one.
+    """
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+
+    common = dict(
+        c_unit=2048.0, g_k=1.0, g_max=1.0, n_k=100, n_max=200, q_min=2, q_max=8
+    )
+
+    # Configuration 2: a memory-starved client (floor(4096/2048) = 2) is capped
+    # to 2 bits with resource awareness on, and freed to the soft target with it off.
+    assert compute_fedmaq_q_k_t(c_k=4096.0, formulation=1, gamma1=1.0, gamma2=0.0, **common) == 2
+    assert (
+        compute_fedmaq_q_k_t(
+            c_k=4096.0, formulation=1, gamma1=1.0, gamma2=0.0, resource_aware=False, **common
+        )
+        == 8
+    )
+
+    # Configuration 3: kappa=0 collapses Formulation 3's modulator to 1, so the
+    # data term drops out and q depends on the gradient norm alone. Two clients
+    # differing only in dataset size must then receive identical bit-widths.
+    kw = dict(c_k=16384.0, c_unit=2048.0, g_k=0.5, g_max=1.0, n_max=200, q_min=2, q_max=8)
+    q_small = compute_fedmaq_q_k_t(n_k=10, formulation=3, lambda_val=0.0, **kw)
+    q_large = compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=0.0, **kw)
+    assert q_small == q_large
+
+    # Sanity: with the data term restored (kappa=1) those same two clients diverge,
+    # confirming the equality above is the removal and not a degenerate setup.
+    assert compute_fedmaq_q_k_t(
+        n_k=10, formulation=3, lambda_val=1.0, **kw
+    ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=1.0, **kw)
+
+
 def test_compute_fedmaq_q_k_t():
     """Test FedMAQ quantization helper formulas."""
     from fedmaq.core.strategy import compute_fedmaq_q_k_t

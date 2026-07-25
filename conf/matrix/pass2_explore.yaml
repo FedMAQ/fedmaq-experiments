@@ -1,4 +1,26 @@
-# Matrix specification for Priority 1 Pass 2 Exploration sweeps (50 rounds)
+# Exploration-phase screening sweep, manuscript §4.3.1.
+#
+# Two constraints from the manuscript that this file must satisfy, and did not
+# before 2026-07-25:
+#
+#   1. HELD-OUT SKEW. Every exploration run is executed at alpha = 0.3, which is
+#      deliberately absent from the confirmatory grid's alpha in {0.1, 1.0}. This
+#      is the guard behind §4.3.1's claim that no mechanism is ever selected at a
+#      skew value it is later reported on. Running exploration at 0.1/1.0 would
+#      falsify that claim directly. Do not add the reported skews here.
+#
+#   2. THE THREE DISCLOSED MECHANISMS. §4.3.1 names exactly three optional
+#      refinements: quantization-aware weighting of teacher logits (soft_voting),
+#      an EMA over the server student's parameters (ema_student), and EMA
+#      smoothing of each client's gradient norm (grad_norm_ema). All three are
+#      screened here. client_kd_reg is NOT part of the disclosed roster and is
+#      held at its default (false) throughout; admitting it to the sweep would
+#      require disclosing it in §4.3.1 first.
+#
+# This file is the SCREENING stage only: R = 50, single seed, per §4.3.1's
+# "wide sweeps ... locate a promising region rather than crown a winner".
+# Keep-or-drop calls are decided afterward by a fully crossed factorial at three
+# seeds, against the measured noise margin.
 phase: explore
 experiment_group: pass2_exploration
 dataset: cifar10
@@ -7,24 +29,34 @@ total_rounds: 50
 client_gpus: 1.0
 seeds: [0]
 heterogeneities:
-  - dirichlet_alpha_0.1
-  - dirichlet_alpha_1.0
+  - dirichlet_alpha_0.3
 
 runs:
-  # Capacity EMA Exploration (on vs off)
+  # Unrefined reference: all three mechanisms off. This is also the cell whose
+  # seed-to-seed spread defines the noise margin (rerun at 3 seeds for sigma).
   - alg: fedmaq
-    label: fedmaq-ema-on
+    label: fedmaq-unrefined
     overrides:
+      - algorithm.soft_voting=false
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=false
+
+  # One-at-a-time screening: each mechanism against the unrefined reference.
+  - alg: fedmaq
+    label: fedmaq-soft-voting-on
+    overrides:
+      - algorithm.soft_voting=true
+      - algorithm.ema_student=false
+      - algorithm.grad_norm_ema=false
+  - alg: fedmaq
+    label: fedmaq-ema-student-on
+    overrides:
+      - algorithm.soft_voting=false
       - algorithm.ema_student=true
-      - algorithm.client_kd_reg=true
+      - algorithm.grad_norm_ema=false
   - alg: fedmaq
-    label: fedmaq-ema-off
+    label: fedmaq-grad-norm-ema-on
     overrides:
+      - algorithm.soft_voting=false
       - algorithm.ema_student=false
-      - algorithm.client_kd_reg=true
-  # Client KD Regularization Exploration
-  - alg: fedmaq
-    label: fedmaq-kd-reg-off
-    overrides:
-      - algorithm.ema_student=false
-      - algorithm.client_kd_reg=false
+      - algorithm.grad_norm_ema=true

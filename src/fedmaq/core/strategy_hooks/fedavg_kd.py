@@ -19,7 +19,11 @@ from fedmaq.core.config_defaults import (
     resolve_run_context,
     resolve_server_compute_speed,
 )
-from fedmaq.core.kd_utils import distill_ensemble_into_global, kd_server_sim_time
+from fedmaq.core.kd_utils import (
+    apply_student_ema,
+    distill_ensemble_into_global,
+    kd_server_sim_time,
+)
 from fedmaq.core.models import get_model
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
@@ -40,6 +44,7 @@ class FedAvgKDHook(StrategyHook):
 
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
+        self._ema_params: list[Any] | None = None
 
     def configure_fit(
         self,
@@ -77,6 +82,14 @@ class FedAvgKDHook(StrategyHook):
             alg_cfg=ctx.alg_cfg,
             device=ctx.device,
         )
+
+        # Student EMA is quantization-independent, so §4.3.7's refinement parity
+        # requires this arm to carry it too (soft_voting and grad_norm_ema are
+        # recorded as inapplicable here: both act on a quantization signal).
+        if aggregated_parameters is not None:
+            aggregated_parameters, self._ema_params = apply_student_ema(
+                aggregated_parameters, self._ema_params, ctx.alg_cfg
+            )
         return aggregated_parameters, metrics
 
     def server_sim_time(

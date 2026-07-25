@@ -56,6 +56,7 @@ class _QuantParams:
     tau_g: float
     tau_n: float
     bit_widths: tuple[int, ...]
+    resource_aware: bool
 
     @classmethod
     def from_cfg(cls, alg_cfg: dict[str, Any]) -> _QuantParams:
@@ -70,6 +71,11 @@ class _QuantParams:
             tau_g=float(alg_cfg.get("tau_g", 0.5)),
             tau_n=float(alg_cfg.get("tau_n", 0.5)),
             bit_widths=tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)),
+            # Removal flag for the manuscript §4.3.7 leave-one-out arm that drops
+            # Tier-1 resource awareness. Absent means "nothing removed", so the
+            # default restores full FedMAQ behaviour rather than silently
+            # disabling a component the way a False default would.
+            resource_aware=bool(alg_cfg.get("resource_aware", True)),
         )
 
 
@@ -108,11 +114,18 @@ def compute_fedmaq_q_k_t(
     tau_g: float = 0.5,
     tau_n: float = 0.5,
     bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
+    resource_aware: bool = True,
 ) -> int:
     """Compute client-specific quantization bit-width for FedMAQ.
 
     The final result is always a member of ``bit_widths`` (manuscript §4.2's
     permissible set Q), not an arbitrary continuous integer.
+
+    ``resource_aware=False`` lifts the Tier-1 memory ceiling so the Tier-2 soft
+    target alone governs the assignment. This is Ablation Configuration 2
+    (manuscript §4.3.7), which places FedMAQ in the memory-blind condition the
+    reproducible baselines occupy. Capacity is a simulated scalar consumed only
+    here, so lifting the cap costs no real memory.
     """
     # Normalized signals
     tilde_g = g_k / g_max if g_max > 0.0 else 0.0
@@ -157,8 +170,10 @@ def compute_fedmaq_q_k_t(
     # Combine raw Tier-1 cap and raw Tier-2 target via min(), then floor into the
     # permissible set Q exactly once: q_k^(t) = max{q in Q | q <= min(Q_k^max, q_hat_k^(t))}.
     # Memory-limited clients may receive fewer bits than q_min — intentional, the
-    # physical bound wins over the soft quality target.
-    return _snap_floor(min(q_k_max_raw, q_hat), bit_widths)
+    # physical bound wins over the soft quality target. With resource awareness
+    # removed there is no Tier-1 term to take the min against, so q_hat stands alone.
+    combined = q_hat if not resource_aware else min(q_k_max_raw, q_hat)
+    return _snap_floor(combined, bit_widths)
 
 
 def _default_probe(model: nn.Module, images: torch.Tensor, labels: torch.Tensor) -> float:
@@ -331,6 +346,7 @@ class QuantizationPlanner:
                 tau_g=qp.tau_g,
                 tau_n=qp.tau_n,
                 bit_widths=qp.bit_widths,
+                resource_aware=qp.resource_aware,
             )
             client_q[cid] = q_k_t
             logger.info(

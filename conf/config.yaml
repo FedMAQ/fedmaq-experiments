@@ -18,22 +18,41 @@ hydra:
 # Full benchmark sweep (CIFAR-10 / CIFAR-100, two alpha values, 3 seeds):
 #   uv run python scripts/run.py --multirun \
 #     dataset=cifar10,cifar100 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq,feddistill,cfd \
+#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedkd,fedmaq,feddistill \
 #     seed=0,42,123
 #
 # FEMNIST sweep (writer partition, 3 seeds):
 #   uv run python scripts/run.py --multirun \
 #     dataset=femnist heterogeneity=femnist experiment=femnist \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedmd,fedkd,fedmaq,feddistill,cfd \
+#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedkd,fedmaq,feddistill \
 #     seed=0,42,123
+#
+# fedmd and cfd are deliberately absent from both sweeps above: DECISIONS #25/#26
+# dropped them from the formal stack and manuscript §4.3.2 documents the
+# exclusions (fedmd's per-client transfer-learning pretrain does not scale to
+# K=100; cfd's 1-bit hard vote collapses to chance at this client scale). Their
+# configs are retained for reproducibility of that finding, not for the grid.
 #
 # Pilot formulation study (§4.3): CIFAR-10, both alpha regimes, variable memory, all 5 formulations (0-4):
 #   uv run python scripts/run.py --multirun \
 #     dataset=cifar10 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 algorithm=fedmaq \
 #     algorithm.post_process=false algorithm.formulation=0,1,2,3,4 seed=0,42,123
 #
+# The Formulation 1 cell of that study doubles as the parity anchor for Ablation
+# Configuration 4 under the §4.3.7 fallback rule — see fedmaq_no_state.yaml.
+#
+# Ablation study (§4.3.7), 6 net-new leave-one-out arms, both alpha, 3 seeds.
+# Configurations 1 and 7 are inherited from the main grid above:
+#   uv run python scripts/run.py --multirun \
+#     dataset=cifar10 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 \
+#     algorithm=fedmaq_no_resource,fedmaq_no_data,fedmaq_no_state,fedmaq_no_kd,fedavg_kd,fedmaq_no_refinements \
+#     seed=0,42,123
+#
+# Exploration phase (§4.3.1) runs at the held-out alpha=0.3 and is NOT part of
+# the confirmatory grid — see conf/matrix/pass2_explore.yaml.
+#
 # ``algorithm.post_process`` (§4.3) gates FedMAQ's error-feedback/diff-coding/zlib
-# pipeline on top of quantization; true by default for fedmaq.yaml (primary
-# benchmarking + FEMNIST grids above), false everywhere else including the
-# Ablation Study's fedmaq_* arm yamls.
+# pipeline on top of quantization. It currently ships false in every config,
+# including fedmaq.yaml; §4.3 applies it after the formulation study, so flip it
+# on for the primary benchmarking and FEMNIST grids at that point.
 seed: 42
