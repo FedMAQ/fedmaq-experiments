@@ -1,0 +1,31 @@
+# Uniform-memory control arm, manuscript §4.1 and §4.3. 6 runs.
+#
+# Every client gets the same 8192 MB capacity, so Tier-1 never binds differently
+# across clients and the memory-driven part of quantization is held constant.
+# What the arm isolates is server-side KD's accuracy recovery, separated from the
+# memory-based quantization that would otherwise confound it.
+#
+# post_process=true, and that is not a copy-paste from benchmark_grid.yaml. This
+# arm's comparison partner is FedMAQ's own CIFAR-10 rows in the primary
+# benchmarking grid, which carry the §4.3 coding pipeline. Drop the pipeline here
+# and the contrast stops being "uniform memory versus variable memory" and
+# becomes "uniform memory and no coding pipeline versus variable memory with
+# one". The rule that decides this flag is always the same: match the regime of
+# whatever the run is compared against. Primary-grid partner means the pipeline
+# is on; ablation or formulation-study partner means it is off.
+phase: formal
+experiment_group: uniform_memory_control
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - uniform_memory_alpha_0.1
+  - uniform_memory_alpha_1.0
+
+runs:
+  - alg: fedmaq
+    label: fedmaq-uniform-memory
+    overrides:
+      - algorithm.post_process=true

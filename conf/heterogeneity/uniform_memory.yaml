@@ -2,9 +2,12 @@
 # Isolates Server-Side KD accuracy recovery from memory-based quantization (system heterogeneity off).
 # Usage: uv run python scripts/run.py heterogeneity=uniform_memory
 #
-# Full control-arm sweep (§4.3): CIFAR-10, both alpha regimes, 3 seeds (2 x 3 = 6 runs):
-#   uv run python scripts/run.py --multirun dataset=cifar10 heterogeneity=uniform_memory \
-#     heterogeneity.alpha=0.1,1.0 algorithm=fedmaq seed=0,42,123
+# This file is for ad-hoc single runs. The formal 6-run control sweep (§4.3) goes
+# through conf/matrix/uniform_memory_control.yaml, which uses the per-alpha
+# variants (uniform_memory_alpha_0.1/1.0) and sets the post-processing flag the
+# arm needs for parity with the primary-grid rows it is compared against.
+# Overriding heterogeneity.alpha on this file instead would write both alphas to
+# the same output directory, since the harness keys those on the config name.
 partition: dirichlet
 alpha: 1.0          # Moderate data skew; combine with other alpha configs as needed
 uniform_memory_mb: 8192  # Fixed memory capacity for all clients (control group)

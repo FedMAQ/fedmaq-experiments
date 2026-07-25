@@ -201,6 +201,31 @@ def test_ablation_grid_never_turns_the_post_process_pipeline_on():
     )
 
 
+def test_uniform_memory_control_arm_matches_its_comparison_partner():
+    """§4.1's control arm is compared against FedMAQ's primary-grid rows.
+
+    Third site of the same defect. The arm holds memory constant to isolate
+    server-side KD's recovery from memory-driven quantization; its partner is
+    FedMAQ's own variable-memory rows in the benchmark grid, which carry the §4.3
+    coding pipeline. Without the pipeline here the contrast silently becomes
+    "uniform memory and no pipeline" against "variable memory with one".
+
+    The rule, everywhere: match the regime of whatever the run is compared
+    against, not the regime of the algorithm config it composes from.
+    """
+    matrix = _matrix("uniform_memory_control")
+    enabled = _post_process_overrides(matrix)
+    assert all(enabled.get(run["label"]) is True for run in matrix["runs"]), (
+        "conf/matrix/uniform_memory_control.yaml must set "
+        "algorithm.post_process=true; its comparison partner is the primary grid."
+    )
+    # Six runs: both alphas, three seeds. Split into per-alpha heterogeneity
+    # configs because output dirs key on the config name, so one file overridden
+    # twice would collide.
+    assert len(matrix["heterogeneities"]) == 2
+    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 6
+
+
 def test_run_manifest_hashes_the_resolved_config(tmp_path):
     """§4.3.1: config content is hashed into the run manifest for verification.
 

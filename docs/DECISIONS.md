@@ -474,3 +474,45 @@ Closes the architecture-deepening candidate this session named "A" (Decision 20'
     - **Import block reordered by `ruff --fix`** in `telemetry.py` as a side effect of adding the `dataclasses` import — this touches the same block Decision 48 flagged as a pre-existing unsorted-import finding; since this candidate added a new import line into that exact block, fixing the resulting sort was in-scope (not the "leave pre-existing findings alone" case).
     - **Gate outcome**: all 9 `GOLDEN_SET` configs pass bit-exact (this seam is on `TelemetryFedAvg.evaluate`'s hot path for every algorithm). Full test suite green (111 passed).
     - **How to apply**: any future telemetry field added to the per-round fit snapshot belongs in `RoundSnapshot`, with round-0 zeroing behavior decided once in `snapshot_for_round`, not re-derived per-field at call sites. This is additive to ADR-0002, not a reopening of it — the per-algorithm dispatch seam ADR-0002 settled is untouched.
+
+---
+
+## 2026-07-26 — Post-Processing Regime, and What Supersedes Decisions 33-35
+
+52. **`post_process` is a per-grid setting, not a per-algorithm one.** §4.3 gives
+    the error-feedback/difference-coding/zlib pipeline to the primary
+    benchmarking grid and to nothing else. It shipped `false` in every
+    `conf/algorithm/*.yaml`, so the grid would have reported communication
+    numbers without the pipeline it claims to run. The obvious repair — flipping
+    it in `fedmaq.yaml` — is worse than the bug: that file is also the
+    formulation study's config and Ablation Configuration 7, and the ablation
+    inherited Configuration 7 from the primary grid. A pipeline there but not in
+    the arms makes every arm two removals from its reference rather than one,
+    with the damage falling on the communication axis where the ablation's claims
+    live. The arms matched only because the flag was uniformly false.
+    - **Resolution**: the flag is overridden per matrix file. Configuration 7 is
+      dispatched by `conf/matrix/ablation.yaml` pipeline-free as the study's own
+      anchor (grid 177 → 183, 7 net-new arms). `conf/matrix/benchmark_grid.yaml`
+      and `conf/matrix/uniform_memory_control.yaml` override it on.
+    - **The governing rule**, now stated in §4.3 so future runs inherit an answer:
+      a FedMAQ run carries the pipeline if and only if the runs it is compared
+      against carry it. The control arm's partner is the primary grid, so it
+      does; the formulation study and every ablation arm are contrasted within
+      their own sets, so they do not.
+    - **How to apply**: never set `post_process` in an algorithm config. Decide it
+      where the comparison is defined. Both directions are enforced in
+      `tests/test_simulation.py`.
+
+53. **Decisions 33-35 are superseded, not pending.** They recorded a
+    single-seed soft-voting pass whose noise floor was an empirical cluster band
+    (~1.6pp) standing in for a variance estimate nobody had, with #34 explicitly
+    flagged provisional pending multi-seed confirmation. The rewritten §4.3.1
+    replaces that whole procedure: σ is now measured from the unrefined cell at
+    three seeds and the keep-or-drop threshold is √2σ, implemented in
+    `scripts/analysis.py:exploration_noise_margin` and dispatched by
+    `conf/matrix/pass2_factorial.yaml`.
+    - The three refinement flags' shipped values are therefore an **exploration
+      outcome not yet measured**, not a decision awaiting a flip. Exploration has
+      not run. Read `fedmaq.yaml`'s current flag values as defaults, not as
+      findings, and do not cite Decision 34's `entropy_weight=2.0` /
+      `precision_weight=0.5` pick as settled.

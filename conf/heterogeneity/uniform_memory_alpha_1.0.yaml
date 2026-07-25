@@ -1,0 +1,14 @@
+# Uniform-memory control arm at moderate data skew (§4.1, §4.3).
+#
+# Same 8192 MB capacity for every client, so Tier-1 is held constant and the
+# arm's contrast against FedMAQ's variable-memory rows isolates server-side KD's
+# recovery from memory-based quantization. Split from uniform_memory.yaml into
+# per-alpha files because the run harness keys output directories on the
+# heterogeneity config name; a single file overridden twice would have written
+# both alphas to the same directory.
+#
+# Dispatch via conf/matrix/uniform_memory_control.yaml, which also sets the
+# post-processing flag this arm needs for parity with its comparison partner.
+partition: dirichlet
+alpha: 1.0
+uniform_memory_mb: 8192
