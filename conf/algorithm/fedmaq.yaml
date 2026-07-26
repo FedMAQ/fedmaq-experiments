@@ -25,7 +25,15 @@ tau_g: 0.5       # Alternative 4 (gradient norm threshold)
 tau_n: 0.5       # Alternative 4 (dataset size threshold)
 
 # Server-side Knowledge Distillation settings (§3.5)
-temperature: 1.0       # T — generalized softmax temperature
+# T — generalized softmax temperature. 1.0 is a DECISION, not the code default
+# it coincides with. Do not "fix" it upward on the strength of Hinton 2015:
+# that guidance is single-teacher, and FedDF (Lin et al. 2020) and FedMD
+# (Li et al. 2019) both distill server-side ensembles on the unmodified softmax.
+# More decisive here: soft_voting reads each teacher's output entropy as a
+# confidence signal (kd_utils.py entropy_weights), and raising T pushes every
+# teacher toward maximum entropy, collapsing the spread that weighting needs.
+# Rationale is written up in manuscript chapter_5.tex §5.2 and chapter_3.tex §3.4.
+temperature: 1.0
 kd_epochs: 1           # distillation passes over D_proxy per round
 server_kd_lr: 0.01     # SGD learning rate for global student during KD
 server_kd_momentum: 0.9  # SGD momentum for global student during KD
