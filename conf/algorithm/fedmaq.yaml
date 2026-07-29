@@ -3,7 +3,7 @@ name: fedmaq
 q_min: 1
 q_max: 16
 
-# Permissible discrete bit-width set per manuscript §4.2 (Q). The Tier-1 memory
+# Permissible discrete bit-width set per manuscript §3.3.3 (Q). The Tier-1 memory
 # hard-cap and Tier-2 soft target are combined via min() while still raw, then the
 # combined value is floored into the largest member of this set <= it, once —
 # q_min/q_max above only bound the *interpolation* range, not the final output.
@@ -27,8 +27,10 @@ tau_n: 0.5       # Alternative 4 (dataset size threshold)
 # Server-side Knowledge Distillation settings (§3.5)
 # T — generalized softmax temperature. 1.0 is a DECISION, not the code default
 # it coincides with. Do not "fix" it upward on the strength of Hinton 2015:
-# that guidance is single-teacher, and FedDF (Lin et al. 2020) and FedMD
-# (Li et al. 2019) both distill server-side ensembles on the unmodified softmax.
+# that guidance is for transfer to a smaller student. FedDF (Lin et al. 2020)
+# applies no temperature to its server-side ensemble at all, and DynFed (He et
+# al. 2025) never mentions one. Do NOT cite FedMD here: it aligns raw logits
+# without applying a softmax, and does so client-side.
 # More decisive here: soft_voting reads each teacher's output entropy as a
 # confidence signal (kd_utils.py entropy_weights), and raising T pushes every
 # teacher toward maximum entropy, collapsing the spread that weighting needs.

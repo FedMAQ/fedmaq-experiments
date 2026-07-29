@@ -24,7 +24,7 @@ from fedmaq.core.partitioning import get_client_loader
 
 logger = logging.getLogger(__name__)
 
-# Permissible bit-width set per manuscript §4.2: Q = {1,...,8, 16, 32}.
+# Permissible bit-width set per manuscript §3.3.3: Q = {1,...,8, 16, 32}.
 # 16/32-bit tiers are effectively "escape" precision levels for well-resourced
 # clients; reachability depends on c_unit and configured memory range (see
 # conf/algorithm/fedmaq.yaml).
@@ -35,6 +35,19 @@ DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
 # pass; tests inject a synthetic probe to drive plan_round without a dataset.
 GradNormProbe = Callable[[nn.Module, torch.Tensor, torch.Tensor], float]
 
+# Which Tier-2 constants each formulation actually consumes (see
+# compute_fedmaq_q_k_t). A constant listed here is read with no default, so a
+# renamed or misspelled key raises instead of falling back to a plausible value
+# and burning a grid run on the wrong formula. Constants absent from a
+# formulation's tuple are inert for that run and keep their defaults.
+FORMULATION_CONSTANTS: dict[int, tuple[str, ...]] = {
+    0: (),  # Resource-only hard cap: no Tier-2 signal, no constants.
+    1: ("gamma1", "gamma2"),
+    2: ("gamma1", "gamma2"),
+    3: ("lambda_val",),
+    4: ("tau_g", "tau_n"),
+}
+
 
 @dataclass(frozen=True)
 class _QuantParams:
@@ -44,6 +57,10 @@ class _QuantParams:
     ``from_cfg``, preserves the F8 fail-loud contract: the algorithm-defining
     knobs (``q_min``/``q_max``/``c_unit``/``formulation``) are read with no
     default so a missing/renamed key raises up front, before any probe work.
+    The Tier-2 constants extend the same contract conditionally, via
+    :data:`FORMULATION_CONSTANTS` — only the ones the selected formulation
+    consumes are required, since every fedmaq config carries all five while any
+    given run reads at most two.
     """
 
     q_min: int
@@ -60,16 +77,29 @@ class _QuantParams:
 
     @classmethod
     def from_cfg(cls, alg_cfg: dict[str, Any]) -> _QuantParams:
+        formulation = int(alg_cfg["formulation"])
+        if formulation not in FORMULATION_CONSTANTS:
+            raise ValueError(
+                f"algorithm.formulation={formulation} is not one of "
+                f"{sorted(FORMULATION_CONSTANTS)}; refusing to plan a round."
+            )
+        required = FORMULATION_CONSTANTS[formulation]
+
+        def constant(key: str, default: float) -> float:
+            if key in required:
+                return float(alg_cfg[key])
+            return float(alg_cfg.get(key, default))
+
         return cls(
             q_min=int(alg_cfg["q_min"]),
             q_max=int(alg_cfg["q_max"]),
             c_unit=float(alg_cfg["c_unit"]),
-            formulation=int(alg_cfg["formulation"]),
-            gamma1=float(alg_cfg.get("gamma1", 0.5)),
-            gamma2=float(alg_cfg.get("gamma2", 0.5)),
-            lambda_val=float(alg_cfg.get("lambda_val", 1.0)),
-            tau_g=float(alg_cfg.get("tau_g", 0.5)),
-            tau_n=float(alg_cfg.get("tau_n", 0.5)),
+            formulation=formulation,
+            gamma1=constant("gamma1", 0.5),
+            gamma2=constant("gamma2", 0.5),
+            lambda_val=constant("lambda_val", 1.0),
+            tau_g=constant("tau_g", 0.5),
+            tau_n=constant("tau_n", 0.5),
             bit_widths=tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)),
             # Removal flag for the manuscript §4.3.7 leave-one-out arm that drops
             # Tier-1 resource awareness. Absent means "nothing removed", so the
@@ -118,7 +148,7 @@ def compute_fedmaq_q_k_t(
 ) -> int:
     """Compute client-specific quantization bit-width for FedMAQ.
 
-    The final result is always a member of ``bit_widths`` (manuscript §4.2's
+    The final result is always a member of ``bit_widths`` (manuscript §3.3.3's
     permissible set Q), not an arbitrary continuous integer.
 
     ``resource_aware=False`` lifts the Tier-1 memory ceiling so the Tier-2 soft
@@ -163,7 +193,9 @@ def compute_fedmaq_q_k_t(
         else:
             q_hat = q_min
     else:
-        q_hat = q_min
+        # No silent fallback: an unrecognized formulation used to resolve to q_min,
+        # which is a valid-looking assignment produced by no formulation at all.
+        raise ValueError(f"formulation={formulation} is not one of {sorted(FORMULATION_CONSTANTS)}")
 
     # Clamp intermediate result to the configured [q_min, q_max] soft-target range.
     q_hat = max(float(q_min), min(float(q_max), float(q_hat)))

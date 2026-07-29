@@ -1181,6 +1181,67 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             shutil.rmtree(persistence_dir)
 
 
+def test_formulation_constants_fail_loud_when_the_formulation_consumes_them():
+    """A typo'd Tier-2 constant must raise, not fall back to a plausible default.
+
+    The grid is expensive and a wrong-formula run looks exactly like a right one
+    in its logs, so the constants the selected formulation actually reads are
+    required keys. Constants it does not read stay optional: every fedmaq config
+    ships all five while any one run consumes at most two.
+    """
+    from fedmaq.core.quantization_planner import _QuantParams
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+
+    base = {"q_min": 1, "q_max": 16, "c_unit": 512.0}
+
+    # Formulation 3 reads lambda_val, so a misspelling of it must not survive.
+    with pytest.raises(KeyError):
+        _QuantParams.from_cfg({**base, "formulation": 3, "lambda_value": 1.0})
+
+    # ...but tau_g/tau_n are inert under Formulation 3 and may be absent.
+    qp = _QuantParams.from_cfg({**base, "formulation": 3, "lambda_val": 1.0})
+    assert qp.lambda_val == 1.0
+
+    # Formulation 1 reads the weights instead, and is indifferent to lambda_val.
+    with pytest.raises(KeyError):
+        _QuantParams.from_cfg({**base, "formulation": 1, "gamma1": 0.5})
+    linear = _QuantParams.from_cfg({**base, "formulation": 1, "gamma1": 0.0, "gamma2": 1.0})
+    assert linear.gamma2 == 1.0
+
+    # An unrecognized formulation used to resolve to q_min for every client,
+    # which is a valid-looking assignment produced by no formulation at all.
+    with pytest.raises(ValueError, match="formulation"):
+        _QuantParams.from_cfg({**base, "formulation": 5, "lambda_val": 1.0})
+    with pytest.raises(ValueError, match="formulation"):
+        compute_fedmaq_q_k_t(
+            c_k=8192.0, c_unit=512.0, g_k=1.0, g_max=1.0, n_k=100, n_max=200,
+            formulation=5, q_min=1, q_max=16,
+        )
+
+
+def test_every_shipped_fedmaq_config_satisfies_the_fail_loud_contract():
+    """The guard above is only worth having if no shipped config trips it.
+
+    Each fedmaq variant is checked against every formulation the study sweeps,
+    not just its own declared one, because conf/matrix/formulation_study.yaml
+    dispatches all five by overriding `algorithm.formulation` on this same file.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    from fedmaq.core.quantization_planner import FORMULATION_CONSTANTS, _QuantParams
+
+    conf_dir = Path(__file__).resolve().parents[1] / "conf" / "algorithm"
+    fedmaq_configs = sorted(conf_dir.glob("fedmaq*.yaml"))
+    assert fedmaq_configs, "no fedmaq algorithm configs found"
+
+    for path in fedmaq_configs:
+        alg_cfg = yaml.safe_load(path.read_text())
+        for formulation in FORMULATION_CONSTANTS:
+            _QuantParams.from_cfg({**alg_cfg, "formulation": formulation})
+
+
 def test_ablation_leave_one_out_arms():
     """The §4.3.7 arms must each be one removal away from full FedMAQ.
 
