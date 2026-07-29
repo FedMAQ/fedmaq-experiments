@@ -45,6 +45,25 @@ def mock_dataset(monkeypatch):
     return mock_ds
 
 
+@pytest.fixture
+def mock_writer_dataset(monkeypatch):
+    """Mock FEMNIST-like dataset carrying real writer identifiers.
+
+    10 writers x 10 samples. Labels are deliberately writer-correlated so a partition
+    that ignored ``writer_ids`` would show up as an even class spread.
+    """
+    mock_data = torch.randn(100, 1, 28, 28)
+    writer_ids = np.repeat(np.arange(10), 10).astype(np.int32)
+    mock_labels = torch.from_numpy((writer_ids % 5).astype(np.int64))
+
+    mock_ds = TensorDataset(mock_data, mock_labels)
+    mock_ds.targets = mock_labels
+    mock_ds.writer_ids = writer_ids
+
+    monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
+    return mock_ds
+
+
 def test_model_factory_and_parameters():
     """Test get_model factory and get/set parameter helpers."""
     model = get_model("mnist", num_classes=10)
@@ -191,13 +210,21 @@ def test_partition_seed_invariant_for_paired_arms(mock_dataset, tmp_path, monkey
     )
 
 
-def test_writer_based_partitioning(mock_dataset, tmp_path, monkeypatch):
-    """Test writer-based natural partitioning (FEMNIST mode) with caching."""
+def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
+    """Writer-based natural partitioning (FEMNIST mode): one real writer per client.
+
+    Regression guard for the label-IID defect: the previous implementation chunked
+    each class into equal parts and handed every client a slice of every class, which
+    made the FEMNIST arm label-IID and gave every client the same local dataset size
+    (nulling FedMAQ's data-richness signal). Asserting one writer per client is what
+    that implementation could not satisfy.
+    """
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
     num_clients = 3
     num_public = 10
     seed = 42
+    writer_ids = mock_writer_dataset.writer_ids
 
     # First run (generates cache)
     pub_idx1, client_dict1 = generate_partition_indices(
@@ -211,9 +238,19 @@ def test_writer_based_partitioning(mock_dataset, tmp_path, monkeypatch):
     assert len(pub_idx1) == num_public
     assert len(client_dict1) == num_clients
 
-    # All samples should be accounted for (public + client partitions)
+    # Each client is exactly one writer, and no writer is shared between clients.
+    seen_writers = set()
+    for cid, indices in client_dict1.items():
+        assert indices, f"Client {cid} received no samples"
+        owners = {int(writer_ids[i]) for i in indices}
+        assert len(owners) == 1, f"Client {cid} spans {len(owners)} writers, expected 1"
+        seen_writers |= owners
+    assert len(seen_writers) == num_clients, "A writer was assigned to two clients"
+
+    # Samples from unselected writers are deliberately unused, mirroring LEAF's own
+    # subsampling — so the partition does NOT cover the corpus.
     total_client_samples = sum(len(v) for v in client_dict1.values())
-    assert len(pub_idx1) + total_client_samples == 100
+    assert len(pub_idx1) + total_client_samples < 100
 
     # No overlap between public pool and any client partition
     pub_set = set(pub_idx1)

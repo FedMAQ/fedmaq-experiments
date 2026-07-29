@@ -1,6 +1,7 @@
 # FEMNIST heterogeneity — writer-based natural partition (no Dirichlet).
-# EMNIST byclass preserves writer locality within each class via natural ordering.
-# We approximate writer partitions by chunking each class into num_clients equal groups.
+# Each client is one real NIST SD19 writer from the LEAF FEMNIST federated split, so
+# heterogeneity is the corpus's own: label skew, sample-count skew, and handwriting
+# style skew arrive together. Requires dataset=femnist (LEAF build, not torchvision).
 # alpha is unused for this partition mode but retained for schema consistency.
 partition: writer
 alpha: 1.0  # Not used; present for schema consistency

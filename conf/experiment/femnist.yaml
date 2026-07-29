@@ -1,5 +1,6 @@
 # FEMNIST experiment override — writer-based natural partitioning.
-# LEAF FEMNIST has ~3,550 writers; we simulate 200 writers for computational tractability.
+# The LEAF FEMNIST federated split has 3,400 writers; we sample 200 of them (one real
+# writer per client) for computational tractability, as LEAF itself does when scaling down.
 # Usage: uv run python scripts/run.py dataset=femnist heterogeneity=femnist experiment=femnist
 #
 # IMPORTANT: pair with heterogeneity=femnist to activate the writer partition mode.

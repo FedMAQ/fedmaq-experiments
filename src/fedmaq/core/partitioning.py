@@ -3,10 +3,18 @@
 Supported partition modes:
 - ``dirichlet``: Artificial non-IID skew via Dirichlet(alpha) distribution. Used for
   CIFAR-10 and CIFAR-100.
-- ``writer``: Writer-based natural partitioning for FEMNIST. EMNIST byclass preserves
-  writer locality within each class via natural ordering; we approximate writer
-  partitions by dividing each class's samples into ``num_clients`` equal chunks along
-  the natural ordering axis, yielding non-IID distributions without artificial skewing.
+- ``writer``: Writer-based natural partitioning for FEMNIST. Each client is one real
+  NIST Special Database 19 writer, taken from the LEAF FEMNIST federated split, so the
+  heterogeneity is the dataset's own rather than an artificial skew.
+
+.. note::
+    ``writer`` previously approximated writers by chunking each class into equal parts
+    along torchvision EMNIST's natural ordering. That approximation handed every client
+    a slice of every class, which made the FEMNIST arm label-IID (total-variation
+    distance to the global label distribution 0.0013) *and* gave every client an
+    identical local dataset size. The latter silently disabled FedMAQ's data-richness
+    signal on FEMNIST, since a constant :math:`|D_k|` carries no information. Real LEAF
+    writers give TV distance 0.259 and an 8.9x spread in samples per client.
 """
 
 import json
@@ -19,11 +27,17 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, Subset
-from torchvision.datasets import CIFAR10, CIFAR100, EMNIST, MNIST, FashionMNIST
+from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
 
 # Base paths
 DATA_DIR = Path("data").resolve()
 CACHE_DIR = Path(".data_partitions").resolve()
+
+# LEAF FEMNIST (federated EMNIST) — the canonical writer-partitioned build, hosted by
+# the TensorFlow Federated project. Used instead of torchvision's EMNIST because
+# torchvision ships no writer identifiers, which is what forced the old approximation.
+FEMNIST_LEAF_URL = "https://storage.googleapis.com/tff-datasets-public/fed_emnist.tar.bz2"
+FEMNIST_LEAF_DIR = DATA_DIR / "femnist_leaf"
 
 # Standard normalizations for torchvision datasets
 TRANSFORMS = {
@@ -31,6 +45,8 @@ TRANSFORMS = {
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     ),
     "fmnist": transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]),
+    # FEMNIST normalization lives on LEAFFEMNIST itself, which reads memmapped uint8
+    # arrays rather than PIL images and so cannot use a ToTensor-headed Compose.
     "femnist": transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]),
     "cifar10": transforms.Compose(
         [
@@ -45,6 +61,98 @@ TRANSFORMS = {
         ]
     ),
 }
+
+
+def _prepare_femnist_leaf(split: str) -> tuple[Path, Path, Path]:
+    """Materialize the LEAF FEMNIST split as memmap-friendly ``.npy`` arrays.
+
+    The upstream HDF5 nests samples under one group per writer, which is awkward for
+    the flat global index space the partitioner works in. We flatten it once into
+    parallel image/label/writer arrays and cache them; subsequent runs just memmap.
+
+    Pixels are stored as ``uint8`` with ink high. The upstream arrays are float32 in
+    ``[0, 1]`` on a *white* (1.0) background, which is inverted relative to the
+    MNIST/EMNIST convention the rest of this codebase and its normalization assume.
+    """
+    img_path = FEMNIST_LEAF_DIR / f"femnist_leaf_{split}_images.npy"
+    lbl_path = FEMNIST_LEAF_DIR / f"femnist_leaf_{split}_labels.npy"
+    wid_path = FEMNIST_LEAF_DIR / f"femnist_leaf_{split}_writers.npy"
+    if img_path.is_file() and lbl_path.is_file() and wid_path.is_file():
+        return img_path, lbl_path, wid_path
+
+    import h5py  # local import: only the one-time conversion needs it
+
+    h5_path = FEMNIST_LEAF_DIR / f"fed_emnist_{split}.h5"
+    if not h5_path.is_file():
+        _download_femnist_leaf()
+
+    with h5py.File(h5_path, "r") as f:
+        group = f["examples"]
+        # Sorted for determinism: HDF5 key order is not guaranteed stable across builds.
+        writer_keys = sorted(group.keys())
+        total = sum(group[k]["label"].shape[0] for k in writer_keys)
+
+        images = np.lib.format.open_memmap(
+            img_path, mode="w+", dtype=np.uint8, shape=(total, 28, 28)
+        )
+        labels = np.empty(total, dtype=np.int64)
+        writers = np.empty(total, dtype=np.int32)
+
+        cursor = 0
+        for widx, key in enumerate(writer_keys):
+            px = group[key]["pixels"][:]
+            lb = group[key]["label"][:]
+            n = lb.shape[0]
+            # Invert to ink-high, then quantize to uint8.
+            images[cursor : cursor + n] = np.rint((1.0 - px) * 255.0).astype(np.uint8)
+            labels[cursor : cursor + n] = lb
+            writers[cursor : cursor + n] = widx
+            cursor += n
+
+        images.flush()
+
+    np.save(lbl_path, labels)
+    np.save(wid_path, writers)
+    return img_path, lbl_path, wid_path
+
+
+def _download_femnist_leaf() -> None:
+    """Fetch and unpack the LEAF FEMNIST archive into :data:`FEMNIST_LEAF_DIR`."""
+    import tarfile
+    import urllib.request
+
+    FEMNIST_LEAF_DIR.mkdir(parents=True, exist_ok=True)
+    archive = FEMNIST_LEAF_DIR / "fed_emnist.tar.bz2"
+    if not archive.is_file():
+        urllib.request.urlretrieve(FEMNIST_LEAF_URL, archive)  # noqa: S310 (pinned https)
+    with tarfile.open(archive, "r:bz2") as tar:
+        tar.extractall(FEMNIST_LEAF_DIR, filter="data")
+
+
+class LEAFFEMNIST(Dataset):
+    """LEAF FEMNIST with real NIST SD19 writer identifiers.
+
+    Exposes ``targets`` and ``writer_ids`` as parallel arrays over a flat global index
+    space, so :func:`generate_partition_indices` can carve a public proxy pool and then
+    assign whole writers to clients using the same index arithmetic as the other
+    datasets.
+    """
+
+    def __init__(self, train: bool = True) -> None:
+        split = "train" if train else "test"
+        img_path, lbl_path, wid_path = _prepare_femnist_leaf(split)
+        self.images = np.load(img_path, mmap_mode="r")
+        self.targets = np.load(lbl_path)
+        self.writer_ids = np.load(wid_path)
+        self.normalize = transforms.Normalize((0.5,), (0.5,))
+
+    def __len__(self) -> int:
+        return int(self.targets.shape[0])
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
+        # copy(): the memmap is read-only, and torch.from_numpy rejects non-writable buffers
+        img = torch.from_numpy(np.array(self.images[index])).unsqueeze(0).float().div_(255.0)
+        return self.normalize(img), int(self.targets[index])
 
 
 @lru_cache(maxsize=8)
@@ -72,15 +180,9 @@ def load_dataset(dataset_name: str, train: bool = True) -> Dataset:
     elif name_lower == "fmnist":
         return FashionMNIST(DATA_DIR, train=train, download=True, transform=TRANSFORMS["fmnist"])
     elif name_lower == "femnist":
-        # FEMNIST is approximated via EMNIST with 'byclass' split.
-        # Writer locality is preserved in the natural ordering within each class.
-        return EMNIST(
-            DATA_DIR,
-            split="byclass",
-            train=train,
-            download=True,
-            transform=TRANSFORMS["femnist"],
-        )
+        # LEAF FEMNIST, which carries the real writer identifiers the ``writer``
+        # partition mode needs. torchvision's EMNIST has no writer column.
+        return LEAFFEMNIST(train=train)
     elif name_lower in ["cifar10", "cifar-10"]:
         return CIFAR10(DATA_DIR, train=train, download=True, transform=TRANSFORMS["cifar10"])
     elif name_lower in ["cifar100", "cifar-100"]:
@@ -131,25 +233,44 @@ def _generate_dirichlet_partition(
 
 def _generate_writer_partition(
     class_indices: dict[int, np.ndarray],
+    writer_ids: np.ndarray,
     num_clients: int,
+    rng: np.random.Generator,
 ) -> dict[str, list[int]]:
-    """Writer-based natural partition for FEMNIST.
+    """Writer-based natural partition for FEMNIST: one real writer per client.
 
-    EMNIST byclass preserves writer locality within each class via natural ordering.
-    We approximate writer partitions by dividing each class's samples into
-    ``num_clients`` equal chunks along the natural ordering axis, yielding non-IID
-    distributions without artificial Dirichlet skewing.
+    ``num_clients`` writers are drawn without replacement from those still holding
+    samples after the public proxy pool has been carved out. Samples belonging to
+    unselected writers go unused, which is the same subsampling LEAF itself applies
+    when scaling the 3,400-writer corpus down to a tractable client count.
 
-    This approximation is calibrated against LEAF FEMNIST by setting
-    ``num_clients`` to approximately the number of real writers (default: 200).
+    Unlike the Dirichlet path this consumes no ``alpha``: the skew in label
+    distribution, sample count, and handwriting style is the corpus's own.
     """
-    client_indices: dict[str, list[int]] = {str(k): [] for k in range(num_clients)}
-    for remaining_idx in class_indices.values():
-        # Preserve natural ordering — writer locality is encoded in EMNIST's structure
-        chunks = np.array_split(remaining_idx, num_clients)
-        for k, chunk in enumerate(chunks):
-            client_indices[str(k)].extend(chunk.tolist())
-    return client_indices
+    if num_clients > 0 and writer_ids.size == 0:
+        raise ValueError("writer partition requires a dataset exposing writer_ids")
+
+    remaining = np.concatenate([idx for idx in class_indices.values() if idx.size > 0])
+    remaining_writers = writer_ids[remaining]
+
+    available = np.unique(remaining_writers)
+    if available.size < num_clients:
+        raise ValueError(
+            f"writer partition needs {num_clients} writers but only {available.size} "
+            f"remain after reserving the public pool"
+        )
+    selected = rng.choice(available, size=num_clients, replace=False)
+
+    # Group once rather than filtering per writer: the corpus is ~670k samples.
+    order = np.argsort(remaining_writers, kind="stable")
+    sorted_writers = remaining_writers[order]
+    starts = np.searchsorted(sorted_writers, selected, side="left")
+    ends = np.searchsorted(sorted_writers, selected, side="right")
+
+    return {
+        str(k): remaining[order[start:end]].tolist()
+        for k, (start, end) in enumerate(zip(starts, ends, strict=True))
+    }
 
 
 def generate_partition_indices(
@@ -236,7 +357,15 @@ def generate_partition_indices(
 
     # Step 2: Partition remaining data
     if partition == "writer":
-        client_indices = _generate_writer_partition(class_indices, num_clients)
+        writer_ids = getattr(dataset, "writer_ids", None)
+        if writer_ids is None:
+            raise ValueError(
+                f"partition='writer' requires writer identifiers, which "
+                f"{dataset_name!r} does not expose"
+            )
+        client_indices = _generate_writer_partition(
+            class_indices, np.asarray(writer_ids), num_clients, rng
+        )
     else:
         client_indices = _generate_dirichlet_partition(class_indices, num_clients, alpha, rng)
 
