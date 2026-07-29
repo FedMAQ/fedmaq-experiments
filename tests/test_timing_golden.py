@@ -2,7 +2,7 @@
 
 Simulated runtime and communication overhead are logged thesis metrics
 (``evaluation-metrics.md``). Phase 3 of the refactor relocated the algorithm-specific
-magic numbers baked into ``PhysicalCostModel`` (FedKD compute penalty ``2.5``; FedMD
+magic numbers baked into ``PhysicalCostModel`` (FedKD compute penalty ``1.3``; FedMD
 round-1 pretraining ``10`` epochs; server-side KD speed ``2000.0``) behind
 ``StrategyHook`` methods / config keys.
 
@@ -53,11 +53,11 @@ def _delay(hook, num_samples, epochs, num_public, public_epochs, server_round):
 
 
 def test_fedkd_compute_penalty_golden():
-    """FedKD scales effective compute speed by the 2.5x dual-model penalty."""
+    """FedKD scales effective compute speed by the 1.3x dual-model penalty."""
     hook = FedKDHook({"algorithm": {}})
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=1)
-    # 200 samples * 5 epochs = 1000; effective speed = 100 / 2.5 = 40 -> 25.0 s.
-    assert t_train == 25.0
+    # 200 samples * 5 epochs = 1000; effective speed = 100 / 1.3 -> 13.0 s.
+    assert t_train == 13.0
 
 
 def test_fedavg_no_compute_penalty_golden():

@@ -1,4 +1,7 @@
 name: fedpaq
+# Not a FedPAQ-published value. That paper parameterizes in quantization levels
+# s in {1, 5, 10} and never publishes a bit-width; 8-bit is the precision at
+# which Wu et al. (2022) benchmark FedPAQ as a baseline. Manuscript §4.3.2.
 q: 8
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.

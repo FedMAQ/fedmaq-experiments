@@ -1,5 +1,9 @@
 name: fedprox
-mu: 0.01
+# Li et al. (2020) tune mu over {0.001, 0.01, 0.1, 1} across five datasets and
+# report best values of 1, 1, 1, 0.001, 0.01. The 0.01 this file used to carry
+# is the best value for Sent140 (LSTM sentiment); for both image datasets the
+# published best is 1. Manuscript §4.3.2, Table 4.1.
+mu: 1.0
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

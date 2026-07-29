@@ -8,8 +8,17 @@ tmax: 0.95  # target SVD energy cutoff T_SVD per manuscript §4.3, Table 4.1
 # probe: floor=0.25 removes the mid-round dip and keeps rank+accuracy
 # improving together across rounds.
 min_rank_frac: 0.25
-temperature: 2.0  # mutual KD temperature (client-side, distinct from server KD)
-compute_penalty: 2.5  # simulated client compute slowdown from joint student+teacher training
+# FedKD's paper contains zero occurrences of "temperature": its mutual
+# distillation is gated by prediction correctness, not by softmax softening
+# (manuscript §4.2 says so explicitly). 1.0 is the neutral point that makes the
+# manuscript's description true of what actually runs. Do not raise this.
+temperature: 1.0  # mutual KD temperature (client-side, distinct from server KD)
+# Simulated client compute slowdown from joint student+teacher training.
+# Was 2.5, which contradicts the source: FedKD reports the mentee's extra cost
+# as "much smaller" than the mentor's. Under our iso-architecture pairing the
+# student is a width-0.5 MobileNetV2GN (~0.59M) against a 2.24M teacher, so the
+# marginal cost is ~0.3x the teacher plus SVD. Manuscript §4.3.3.4.
+compute_penalty: 1.3
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

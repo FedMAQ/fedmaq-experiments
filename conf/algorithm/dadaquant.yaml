@@ -1,6 +1,9 @@
 name: dadaquant
 psi: 0.9
-phi: 5
+# Hönig et al. (2022) set phi to 1/10th of the number of rounds -- a rule, not a
+# constant. At R=100 that is 10, not the 5 this file used to carry. If R changes,
+# re-derive rather than reusing this number. Manuscript §4.3.2, Table 4.1.
+phi: 10
 q_min: 1
 q_max: 8
 

@@ -45,7 +45,7 @@ class FedKDHook(StrategyHook):
         self._min_rank_frac = float(alg_cfg.get("min_rank_frac", 0.0))
         self._total_rounds = int(config.get("experiment", {}).get("total_rounds", 10))
         # Dual-model (student+teacher) training slows effective client compute.
-        self._compute_penalty = float(alg_cfg.get("compute_penalty", 2.5))
+        self._compute_penalty = float(alg_cfg.get("compute_penalty", 1.3))
         # Cached energy for current round (set in pre_configure_fit, read in configure_fit)
         self._current_energy: float = self._tmin
         # Client-side reference state: the last parameters the clients actually
