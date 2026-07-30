@@ -3,7 +3,9 @@ data/
 .data_partitions/
 /experiments/
 multirun/
-outputs/
+# outputs/ is not ignored wholesale -- see the grid-results block at the end of
+# this file. A `dir/` rule stops git descending, which makes re-inclusion of
+# anything beneath it impossible regardless of later negations.
 references/
 wandb/
 /experiment_log.csv
@@ -227,3 +229,38 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Grid results: track the analysis inputs, drop the bulk
+#
+# scripts/common.get_canonical_output_dir writes every run under outputs/, and
+# scripts/analysis.py rebuilds every reported table from the per-run CSV/JSONL
+# there. The 183-run grid executes on a shared VM we do not administer, so those
+# inputs need a path off that host; WandB carries the metrics but not the Hydra
+# config, the run log, or sweep_status.json.
+#
+# Checkpoints (final_global_model.pt, ~27 MB each) stay untracked -- they are
+# several GB across the grid and nothing reported is computed from them.
+#
+# This block must stay at the END of the file: `*.log` above would otherwise
+# re-ignore run.log, since the last matching pattern wins.
+outputs/**
+!outputs/**/
+!outputs/**/experiment_log.csv
+!outputs/**/experiment_log.jsonl
+!outputs/**/run.log
+!outputs/**/.hydra/*.yaml
+!outputs/**/sweep_status.json
+
+# Legacy pre-matrix Hydra runs land in outputs/<date>/<time>/ rather than the
+# canonical outputs/<phase>/... taxonomy. They are local scratch, not grid
+# results, so re-ignore them after the negations above.
+outputs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+
+# Scratch phases. The reported grid runs under phase `formal` (the 183-run
+# confirmatory matrices) and `explore` (pass2/pass3 staging); `ci`, `smoke` and
+# `golden` are throwaway validation runs. Deliberately an exclusion list rather
+# than an allowlist of the two real phases: a phase name added later should
+# default to being kept, since silently dropping results is the costlier failure.
+outputs/ci/
+outputs/smoke/
+outputs/golden/
