@@ -9,13 +9,13 @@ Hydra's ``compose`` API and call :func:`run` directly.
 import logging
 import os
 import random
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import flwr as fl
 import numpy as np
 import torch
 from flwr.clientapp import ClientApp
-from flwr.common import Scalar, ndarrays_to_parameters
+from flwr.common import ConfigRecordValues, Scalar, ndarrays_to_parameters
 from flwr.server import ServerAppComponents, ServerConfig
 from flwr.serverapp import ServerApp
 from flwr.simulation import run_simulation
@@ -42,6 +42,78 @@ from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
 logger = logging.getLogger("fedmaq")
+
+# Linux caps Unix domain socket paths near 108 bytes, and Ray builds its plasma-store
+# socket beneath the session temp dir as roughly
+# ``<root>/session_<19 chars>/sockets/plasma_store``.
+RAY_SOCKET_PATH_BUDGET = 107
+RAY_SESSION_SUFFIX_BUDGET = 60
+
+
+def build_ray_init_args(cfg: DictConfig) -> dict[str, ConfigRecordValues]:
+    """Translate the ``ray:`` config block into ``ray.init()`` keyword arguments.
+
+    Returns ``{}`` when nothing is configured, and the caller then omits
+    ``init_args`` from ``backend_config`` entirely, which reproduces Flower's stock
+    behaviour exactly. Both settings are host properties and both ship null, so the
+    local development rig is unaffected by their existence.
+
+    The pass-through is real but undocumented, so it is worth recording why this
+    works. ``run_simulation`` merges ``init_args`` with its own ``logging_level`` /
+    ``log_to_driver`` defaults and JSON-serialises the whole ``backend_config``
+    (``flwr/simulation/run_simulation.py``), then ``RayBackend.init_ray`` copies
+    every key of it verbatim into the ``ray.init()`` call
+    (``raybackend.py:107-122``). There is no schema and no allowlist on that path,
+    which is what lets ``object_store_memory`` and ``_temp_dir`` through. Flower's
+    *other* ``init_args`` surface, the ``flwr run`` TOML federation config, is a
+    closed four-field dataclass (``num_cpus``, ``num_gpus``, ``logging_level``,
+    ``log_to_driver``); this thesis does not use that surface, and neither of the
+    two settings below could be expressed through it. The only real constraint here
+    is JSON-serialisability, which ``int`` and ``str`` satisfy.
+
+    ``_temp_dir`` is a private ``ray.init`` argument, absorbed by its ``**kwargs``
+    and popped in ``ray/_private/worker.py``. Ray requires it absolute and gives a
+    poor error when it is not, so reject a relative path here instead.
+    """
+    init_args: dict[str, ConfigRecordValues] = {}
+
+    object_store_gb = OmegaConf.select(cfg, "ray.object_store_gb", default=None)
+    if object_store_gb is not None:
+        init_args["object_store_memory"] = int(float(object_store_gb) * 1024**3)
+
+    temp_dir = OmegaConf.select(cfg, "ray.temp_dir", default=None)
+    if temp_dir:
+        # ``os.path.expanduser`` rather than ``Path.expanduser``: this value is a path
+        # on the host that runs Ray, and passing it through ``Path`` on Windows
+        # rewrites '/tmp/ray-cjb' into '\tmp\ray-cjb'. Keep it a string and let Ray
+        # receive exactly what was configured.
+        resolved = os.path.expanduser(str(temp_dir))
+        # Absoluteness is likewise checked against both path flavours rather than the
+        # local one, because the hub is Linux while the config is edited and dry-run
+        # from Windows, where ``PurePath('/tmp/ray-cjb').is_absolute()`` is False for
+        # want of a drive letter. A platform-native check would reject the correct hub
+        # value on the development rig.
+        if not (
+            PurePosixPath(resolved).is_absolute()
+            or PureWindowsPath(resolved).is_absolute()
+        ):
+            raise ValueError(
+                f"ray.temp_dir must be an absolute path, got '{temp_dir}'. Ray builds "
+                "its session directory beneath it and requires an absolute root."
+            )
+        if len(resolved) + RAY_SESSION_SUFFIX_BUDGET > RAY_SOCKET_PATH_BUDGET:
+            # A long root does not fail at init. It fails later, when the plasma
+            # store cannot bind its socket, so warn while the cause is still
+            # attributable.
+            logger.warning(
+                f"ray.temp_dir '{resolved}' is {len(resolved)} characters. Ray appends "
+                f"about {RAY_SESSION_SUFFIX_BUDGET} more to reach its plasma-store "
+                f"socket, against a ~{RAY_SOCKET_PATH_BUDGET}-character limit. Prefer "
+                f"a short path such as /tmp/ray-<user>."
+            )
+        init_args["_temp_dir"] = resolved
+
+    return init_args
 
 
 def set_seed(seed: int, strict: bool = True) -> None:
@@ -278,12 +350,20 @@ def run(cfg: DictConfig) -> TelemetryManager:
     server_app = ServerApp(server_fn=server_fn)
 
     # 5. Run FL simulation
-    backend_config = {
+    # Typed as Flower's own BackendConfig shape (dict[str, dict[str,
+    # ConfigRecordValues]]) so the two sub-dicts stay assignable to it. dict is
+    # invariant in its value type, so a narrower annotation such as
+    # dict[str, dict[str, float]] does not type-check against run_simulation.
+    backend_config: dict[str, dict[str, ConfigRecordValues]] = {
         "client_resources": {
             "num_cpus": 1,
             "num_gpus": float(OmegaConf.select(cfg, "experiment.client_gpus", default=0.0)),
         }
     }
+    init_args = build_ray_init_args(cfg)
+    if init_args:
+        logger.info(f"Ray init_args: {init_args}")
+        backend_config["init_args"] = init_args
 
     logger.info("Starting Flower Simulation...")
     run_simulation(

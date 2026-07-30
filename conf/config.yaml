@@ -88,3 +88,31 @@ hydra:
 # See the headers of fedmaq.yaml and conf/matrix/ablation.yaml before changing
 # this. Both directions are enforced in tests/test_simulation.py.
 seed: 42
+
+# Ray runtime settings, forwarded to ray.init() through Flower's
+# ``backend_config["init_args"]`` (see fedmaq.simulation).
+#
+# These are properties of the execution host, not of the experiment, which is why
+# they sit here rather than under conf/experiment/: that group is replaced wholesale
+# by ``experiment=femnist``, so a key placed there has to be copied into all four
+# files and is silently lost by the fifth.
+#
+# Both default to null, reproducing Flower's stock ray.init() exactly. Set them on
+# the host that needs them:
+#
+#   object_store_gb  Ray sizes its object store at ~30% of *total* RAM. On the
+#                    datacenter allocation that is ~19 GB of a 64 GB machine with
+#                    only ~28 GB actually available, and .claude/rules/
+#                    flower-patterns.md records that low system RAM starves
+#                    Ray/PyTorch init independently of VRAM. 4 is ample: the store
+#                    carries parameter payloads between actors, and MobileNetV2GN is
+#                    ~27 MB of weights.
+#   temp_dir         Ray's session directory defaults to /tmp/ray. The allocation is
+#                    one shared VM with per-user Unix accounts and a shared /tmp, so
+#                    a co-tenant's session collides with ours there. Use a short
+#                    per-user path such as /tmp/ray-cjb. Short, not under $HOME:
+#                    Ray builds Unix domain sockets beneath this directory and those
+#                    paths cap near 107 characters.
+ray:
+  object_store_gb: null
+  temp_dir: null

@@ -528,6 +528,246 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     assert "algorithm=fedavg" in dispatched[0]
 
 
+def _write_probe_matrix(tmp_path, arms):
+    """Write a minimal matrix file with one run per entry in ``arms``."""
+    matrix_dir = tmp_path / "conf" / "matrix"
+    matrix_dir.mkdir(parents=True, exist_ok=True)
+    runs = "".join(f"  - alg: {alg}\n" for alg in arms)
+    (matrix_dir / "probe.yaml").write_text(
+        "phase: smoke\n"
+        "experiment_group: status_probe\n"
+        "dataset: cifar10\n"
+        "model: mobilenetv2\n"
+        "total_rounds: 1\n"
+        "seeds: [0]\n"
+        "heterogeneities: [dirichlet_alpha_0.1]\n"
+        f"runs:\n{runs}",
+        encoding="utf-8",
+    )
+    return Path("outputs/smoke/cifar10_mobilenetv2/status_probe")
+
+
+def test_sweep_aborts_on_consecutive_failures_without_claiming_it_finished(
+    tmp_path, monkeypatch
+):
+    """A systemic failure must stop the queue, not be repeated 100 more times.
+
+    On a contended GPU a co-tenant VRAM spike or a leaked Ray actor fails one run
+    and then every run after it. Detached via ``setsid`` there is no terminal to
+    notice from, so the sweep has to notice itself and say so in a file. The
+    terminal state must not be ``finished``: runs were left undispatched, and
+    ``sweep_status.json`` is the only account of that.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+    from scripts.common import SWEEP_STATUS_FILENAME
+
+    group_dir = _write_probe_matrix(
+        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    dispatched: list[list[str]] = []
+    monkeypatch.setattr(
+        run_matrix.subprocess,
+        "run",
+        lambda cmd, *a, **k: (
+            dispatched.append(cmd),
+            subprocess.CompletedProcess(cmd, 1),
+        )[1],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_matrix.py", "--matrix", "probe", "--max_consecutive_failures", "3"],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        run_matrix.main()
+    assert exc.value.code == 1, "an aborted sweep must exit non-zero"
+
+    assert len(dispatched) == 3, "the queue must stop at the threshold, not run on"
+    status = json.loads((group_dir / SWEEP_STATUS_FILENAME).read_text(encoding="utf-8"))
+    assert status["state"] == "aborted"
+    assert status["abort_reason"] and "3 consecutive failures" in status["abort_reason"]
+    assert status["total_tasks"] == 5
+    assert status["failed"] == 3
+
+
+def test_sweep_threshold_counts_consecutive_failures_not_total(tmp_path, monkeypatch):
+    """One success resets the counter: scattered failures are not a systemic one.
+
+    Without the reset, a threshold of 3 would abort any long sweep that merely
+    accumulated three unrelated bad runs across 100+ dispatches, which is exactly
+    the case ``--skip_completed`` gap-filling already handles well.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+    from scripts.common import SWEEP_STATUS_FILENAME
+
+    group_dir = _write_probe_matrix(
+        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    # Fail, fail, succeed, fail, fail: five tasks, four failures, never three in a row.
+    codes = iter([1, 1, 0, 1, 1])
+    monkeypatch.setattr(
+        run_matrix.subprocess,
+        "run",
+        lambda cmd, *a, **k: subprocess.CompletedProcess(cmd, next(codes)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_matrix.py", "--matrix", "probe", "--max_consecutive_failures", "3"],
+    )
+    run_matrix.main()
+
+    status = json.loads((group_dir / SWEEP_STATUS_FILENAME).read_text(encoding="utf-8"))
+    assert status["state"] == "finished"
+    assert status["abort_reason"] is None
+    assert status["failed"] == 4
+
+
+def test_sweep_kills_a_hung_run_and_records_it_distinguishably(tmp_path, monkeypatch):
+    """A Ray deadlock must not freeze the sweep at ``running`` forever.
+
+    Ray can deadlock waiting on an actor that never starts, the documented
+    low-system-RAM failure mode, and a bare ``subprocess.run`` waits on it
+    indefinitely. The timeout also has to reap Ray itself: ``subprocess.run`` kills
+    the direct child, while the raylet and actors are grandchildren that survive it
+    still holding VRAM.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+    from scripts.common import SWEEP_STATUS_FILENAME
+
+    group_dir = _write_probe_matrix(tmp_path, ["fedavg", "fedprox"])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    cleanups: list[int] = []
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: cleanups.append(1))
+
+    seen_timeouts: list[object] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        seen_timeouts.append(kwargs.get("timeout"))
+        if "algorithm=fedavg" in cmd:
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout") or 0)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(run_matrix.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_matrix.py", "--matrix", "probe", "--run_timeout_seconds", "900"],
+    )
+    run_matrix.main()
+
+    assert seen_timeouts == [900, 900], "the timeout must reach subprocess.run"
+    status = json.loads((group_dir / SWEEP_STATUS_FILENAME).read_text(encoding="utf-8"))
+    assert status["state"] == "finished", "one hang is not a systemic failure"
+    assert status["failed"] == 1 and status["completed"] == 1
+    hang = status["failures"][0]
+    assert hang["timed_out"] is True
+    assert hang["returncode"] == run_matrix.TIMEOUT_RETURNCODE
+    # Two per-run cleanups plus the post-sweep one, plus the extra reap on timeout.
+    assert len(cleanups) == 4, "a timeout must trigger its own Ray cleanup"
+
+
+def test_no_timeout_by_default_so_a_slow_run_is_not_a_failed_one(tmp_path, monkeypatch):
+    """The default must stay ``None``, not a guessed number.
+
+    Total grid runtime is unmeasured, and the contended host makes the tail long. A
+    default timeout would convert slowness into fabricated failures.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+
+    _write_probe_matrix(tmp_path, ["fedavg"])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    seen: list[object] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        seen.append(kwargs.get("timeout"))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(run_matrix.subprocess, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "probe"])
+    run_matrix.main()
+
+    assert seen == [None]
+
+
+def test_ray_init_args_default_to_flowers_stock_behaviour():
+    """Absent config must produce no ``init_args`` at all, not an empty dict of them.
+
+    The local development rig and the CI suite run without either setting, so the
+    null path has to be byte-identical to what shipped before this existed.
+    """
+    from fedmaq.simulation import build_ray_init_args
+
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(config_name="config")
+    assert cfg.ray.object_store_gb is None
+    assert cfg.ray.temp_dir is None
+    assert build_ray_init_args(cfg) == {}
+
+
+def test_ray_init_args_translate_to_ray_kwargs():
+    """The two host settings must arrive as the exact ``ray.init`` keyword names.
+
+    Flower forwards every ``init_args`` key verbatim into ``ray.init()`` with no
+    schema, so a misspelling is not caught anywhere: Ray absorbs unknown
+    underscore-prefixed names into ``**kwargs``. Pin the spellings and the GB to
+    bytes conversion here.
+    """
+    from fedmaq.simulation import build_ray_init_args
+
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=["ray.object_store_gb=4", "ray.temp_dir=/tmp/ray-cjb"],
+        )
+    args = build_ray_init_args(cfg)
+    assert args["object_store_memory"] == 4 * 1024**3
+    assert args["_temp_dir"] == "/tmp/ray-cjb"
+
+
+def test_ray_temp_dir_must_be_absolute():
+    """Ray requires an absolute temp dir and reports a relative one poorly.
+
+    Rejecting it here keeps the failure attributable to the config that caused it.
+    """
+    from fedmaq.simulation import build_ray_init_args
+
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["ray.temp_dir=ray-tmp"])
+    with pytest.raises(ValueError, match="absolute path"):
+        build_ray_init_args(cfg)
+
+
 @pytest.mark.parametrize("algorithm", ALGORITHM_CONFIGS)
 def test_algorithm_config_composes(algorithm):
     """Every algorithm config must compose into a structurally valid experiment config.

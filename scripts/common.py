@@ -22,14 +22,26 @@ def kill_ray_processes() -> None:
 
     Ensures VRAM and process memory are released between sequential runs to
     prevent CUDA OOM and Ray actor leaks.
+
+    ``ray stop``'s exit status is reported rather than discarded. A failed cleanup
+    used to be completely invisible here, and on a contended GPU with roughly 11 GB
+    of usable headroom that is the difference between a clean sweep and an OOM
+    cascade through every remaining run. It stays non-fatal: no cluster to stop is
+    the normal case between runs and must not raise.
     """
     logger.info("Stopping Ray and cleaning up lingering processes...")
-    subprocess.run(
+    res = subprocess.run(
         ["uv", "run", "ray", "stop"],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         check=False,
+        text=True,
     )
+    if res.returncode != 0:
+        logger.warning(
+            f"'ray stop' exited with code {res.returncode}; leaked actors may still "
+            f"hold VRAM. stderr: {(res.stderr or '').strip()[:500]}"
+        )
     if sys.platform.startswith("win"):
         subprocess.run(
             ["taskkill", "/F", "/T", "/IM", "raylet.exe"],

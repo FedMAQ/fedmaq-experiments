@@ -41,6 +41,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("fedmaq.run_matrix")
 
+# Recorded in sweep_status.json for a run killed by --run_timeout_seconds. Distinct
+# from any exit code scripts/run.py itself produces, so a hang is separable from a
+# crash when reading the file back. Mirrors the shell's 128+SIGALRM convention.
+TIMEOUT_RETURNCODE = -128
+
 
 def resolve_matrix_path(matrix_arg: str) -> Path:
     """Resolve matrix file path from argument string."""
@@ -91,7 +96,35 @@ def main() -> None:
         action="store_true",
         help="Display planned execution grid without running commands",
     )
+    parser.add_argument(
+        "--max_consecutive_failures",
+        type=int,
+        default=3,
+        help=(
+            "Abort the sweep after this many consecutive run failures (default: 3; "
+            "0 disables). A systemic condition (a co-tenant VRAM spike, a leaked Ray "
+            "actor) fails one run and then every run after it, and a detached sweep "
+            "has no terminal to notice from."
+        ),
+    )
+    parser.add_argument(
+        "--run_timeout_seconds",
+        type=int,
+        default=0,
+        help=(
+            "Kill any single run exceeding this many seconds and record it as a "
+            "failure (default: 0, no timeout). Guards against hangs, not slowness: "
+            "Ray can deadlock waiting on an actor that never starts, which is the "
+            "documented low-system-RAM failure mode and leaves the sweep frozen "
+            "forever. Set generously from a measured run time."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.max_consecutive_failures < 0:
+        parser.error("--max_consecutive_failures must be >= 0")
+    if args.run_timeout_seconds < 0:
+        parser.error("--run_timeout_seconds must be >= 0")
 
     matrix_path = resolve_matrix_path(args.matrix)
     logger.info(f"Loading experiment matrix from {matrix_path}")
@@ -191,6 +224,8 @@ def main() -> None:
     completed = 0
     failed = 0
     skipped = 0
+    consecutive_failures = 0
+    abort_reason: str | None = None
     failures: list[dict] = []
     start_time = time.time()
     started_at = datetime.now().isoformat()
@@ -212,6 +247,10 @@ def main() -> None:
         Scoped to one invocation: the file is replaced, not appended, so a
         gap-filling re-run reflects that re-run's outcome rather than
         accumulating stale failures from the sweep it is repairing.
+
+        ``state`` is one of ``running``, ``finished``, or ``aborted``. An aborted
+        sweep is never recorded as finished: a detached sweep has to be able to
+        explain itself from this file alone, and ``abort_reason`` is where it does.
         """
         payload = {
             "matrix": matrix_path.as_posix(),
@@ -225,6 +264,7 @@ def main() -> None:
             "skipped": skipped,
             "failed_indices": [f["index"] for f in failures],
             "failures": failures,
+            "abort_reason": abort_reason,
         }
         try:
             status_path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,19 +293,38 @@ def main() -> None:
         kill_ray_processes()
 
         run_start = time.time()
-        res = subprocess.run(task["cmd"])
+        timed_out = False
+        try:
+            returncode = subprocess.run(
+                task["cmd"], timeout=args.run_timeout_seconds or None
+            ).returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            returncode = TIMEOUT_RETURNCODE
+            logger.error(
+                f"[TIMEOUT] Task [{idx}/{len(tasks)}] '{task['label']}' exceeded "
+                f"{args.run_timeout_seconds}s and was killed"
+            )
+            # subprocess.run kills the direct child on timeout, but Ray's raylet and
+            # actors are grandchildren and survive it, still holding VRAM. Reap them
+            # now rather than at the top of the next iteration, so a timeout that
+            # ends the sweep does not leave the cluster running.
+            kill_ray_processes()
         elapsed = time.time() - run_start
 
-        if res.returncode != 0:
-            logger.error(
-                f"[FAILED] Task [{idx}/{len(tasks)}] '{task['label']}' exited with code {res.returncode} ({elapsed:.1f}s)"
-            )
+        if returncode != 0:
+            if not timed_out:
+                logger.error(
+                    f"[FAILED] Task [{idx}/{len(tasks)}] '{task['label']}' exited with code {returncode} ({elapsed:.1f}s)"
+                )
             failed += 1
+            consecutive_failures += 1
             failures.append(
                 {
                     "index": idx,
                     "label": task["label"],
-                    "returncode": res.returncode,
+                    "returncode": returncode,
+                    "timed_out": timed_out,
                     "output_dir": task["output_dir"].as_posix(),
                     "elapsed_seconds": round(elapsed, 1),
                     "command": " ".join(task["cmd"]),
@@ -276,6 +335,26 @@ def main() -> None:
                 f"[SUCCESS] Task [{idx}/{len(tasks)}] '{task['label']}' completed in {elapsed:.1f}s"
             )
             completed += 1
+            consecutive_failures = 0
+
+        if (
+            args.max_consecutive_failures
+            and consecutive_failures >= args.max_consecutive_failures
+        ):
+            abort_reason = (
+                f"{consecutive_failures} consecutive failures at task index {idx} "
+                f"of {len(tasks)} (threshold {args.max_consecutive_failures})"
+            )
+            logger.error(f"\n{'=' * 70}")
+            logger.error(f"[ABORTED] {abort_reason}")
+            logger.error(
+                "Consecutive failures indicate a systemic condition rather than a bad "
+                "run. Diagnose, then re-run this matrix with --skip_completed to "
+                "resume from the last finished run."
+            )
+            logger.error(f"{'=' * 70}")
+            save_status("aborted")
+            break
 
         save_status("running")
         time.sleep(3)
@@ -295,9 +374,17 @@ def main() -> None:
             f"  Failed indices: {[f['index'] for f in failures]} "
             f"-- re-run with --skip_completed to fill the gaps"
         )
-    save_status("finished")
+    if abort_reason is None:
+        save_status("finished")
+    else:
+        # The loop already wrote "aborted". Re-save so the final counters land, but
+        # never as "finished": an aborted sweep left runs undispatched, and reading
+        # the file is the only way a detached sweep reports that.
+        save_status("aborted")
     logger.info(f"Sweep status written to {status_path}")
     logger.info("=" * 70)
+    if abort_reason is not None:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
