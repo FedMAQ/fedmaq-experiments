@@ -15,19 +15,38 @@ hydra:
 #   uv run python scripts/run.py --multirun seed=0,42,123
 # Canonical seeds: [0, 42, 123]
 #
-# Full benchmark sweep (CIFAR-10 / CIFAR-100, two alpha values, 3 seeds):
-#   uv run python scripts/run.py --multirun \
-#     dataset=cifar10,cifar100 heterogeneity=dirichlet_alpha_0.1,dirichlet_alpha_1.0 \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedkd,fedmaq,feddistill \
-#     seed=0,42,123
+# EVERY CONFIRMATORY RUN IS DISPATCHED THROUGH A MATRIX FILE. Do not hand-type a
+# --multirun for any of them. The 183 runs of §4.5:
 #
-# FEMNIST sweep (writer partition, 3 seeds):
-#   uv run python scripts/run.py --multirun \
-#     dataset=femnist heterogeneity=femnist experiment=femnist \
-#     algorithm=fedavg,fedprox,fedpaq,dadaquant,fedkd,fedmaq,feddistill \
-#     seed=0,42,123
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid           # 42
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid_cifar100  # 42
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid_femnist   # 21
+#   uv run python scripts/run_matrix.py --matrix formulation_study        # 30
+#   uv run python scripts/run_matrix.py --matrix ablation                 # 42
+#   uv run python scripts/run_matrix.py --matrix uniform_memory_control   #  6
 #
-# fedmd and cfd are deliberately absent from both sweeps above: DECISIONS #25/#26
+# The three benchmark_grid* files share one `experiment_group`, so analysis.py
+# reads them as the single 105-run primary grid the manuscript describes.
+#
+# The primary grid was a hand-typed --multirun here until 2026-07-30, for the
+# same reason the formulation study was until 2026-07-26, and it failed the same
+# two ways plus a third. It landed in a date-keyed multirun/ tree with no
+# experiment_group; it silently omitted `algorithm.post_process=true` on FedMAQ
+# while conf/matrix/benchmark_grid.yaml set it, so the CIFAR-100 and FEMNIST rows
+# of one communication table would have been measured in a different regime from
+# the CIFAR-10 rows; and nothing tested it, because tests read conf/matrix/ and a
+# comment is not a matrix. tests/test_simulation.py now asserts all three files
+# carry the flag and that they sum to 105.
+#
+# ORDERING IS LOAD-BEARING (§4.5). The exploration phase (pass2_explore ->
+# pass2_factorial -> pass3_freeze_confirm) completes and freezes first; the
+# formulation study runs next, carrying the surviving refinement layer, because
+# its Formulation 1 cell is Ablation Configuration 4's parity anchor; the
+# ablation runs after that, since its arms are pinned to the winning formulation.
+# The three benchmark_grid* files are independent of that chain only for the six
+# baselines; FedMAQ's own rows need the freeze.
+#
+# fedmd and cfd are deliberately absent from every grid: DECISIONS #25/#26
 # dropped them from the formal stack and manuscript §4.3.2 documents the
 # exclusions (fedmd's per-client transfer-learning pretrain does not scale to
 # K=100; cfd's 1-bit hard vote collapses to chance at this client scale). Their
@@ -58,9 +77,14 @@ hydra:
 #
 # ``algorithm.post_process`` (§4.3) gates FedMAQ's error-feedback/diff-coding/zlib
 # pipeline on top of quantization. It ships false in every conf/algorithm file and
-# is turned on per-grid instead: conf/matrix/benchmark_grid.yaml overrides it to
-# true for FedMAQ, and the FEMNIST sweep above must do the same when it runs.
-# The formulation study and every ablation arm stay pipeline-free by design --
-# see the headers of fedmaq.yaml and conf/matrix/ablation.yaml before changing
+# is turned on per-grid instead. The rule that decides it is always the same:
+# match the regime of whatever the run is compared against.
+#
+#   ON  — all three benchmark_grid* files, and uniform_memory_control.yaml,
+#         whose partner is FedMAQ's own primary-grid rows.
+#   OFF — formulation_study.yaml and every ablation.yaml arm, so no arm is two
+#         removals from its reference.
+#
+# See the headers of fedmaq.yaml and conf/matrix/ablation.yaml before changing
 # this. Both directions are enforced in tests/test_simulation.py.
 seed: 42

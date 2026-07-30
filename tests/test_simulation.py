@@ -155,7 +155,19 @@ def _post_process_overrides(matrix):
     return found
 
 
-def test_primary_grid_turns_the_post_process_pipeline_on():
+# §4.5's 105 primary-grid runs are split across three matrix files because
+# run_matrix.py reads ``dataset`` as a scalar and because FEMNIST differs on
+# client count, heterogeneity, and model too. They share one ``experiment_group``
+# so analysis.py reads them as a single grid.
+PRIMARY_GRID_MATRICES = (
+    "benchmark_grid",
+    "benchmark_grid_cifar100",
+    "benchmark_grid_femnist",
+)
+
+
+@pytest.mark.parametrize("name", PRIMARY_GRID_MATRICES)
+def test_primary_grid_turns_the_post_process_pipeline_on(name):
     """§4.3 applies difference coding, error compensation, and lossless encoding
     to FedMAQ for primary benchmarking.
 
@@ -164,12 +176,67 @@ def test_primary_grid_turns_the_post_process_pipeline_on():
     silently reports uncompressed payload numbers is this override. A comment is
     not a guard; a plausible-looking communication table is exactly the kind of
     defect nobody questions after the fact.
+
+    Parametrized over all three primary-grid files rather than checked on
+    CIFAR-10 alone. The CIFAR-100 and FEMNIST halves had no matrix file at all
+    until 2026-07-30 and were dispatched from a commented raw ``--multirun`` in
+    conf/config.yaml that omitted this flag, so FedMAQ's communication rows would
+    have been measured pipeline-free on two of three datasets and pipeline-on on
+    the third, in one table, with nothing failing.
     """
-    enabled = _post_process_overrides(_matrix("benchmark_grid"))
+    enabled = _post_process_overrides(_matrix(name))
     assert enabled.get("fedmaq") is True, (
-        "conf/matrix/benchmark_grid.yaml must run FedMAQ with "
+        f"conf/matrix/{name}.yaml must run FedMAQ with "
         "algorithm.post_process=true. Without it the primary grid measures "
         "communication without the §4.3 pipeline and reports it as if it had."
+    )
+
+
+def test_primary_grid_files_dispatch_all_105_runs():
+    """§4.5: main benchmark 2 datasets x 2 alpha x 7 algorithms x 3 seeds = 84,
+    plus FEMNIST 7 x 3 = 21.
+
+    The arithmetic is the point. A matrix file that silently covers one dataset
+    of three still runs to completion and still produces a table; the shortfall
+    shows up only as absent rows, months later. This asserts the three files sum
+    to what the manuscript promises, and that they agree on the group analysis.py
+    reads them by.
+    """
+    total = 0
+    for name in PRIMARY_GRID_MATRICES:
+        matrix = _matrix(name)
+        assert matrix["experiment_group"] == "benchmark_grid", (
+            f"conf/matrix/{name}.yaml declares experiment_group "
+            f"{matrix['experiment_group']!r}. All three primary-grid files must "
+            "share one group or analysis.py splits the headline table."
+        )
+        assert len(matrix["runs"]) == 7, (
+            f"conf/matrix/{name}.yaml dispatches {len(matrix['runs'])} algorithms; "
+            "§4.5 compares 7 (six baselines plus FedMAQ) on every dataset."
+        )
+        total += len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"])
+    assert total == 105, (
+        f"The primary grid dispatches {total} runs; §4.5 accounts for 105 "
+        "(84 CIFAR-10/100 + 21 FEMNIST)."
+    )
+
+
+def test_femnist_grid_selects_its_own_experiment_group():
+    """Table 4.1 note (a): FEMNIST runs at K = 200, one real LEAF writer each.
+
+    conf/experiment/default.yaml is K = 100 with MobileNetV2GN throughput
+    constants. Without the group override the FEMNIST grid composes from that
+    default and runs a differently-sized federation than the one the manuscript
+    describes, at the wrong telemetry, while looking entirely normal in the log.
+    """
+    matrix = _matrix("benchmark_grid_femnist")
+    assert matrix.get("experiment") == "femnist", (
+        "conf/matrix/benchmark_grid_femnist.yaml must set `experiment: femnist` "
+        "to pick up num_clients=200 and the SimpleCNN throughput constants."
+    )
+    assert matrix["heterogeneities"] == ["femnist"], (
+        "§4.1 exempts FEMNIST from the Dirichlet sweep; its writer partition is "
+        "already non-IID and layering synthetic skew on it departs from LEAF."
     )
 
 

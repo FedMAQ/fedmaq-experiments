@@ -89,6 +89,7 @@ def main() -> None:
     model = cfg.get("model", "mobilenetv2")
     total_rounds = int(cfg.get("total_rounds", 50))
     client_gpus = float(cfg.get("client_gpus", 1.0))
+    experiment = cfg.get("experiment", None)
     seeds = [int(s) for s in cfg.get("seeds", [0])]
     heterogeneities = list(cfg.get("heterogeneities", ["dirichlet_alpha_0.1"]))
     runs_spec = cfg.get("runs", [])
@@ -125,6 +126,7 @@ def main() -> None:
                     client_gpus=client_gpus,
                     target_dir=output_dir,
                     overrides=overrides,
+                    experiment=experiment,
                 )
 
                 tasks.append(
@@ -141,6 +143,8 @@ def main() -> None:
     print("=" * 70)
     print(f"FedMAQ Matrix Sweep: {exp_group.upper()}")
     print(f"Phase: {phase} | Dataset: {dataset} | Model: {model}")
+    if experiment:
+        print(f"Experiment group: {experiment}")
     print(f"Total Rounds: {total_rounds} | Client GPUs: {client_gpus}")
     print(f"Heterogeneities: {heterogeneities}")
     print(f"Seeds: {seeds}")

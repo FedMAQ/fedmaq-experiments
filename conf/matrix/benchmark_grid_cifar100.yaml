@@ -1,0 +1,50 @@
+# Primary confirmatory benchmark grid, CIFAR-100 half. 42 runs.
+#
+# Manuscript §4.5 accounts for 84 main-grid runs: 2 datasets x 2 alpha x 7
+# algorithms x 3 seeds. conf/matrix/benchmark_grid.yaml supplies the CIFAR-10
+# 42; this file supplies the CIFAR-100 42. They are separate files rather than
+# one file with a dataset list because scripts/run_matrix.py reads `dataset` as a
+# scalar, and because FEMNIST -- the third primary-grid file -- differs on client
+# count, heterogeneity, and model as well as dataset, so the dimension is ragged
+# and a list would not express it anyway.
+#
+# `experiment_group` is deliberately identical across all three primary-grid
+# files. scripts/analysis.py groups by it, not by matrix filename, so the
+# headline baseline comparison sees one grid; splitting the group would split the
+# table. The dataset is already a path segment (see get_canonical_output_dir), so
+# nothing collides.
+#
+# post_process=true on FedMAQ, matching benchmark_grid.yaml. This is the one
+# stage that runs FedMAQ with the §4.3 pipeline (error feedback + difference
+# coding + lossless zlib). Omitting it here while CIFAR-10 carries it would make
+# FedMAQ's communication rows incomparable across datasets -- the same row of the
+# same table measured under two different regimes. tests/test_simulation.py
+# enforces the flag on every primary-grid file.
+phase: formal
+experiment_group: benchmark_grid
+dataset: cifar100
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedavg
+    label: fedavg
+  - alg: fedprox
+    label: fedprox
+  - alg: fedpaq
+    label: fedpaq
+  - alg: dadaquant
+    label: dadaquant
+  - alg: feddistill
+    label: feddistill
+  - alg: fedkd
+    label: fedkd
+  - alg: fedmaq
+    label: fedmaq
+    overrides:
+      - algorithm.post_process=true

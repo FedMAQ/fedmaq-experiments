@@ -1,0 +1,55 @@
+# Primary confirmatory benchmark grid, FEMNIST half. 21 runs.
+#
+# Manuscript §4.5: "FEMNIST: 7 algorithms x 3 seeds = 21". No alpha sweep. §4.1
+# gives the reason -- the LEAF writer partition is already naturally non-IID, and
+# layering a synthetic Dirichlet skew on top of it is atypical against LEAF
+# convention -- so `heterogeneities` carries the single writer-partition config
+# rather than the two Dirichlet ones. Its `alpha: 1.0` is schema filler and is
+# unused by the writer partition mode.
+#
+# `experiment: femnist` is what makes this grid FEMNIST's rather than CIFAR's
+# with a different loader. conf/experiment/femnist.yaml sets num_clients=200 (one
+# real NIST SD19 writer per client, sampled from LEAF's 3,400, per Table 4.1
+# note a), compute_samples_per_sec=600 and server_compute_speed=10000 for
+# SimpleCNN rather than MobileNetV2GN (§4.3.4). Dispatching this grid without the
+# group override silently runs FEMNIST at K=100 on MobileNetV2GN telemetry.
+#
+# The matrix runner gained an `experiment:` key for exactly this file; before
+# that, FEMNIST had no dispatchable matrix at all and lived only as a commented
+# raw --multirun in conf/config.yaml. That command also omitted post_process,
+# which is the defect below.
+#
+# `model: simplecnn` is a path label only. src/fedmaq/core/models.py always
+# returns SimpleCNN for FEMNIST regardless of any model_name override, so this
+# names the output tree truthfully; it does not select anything.
+#
+# post_process=true on FedMAQ, matching both CIFAR halves. See the header of
+# benchmark_grid_cifar100.yaml. tests/test_simulation.py enforces it.
+phase: formal
+experiment_group: benchmark_grid
+dataset: femnist
+model: simplecnn
+experiment: femnist
+total_rounds: 100
+client_gpus: 1.0
+seeds: [0, 42, 123]
+heterogeneities:
+  - femnist
+
+runs:
+  - alg: fedavg
+    label: fedavg
+  - alg: fedprox
+    label: fedprox
+  - alg: fedpaq
+    label: fedpaq
+  - alg: dadaquant
+    label: dadaquant
+  - alg: feddistill
+    label: feddistill
+  - alg: fedkd
+    label: fedkd
+  - alg: fedmaq
+    label: fedmaq
+    overrides:
+      - algorithm.post_process=true

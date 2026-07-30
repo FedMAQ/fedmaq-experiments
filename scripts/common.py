@@ -81,8 +81,22 @@ def build_run_command(
     client_gpus: float,
     target_dir: Path,
     overrides: list[str] | None = None,
+    experiment: str | None = None,
 ) -> list[str]:
-    """Construct the command array for launching scripts/run.py via uv."""
+    """Construct the command array for launching scripts/run.py via uv.
+
+    ``experiment`` selects a non-default ``conf/experiment/`` group. It exists
+    for FEMNIST, whose grid is not the default one overridden a few values at a
+    time: ``conf/experiment/femnist.yaml`` carries ``num_clients=200`` (one real
+    LEAF writer per client) and the SimpleCNN throughput constants. Without this
+    the matrix runner could dispatch FEMNIST only at the CIFAR grid's K=100 and
+    MobileNetV2GN telemetry, which contradicts Table 4.1's note (a) and §4.3.4.
+
+    The group override is emitted *before* the ``experiment.*`` value overrides.
+    Hydra applies group selection during composition and values afterward, so
+    the order is not strictly required, but reading the command back is how a
+    dispatch mistake gets caught, and value-after-group is how it reads.
+    """
     cmd = [
         "uv",
         "run",
@@ -91,6 +105,10 @@ def build_run_command(
         f"dataset={dataset}",
         f"heterogeneity={heterogeneity}",
         f"algorithm={algorithm}",
+    ]
+    if experiment:
+        cmd.append(f"experiment={experiment}")
+    cmd += [
         f"experiment.total_rounds={total_rounds}",
         f"seed={seed}",
         f"experiment.client_gpus={client_gpus}",

@@ -1,10 +1,18 @@
-# Matrix specification for formal confirmatory benchmark grid (100 rounds, 3 seeds)
+# Primary confirmatory benchmark grid, CIFAR-10 half (100 rounds, 3 seeds). 42 runs.
 #
-# This is the ONLY stage that runs FedMAQ with the §4.3 post-processing pipeline
-# (error feedback + difference coding + lossless zlib). The flag lives here and
-# not in conf/algorithm/fedmaq.yaml because that same file is the formulation
-# study's config and Ablation Configuration 7, neither of which may carry the
-# pipeline. See the header of fedmaq.yaml and conf/matrix/ablation.yaml.
+# One of three files that together make up §4.5's 105 primary-grid runs:
+# this one (CIFAR-10, 42), benchmark_grid_cifar100.yaml (42), and
+# benchmark_grid_femnist.yaml (21). All three declare the same
+# `experiment_group: benchmark_grid` so scripts/analysis.py reads them as one
+# grid. Dispatch all three; running only this one delivers 42 of 105.
+#
+# FedMAQ runs here with the §4.3 post-processing pipeline (error feedback +
+# difference coding + lossless zlib). The flag lives in the matrix and not in
+# conf/algorithm/fedmaq.yaml because that same file is the formulation study's
+# config and Ablation Configuration 7, neither of which may carry the pipeline.
+# Pipeline on: the three primary-grid files and uniform_memory_control.yaml,
+# whose comparison partner is FedMAQ's rows here. Pipeline off: ablation.yaml and
+# formulation_study.yaml. See the header of fedmaq.yaml and of each matrix.
 phase: formal
 experiment_group: benchmark_grid
 dataset: cifar10

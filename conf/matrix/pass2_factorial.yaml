@@ -8,7 +8,7 @@
 #
 # Fully crossed over the three disclosed mechanisms: 2^3 = 8 cells x 3 seeds =
 # 24 runs. Held at the same held-out alpha = 0.3 as every other exploration run.
-# These runs are NOT part of the 177-run confirmatory grid (§4.5).
+# These runs are NOT part of the 183-run confirmatory grid (§4.5).
 #
 # Each mechanism's own hyperparameters stay at the neutral point of its range
 # (ema_decay 0.7, grad_norm_beta 0.7, entropy/precision weight 1.0) so the

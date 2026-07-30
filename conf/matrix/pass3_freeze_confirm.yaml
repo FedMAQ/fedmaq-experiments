@@ -23,7 +23,7 @@
 # enforces that they stay identical), then tag the commit. Chapter 6 §6.2
 # promises that tag as the recoverable frozen configuration.
 #
-# Not counted among the 177 confirmatory runs.
+# Not counted among the 183 confirmatory runs.
 phase: explore
 experiment_group: pass3_freeze_confirm
 dataset: cifar10
