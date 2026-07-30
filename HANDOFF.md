@@ -95,7 +95,16 @@ asserts the primary-grid share of that arithmetic.
   `benchmark_grid*` files and `uniform_memory_control`; OFF for `formulation_study` and
   every `ablation` arm. Both directions are enforced in `tests/test_simulation.py`.
 - **RAM Headroom & Crash Recovery**: Check system RAM headroom before Flower simulations.
-  Resume crashed matrix sweeps using `--start_at N` (1-indexed, and the index is into
-  that matrix's own task list — re-read the dry run before resuming).
+  Prefer `--skip_completed` for recovery: it re-dispatches only runs missing a
+  final-round `final_global_model.pt`, so a sweep that lost tasks 57 and 91 is repaired
+  by one re-invocation with no index arithmetic. `--start_at N` still exists for
+  deliberately resuming at a point (1-indexed, and the index is into that matrix's own
+  task list — re-read the dry run before using it). Both are previewable: `--dry_run`
+  labels each task it would skip and why.
+- **Every sweep writes `sweep_status.json`** to its experiment-group directory
+  (`outputs/<phase>/<dataset>_<model>/<exp_group>/`), rewritten after each task so it
+  survives a sweep that never reaches its summary. It carries `failed_indices`, plus the
+  label, exit code, and full command of each failure. Read it before deciding what to
+  re-run; it is scoped to one invocation and replaced on the next.
 - **Dry-run first**: `--dry_run` prints every composed command without executing. On a
   shared host this is the cheapest way to catch a wrong `experiment=` or output path.

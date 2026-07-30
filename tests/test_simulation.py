@@ -416,6 +416,118 @@ def test_final_global_model_is_written_only_on_the_last_round(tmp_path):
     assert torch.allclose(reconstructed.weight, model.weight)
 
 
+def test_run_completion_keys_on_the_final_round_checkpoint(tmp_path):
+    """Resume must not mistake a killed run for a finished one.
+
+    Every other per-run artifact appears before round 1, so the final-round
+    checkpoint is the only usable completion sentinel. Also pin the sweep-group
+    directory as an ancestor of the canonical run directory, since
+    ``sweep_status.json`` is written there.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
+    from fedmaq.core.manifest import MANIFEST_FILENAME
+    from scripts.common import (
+        get_canonical_output_dir,
+        get_sweep_group_dir,
+        is_run_complete,
+    )
+
+    assert not is_run_complete(tmp_path)
+    # Written before round 1, so it must not read as completion.
+    (tmp_path / MANIFEST_FILENAME).write_text("{}", encoding="utf-8")
+    (tmp_path / "experiment_log.csv").write_text("round\n", encoding="utf-8")
+    assert not is_run_complete(tmp_path)
+
+    (tmp_path / FINAL_MODEL_FILENAME).write_bytes(b"")
+    assert is_run_complete(tmp_path)
+
+    group = get_sweep_group_dir("primary", "cifar10", "mobilenetv2", "benchmark_grid")
+    run_dir = get_canonical_output_dir(
+        phase="primary",
+        dataset="cifar10",
+        model="mobilenetv2",
+        exp_group="benchmark_grid",
+        algorithm="fedmaq",
+        heterogeneity="dirichlet_alpha_0.1",
+        seed=0,
+    )
+    assert group in run_dir.parents
+
+
+def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monkeypatch):
+    """A multi-day sweep must leave a machine-readable record of what failed.
+
+    ``--start_at`` is positional, so without this the only account of *which*
+    index failed is a log stream, and gap-filling means arithmetic against it.
+    Drives the real runner with the subprocess call faked, so this exercises the
+    dispatch loop rather than a reimplementation of it.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+    from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
+    from scripts.common import SWEEP_STATUS_FILENAME
+
+    matrix_dir = tmp_path / "conf" / "matrix"
+    matrix_dir.mkdir(parents=True)
+    (matrix_dir / "probe.yaml").write_text(
+        "phase: smoke\n"
+        "experiment_group: status_probe\n"
+        "dataset: cifar10\n"
+        "model: mobilenetv2\n"
+        "total_rounds: 1\n"
+        "seeds: [0]\n"
+        "heterogeneities: [dirichlet_alpha_0.1]\n"
+        "runs:\n"
+        "  - alg: fedavg\n"
+        "  - alg: fedprox\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    dispatched: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        dispatched.append(cmd)
+        # First arm fails, second succeeds.
+        return subprocess.CompletedProcess(cmd, 1 if "algorithm=fedavg" in cmd else 0)
+
+    monkeypatch.setattr(run_matrix.subprocess, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "probe"])
+    run_matrix.main()
+
+    group_dir = Path("outputs/smoke/cifar10_mobilenetv2/status_probe")
+    status = json.loads((group_dir / SWEEP_STATUS_FILENAME).read_text(encoding="utf-8"))
+    assert status["state"] == "finished"
+    assert status["total_tasks"] == 2
+    assert status["completed"] == 1
+    assert status["failed_indices"] == [1]
+    assert status["failures"][0]["label"] == "fedavg-dirichlet_alpha_0.1-seed0"
+    assert status["failures"][0]["returncode"] == 1
+
+    # Mark the arm that succeeded as complete; the gap-filling re-run must
+    # dispatch only the one that failed.
+    done = group_dir / "fedprox" / "dirichlet_alpha_0.1" / "seed_0"
+    done.mkdir(parents=True, exist_ok=True)
+    (done / FINAL_MODEL_FILENAME).write_bytes(b"")
+
+    dispatched.clear()
+    monkeypatch.setattr(
+        sys, "argv", ["run_matrix.py", "--matrix", "probe", "--skip_completed"]
+    )
+    run_matrix.main()
+
+    assert len(dispatched) == 1, "the completed arm should not have been re-dispatched"
+    assert "algorithm=fedavg" in dispatched[0]
+
+
 @pytest.mark.parametrize("algorithm", ALGORITHM_CONFIGS)
 def test_algorithm_config_composes(algorithm):
     """Every algorithm config must compose into a structurally valid experiment config.

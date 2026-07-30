@@ -10,7 +10,11 @@ import sys
 import time
 from pathlib import Path
 
+from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
+
 logger = logging.getLogger("fedmaq.runner")
+
+SWEEP_STATUS_FILENAME = "sweep_status.json"
 
 
 def kill_ray_processes() -> None:
@@ -42,6 +46,16 @@ def kill_ray_processes() -> None:
     time.sleep(3)
 
 
+def get_sweep_group_dir(phase: str, dataset: str, model: str, exp_group: str) -> Path:
+    """Return the directory holding every run of one matrix.
+
+    ``outputs/<phase>/<dataset>_<model>/<exp_group>/`` -- the common ancestor of
+    that matrix's canonical run directories, and so where sweep-level rather than
+    run-level artifacts belong (``sweep_status.json``).
+    """
+    return Path(f"outputs/{phase}/{dataset}_{model}/{exp_group}")
+
+
 def get_canonical_output_dir(
     phase: str,
     dataset: str,
@@ -66,10 +80,29 @@ def get_canonical_output_dir(
     unchanged, so ``analysis.experiment_group_of`` still reads the group.
     """
     algorithm_segment = f"{algorithm}__{variant}" if variant else algorithm
-    return Path(
-        f"outputs/{phase}/{dataset}_{model}/{exp_group}/{algorithm_segment}/"
-        f"{heterogeneity}/seed_{seed}"
+    return (
+        get_sweep_group_dir(phase, dataset, model, exp_group)
+        / algorithm_segment
+        / heterogeneity
+        / f"seed_{seed}"
     )
+
+
+def is_run_complete(output_dir: Path) -> bool:
+    """Report whether ``output_dir`` holds a run that reached its final round.
+
+    ``final_global_model.pt`` is the only artifact written exclusively on the
+    last round. ``run_manifest.json`` is written before round 1 and the
+    telemetry CSV/JSONL are opened just as early, so a run killed at round 3 is
+    indistinguishable from a finished one by their presence alone.
+
+    One asymmetry is deliberate: ``write_final_global_model`` logs and swallows
+    disk errors, so a run that trained fully but failed to save its checkpoint
+    reads as incomplete here and would be redone. Redoing a finished run costs
+    wall-clock; skipping an unfinished one leaves a hole that only surfaces at
+    analysis time, so the bias points the safe way.
+    """
+    return (output_dir / FINAL_MODEL_FILENAME).is_file()
 
 
 def build_run_command(

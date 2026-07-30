@@ -8,9 +8,11 @@ Usage:
     uv run python scripts/run_matrix.py --matrix conf/matrix/ci_test.yaml
     uv run python scripts/run_matrix.py --matrix ci_test --dry_run
     uv run python scripts/run_matrix.py --matrix pass2_explore --start_at 3
+    uv run python scripts/run_matrix.py --matrix benchmark_grid --skip_completed
 """
 
 import argparse
+import json
 import logging
 import subprocess
 import sys
@@ -24,8 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from omegaconf import OmegaConf
 
 from scripts.common import (
+    SWEEP_STATUS_FILENAME,
     build_run_command,
     get_canonical_output_dir,
+    get_sweep_group_dir,
+    is_run_complete,
     kill_ray_processes,
 )
 
@@ -71,6 +76,15 @@ def main() -> None:
         type=int,
         default=1,
         help="1-indexed run number to resume execution from (default: 1)",
+    )
+    parser.add_argument(
+        "--skip_completed",
+        action="store_true",
+        help=(
+            "Skip any run whose output directory already holds a final-round "
+            "checkpoint. Use to fill gaps after a partial sweep, instead of "
+            "computing a --start_at index by hand."
+        ),
     )
     parser.add_argument(
         "--dry_run",
@@ -151,12 +165,23 @@ def main() -> None:
     print(f"Total Runs Scheduled: {len(tasks)}")
     if args.start_at > 1:
         print(f"Resuming from Run Index: {args.start_at}")
+    if args.skip_completed:
+        print("Skipping runs that already hold a final-round checkpoint")
     print("=" * 70)
+
+    def skip_reason(idx: int, task: dict) -> str | None:
+        """Why this task would not run, or ``None`` if it would."""
+        if idx < args.start_at:
+            return f"--start_at {args.start_at}"
+        if args.skip_completed and is_run_complete(task["output_dir"]):
+            return "already complete"
+        return None
 
     if args.dry_run:
         print("\n[DRY RUN MODE] The following commands would be executed:")
         for idx, task in enumerate(tasks, 1):
-            skip_mark = " (SKIPPED)" if idx < args.start_at else ""
+            reason = skip_reason(idx, task)
+            skip_mark = f" (SKIPPED: {reason})" if reason else ""
             print(f"\nTask {idx}/{len(tasks)} [{task['label']}]{skip_mark}")
             print(f" Target Dir: {task['output_dir']}")
             print(f" Command:    {' '.join(task['cmd'])}")
@@ -166,12 +191,55 @@ def main() -> None:
     completed = 0
     failed = 0
     skipped = 0
+    failures: list[dict] = []
     start_time = time.time()
+    started_at = datetime.now().isoformat()
+    status_path = (
+        get_sweep_group_dir(phase, dataset, model, exp_group) / SWEEP_STATUS_FILENAME
+    )
+
+    def save_status(state: str) -> None:
+        """Persist which task indices failed, after every task rather than at the end.
+
+        A multi-day unattended sweep can end without reaching its summary: a
+        dropped connection, an idle-culled kernel, an evicted allocation on a
+        shared host. Without this the only record of *which* index failed is the
+        log stream, and because ``--start_at`` is positional, recovering from a
+        failure at index 57 of 183 means arithmetic against that log. Written on
+        each iteration so the file is useful precisely when the sweep did not
+        finish.
+
+        Scoped to one invocation: the file is replaced, not appended, so a
+        gap-filling re-run reflects that re-run's outcome rather than
+        accumulating stale failures from the sweep it is repairing.
+        """
+        payload = {
+            "matrix": matrix_path.as_posix(),
+            "experiment_group": exp_group,
+            "state": state,
+            "started_at": started_at,
+            "updated_at": datetime.now().isoformat(),
+            "total_tasks": len(tasks),
+            "completed": completed,
+            "failed": failed,
+            "skipped": skipped,
+            "failed_indices": [f["index"] for f in failures],
+            "failures": failures,
+        }
+        try:
+            status_path.parent.mkdir(parents=True, exist_ok=True)
+            status_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except OSError as exc:
+            # Never lose a sweep to its own bookkeeping.
+            logger.error(f"Could not write sweep status to {status_path}: {exc}")
+
+    save_status("running")
 
     for idx, task in enumerate(tasks, 1):
-        if idx < args.start_at:
+        reason = skip_reason(idx, task)
+        if reason:
             logger.info(
-                f"[{idx}/{len(tasks)}] Skipping run '{task['label']}' (--start_at {args.start_at})"
+                f"[{idx}/{len(tasks)}] Skipping run '{task['label']}' ({reason})"
             )
             skipped += 1
             continue
@@ -193,12 +261,23 @@ def main() -> None:
                 f"[FAILED] Task [{idx}/{len(tasks)}] '{task['label']}' exited with code {res.returncode} ({elapsed:.1f}s)"
             )
             failed += 1
+            failures.append(
+                {
+                    "index": idx,
+                    "label": task["label"],
+                    "returncode": res.returncode,
+                    "output_dir": task["output_dir"].as_posix(),
+                    "elapsed_seconds": round(elapsed, 1),
+                    "command": " ".join(task["cmd"]),
+                }
+            )
         else:
             logger.info(
                 f"[SUCCESS] Task [{idx}/{len(tasks)}] '{task['label']}' completed in {elapsed:.1f}s"
             )
             completed += 1
 
+        save_status("running")
         time.sleep(3)
 
     logger.info(f"\n{'=' * 70}")
@@ -211,6 +290,13 @@ def main() -> None:
     logger.info(f"  Completed: {completed}/{len(tasks)}")
     logger.info(f"  Failed:    {failed}/{len(tasks)}")
     logger.info(f"  Skipped:   {skipped}/{len(tasks)}")
+    if failures:
+        logger.error(
+            f"  Failed indices: {[f['index'] for f in failures]} "
+            f"-- re-run with --skip_completed to fill the gaps"
+        )
+    save_status("finished")
+    logger.info(f"Sweep status written to {status_path}")
     logger.info("=" * 70)
 
 
