@@ -24,10 +24,21 @@ compute_samples_per_sec: 20.0  # Raspberry Pi 5 Quad Cortex-A76 @ 2.4GHz sustain
 
 
 # Telemetry settings
+#
+# Online so the 183-run grid is watchable while it runs on the datacenter
+# allocation, where the alternative is reading a tee'd log over the JupyterHub
+# terminal. WandB is strictly a viewing surface: every reported result is
+# computed from this run's local ``experiment_log.csv``, and ``telemetry.log``
+# writes those local logs before it touches WandB and swallows WandB failures,
+# so losing the network mid-sweep costs visibility and nothing else.
+#
+# Authenticate with ``export WANDB_API_KEY=...`` on the host -- never commit a
+# key. ``WANDB_MODE=offline`` overrides ``mode`` below without a config edit,
+# which is the escape hatch if the host blocks egress or the key is absent.
 telemetry:
-  wandb_enabled: false   # Set to true to log to WandB online
+  wandb_enabled: true
   project: "fedmaq-experiments"
-  mode: "offline"        # "online" or "offline"
+  mode: "online"         # "online" or "offline"; WANDB_MODE env var overrides
   run_name: null
 
 # Local model checkpoint persistence for distillation baseline (e.g. FedMD)

@@ -25,10 +25,13 @@ compute_samples_per_sec: 600.0  # Raspberry Pi 5 Quad Cortex-A76 @ 2.4GHz for Si
 server_compute_speed: 10000.0
 
 
+# Online to match conf/experiment/default.yaml -- the FEMNIST half of the primary
+# grid should be as watchable as the CIFAR halves. See that file for the rationale
+# and for the WANDB_API_KEY / WANDB_MODE handling.
 telemetry:
-  wandb_enabled: false
+  wandb_enabled: true
   project: "fedmaq-experiments"
-  mode: "offline"
+  mode: "online"
   run_name: null
 
 persistence_dir: ".data_partitions/fedmd_models"

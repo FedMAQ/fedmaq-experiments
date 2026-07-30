@@ -10,3 +10,9 @@ defaults:
 
 total_rounds: 2
 num_clients: 2
+
+# Kept off even though default.yaml is now online: a smoke run should neither
+# depend on WANDB_API_KEY being present nor litter the project with 2-round runs.
+telemetry:
+  wandb_enabled: false
+  mode: "offline"

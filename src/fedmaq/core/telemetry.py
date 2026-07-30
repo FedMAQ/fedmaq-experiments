@@ -361,11 +361,21 @@ class TelemetryManager:
             f"Sim Time: {self.cumulative_time:8.2f}s"
         )
 
-        if self.enabled and self.run is not None:
-            self.run.log(metrics, step=round_num)
-
-        # Log locally
+        # Local logs first, and WandB after: the CSV/JSONL are the artifacts every
+        # reported result is computed from, while WandB is for watching a sweep in
+        # progress. In ``mode: "offline"`` the ordering was academic, but online it
+        # is not -- a transient network failure at round 57 of a 100-round run would
+        # otherwise both abort the run and lose that round's local row.
         self._write_local_logs(metrics)
+
+        if self.enabled and self.run is not None:
+            try:
+                self.run.log(metrics, step=round_num)
+            except Exception as exc:  # noqa: BLE001 - see comment above
+                logger.warning(
+                    f"WandB log failed at round {round_num}: {exc}. "
+                    f"Local logs are unaffected; continuing."
+                )
 
     def _write_local_logs(self, metrics: dict[str, Any]) -> None:
         # 1. Write to JSONL
@@ -403,10 +413,19 @@ class TelemetryManager:
             logger.warning(f"Failed to write to local CSV log: {exc}")
 
     def finish(self) -> None:
-        """Close the WandB run."""
+        """Close the WandB run.
+
+        Guarded for the same reason as :meth:`log`: online mode flushes over the
+        network here, and a run that has already trained for 100 rounds and
+        written its checkpoint must not be reported as failed because its
+        telemetry upload could not complete.
+        """
         if self.enabled and self.run is not None:
-            self.run.finish()
-            logger.info("WandB run finished.")
+            try:
+                self.run.finish()
+                logger.info("WandB run finished.")
+            except Exception as exc:  # noqa: BLE001 - see docstring
+                logger.warning(f"WandB finish failed: {exc}. Local logs are complete.")
 
     def _flatten_dict(
         self, d: dict[str, Any], parent_key: str = "", sep: str = "."
