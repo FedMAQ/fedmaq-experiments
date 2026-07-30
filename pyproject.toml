@@ -13,8 +13,8 @@ dependencies = [
     "pandas>=3.0.3",  # runtime: scripts/analysis.py formulation-winner harness
     "scikit-learn>=1.9.0",  # runtime: macro P/R/F1 in core/evaluation.py
     "seaborn>=0.13.2",
-    "torch==2.12.1+cu132",
-    "torchvision==0.27.1+cu132",
+    "torch==2.12.1",
+    "torchvision==0.27.1",
     "wandb>=0.28.0",
 ]
 
@@ -44,7 +44,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.flwr.app]
 publisher = "fedmaq"
-flwr-version-target = "1.31.0"
+flwr-version-target = "1.32.1"
 
 [tool.mypy]
 python_version = "3.11"
@@ -64,6 +64,21 @@ name = "pytorch-cu132"
 url = "https://download.pytorch.org/whl/cu132"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+# Per-platform accelerator build. The datacenter allocation (Linux, CUDA 12.9 driver) has no
+# cu132 wheel available to it; the Windows fallback rig (CUDA 13.3 UMD) has no cu129 wheel
+# published. Everything else in the lockfile is one shared package set. Only the hub produces
+# reported numbers, so cross-host bitwise reproducibility is not a requirement here.
 [tool.uv.sources]
-torch = { index = "pytorch-cu132" }
-torchvision = { index = "pytorch-cu132" }
+torch = [
+    { index = "pytorch-cu132", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu129", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cu132", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu129", marker = "sys_platform == 'linux'" },
+]
