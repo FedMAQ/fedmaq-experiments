@@ -35,6 +35,7 @@ from fedmaq.core.partitioning import (
     get_client_loader,
     get_server_loaders,
 )
+from fedmaq.core.checkpoint import write_final_global_model
 from fedmaq.core.client_manager import SeededPartitionClientManager
 from fedmaq.core.manifest import write_run_manifest
 from fedmaq.core.strategy import TelemetryFedAvg
@@ -232,6 +233,14 @@ def run(cfg: DictConfig) -> TelemetryManager:
             # mutable-closure issues in async simulation scenarios.
             eval_model = get_client_model(alg_name, dataset_name, num_classes)
             set_model_parameters(eval_model, parameters)
+            # §5.2.1's t-SNE plots are built from this model after the grid
+            # finishes, so the last round's weights have to outlive the process.
+            write_final_global_model(
+                eval_model,
+                telemetry.log_dir,
+                server_round,
+                int(cfg.experiment.total_rounds),
+            )
             return evaluate_global_model(
                 eval_model,
                 test_loader,

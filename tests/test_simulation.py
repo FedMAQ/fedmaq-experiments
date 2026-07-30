@@ -388,6 +388,34 @@ def test_run_manifest_hashes_the_resolved_config(tmp_path):
     assert "commit" in manifest["git"] and "dirty" in manifest["git"]
 
 
+def test_final_global_model_is_written_only_on_the_last_round(tmp_path):
+    """§5.2.1's t-SNE plots are built from the trained global model after the grid.
+
+    Nothing persisted that model until 2026-07-30, so the figure would have been
+    unbuildable once all 183 runs finished. Guard both halves of the contract:
+    the last round writes a loadable state_dict, and no earlier round writes at
+    all (a per-round checkpoint would multiply the grid's disk cost by 100).
+    """
+    import torch
+
+    from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME, write_final_global_model
+
+    model = torch.nn.Linear(4, 3)
+    total_rounds = 100
+
+    assert write_final_global_model(model, tmp_path, 1, total_rounds) is None
+    assert write_final_global_model(model, tmp_path, 99, total_rounds) is None
+    assert not (tmp_path / FINAL_MODEL_FILENAME).exists()
+
+    path = write_final_global_model(model, tmp_path, total_rounds, total_rounds)
+    assert path == tmp_path / FINAL_MODEL_FILENAME
+
+    loaded = torch.load(path, map_location="cpu")
+    reconstructed = torch.nn.Linear(4, 3)
+    reconstructed.load_state_dict(loaded)
+    assert torch.allclose(reconstructed.weight, model.weight)
+
+
 @pytest.mark.parametrize("algorithm", ALGORITHM_CONFIGS)
 def test_algorithm_config_composes(algorithm):
     """Every algorithm config must compose into a structurally valid experiment config.

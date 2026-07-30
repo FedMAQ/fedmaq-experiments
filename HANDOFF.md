@@ -47,7 +47,7 @@ the 183.
 3. **Edit `pass3_freeze_confirm.yaml`** — replace the placeholder overrides in the
    `fedmaq-surviving-set` arm with `surviving_refinement_set` from that JSON. The
    values shipped there are today's defaults, not a prediction.
-4. `--matrix pass3_freeze_confirm` — R=100, three seeds, 4 runs.
+4. `--matrix pass3_freeze_confirm` — R=100, two arms x three seeds, 6 runs.
 5. **Freeze.** Write the surviving set into `conf/algorithm/fedmaq.yaml` *and* every
    §4.3.7 ablation arm (`test_ablation_arms_share_one_refinement_layer` enforces they
    stay identical), then git-tag. Manuscript §6.2 promises that tag.
