@@ -720,6 +720,74 @@ def test_no_timeout_by_default_so_a_slow_run_is_not_a_failed_one(tmp_path, monke
     assert seen == [None]
 
 
+def test_sweep_wide_overrides_reach_every_run_but_never_outrank_the_matrix(
+    tmp_path, monkeypatch
+):
+    """Host settings belong on the command line; regime settings belong to the matrix.
+
+    ``ray.temp_dir`` and ``ray.object_store_gb`` are properties of the machine, and
+    the alternative to a flag is hand-editing conf/config.yaml on the host and
+    carrying that diff across a multi-day grid, where one git pull reverts it
+    partway through. But Hydra resolves the last override, so the flag has to be
+    emitted *before* the matrix's own: ``algorithm.post_process`` fixes which regime
+    a run is comparable in, and a hand-typed flag must not be able to displace it.
+    """
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+
+    matrix_dir = tmp_path / "conf" / "matrix"
+    matrix_dir.mkdir(parents=True)
+    (matrix_dir / "probe.yaml").write_text(
+        "phase: smoke\n"
+        "experiment_group: status_probe\n"
+        "dataset: cifar10\n"
+        "model: mobilenetv2\n"
+        "total_rounds: 1\n"
+        "seeds: [0]\n"
+        "heterogeneities: [dirichlet_alpha_0.1]\n"
+        "runs:\n"
+        "  - alg: fedmaq\n"
+        "    overrides: [algorithm.post_process=true]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+
+    dispatched: list[list[str]] = []
+    monkeypatch.setattr(
+        run_matrix.subprocess,
+        "run",
+        lambda cmd, *a, **k: (
+            dispatched.append(cmd),
+            subprocess.CompletedProcess(cmd, 0),
+        )[1],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_matrix.py",
+            "--matrix",
+            "probe",
+            "-o",
+            "ray.temp_dir=/tmp/ray-cjb",
+            "-o",
+            "algorithm.post_process=false",
+        ],
+    )
+    run_matrix.main()
+
+    cmd = dispatched[0]
+    assert "ray.temp_dir=/tmp/ray-cjb" in cmd
+    assert cmd.index("algorithm.post_process=false") < cmd.index(
+        "algorithm.post_process=true"
+    ), "the matrix file's regime setting must be the one Hydra resolves"
+
+
 def test_ray_init_args_default_to_flowers_stock_behaviour():
     """Absent config must produce no ``init_args`` at all, not an empty dict of them.
 

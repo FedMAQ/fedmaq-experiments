@@ -9,6 +9,9 @@ Usage:
     uv run python scripts/run_matrix.py --matrix ci_test --dry_run
     uv run python scripts/run_matrix.py --matrix pass2_explore --start_at 3
     uv run python scripts/run_matrix.py --matrix benchmark_grid --skip_completed
+    uv run python scripts/run_matrix.py --matrix benchmark_grid \
+        -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4 \
+        --run_timeout_seconds 5400
 """
 
 import argparse
@@ -97,6 +100,23 @@ def main() -> None:
         help="Display planned execution grid without running commands",
     )
     parser.add_argument(
+        "-o",
+        "--override",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        dest="overrides",
+        help=(
+            "Extra Hydra override applied to every run of the sweep; repeatable. For "
+            "host settings that belong to the machine rather than the matrix, chiefly "
+            "ray.temp_dir and ray.object_store_gb. The alternative is hand-editing "
+            "conf/config.yaml on the host and carrying that diff for the length of a "
+            "multi-day grid, where a single git pull silently reverts it partway "
+            "through. Applied before each run's own overrides, so a matrix file's "
+            "deliberate per-run setting always wins."
+        ),
+    )
+    parser.add_argument(
         "--max_consecutive_failures",
         type=int,
         default=3,
@@ -148,7 +168,11 @@ def main() -> None:
             for run_item in runs_spec:
                 alg = run_item.get("alg")
                 label = run_item.get("label", alg)
-                overrides = list(run_item.get("overrides", []))
+                # Sweep-wide host overrides first, so a matrix file's own per-run
+                # override wins any collision. Several of those are load-bearing
+                # (``algorithm.post_process`` fixes which regime a run is comparable
+                # in), and a hand-typed flag must not be able to silently displace one.
+                overrides = list(args.overrides) + list(run_item.get("overrides", []))
                 # Set this whenever two runs in one matrix share an ``alg`` but
                 # differ by override, or they collide on the output directory.
                 variant = run_item.get("variant", "")
@@ -196,6 +220,8 @@ def main() -> None:
     print(f"Heterogeneities: {heterogeneities}")
     print(f"Seeds: {seeds}")
     print(f"Total Runs Scheduled: {len(tasks)}")
+    if args.overrides:
+        print(f"Sweep-wide overrides: {' '.join(args.overrides)}")
     if args.start_at > 1:
         print(f"Resuming from Run Index: {args.start_at}")
     if args.skip_completed:
