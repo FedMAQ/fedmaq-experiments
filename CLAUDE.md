@@ -1,4 +1,4 @@
-FedMAQ thesis experiments: a uv monorepo (Flower, Hydra, PyTorch, WandB) implementing communication-efficient federated learning via multi-adaptive quantization and knowledge distillation. This is the domain "hub" repo in a 5-repo thesis workspace.
+FedMAQ thesis experiments: a uv monorepo (Flower, Hydra, PyTorch, WandB) implementing multi-adaptive quantization and knowledge distillation for memory-constrained federated learning under non-IID data. This is the domain "hub" repo in a 5-repo thesis workspace.
 
 - **Rules**: `.claude/rules/` (e.g., `hydra-config.md`, `flower-patterns.md`, `datasets-simulation.md`)
 - **Registries**: `.claude/project/` (e.g., `workspace_map.md`, `baseline_registry.md`)

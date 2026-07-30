@@ -1,6 +1,6 @@
 # FedMAQ Thesis Domain
 
-Communication-efficient federated learning via multi-adaptive quantization and knowledge distillation. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
+Multi-adaptive quantization and knowledge distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
 
 ## Language
 
