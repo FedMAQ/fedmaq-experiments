@@ -18,10 +18,16 @@
 # of what will survive.
 #
 # AFTER RUNNING: if the surviving set still clears the margin at R=100, write
-# those values into conf/algorithm/fedmaq.yaml and every §4.3.7 ablation arm
-# (tests/test_simulation.py::test_ablation_arms_share_one_refinement_layer
-# enforces that they stay identical), then tag the commit. Chapter 6 §6.2
-# promises that tag as the recoverable frozen configuration.
+# those values into conf/algorithm/fedmaq.yaml -- and ONLY there. The §4.3.7
+# ablation arms inherit that file through their defaults list and restate only
+# their own removal, so the freeze reaches all of them from one edit; there is no
+# longer a set of parallel copies to keep in step. Then:
+#   1. uv run python scripts/dump_frozen_configs.py   (refresh docs/freeze/)
+#   2. uv run python -m pytest tests/test_simulation.py
+#   3. commit and tag.
+# Step 1 is not optional bookkeeping: the arms are no longer self-describing, and
+# docs/freeze/resolved_configs.yaml is what makes the tagged state readable as
+# chapter 6 §6.2's recoverable frozen configuration. `--check` fails on a stale one.
 #
 # IF IT DOES NOT CLEAR -- pre-registered here, before the runs exist, because a
 # failure branch invented after seeing the numbers is not a failure branch. The

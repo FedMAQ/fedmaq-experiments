@@ -199,6 +199,32 @@ def test_configuration_8_exists_only_while_there_is_a_layer_to_remove():
         )
 
 
+def test_frozen_config_snapshot_is_current():
+    """docs/freeze/resolved_configs.yaml must match what the configs compose to.
+
+    The §4.3.7 arms inherit fedmaq.yaml and state only their own removal, so
+    reading an arm no longer tells you what it runs. That generated snapshot is
+    what chapter 6 §6.2's "recoverable frozen configuration" promise now rests on,
+    and a stale one is worse than none: it describes a configuration the tag does
+    not contain. The freeze runbook says to regenerate it, but an instruction in a
+    runbook is not a guard -- this is.
+    """
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_frozen_configs.py", "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\n"
+        "Run `uv run python scripts/dump_frozen_configs.py` and commit the result."
+    )
+
+
 def test_configuration_8_can_express_any_freeze():
     """fedmaq_no_refinements must hold every mechanism off, not merely the ones
     that happen to be frozen today. Its job is to be the layer's absence, so a
@@ -594,9 +620,7 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     (done / FINAL_MODEL_FILENAME).write_bytes(b"")
 
     dispatched.clear()
-    monkeypatch.setattr(
-        sys, "argv", ["run_matrix.py", "--matrix", "probe", "--skip_completed"]
-    )
+    monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "probe", "--skip_completed"])
     run_matrix.main()
 
     assert len(dispatched) == 1, "the completed arm should not have been re-dispatched"
@@ -622,9 +646,7 @@ def _write_probe_matrix(tmp_path, arms):
     return Path("outputs/smoke/cifar10_mobilenetv2/status_probe")
 
 
-def test_sweep_aborts_on_consecutive_failures_without_claiming_it_finished(
-    tmp_path, monkeypatch
-):
+def test_sweep_aborts_on_consecutive_failures_without_claiming_it_finished(tmp_path, monkeypatch):
     """A systemic failure must stop the queue, not be repeated 100 more times.
 
     On a contended GPU a co-tenant VRAM spike or a leaked Ray actor fails one run
@@ -640,9 +662,7 @@ def test_sweep_aborts_on_consecutive_failures_without_claiming_it_finished(
     import scripts.run_matrix as run_matrix
     from scripts.common import SWEEP_STATUS_FILENAME
 
-    group_dir = _write_probe_matrix(
-        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
-    )
+    group_dir = _write_probe_matrix(tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
     monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
@@ -688,9 +708,7 @@ def test_sweep_threshold_counts_consecutive_failures_not_total(tmp_path, monkeyp
     import scripts.run_matrix as run_matrix
     from scripts.common import SWEEP_STATUS_FILENAME
 
-    group_dir = _write_probe_matrix(
-        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
-    )
+    group_dir = _write_probe_matrix(tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
     monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
@@ -795,9 +813,7 @@ def test_no_timeout_by_default_so_a_slow_run_is_not_a_failed_one(tmp_path, monke
     assert seen == [None]
 
 
-def test_sweep_wide_overrides_reach_every_run_but_never_outrank_the_matrix(
-    tmp_path, monkeypatch
-):
+def test_sweep_wide_overrides_reach_every_run_but_never_outrank_the_matrix(tmp_path, monkeypatch):
     """Host settings belong on the command line; regime settings belong to the matrix.
 
     ``ray.temp_dir`` and ``ray.object_store_gb`` are properties of the machine, and
@@ -858,9 +874,9 @@ def test_sweep_wide_overrides_reach_every_run_but_never_outrank_the_matrix(
 
     cmd = dispatched[0]
     assert "ray.temp_dir=/tmp/ray-cjb" in cmd
-    assert cmd.index("algorithm.post_process=false") < cmd.index(
-        "algorithm.post_process=true"
-    ), "the matrix file's regime setting must be the one Hydra resolves"
+    assert cmd.index("algorithm.post_process=false") < cmd.index("algorithm.post_process=true"), (
+        "the matrix file's regime setting must be the one Hydra resolves"
+    )
 
 
 def test_ray_init_args_default_to_flowers_stock_behaviour():

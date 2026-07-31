@@ -1216,8 +1216,15 @@ def test_formulation_constants_fail_loud_when_the_formulation_consumes_them():
         _QuantParams.from_cfg({**base, "formulation": 5, "lambda_val": 1.0})
     with pytest.raises(ValueError, match="formulation"):
         compute_fedmaq_q_k_t(
-            c_k=8192.0, c_unit=512.0, g_k=1.0, g_max=1.0, n_k=100, n_max=200,
-            formulation=5, q_min=1, q_max=16,
+            c_k=8192.0,
+            c_unit=512.0,
+            g_k=1.0,
+            g_max=1.0,
+            n_k=100,
+            n_max=200,
+            formulation=5,
+            q_min=1,
+            q_max=16,
         )
 
 
@@ -1227,19 +1234,26 @@ def test_every_shipped_fedmaq_config_satisfies_the_fail_loud_contract():
     Each fedmaq variant is checked against every formulation the study sweeps,
     not just its own declared one, because conf/matrix/formulation_study.yaml
     dispatches all five by overriding `algorithm.formulation` on this same file.
+
+    Composed through Hydra rather than read as raw YAML: the §4.3.7 ablation arms
+    inherit `fedmaq` via their defaults list and carry only their own removal, so
+    the file on disk is no longer the config the run actually sees.
     """
     from pathlib import Path
 
-    import yaml
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
 
     from fedmaq.core.quantization_planner import FORMULATION_CONSTANTS, _QuantParams
 
-    conf_dir = Path(__file__).resolve().parents[1] / "conf" / "algorithm"
-    fedmaq_configs = sorted(conf_dir.glob("fedmaq*.yaml"))
+    conf_root = Path(__file__).resolve().parents[1] / "conf"
+    fedmaq_configs = sorted(p.stem for p in (conf_root / "algorithm").glob("fedmaq*.yaml"))
     assert fedmaq_configs, "no fedmaq algorithm configs found"
 
-    for path in fedmaq_configs:
-        alg_cfg = yaml.safe_load(path.read_text())
+    for name in fedmaq_configs:
+        with initialize_config_dir(config_dir=str(conf_root), version_base="1.3"):
+            composed = compose(config_name="config", overrides=[f"algorithm={name}"])
+        alg_cfg = OmegaConf.to_container(composed.algorithm, resolve=True)
         for formulation in FORMULATION_CONSTANTS:
             _QuantParams.from_cfg({**alg_cfg, "formulation": formulation})
 
@@ -1257,9 +1271,7 @@ def test_ablation_leave_one_out_arms():
     """
     from fedmaq.core.strategy import compute_fedmaq_q_k_t
 
-    common = dict(
-        c_unit=2048.0, g_k=1.0, g_max=1.0, n_k=100, n_max=200, q_min=2, q_max=8
-    )
+    common = dict(c_unit=2048.0, g_k=1.0, g_max=1.0, n_k=100, n_max=200, q_min=2, q_max=8)
 
     # Configuration 2: a memory-starved client (floor(4096/2048) = 2) is capped
     # to 2 bits with resource awareness on, and freed to the soft target with it off.

@@ -8,41 +8,17 @@
 # full-FedMAQ runs from the formulation study, NOT against Configuration 7.
 #
 # If Formulation 1 or 2 wins the formulation study, this arm becomes nested like
-# every other and the parity anchor is Configuration 7 as normal.
+# every other: drop the `formulation` override below and the parity anchor
+# reverts to Configuration 7.
+#
+# INHERITS full FedMAQ and states only its removal, so the frozen refinement
+# layer reaches this arm from one place and no second difference is expressible.
+# For what it composes to, see docs/freeze/ or `scripts/dump_frozen_configs.py`.
 # Usage: uv run python scripts/run.py algorithm=fedmaq_no_state
-name: fedmaq
-q_min: 1
-q_max: 16
-bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
-c_unit: 512.0
-
-resource_aware: true
+defaults:
+  - fedmaq
+  - _self_
 
 formulation: 1             # fallback formulation, see header
 gamma1: 0.0                # <-- the removal defining this arm
-gamma2: 1.0
-lambda_val: 1.0
-tau_g: 0.5
-tau_n: 0.5
-
-# Server-side KD retained, identical to full FedMAQ.
-temperature: 1.0
-kd_epochs: 1
-server_kd_lr: 0.01
-server_kd_momentum: 0.9
-server_compute_speed: 5000.0
-
-post_process: false
-
-# Refinement layer held identical across every arm (§4.3.7 parity requirement).
-soft_voting: true
-entropy_weight: 1.0
-precision_weight: 1.0
-ema_student: true
-ema_decay: 0.7
-grad_norm_ema: true
-grad_norm_beta: 0.7
-client_kd_reg: false
-kd_reg_alpha: 0.5
-kd_reg_temp: 2.0
-kd_prox_mu: 0.0
+gamma2: 1.0                # renormalized so the surviving data term carries full weight

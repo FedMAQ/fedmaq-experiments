@@ -1,0 +1,263 @@
+# GENERATED FILE -- do not edit by hand.
+# Regenerate with: uv run python scripts/dump_frozen_configs.py
+#
+# Hydra-resolved form of every conf/algorithm/fedmaq*.yaml, committed so that
+# the tag chapter 6 §6.2 points at records what each §4.3.7 ablation arm
+# actually ran, not just the one-line removal its config file states.
+# `config_sha256` uses the same digest function as run_manifest.json but is
+# taken over the algorithm block ALONE, so it is stable across the dataset,
+# skew, and seed a matrix sweeps. It will not equal any run manifest's
+# config_sha256, which covers the whole resolved run config; it identifies the
+# arm, not the run.
+
+fedmaq:
+  config_sha256: e2c6855d6b5724eaa3e60b48bc2552d4189c77a7d1e5e9fd222c59510b6bfb31
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: true
+  entropy_weight: 1.0
+  formulation: 3
+  gamma1: 0.5
+  gamma2: 0.5
+  grad_norm_beta: 0.7
+  grad_norm_ema: true
+  kd_epochs: 1
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 1.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: true
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: true
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
+
+fedmaq_no_data:
+  config_sha256: 4f514b234791a86ca2b756b79adad866880c9eb96accc67ed9d6593107574843
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: true
+  entropy_weight: 1.0
+  formulation: 3
+  gamma1: 0.5
+  gamma2: 0.5
+  grad_norm_beta: 0.7
+  grad_norm_ema: true
+  kd_epochs: 1
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 0.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: true
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: true
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
+
+fedmaq_no_kd:
+  config_sha256: c564ed21f45d5eef49c4d61243d45439d8780108d376c969b6715c545b289657
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: true
+  entropy_weight: 1.0
+  formulation: 3
+  gamma1: 0.5
+  gamma2: 0.5
+  grad_norm_beta: 0.7
+  grad_norm_ema: true
+  kd_epochs: 0
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 1.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: true
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: false
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
+
+fedmaq_no_refinements:
+  config_sha256: 4ad6e5abdcf651f6f810aeaf2a947916ba578178d1b4007126d4ffc597e3e881
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: false
+  entropy_weight: 1.0
+  formulation: 3
+  gamma1: 0.5
+  gamma2: 0.5
+  grad_norm_beta: 0.7
+  grad_norm_ema: false
+  kd_epochs: 1
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 1.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: true
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: false
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
+
+fedmaq_no_resource:
+  config_sha256: 9930b1eedd3f1dfdd76c32666d5879c5284bf77f1c545855a7a852cabf049ca4
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: true
+  entropy_weight: 1.0
+  formulation: 3
+  gamma1: 0.5
+  gamma2: 0.5
+  grad_norm_beta: 0.7
+  grad_norm_ema: true
+  kd_epochs: 1
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 1.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: false
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: true
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
+
+fedmaq_no_state:
+  config_sha256: 1e004e9e305a164fbe51d61b8d0a9d995407366541713283c6db4780aee07456
+  bit_widths:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 16
+  - 32
+  c_unit: 512.0
+  client_kd_reg: false
+  ema_decay: 0.7
+  ema_student: true
+  entropy_weight: 1.0
+  formulation: 1
+  gamma1: 0.0
+  gamma2: 1.0
+  grad_norm_beta: 0.7
+  grad_norm_ema: true
+  kd_epochs: 1
+  kd_prox_mu: 0.0
+  kd_reg_alpha: 0.5
+  kd_reg_temp: 2.0
+  lambda_val: 1.0
+  name: fedmaq
+  post_process: false
+  precision_weight: 1.0
+  q_max: 16
+  q_min: 1
+  resource_aware: true
+  server_compute_speed: 5000.0
+  server_kd_lr: 0.01
+  server_kd_momentum: 0.9
+  soft_voting: true
+  tau_g: 0.5
+  tau_n: 0.5
+  temperature: 1.0
