@@ -34,7 +34,7 @@ Process questions (selection rule, sweep structure, decision rule, baseline-tuni
 
 ## Execution Structure (tentative)
 
-Two-phase, freeze-enforced — design summary only; concrete build steps (config-as-code registry, seed-determinism check) are tracked in [HANDOFF.md](../../HANDOFF.md) ("Immediate Next Actions").
+Two-phase, freeze-enforced — design summary only; concrete execution steps are tracked in [docs/RUNBOOK.md](../RUNBOOK.md) ("Dispatch Order").
 
 - **Exploration phase** (now): adaptive, single-seed, mechanisms in flux. Output = one pre-registered frozen config (CIFAR-10) + baseline HP table + fixed mechanism set. Git-tag the pre-registration.
 - **Confirmation phase**: config-as-code manifest → process-isolated runners → WandB (fixed project/group/tag scheme). Read-only configs after launch (hashed in manifest).

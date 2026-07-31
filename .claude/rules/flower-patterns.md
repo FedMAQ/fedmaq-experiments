@@ -7,6 +7,11 @@
 
 ## Windows Ray crash mitigation
 
+**Scope: the local Windows fallback workstation only** (manuscript §4.3.4) — smoke
+tests, `run-minitest`, and pre-dispatch validation. The reported 183-run grid runs
+on the Linux datacenter allocation via JupyterHub, where none of this applies. See
+`docs/RUNBOOK.md` § "Execution Model".
+
 If a Flower+Ray sim dies unexpectedly (raylet `SIGSEGV`, `SYSTEM_ERROR`, actor deaths):
 
 - **Check system RAM headroom first**, not just GPU VRAM — `nvidia-smi` can show ample headroom while `Get-CimInstance Win32_OperatingSystem` shows only ~4GB free out of 16GB, starving Ray/PyTorch init. Want several GB free before launching.

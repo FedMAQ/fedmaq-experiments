@@ -1,6 +1,6 @@
 # FedMAQ Decisions Log
 
-Single source of truth for resolved project decisions. Append-only, dated. STATUS.md, HANDOFF.md, and formal-experiment-plan.md link here instead of repeating this content.
+Single source of truth for resolved project decisions. Append-only, dated. STATUS.md, RUNBOOK.md, and formal-experiment-plan.md link here instead of repeating this content.
 
 ---
 
@@ -63,7 +63,7 @@ alpha, num_public_samples, seed, partition)` with **no algorithm input**. Single
     Rationale: one baseline's state must not leak into the shared strategy surface.
 
 **Open follow-ups** (not decisions — tracked in
-[distillation-direction-audit.md](audits/distillation-direction-audit.md)):
+[distillation-direction-audit.md](audits/archive/distillation-direction-audit.md)):
 FedKD near-chance accuracy (F10 — mechanism confirmed + fix landed 2026-07-16,
 see below), FedMAQ α=1.0 framing constraint (F11), `num_public_samples=200`
 dead-fallback (F12), 4 KD baselines unmeasured on MobileNetV2GN (F13).
@@ -166,7 +166,7 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
     (floor-mandated cost of retaining more singular vectors) — still ~12×
     cheaper than FedAvg's uncompressed ~8.5 GB baseline.
     Logs: `outputs/2026-07-16/23-36-50/` (α=0.1), `outputs/2026-07-17/10-20-23/`
-    (α=1.0). Full analysis: `docs/audits/distillation-direction-audit.md` F10.
+    (α=1.0). Full analysis: `docs/audits/archive/distillation-direction-audit.md` F10.
 
     _(Note for `docs-audit`: decisions 14–17 above are numbered out of the file's
     append order — a pre-existing drift this entry did not introduce or fix.)_
@@ -250,7 +250,7 @@ Resolved via grilling session on doc-hygiene drift (stale STATUS.md date, broken
 
 26. **CFD removed from the baseline stack (7 → 6: FedAvg, FedProx, FedPAQ,
     DAdaQuant, FedDistill, FedKD) + FedMAQ.** Closes distillation-audit F15
-    (CFD collapses to chance both α — see `docs/audits/distillation-direction-audit.md`
+    (CFD collapses to chance both α — see `docs/audits/archive/distillation-direction-audit.md`
     F15) as **structural, not fixed**. This corrects the F15 write-up's original
     mechanism guess: the collapse is real (confirmed at both toy and
     production scale this session) but the root cause is **not** the
@@ -565,3 +565,111 @@ Closes the architecture-deepening candidate this session named "A" (Decision 20'
     parametrized guard now asserts output-directory uniqueness across every
     confirmatory matrix, so the next occurrence fails in CI rather than at
     analysis time.
+
+---
+
+## 2026-07-31 — Freeze Ergonomics and the Pre-Registered Empty Branch
+
+58. **The §4.3.7 ablation arms inherit `conf/algorithm/fedmaq.yaml` through their
+    Hydra defaults list instead of restating it.** Each of `fedmaq_no_resource`,
+    `fedmaq_no_data`, `fedmaq_no_state`, `fedmaq_no_kd`, and
+    `fedmaq_no_refinements` is now `defaults: [fedmaq, _self_]` plus its own
+    removal and nothing else. Previously all five restated `soft_voting` /
+    `ema_student` / `grad_norm_ema` as literals, which made the freeze a five-file
+    hand edit at the single highest-stakes moment in the runbook; a partial or
+    empty surviving set desynced three of the arms. §4.3.7's parity requirement
+    stops being a property the tests check after the fact and becomes one the
+    configs cannot violate: a second difference is no longer expressible.
+    `fedmaq_no_refinements` still names all three flags, because "every refinement
+    off" is its definition rather than a copy of the freeze — whatever subset
+    `fedmaq.yaml` freezes on, that arm removes exactly that subset.
+
+59. **The cost of Decision 58 is paid by `scripts/dump_frozen_configs.py`, which
+    generates `docs/freeze/resolved_configs.yaml`.** Inheritance destroys the arms'
+    self-describing property, which chapter 6 §6.2's "recoverable frozen
+    configuration" promise leans on: reading an arm no longer tells you what it
+    runs. The script composes each `fedmaq*` config exactly as `scripts/run.py`
+    would and commits the resolved result with a per-arm `config_sha256` (over the
+    algorithm block alone, so it is stable across the dataset/skew/seed a matrix
+    sweeps and does *not* equal any run manifest's whole-config digest). Being
+    generated, it cannot drift the way five hand-maintained copies could.
+    `--check` exits non-zero on a stale snapshot, and
+    `test_frozen_config_snapshot_is_current` runs that check in the suite, so a
+    freeze commit that edits `fedmaq.yaml` without regenerating fails rather than
+    ships. Regenerating it is step 5 of the freeze runbook in `docs/RUNBOOK.md`,
+    and an instruction in a runbook is not a guard — the test is. A stale snapshot
+    is worse than none, since it describes a configuration the tag does not
+    contain.
+
+60. **The empty-freeze branch is pre-registered in the manuscript body, not only
+    in YAML comments.** `conf/matrix/pass3_freeze_confirm.yaml` and
+    `test_configuration_8_exists_only_while_there_is_a_layer_to_remove` already
+    pre-registered that an empty surviving set drops Ablation Configuration 8 and
+    the chapter 6 contribution bullet resting on its contrast. The manuscript said
+    flatly that the study "consists of eight test configurations", so the
+    pre-registration was one no reader could hold the thesis to — and writing it
+    in after seeing an empty result is the exact thing pre-registration prevents.
+    §4.3.1 now carries the failure branch (empty set, FedMAQ ships unrefined, no
+    subset retries, no tuning rescue) and §4.3.7 carries Configuration 8's
+    existence condition together with the six runs the empty branch removes from
+    §4.4's totals. §4.3.7's claim that Configuration 8 "supplies the parity
+    reference that makes the remaining arms legible" was corrected in the same
+    edit: Configuration 7 is the parity anchor for arms 2–5; Configuration 8
+    prices the shared layer.
+
+61. **§4.3.1 states the noise-margin *rule* and names no seed counts.** Three
+    sites said "three seeds" while §4.4 deepened the reference cell to five, so
+    the two sections contradicted each other. The deeper defect a number-swap
+    would have hidden: §4.3.1 read as though there were one σ measured once, while
+    `scripts/analysis.py:exploration_noise_margin` takes an `experiment_group` and
+    *refuses* to pool stages — the factorial and the R=100 confirmation each
+    compute their own. That methodological choice was visible only in a Python
+    default argument. §4.3.1 now states that σ comes from the unrefined reference
+    cell of the stage making the call, at the held-out α = 0.3, with margin √2σ,
+    never pooled across stages; §4.4 is the single site owning the seed
+    arithmetic. Exploration is described as three stages throughout, matching
+    `pass3_freeze_confirm.yaml`'s "Stage 3 of 3".
+
+62. **The pre-existing `ruff` drift was cleared before the freeze, and the five
+    `B905` sites took `strict=True` rather than `strict=False`.** 21 errors and 11
+    unformatted files at HEAD; §6.2 offers the tagged commit as the reproducible
+    artifact, so an artifact that fails its own linter was worth not shipping.
+    `strict=` was the only judgement call in the batch: ruff's own unsafe fix
+    writes `strict=False`, which silences the rule while preserving the silent
+    truncation it warns about. All five sites zip sequences whose lengths are
+    invariant-equal — `REFINEMENT_NAMES` against a 3-tuple cell key in
+    `exploration_noise_margin`, and seed/accuracy literals in four
+    `test_analysis.py` fixtures — where a length mismatch means the refinement
+    roster changed under the analysis. Truncating there would label a keep-or-drop
+    verdict with the wrong mechanism set, so crashing is the better failure.
+    `scripts/analysis.py:790` already used `strict=True` for the same pattern; the
+    batch makes that consistent. Everything else was mechanical: `ruff format`,
+    import sorting, two unused `flwr.common` imports, `datetime.UTC`, a dead
+    `alg_cfg` left over from the F12 fix in `cfd.py`, and six re-wrapped long
+    lines. 168 tests pass, unchanged.
+
+---
+
+## 2026-07-31 — HANDOFF.md Retired
+
+63. **`HANDOFF.md` is deleted and no committed handoff file replaces it.**
+    Session-to-session orientation is now a temporary artifact produced by the
+    `handoff` skill and never tracked in this repo. The committed file failed in
+    the way a tracked handoff always does: it accreted durable operational content
+    that then went stale and was cited from three other docs, while the transient
+    action items it actually existed for were rewritten wholesale every session.
+    The audit that prompted this found the failure mode directly —
+    `.claude/rules/flower-patterns.md` pointed at `HANDOFF.md § "Execution Model"`,
+    a section that did not exist, so the single most important operational fact in
+    the project (runs execute on a JupyterHub-gated allocation that no agent can
+    drive) was one dead link from being lost.
+
+    Its content was split by lifetime rather than discarded. Durable operational
+    reference — execution model, dispatch order, operational controls — moved to
+    the new `docs/RUNBOOK.md`. Current state moved into `docs/STATUS.md`, which
+    was stale on two counts the move surfaced: it still said the exploration phase
+    had not started (Stage 1 ran 2026-07-31) and still carried the pre-deepening
+    exploration run counts (24/4 rather than 26/8). The transient "Next Session"
+    section was dropped, which is the whole point. `docs-management.md` now
+    forbids the pattern, and the `docs-audit` skill treats a tracked handoff file
+    as a finding rather than as something to audit.

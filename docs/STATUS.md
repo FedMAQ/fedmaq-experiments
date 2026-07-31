@@ -2,20 +2,38 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-07-30 (pre-dispatch sync: primary grid made fully dispatchable)
+**Last updated**: 2026-07-31 (HANDOFF.md retired into `docs/RUNBOOK.md`; exploration Stage 1 recorded)
 
 ---
 
 ## Important Context
 
 > [!IMPORTANT]
-> **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. **Nothing in the 183-run confirmatory grid has been executed, and neither has the three-stage exploration phase that gates it.** Manuscript Chapters 5 and 6 are ~90% `{[PLACEHOLDER]}` for that reason; nothing there may be written as though results exist.
+> **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. **Nothing in the 183-run confirmatory grid has been executed.** Of the three-stage exploration phase that gates it, only Stage 1 (`pass2_explore`, screening) has run, on 2026-07-31; Stages 2 and 3 are pending, so the refinement layer is unselected. Manuscript Chapters 5 and 6 are ~90% `{[PLACEHOLDER]}` for that reason; nothing there may be written as though results exist.
 
 > [!IMPORTANT]
-> **The refinement layer is not frozen.** `soft_voting`, `ema_student`, and `grad_norm_ema` all ship `true` in `conf/algorithm/fedmaq.yaml`, but that is a default, not an exploration result. The freeze happens at the end of Stage 1 in [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md)'s dispatch order. If exploration drops a mechanism, manuscript §3.5 and Chapter 5's $T = 1.0$ justification both need revisiting.
+> **The refinement layer is not frozen.** `soft_voting`, `ema_student`, and `grad_norm_ema` all ship `true` in `conf/algorithm/fedmaq.yaml`, but that is a default, not an exploration result. The freeze happens at the end of Stage 1 in [docs/RUNBOOK.md](RUNBOOK.md)'s dispatch order. If exploration drops a mechanism, manuscript §3.5 and Chapter 5's $T = 1.0$ justification both need revisiting.
 
 > [!WARNING]
 > **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression _ratio_ — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see Decision 1). All prior ResNet18GN smoke test results are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
+
+---
+
+## Manuscript Sync
+
+Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
+
+- **2026-07-31** — §4.3.1 rewritten to state the noise-margin *rule* rather than seed
+  counts that contradicted §4.4, and to describe exploration as three stages; the
+  empty-freeze branch pre-registered in §4.3.1 and §4.3.7 body text; §4.3.7's
+  parity-anchor claim corrected (Decisions 60–61).
+- **2026-07-31** (manuscript `bebdd67`) — §4.4 and §5.7 extended with the statistical
+  reasoning behind the deepened reference cell, the factorial's family-wise rate, and
+  four limitations that were real, known and unwritten.
+- **2026-07-30** (manuscript `14975d0`) — §4.1 and §4.3 reconciled against this repo.
+
+§4.3.4 is canonical for hardware and software specifications; do not restate it in an
+ADR or a second registry.
 
 ---
 
@@ -54,7 +72,7 @@ Full list with rationale: [docs/experiments/archive/RESNET18GN-SUMMARY.md](exper
 
 ## The Confirmatory Grid — 183 runs, all pending
 
-Every one is dispatched through a matrix file. See [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md) ("Dispatch Order") for the sequence, which is load-bearing.
+Every one is dispatched through a matrix file. See [docs/RUNBOOK.md](RUNBOOK.md) ("Dispatch Order") for the sequence, which is load-bearing, and ("Execution Model") for where runs actually happen.
 
 | Stage | Matrix | Runs | Manuscript |
 | :---- | :----- | ---: | :--------- |
@@ -66,8 +84,10 @@ Every one is dispatched through a matrix file. See [HANDOFF.md](file:///c:/Users
 | Uniform-memory control | `uniform_memory_control` | 6 | §4.1, §4.3 |
 | **Total** | | **183** | |
 
-The exploration phase (`pass2_explore` 4, `pass2_factorial` 24, `pass3_freeze_confirm` 4)
-runs at the held-out α = 0.3 and is **not** counted among the 183.
+The exploration phase (`pass2_explore` 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8)
+runs at the held-out α = 0.3 and is **not** counted among the 183. The factorial and the
+freeze confirmation each deepen their unrefined reference cell to five seeds, because that
+cell's spread *is* the margin every other cell is judged against (manuscript §4.4).
 
 The three `benchmark_grid*` files share one `experiment_group`, so `scripts/analysis.py`
 reads them as a single 105-run grid. Before 2026-07-30 only the CIFAR-10 file existed and
@@ -83,7 +103,7 @@ parametrized `test_primary_grid_turns_the_post_process_pipeline_on` now guard bo
 | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
 | [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)                                                         | Resolved decisions log (single source of truth)             |
 | [docs/adr/0002-hardware-telemetry-grounding.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md) | Late-2023 Hardware Grounding & Telemetry specification      |
-| [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md)                                                                       | Next-agent instructions and immediate action items          |
+| [docs/RUNBOOK.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/RUNBOOK.md)                                                             | Execution model, dispatch order, operational controls       |
 | [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)                                       | Chronological experiment registry with per-experiment links |
 | [docs/audits/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/README.md)                                                 | Codebase and algorithm audit registry & archive             |
 | [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                                                       | Canonical glossary (resolves naming drift between repos)    |

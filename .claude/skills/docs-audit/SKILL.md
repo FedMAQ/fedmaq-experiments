@@ -1,7 +1,7 @@
 ---
 name: docs-audit
 description: >-
-  Full sweep of context docs (docs/, HANDOFF.md, .claude/project/) for staleness,
+  Full sweep of context docs (docs/, .claude/project/) for staleness,
   broken numbering, and duplication. Auto-fixes mechanical issues, flags
   judgment-call issues. Use when asked to audit/review the docs system, or
   periodically after a batch of doc edits to catch drift.
@@ -11,7 +11,7 @@ description: >-
 
 Conventions enforced: [.claude/rules/docs-management.md](../../rules/docs-management.md).
 
-1. **Inventory**: list `docs/**/*.md`, `HANDOFF.md`, `.claude/project/*.md`.
+1. **Inventory**: list `docs/**/*.md`, `.claude/project/*.md`. A tracked `HANDOFF.md` (or any committed next-session file) is itself a finding — flag it against `docs-management.md`'s "no committed handoff file" rule rather than auditing its contents.
 2. **Staleness**: for each doc with a "Last updated" header, compare against its own body content and cross-linked docs (e.g. does it reference a decision dated later than its own header?). Auto-fix: bump the date.
 3. **Duplicate/overlapping registries or content**: grep for docs covering the same ground (e.g. two experiment trackers, two decision logs). Flag — do not auto-merge; report the overlap and recommend which should be canonical per `docs-management.md`.
 4. **`docs/plans/` lifecycle**: any plan whose "open questions" section is fully resolved (check against `docs/DECISIONS.md` for a matching dated entry) should be deleted after confirming its content made it into `DECISIONS.md`. Flag if unclear.
