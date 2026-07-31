@@ -187,9 +187,107 @@ EXPLORATION_ALPHA = 0.3
 # The ``phase:`` every conf/matrix exploration file declares (pass2_explore,
 # pass2_factorial, pass3_freeze_confirm). Confirmatory matrices declare ``formal``.
 EXPLORATION_PHASE = "explore"
+# The keep-or-drop calls belong to the factorial (§4.3.1), not to the single-seed
+# screening sweep that precedes it or the two-arm confirmation that follows. All
+# three declare ``phase: explore`` at alpha 0.3 with ``name: fedmaq``, and two of
+# them contain a (False, False, False) cell, so phase alone would pool R=50 and
+# R=100 runs into one sigma and duplicate seed 0 inside it.
+EXPLORATION_GROUP = "pass2_factorial"
 
 
-def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_ALPHA) -> dict:
+def _lower_regularized_gamma(a: float, x: float) -> float:
+    """Regularized lower incomplete gamma P(a, x), series/continued-fraction form.
+
+    Present so the sigma interval below needs nothing outside the standard
+    library. scipy is importable in the current environment but is not declared
+    in pyproject.toml, and this module has to keep running at the frozen tag that
+    chapter 6 §6.2 offers as the reproducible configuration.
+    """
+    if x <= 0.0:
+        return 0.0
+    if x < a + 1.0:  # series expansion converges fast here
+        term = 1.0 / a
+        total = term
+        n = 0
+        while n < 1000:
+            n += 1
+            term *= x / (a + n)
+            total += term
+            if abs(term) < abs(total) * 1e-15:
+                break
+        return total * math.exp(-x + a * math.log(x) - math.lgamma(a))
+    # Continued fraction for the upper tail, then complement (Lentz's method).
+    tiny = 1e-300
+    b = x + 1.0 - a
+    c = 1.0 / tiny
+    d = 1.0 / b if b != 0.0 else 1.0 / tiny
+    h = d
+    for i in range(1, 1000):
+        an = -i * (i - a)
+        b += 2.0
+        d = an * d + b
+        if abs(d) < tiny:
+            d = tiny
+        c = b + an / c
+        if abs(c) < tiny:
+            c = tiny
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < 1e-15:
+            break
+    upper = h * math.exp(-x + a * math.log(x) - math.lgamma(a))
+    return 1.0 - upper
+
+
+def _chi2_quantile(p: float, df: int) -> float:
+    """Inverse chi-square CDF by bisection on the CDF. Adequate for CI endpoints."""
+    lo, hi = 0.0, max(float(df) * 10.0, 10.0)
+    while _lower_regularized_gamma(df / 2.0, hi / 2.0) < p:
+        hi *= 2.0
+        if hi > 1e12:
+            break
+    for _ in range(200):
+        mid = (lo + hi) / 2.0
+        if _lower_regularized_gamma(df / 2.0, mid / 2.0) < p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+def sigma_confidence_interval(sigma: float, n: int, level: float = 0.95) -> dict:
+    """Chi-square interval for a standard deviation estimated from ``n`` samples.
+
+    The point of reporting this is that §4.3.1 calls the margin "measured rather
+    than asserted", and a measurement without its own uncertainty is closer to an
+    assertion than that phrasing admits. At n=3 the interval spans roughly a
+    factor of twelve; the reference cells are deepened to n=5 to cut that to about
+    five. Assumes seed-to-seed accuracy is approximately normal -- the usual
+    caveat for this interval, and worth stating in the write-up.
+    """
+    if n < 2 or sigma <= 0.0:
+        return {"level": level, "low": None, "high": None, "n": n}
+    df = n - 1
+    tail = (1.0 - level) / 2.0
+    return {
+        "level": level,
+        "n": n,
+        "low": sigma * math.sqrt(df / _chi2_quantile(1.0 - tail, df)),
+        "high": sigma * math.sqrt(df / _chi2_quantile(tail, df)),
+    }
+
+
+def _normal_sf(z: float) -> float:
+    """P(Z > z) for a standard normal."""
+    return 0.5 * math.erfc(z / math.sqrt(2.0))
+
+
+def exploration_noise_margin(
+    runs: list[RunRecord],
+    alpha: float = EXPLORATION_ALPHA,
+    experiment_group: str = EXPLORATION_GROUP,
+) -> dict:
     """Measure the exploration phase's noise margin and apply the keep-or-drop rule.
 
     Implements chapter_4.tex §4.3.1 directly, which requires the margin to be
@@ -206,10 +304,20 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
        that merely scores highest is not retained -- selecting the best of
        several noisy measurements manufactures winners.
 
-    Only runs at ``alpha`` are considered. §4.3.1 holds exploration at a held-out
-    skew, so a confirmatory-skew run appearing here means the sweep config
-    drifted from the manuscript and the verdict would be contaminated; that case
-    is reported rather than silently averaged in.
+    Only runs at ``alpha``, and only runs from ``experiment_group``, are
+    considered. §4.3.1 holds exploration at a held-out skew, so a
+    confirmatory-skew run appearing here means the sweep config drifted from the
+    manuscript and the verdict would be contaminated; that case is reported
+    rather than silently averaged in. The group scope is the same guard applied
+    to stages: the three exploration matrices differ in round budget and seed
+    count and share the unrefined cell, so pooling them would compute sigma from
+    a mixture of horizons with seed 0 counted twice. Runs outside the requested
+    group are refused, never merged -- pass ``experiment_group`` explicitly to
+    measure a different stage (``pass3_freeze_confirm`` for the R=100 gate).
+
+    Alongside the verdicts the result carries the uncertainty on sigma itself and
+    the multiplicity accounting for the seven comparisons, so the write-up can
+    quote both rather than the point estimate alone. Neither changes the rule.
     """
     # Scope to the exploration phase before anything else. Every confirmatory
     # FedMAQ run -- benchmark grid, formulation study, six of the seven ablation
@@ -218,10 +326,23 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
     # the one case the warning exists to catch: an *exploration* matrix that
     # drifted onto a reported skew.
     runs = [r for r in runs if r.phase == EXPLORATION_PHASE]
-    candidates = [r for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) < 1e-9]
-    contaminated = sorted(
-        {r.alpha for r in runs if r.algorithm == "fedmaq" and abs(r.alpha - alpha) >= 1e-9}
-    )
+    fedmaq_runs = [r for r in runs if r.algorithm == "fedmaq"]
+    groups_present = sorted({r.experiment_group or "<none>" for r in fedmaq_runs})
+    scoped = [r for r in fedmaq_runs if r.experiment_group == experiment_group]
+    if not scoped:
+        return {
+            "alpha": alpha,
+            "experiment_group": experiment_group,
+            "error": (
+                f"no exploration runs found in experiment_group '{experiment_group}'. "
+                f"Groups present: {groups_present}. Stages are never pooled -- pass "
+                "experiment_group= explicitly to measure a different one."
+            ),
+            "groups_present": groups_present,
+        }
+
+    candidates = [r for r in scoped if abs(r.alpha - alpha) < 1e-9]
+    contaminated = sorted({r.alpha for r in scoped if abs(r.alpha - alpha) >= 1e-9})
 
     by_cell: dict[tuple[bool, bool, bool], list[float]] = {}
     for r in candidates:
@@ -229,13 +350,16 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
         by_cell.setdefault(r.refinements, []).append(acc)
 
     unrefined = by_cell.get((False, False, False), [])
-    if len(unrefined) < 2:
+    if len(unrefined) < 3:
         return {
             "alpha": alpha,
+            "experiment_group": experiment_group,
             "error": (
                 "cannot measure sigma: the unrefined cell (all refinements off) has "
-                f"{len(unrefined)} seed(s); §4.3.1 requires three."
+                f"{len(unrefined)} seed(s); §4.3.1 requires at least three, and the "
+                "matrix deepens this cell to five."
             ),
+            "groups_present": groups_present,
             "other_skews_present": contaminated,
         }
 
@@ -243,38 +367,93 @@ def exploration_noise_margin(runs: list[RunRecord], alpha: float = EXPLORATION_A
     margin = sigma * math.sqrt(2.0)
     baseline_mean = statistics.fmean(unrefined)
 
+    n_ref = len(unrefined)
     verdicts = {}
+    per_comparison_rates = []
     for cell, accs in sorted(by_cell.items()):
         if cell == (False, False, False):
             continue
         delta = statistics.fmean(accs) - baseline_mean
         active = [n for n, on in zip(REFINEMENT_NAMES, cell) if on]
+        # Standard error of the delta between two cell means. The threshold is
+        # sqrt(2)*sigma regardless -- that is the pre-registered rule and is not
+        # recomputed here -- but expressing it in SE units is what makes the
+        # per-comparison false-positive rate quotable.
+        se_delta = sigma * math.sqrt(1.0 / n_ref + 1.0 / len(accs)) if sigma > 0 else 0.0
+        z = margin / se_delta if se_delta > 0 else float("inf")
+        p_null = _normal_sf(z)
+        per_comparison_rates.append(p_null)
         verdicts["+".join(active) or "none"] = {
             "active": active,
             "seeds": len(accs),
             "mean_accuracy": statistics.fmean(accs),
             "delta_vs_unrefined": delta,
+            "delta_standard_error": se_delta,
+            "margin_in_standard_errors": z,
+            "false_positive_rate_if_null": p_null,
             "clears_margin": delta > margin,
             "retained": delta > margin,
         }
 
+    # THE SURVIVING SET IS A CELL, NOT A UNION.
+    #
+    # Taking the union of every mechanism appearing in any clearing cell would
+    # ship a combination the factorial never measured: if soft_voting alone and
+    # ema_student alone each clear, the union ships both together, and their
+    # joint cell may well be one of the seven that did not clear. §4.3.1's
+    # keep-or-drop rule selects among measured cells.
+    #
+    # Among the cells that clear, the smallest wins -- fewest moving parts for
+    # the same measured benefit, and it is the choice that survives an examiner
+    # asking why a mechanism is in the frozen configuration. Ties on size break
+    # toward the larger delta. If nothing clears, the set is empty and FedMAQ
+    # freezes unrefined; that is a real outcome, not a failure to select.
+    clearing = [(k, v) for k, v in verdicts.items() if v["retained"]]
+    clearing.sort(key=lambda kv: (len(kv[1]["active"]), -kv[1]["delta_vs_unrefined"]))
+    surviving_cell, surviving = (clearing[0] if clearing else (None, None))
+
     return {
         "alpha": alpha,
+        "experiment_group": experiment_group,
         "sigma_unrefined": sigma,
+        "sigma_confidence_interval": sigma_confidence_interval(sigma, n_ref),
         "noise_margin": margin,
         "margin_rule": "sqrt(2) * sigma — a delta carries the variance of both runs",
         "unrefined_mean_accuracy": baseline_mean,
-        "unrefined_seeds": len(unrefined),
+        "unrefined_seeds": n_ref,
         "verdicts": verdicts,
-        "surviving_refinement_set": sorted(
-            {m for v in verdicts.values() if v["retained"] for m in v["active"]}
+        "surviving_cell": surviving_cell,
+        "surviving_refinement_set": list(surviving["active"]) if surviving else [],
+        "selection_rule": (
+            "smallest cell clearing the margin; ties by larger delta; empty if none clears"
         ),
-        # A mechanism retained in any cell is not "discarded" merely because some
-        # other cell containing it failed; the factorial can pair it with a loser.
+        # Mechanisms the factorial actually measured and did not ship. Scoped to
+        # what appeared in some tested cell rather than to REFINEMENT_NAMES: a
+        # mechanism absent from the matrix was never judged, and reporting it as
+        # "discarded" would claim evidence against it that was never collected.
         "discarded": sorted(
-            {m for v in verdicts.values() if not v["retained"] for m in v["active"]}
-            - {m for v in verdicts.values() if v["retained"] for m in v["active"]}
+            {m for v in verdicts.values() for m in v["active"]}
+            - set(surviving["active"] if surviving else [])
         ),
+        # Seven cells are tested against one reference at one threshold. Reported,
+        # not corrected: conf/matrix/pass2_factorial.yaml pre-registers that the
+        # independent R=100 confirmation is what controls this, and an alpha
+        # correction here would cost power the confirmation already covers.
+        "multiplicity": {
+            "comparisons": len(per_comparison_rates),
+            "family_wise_false_positive_rate": (
+                1.0 - math.prod(1.0 - p for p in per_comparison_rates)
+                if per_comparison_rates
+                else 0.0
+            ),
+            "note": (
+                "Rate that at least one of the cells clears the margin by chance "
+                "under the null. Controlled by the pass3_freeze_confirm stage, "
+                "which re-tests the selected cell on fresh runs at R=100, not by "
+                "correcting the threshold here."
+            ),
+        },
+        "groups_present": groups_present,
         "other_skews_present": contaminated,
     }
 

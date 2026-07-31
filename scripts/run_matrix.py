@@ -161,11 +161,30 @@ def main() -> None:
     heterogeneities = list(cfg.get("heterogeneities", ["dirichlet_alpha_0.1"]))
     runs_spec = cfg.get("runs", [])
 
+    # A run may declare its own ``seeds:``, overriding the matrix-level list. This
+    # exists so a single cell can be measured at more seeds than the rest of its
+    # matrix: the exploration factorial's unrefined reference cell defines the
+    # sigma that every keep-or-drop call is judged against (§4.3.1), and sigma
+    # estimated from three seeds carries roughly +/-50% of itself. Deepening only
+    # that one cell buys the precision for two extra runs instead of sixteen.
+    def seeds_for(run_item) -> list[int]:
+        return [int(s) for s in run_item.get("seeds", seeds)]
+
+    # Union across the matrix, matrix-level seeds first, so a matrix that declares
+    # no per-run seeds expands in exactly the order it did before this existed.
+    all_seeds = list(seeds)
+    for run_item in runs_spec:
+        for s in seeds_for(run_item):
+            if s not in all_seeds:
+                all_seeds.append(s)
+
     # Expand all permutations into concrete run tasks
     tasks = []
     for het in heterogeneities:
-        for seed in seeds:
+        for seed in all_seeds:
             for run_item in runs_spec:
+                if seed not in seeds_for(run_item):
+                    continue
                 alg = run_item.get("alg")
                 label = run_item.get("label", alg)
                 # Sweep-wide host overrides first, so a matrix file's own per-run
@@ -219,6 +238,10 @@ def main() -> None:
     print(f"Total Rounds: {total_rounds} | Client GPUs: {client_gpus}")
     print(f"Heterogeneities: {heterogeneities}")
     print(f"Seeds: {seeds}")
+    for run_item in runs_spec:
+        extra = [s for s in seeds_for(run_item) if s not in seeds]
+        if extra:
+            print(f"  + {run_item.get('label', run_item.get('alg'))}: deepened with {extra}")
     print(f"Total Runs Scheduled: {len(tasks)}")
     if args.overrides:
         print(f"Sweep-wide overrides: {' '.join(args.overrides)}")

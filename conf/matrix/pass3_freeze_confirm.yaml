@@ -23,6 +23,24 @@
 # enforces that they stay identical), then tag the commit. Chapter 6 §6.2
 # promises that tag as the recoverable frozen configuration.
 #
+# IF IT DOES NOT CLEAR -- pre-registered here, before the runs exist, because a
+# failure branch invented after seeing the numbers is not a failure branch. The
+# surviving set collapses to EMPTY: all three refinements ship off, fedmaq.yaml
+# freezes unrefined, and Ablation Configuration 8 drops from conf/matrix/
+# ablation.yaml (nothing left to remove) along with the chapter 6 contribution
+# bullet that rests on its contrast. There are no subset retries at R=100 and no
+# hyperparameter tuning to rescue a mechanism. Re-testing the subsets of a set
+# that failed is exactly the search this two-stage design exists to prevent, and
+# it would spend the confirmation stage's independence -- the thing that controls
+# the factorial's seven-way multiplicity -- to buy back a mechanism the data did
+# not support.
+#
+# WHY THE UNREFINED ARM RUNS FIVE SEEDS. Same reason as the factorial's reference
+# cell: this arm's spread is the sigma for this stage's margin, and this stage is
+# the single gate on the freeze. Two extra runs at R=100 (~70 min) narrow the 95%
+# interval on sigma from roughly twelvefold to roughly fivefold. The surviving-set
+# arm stays at three: it supplies a mean, not the threshold.
+#
 # Not counted among the 183 confirmatory runs.
 phase: explore
 experiment_group: pass3_freeze_confirm
@@ -37,6 +55,9 @@ heterogeneities:
 runs:
   - alg: fedmaq
     label: fedmaq-unrefined
+    # Defines this stage's sigma; deepened for the same reason as the factorial's
+    # reference cell. Must stay a superset of the matrix-level seeds.
+    seeds: [0, 42, 123, 7, 21]
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=false

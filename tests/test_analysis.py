@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from analysis import (
+    EXPLORATION_GROUP,
     RunRecord,
     accuracy_at_round,
     build_ablation_table,
@@ -158,8 +159,15 @@ def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
     assert entry["winner"] == 0
 
 
-def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3):
-    """One exploration-phase run at the held-out skew, with its refinement flags."""
+def _explore_run(
+    tmp_path, label, seed, final_acc, refinements, alpha=0.3, group=EXPLORATION_GROUP
+):
+    """One exploration-phase run at the held-out skew, with its refinement flags.
+
+    Defaults to the factorial's group because that is the stage that makes the
+    keep-or-drop calls. The screening sweep and the R=100 confirmation are
+    separate groups and are never pooled with it.
+    """
     job_dir = tmp_path / f"{label}_{seed}"
     job_dir.mkdir()
     csv_path = job_dir / "experiment_log.csv"
@@ -173,7 +181,7 @@ def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3):
         seed=seed,
         csv_path=csv_path,
         refinements=refinements,
-        experiment_group="pass2_exploration",
+        experiment_group=group,
         phase="explore",
     )
 
@@ -243,6 +251,140 @@ def test_exploration_margin_refuses_to_guess_when_reference_is_underpowered(tmp_
     result = exploration_noise_margin(runs)
     assert "error" in result
     assert "sigma" not in result
+
+
+SV_AND_EMA_ON = (True, True, False)
+
+
+def test_surviving_set_is_a_measured_cell_and_never_a_union(tmp_path):
+    """The union of clearing cells can name a combination the factorial never ran.
+
+    Here soft_voting alone and ema_student alone both clear, but the cell that
+    holds *both* does not. Unioning the clearing cells would freeze the pair --
+    shipping a configuration whose only measurement says it fails to clear.
+    """
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    # sigma = 0.02, margin = 0.0283, baseline mean = 0.72.
+    runs += [  # mean 0.78 -> delta 0.06, clears
+        _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
+        for s, acc in zip((0, 42, 123), (0.77, 0.78, 0.79), strict=True)
+    ]
+    runs += [  # mean 0.80 -> delta 0.08, clears by more
+        _explore_run(tmp_path, "ema", s, acc, EMA_ON)
+        for s, acc in zip((0, 42, 123), (0.79, 0.80, 0.81), strict=True)
+    ]
+    runs += [  # mean 0.73 -> delta 0.01, does NOT clear
+        _explore_run(tmp_path, "both", s, acc, SV_AND_EMA_ON)
+        for s, acc in zip((0, 42, 123), (0.72, 0.73, 0.74), strict=True)
+    ]
+
+    result = exploration_noise_margin(runs)
+
+    assert result["verdicts"]["soft_voting+ema_student"]["retained"] is False
+    # Both singletons clear; the tie on size breaks toward the larger delta.
+    assert result["surviving_refinement_set"] == ["ema_student"]
+    assert result["surviving_cell"] == "ema_student"
+
+
+def test_surviving_set_prefers_the_smallest_clearing_cell(tmp_path):
+    """Parsimony, not the highest score: a bigger cell must beat a smaller one on
+    more than noise to justify the extra mechanism, and the margin rule alone does
+    not test that. The smallest cell that clears is the one that ships."""
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    runs += [  # delta 0.05, clears
+        _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
+        for s, acc in zip((0, 42, 123), (0.76, 0.77, 0.78), strict=True)
+    ]
+    runs += [  # delta 0.09, clears by more -- but costs a second mechanism
+        _explore_run(tmp_path, "both", s, acc, SV_AND_EMA_ON)
+        for s, acc in zip((0, 42, 123), (0.80, 0.81, 0.82), strict=True)
+    ]
+
+    result = exploration_noise_margin(runs)
+
+    assert result["surviving_refinement_set"] == ["soft_voting"]
+    assert result["discarded"] == ["ema_student"]
+
+
+def test_nothing_clearing_freezes_unrefined_rather_than_crowning_a_best(tmp_path):
+    """conf/matrix/pass3_freeze_confirm.yaml pre-registers the empty set as a real
+    outcome. Selecting the highest scorer when none clears is the exact failure
+    the margin exists to prevent."""
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    runs += [  # delta 0.02 -- above sigma, below the margin
+        _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
+        for s, acc in zip((0, 42, 123), (0.73, 0.74, 0.75), strict=True)
+    ]
+
+    result = exploration_noise_margin(runs)
+
+    assert result["surviving_refinement_set"] == []
+    assert result["surviving_cell"] is None
+
+
+def test_exploration_stages_are_refused_rather_than_pooled(tmp_path):
+    """The three exploration matrices differ in round budget and share the
+    unrefined cell, so pooling them computes sigma from a mixture of horizons
+    with seed 0 counted twice. Scoping is by group, and a miss is an error."""
+    factorial = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    confirm = [
+        _explore_run(tmp_path, "c_off", s, acc, OFF, group="pass3_freeze_confirm")
+        for s, acc in zip((0, 42, 123), (0.80, 0.86, 0.92), strict=True)
+    ]
+
+    result = exploration_noise_margin(factorial + confirm)
+    # The R=100 runs have a far wider spread; if they were pooled in, sigma moves.
+    assert result["sigma_unrefined"] == pytest.approx(0.02, abs=1e-9)
+    assert result["unrefined_seeds"] == 3
+
+    other = exploration_noise_margin(factorial + confirm, experiment_group="pass3_freeze_confirm")
+    assert other["sigma_unrefined"] == pytest.approx(0.06, abs=1e-9)
+
+    missing = exploration_noise_margin(factorial, experiment_group="nonexistent_group")
+    assert "error" in missing
+    assert "pass2_factorial" in missing["groups_present"]
+
+
+def test_margin_reports_its_own_uncertainty_and_the_multiplicity_it_carries(tmp_path):
+    """§4.3.1 calls the margin "measured rather than asserted"; a measurement
+    without its uncertainty is nearer an assertion. Deepening the reference cell
+    is what pays for a usable interval, so the interval has to be visible."""
+    deep = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123, 7, 21), (0.70, 0.71, 0.72, 0.73, 0.74), strict=True)
+    ]
+    deep += [
+        _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
+        for s, acc in zip((0, 42, 123), (0.77, 0.78, 0.79), strict=True)
+    ]
+
+    result = exploration_noise_margin(deep)
+
+    ci = result["sigma_confidence_interval"]
+    assert ci["n"] == 5
+    assert ci["low"] < result["sigma_unrefined"] < ci["high"]
+    # n=5 keeps the interval inside a fivefold span; n=3 spans roughly twelvefold.
+    assert ci["high"] / ci["low"] < 5.0
+
+    mult = result["multiplicity"]
+    assert mult["comparisons"] == 1
+    assert 0.0 < mult["family_wise_false_positive_rate"] < 1.0
+    # With n_ref=5 against n_cell=3 the threshold sits near 1.94 standard errors.
+    assert result["verdicts"]["soft_voting"]["margin_in_standard_errors"] == pytest.approx(
+        1.936, abs=1e-3
+    )
 
 
 # --- §4.3.7 / §5.4 ablation matrix -------------------------------------------

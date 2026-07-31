@@ -23,7 +23,42 @@
 # BEFORE DISPATCH: the exploration phase must have completed (§4.5). These runs
 # carry its surviving refinement layer, and Configuration 4's anchor only anchors
 # if it carries the same layer as the arm.
-phase: formal
+#
+# SELECTION IS SEQUENTIAL, AND THE CIRCULARITY IS BOUNDED
+#
+# The refinements were selected with the formulation held at 3, and the
+# formulation is selected here with the refinement layer held at whatever
+# survived. That is coordinate-wise, not joint: a refinement that helps under
+# Formulation 3 and hurts under the winner would not be caught. A joint search
+# over 5 formulations x 8 refinement cells x 3 seeds is 120 runs and is not
+# affordable; the sequential order is disclosed in §4.3.6 as a limitation rather
+# than papered over. soft_voting is the exposed verdict -- it reweights teacher
+# logits by quantization level, so it is the one mechanism whose value plausibly
+# depends on which formulation assigns those levels.
+#
+# THE RESERVED RECHECK, AND WHAT A FLIP MEANS -- pre-registered before the runs
+# exist. If Formulation 3 wins, nothing is spent and the layer stands as frozen.
+# If another formulation wins, a 6-run recheck (surviving layer vs. unrefined,
+# 3 seeds, under the winning formulation, at the held-out alpha = 0.3) is spent
+# to re-test the layer where it now has to live.
+#
+# If that recheck no longer clears the margin, soft_voting leaves the frozen set,
+# conf/algorithm/fedmaq.yaml and every §4.3.7 arm are rewritten to the reduced
+# layer, and Ablation Configuration 8 shrinks to whatever remains (dropping
+# entirely if nothing does). The factorial is NOT re-run under the new
+# formulation, and no other mechanism is reconsidered on the strength of it. The
+# recheck is a veto on the layer it was given, not a second search -- re-opening
+# the factorial here would spend the held-out skew's independence a second time
+# and turn a bounded sequential design into an unbounded one.
+#
+# PHASE. These runs are `explore`, not `formal`, and are not among the 183.
+# chapter_4.tex:161 makes this study "the pre-registered culmination of the
+# exploration phase's search", whose verdict is written into the frozen
+# configuration and tagged -- so it necessarily precedes the freeze rather than
+# sitting inside the confirmatory grid it configures. Its held-out axis is
+# dataset, not skew (chapter_4.tex:155): the formulation is chosen on CIFAR-10
+# and tested by CIFAR-100 and FEMNIST in the main grid.
+phase: explore
 experiment_group: formulation_study
 dataset: cifar10
 model: mobilenetv2
