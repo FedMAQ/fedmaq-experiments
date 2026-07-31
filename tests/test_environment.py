@@ -959,7 +959,7 @@ def test_fedmaq_strategy_allocation():
             "total_rounds": 10,
         },
         "algorithm": {
-            "name": "fedmaq_lite",
+            "name": "fedmaq",
             "q_min": 2,
             "q_max": 8,
             "c_unit": 2048.0,
@@ -1013,9 +1013,15 @@ def test_fedmaq_strategy_allocation():
 
     # Test round 1 client-adaptive configuration for FedMAQ
     # Mock parameters representing global weights
-    from fedmaq.core.models import TinyCNN, get_model_parameters
+    # Derive the model from the factory rather than naming a class: FedMAQ's
+    # server-side grad-norm probe builds its own model through
+    # get_server_model_factory and fails loudly on a shape mismatch, so a
+    # hardcoded backbone here silently encodes an assumption about which one
+    # the algorithm resolves to. This fixture held TinyCNN, which was correct
+    # only while fedmaq_lite existed to map onto it.
+    from fedmaq.core.models import get_model, get_model_parameters
 
-    model = TinyCNN(in_channels=1, num_classes=10)
+    model = get_model("mnist", num_classes=10)
     params = ndarrays_to_parameters(get_model_parameters(model))
 
     client_manager = fl.server.client_manager.SimpleClientManager()
@@ -1096,7 +1102,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 "num_classes": 10,
             },
             "algorithm": {
-                "name": "fedmaq_lite",
+                "name": "fedmaq",
                 "q_min": 2,
                 "q_max": 8,
                 "c_unit": 2048.0,
@@ -1115,9 +1121,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 "mnist", partition_id, client_indices_dict, batch_size=2, train=True
             )
             public_loader, _ = get_server_loaders("mnist", public_indices, batch_size=2)
-            from fedmaq.core.models import TinyCNN
-
-            model = TinyCNN(in_channels=1, num_classes=10)
+            model = get_model("mnist", num_classes=10)
             loss_hook = LossHook()
             from fedmaq.baselines.quantization import DAdaQuantCompressionHook
 
@@ -1140,9 +1144,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
 
         def server_fn(context: fl.app.Context) -> ServerAppComponents:
             nonlocal strategy
-            from fedmaq.core.models import TinyCNN
-
-            global_model = TinyCNN(in_channels=1, num_classes=10)
+            global_model = get_model("mnist", num_classes=10)
             initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
 
             def evaluate_fn(server_round, parameters, config):

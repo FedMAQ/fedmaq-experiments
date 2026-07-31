@@ -13,7 +13,12 @@ All runs use:
   - α=0.1: `entropy_weight=4.0`, `precision_weight=1.0`
   - α=1.0: `entropy_weight=2.0`, `precision_weight=0.5`
 
-Logs: [multirun/2026-07-15/temperature-ablation/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/multirun/2026-07-15/temperature-ablation/)
+Logs: originally `multirun/2026-07-15/temperature-ablation/`. That tree no longer
+exists — it was cleared with the other outdated run data, and the `fedmaq_lite`
+code path these runs used has since been removed (Decision 4). The numbers below
+are a historical record and are not reproducible at the current HEAD; three
+determinism fixes (`2ac52f5`, `d71cb11`, `f216abf`) landed after they were taken,
+so even a restored code path would not reproduce them exactly.
 
 ---
 
@@ -29,7 +34,7 @@ An apples-to-apples comparison with the Phase 2 grid sweep (which ran for 40 rou
 | **1.0** | **1.0 (Best SV)** |   **63.28%**    |     63.28%     |    **1.0815**    |  4072.1   |
 |   1.0   |        2.0        |     62.92%      |   **63.77%**   |      1.3201      |  4056.4   |
 
-_Note: $T=1.0$ is the default used in all preceding sweeps. $T=2.0$ runs were executed in `multirun/2026-07-15/temperature-ablation/0` (α=0.1) and `1` (α=1.0)._
+_Note: $T=1.0$ is the default used in all preceding sweeps. $T=2.0$ runs were executed in the since-deleted `multirun/2026-07-15/temperature-ablation/0` (α=0.1) and `1` (α=1.0)._
 
 ---
 

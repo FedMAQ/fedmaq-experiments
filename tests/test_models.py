@@ -49,12 +49,15 @@ def test_width_half_student_forward_pass_and_groupnorm_valid() -> None:
     assert out.shape == (2, 10)
 
 
-def test_fedmaq_lite_keeps_legacy_simplecnn_student() -> None:
-    # FedKD's student switch (DECISIONS #22) must NOT leak into fedmaq_lite,
-    # which is the SimpleCNN variant by definition (DECISIONS #4) and whose
-    # archived smoke results depend on that backbone.
-    assert isinstance(get_client_model("fedmaq_lite", "cifar10", 10), SimpleCNN)
-    server_factory = get_server_model_factory("fedmaq_lite")
-    assert isinstance(server_factory("cifar10", 10), SimpleCNN)
-    # FedKD, by contrast, gets the width-0.5 MobileNetV2GN student.
+def test_fedkd_holds_the_only_compact_student() -> None:
+    # FedMAQ-Lite was the one other algorithm mapping to a non-standard student,
+    # and it is gone (DECISIONS #4). FedKD's width-0.5 switch (DECISIONS #22)
+    # must not reach FedMAQ: the server's grad-norm probe and its distillation
+    # student both resolve through get_server_model_factory, so a leak here
+    # would silently change what the ablation's arms are measuring.
     assert isinstance(get_client_model("fedkd", "cifar10", 10), MobileNetV2GN)
+    assert isinstance(get_client_model("fedmaq", "cifar10", 10), MobileNetV2GN)
+    server_factory = get_server_model_factory("fedmaq")
+    assert isinstance(server_factory("cifar10", 10), MobileNetV2GN)
+    # FEMNIST keeps SimpleCNN as its full model, unrelated to any KD student.
+    assert isinstance(get_client_model("fedmaq", "femnist", 62), SimpleCNN)

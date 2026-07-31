@@ -46,7 +46,6 @@ __all__ = [
 # Algorithm name -> hook constructor (each takes the full config dict).
 _STRATEGY_HOOKS: dict[str, Callable[[dict[str, Any]], StrategyHook]] = {
     "fedmaq": FedMAQHook,
-    "fedmaq_lite": FedMAQHook,
     "dadaquant": DAdaQuantHook,
     "fedkd": FedKDHook,
     "fedmd": FedMDHook,

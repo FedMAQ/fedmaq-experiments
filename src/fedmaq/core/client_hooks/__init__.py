@@ -34,7 +34,6 @@ _FIT_STRATEGIES: dict[str, type[ClientFitStrategy]] = {
     "fedkd": FedKDFit,
     "dadaquant": DAdaQuantFit,
     "fedmaq": FedMAQFit,
-    "fedmaq_lite": FedMAQFit,
     "feddistill": FedDistillFit,
     "cfd": CFDFit,
 }

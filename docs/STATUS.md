@@ -21,12 +21,15 @@ Single source of truth for current project state. Updated after each experiment 
 
 ## Algorithm Variants
 
-FedMAQ has been formally partitioned into two variants:
+One variant. FedMAQ-Lite was dropped from the thesis (Decision 4) and its code
+removed once nothing depended on it; the size-contrast story it carried died
+when the main model became MobileNetV2GN at ~2.24M, within 4% of Lite's ~2.16M
+SimpleCNN. Its archived smoke results stay in
+`docs/experiments/archive/temperature-ablation/` as a historical record.
 
-| Variant                         | Client Model  | Params | Status                                          | Primary Use Case                                    |
-| :------------------------------ | :------------ | :----: | :---------------------------------------------- | :-------------------------------------------------- |
-| **FedMAQ** (`fedmaq`)           | MobileNetV2GN | ~2.24M | Active development — needs MobileNetV2GN tuning | Iso-architecture baseline comparison (edge model)   |
-| **FedMAQ-Lite** (`fedmaq_lite`) | SimpleCNN     | ~2.16M | Smoke tests complete — tuned                    | Demonstrates even small models beat large baselines |
+| Variant               | Client Model  | Params | Status                                          | Primary Use Case                                  |
+| :-------------------- | :------------ | :----: | :---------------------------------------------- | :------------------------------------------------ |
+| **FedMAQ** (`fedmaq`) | MobileNetV2GN | ~2.24M | Active development — needs MobileNetV2GN tuning | Iso-architecture baseline comparison (edge model) |
 
 ---
 

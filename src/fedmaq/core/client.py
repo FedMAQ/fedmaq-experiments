@@ -82,7 +82,7 @@ def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:
     """Factory: return the appropriate LossHook for the given algorithm name."""
     if alg_name == "fedprox":
         return FedProxLossHook(mu=float(alg_cfg.get("mu", 0.01)))
-    if alg_name in {"fedmaq", "fedmaq_lite"}:
+    if alg_name == "fedmaq":
         if alg_cfg.get("client_kd_reg", False):
             from fedmaq.core.kd_loss_hook import ClientKDLossHook
 
