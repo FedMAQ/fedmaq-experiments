@@ -237,6 +237,28 @@ class TelemetryFedAvg(FedAvg):
             self, server_round, parameters, client_manager, client_instructions
         )
 
+    def _partition_sort_key(self, client_proxy: ClientProxy, fit_res: FitRes) -> int:
+        """Cross-run-stable identity for a fit result, for deterministic aggregation.
+
+        Every client hook reports ``partition_id`` in its fit metrics, so the
+        common path needs no round-trip. A missing metric means a client hook
+        stopped reporting it, and there is then no cross-run-stable identity
+        available: ``resolve_partition_id``'s last-resort branch is
+        ``hash(cid) % num_clients``, and Python randomises *string* hashing per
+        process, so it would reintroduce exactly the run-to-run permutation this
+        sort exists to prevent. Fail loudly at round 1 instead of silently
+        emitting an unreproducible model for the rest of the grid.
+        """
+        pid = int(fit_res.metrics.get("partition_id", -1))
+        if 0 <= pid < self.num_clients:
+            return pid
+        raise ValueError(
+            f"Client {client_proxy.cid} reported partition_id={pid}, outside "
+            f"[0, {self.num_clients}). Deterministic aggregation needs a stable "
+            "partition identity; ensure the algorithm's client hook includes "
+            "'partition_id' in its fit metrics."
+        )
+
     def aggregate_fit(
         self,
         server_round: int,
@@ -248,8 +270,12 @@ class TelemetryFedAvg(FedAvg):
         # concurrency), not client identity. Sequential float32 summation in
         # aggregate() is order-dependent, so an unsorted results list makes the
         # aggregated model non-reproducible across concurrency settings. Canonical
-        # cid order restores that determinism for every downstream consumer below.
-        results = sorted(results, key=lambda r: r[0].cid)
+        # partition order restores that determinism for every downstream consumer
+        # below. Sorting on proxy.cid does NOT work: cid is str(node_id), and node
+        # ids are fresh urandom int64s per run (see client_manager.py's docstring),
+        # so a cid sort is canonical within a run but an arbitrary permutation of
+        # partitions across runs.
+        results = sorted(results, key=lambda r: self._partition_sort_key(*r))
 
         # 1. Check if the hook wants to bypass FedAvg aggregation entirely
         pre_result = self.hook.pre_aggregate_fit(self, server_round, results, failures)
