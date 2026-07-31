@@ -57,14 +57,16 @@ def resolve_partition_id(
         except Exception as exc:
             if attempt < max_retries - 1:
                 logger.warning(
-                    f"Attempt {attempt + 1} failed to resolve partition ID for client {cid_str}: {exc}. Retrying in 1.5s..."
+                    f"Attempt {attempt + 1} failed to resolve partition ID for "
+                    f"client {cid_str}: {exc}. Retrying in 1.5s..."
                 )
                 time.sleep(1.5)
             else:
                 pid = hash(client.cid) % strategy.num_clients
                 strategy.proxy_cid_to_partition_id[cid_str] = pid
                 logger.warning(
-                    f"Could not resolve partition ID for client {cid_str} ({exc}) after {max_retries} attempts. "
+                    f"Could not resolve partition ID for client {cid_str} ({exc}) "
+                    f"after {max_retries} attempts. "
                     f"Falling back to hash-based mapping -> partition {pid}. "
                     "Verify that GenericClient.get_properties exposes 'cid'."
                 )

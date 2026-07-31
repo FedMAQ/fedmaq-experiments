@@ -100,9 +100,7 @@ def test_sort_key_recovers_partition_order_regardless_of_node_ids():
         ordered = sorted(results, key=lambda r: strategy._partition_sort_key(*r))
         pids = [int(fit_res.metrics["partition_id"]) for _, fit_res in ordered]
 
-        assert pids == list(range(NUM_CLIENTS)), (
-            f"expected canonical partition order, got {pids}"
-        )
+        assert pids == list(range(NUM_CLIENTS)), f"expected canonical partition order, got {pids}"
 
 
 def test_cid_sort_would_not_be_stable_across_runs():

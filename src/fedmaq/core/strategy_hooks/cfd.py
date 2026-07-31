@@ -294,7 +294,6 @@ class CFDHook(StrategyHook):
     ) -> float:
         if self._pending_targets is None:
             return 0.0
-        alg_cfg = self._config.get("algorithm", {})
         num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,

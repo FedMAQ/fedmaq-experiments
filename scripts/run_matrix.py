@@ -77,7 +77,10 @@ def main() -> None:
         "--matrix",
         type=str,
         required=True,
-        help="Path or name of the matrix YAML file (e.g. 'ci_test' or 'conf/matrix/mobilenetv2_smoke_50r.yaml')",
+        help=(
+            "Path or name of the matrix YAML file "
+            "(e.g. 'ci_test' or 'conf/matrix/mobilenetv2_smoke_50r.yaml')"
+        ),
     )
     parser.add_argument(
         "--start_at",
@@ -278,9 +281,7 @@ def main() -> None:
     failures: list[dict] = []
     start_time = time.time()
     started_at = datetime.now().isoformat()
-    status_path = (
-        get_sweep_group_dir(phase, dataset, model, exp_group) / SWEEP_STATUS_FILENAME
-    )
+    status_path = get_sweep_group_dir(phase, dataset, model, exp_group) / SWEEP_STATUS_FILENAME
 
     def save_status(state: str) -> None:
         """Persist which task indices failed, after every task rather than at the end.
@@ -327,9 +328,7 @@ def main() -> None:
     for idx, task in enumerate(tasks, 1):
         reason = skip_reason(idx, task)
         if reason:
-            logger.info(
-                f"[{idx}/{len(tasks)}] Skipping run '{task['label']}' ({reason})"
-            )
+            logger.info(f"[{idx}/{len(tasks)}] Skipping run '{task['label']}' ({reason})")
             skipped += 1
             continue
 
@@ -364,7 +363,8 @@ def main() -> None:
         if returncode != 0:
             if not timed_out:
                 logger.error(
-                    f"[FAILED] Task [{idx}/{len(tasks)}] '{task['label']}' exited with code {returncode} ({elapsed:.1f}s)"
+                    f"[FAILED] Task [{idx}/{len(tasks)}] '{task['label']}' "
+                    f"exited with code {returncode} ({elapsed:.1f}s)"
                 )
             failed += 1
             consecutive_failures += 1
@@ -386,10 +386,7 @@ def main() -> None:
             completed += 1
             consecutive_failures = 0
 
-        if (
-            args.max_consecutive_failures
-            and consecutive_failures >= args.max_consecutive_failures
-        ):
+        if args.max_consecutive_failures and consecutive_failures >= args.max_consecutive_failures:
             abort_reason = (
                 f"{consecutive_failures} consecutive failures at task index {idx} "
                 f"of {len(tasks)} (threshold {args.max_consecutive_failures})"

@@ -295,7 +295,10 @@ def exploration_noise_margin(
 
     1. Characterize the seed-to-seed standard deviation ``sigma`` of the
        *unrefined* FedMAQ configuration (all three refinements off) at the
-       held-out exploration skew, across its three seeds.
+       held-out exploration skew, across whatever seeds that reference cell was
+       run at in *this* stage. The count is not fixed here: §4.4 deepens the
+       reference cell relative to the arms it is judged against, so it is read
+       from the runs rather than assumed.
     2. Scale the margin above sigma, because a delta between two runs carries the
        variance of both: sd(A - B) = sqrt(2) * sigma for independent runs of
        equal variance. Comparing a delta against bare sigma would be the error
@@ -374,7 +377,10 @@ def exploration_noise_margin(
         if cell == (False, False, False):
             continue
         delta = statistics.fmean(accs) - baseline_mean
-        active = [n for n, on in zip(REFINEMENT_NAMES, cell) if on]
+        # strict: a cell key that is not one flag per REFINEMENT_NAMES entry means
+        # the roster changed under the analysis. Truncating silently would label a
+        # verdict with the wrong mechanism set, which is worse than crashing here.
+        active = [n for n, on in zip(REFINEMENT_NAMES, cell, strict=True) if on]
         # Standard error of the delta between two cell means. The threshold is
         # sqrt(2)*sigma regardless -- that is the pre-registered rule and is not
         # recomputed here -- but expressing it in SE units is what makes the
@@ -410,7 +416,7 @@ def exploration_noise_margin(
     # freezes unrefined; that is a real outcome, not a failure to select.
     clearing = [(k, v) for k, v in verdicts.items() if v["retained"]]
     clearing.sort(key=lambda kv: (len(kv[1]["active"]), -kv[1]["delta_vs_unrefined"]))
-    surviving_cell, surviving = (clearing[0] if clearing else (None, None))
+    surviving_cell, surviving = clearing[0] if clearing else (None, None)
 
     return {
         "alpha": alpha,

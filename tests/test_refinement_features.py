@@ -34,8 +34,8 @@ def test_soft_voting_logic():
     teacher1 = SimpleCNN(in_channels=1, num_classes=3)
     teacher2 = SimpleCNN(in_channels=1, num_classes=3)
 
-    # Set teacher 1 to be highly confident (one-hot outputs) and teacher 2 to be uniform (low confidence)
-    # By modifying biases/weights of the last layer
+    # Set teacher 1 to be highly confident (one-hot outputs) and teacher 2 to be
+    # uniform (low confidence), by modifying biases/weights of the last layer.
     with torch.no_grad():
         teacher1.fc2.bias.fill_(0.0)
         teacher1.fc2.weight.fill_(0.0)
@@ -211,6 +211,7 @@ def test_client_telemetry_aggregation():
 def test_stacked_loss_regularization():
     """Verify that ClientKDLossHook correctly stacks KD and FedProx proximal regularization."""
     import torch.nn as nn
+
     from fedmaq.core.kd_loss_hook import ClientKDLossHook
 
     # Create model, input, and targets

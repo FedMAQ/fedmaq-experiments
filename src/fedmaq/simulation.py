@@ -22,8 +22,11 @@ from flwr.simulation import run_simulation
 from omegaconf import DictConfig, OmegaConf
 
 from fedmaq.baselines import get_compressor_hook
+from fedmaq.core.checkpoint import write_final_global_model
 from fedmaq.core.client import GenericClient, get_loss_hook
+from fedmaq.core.client_manager import SeededPartitionClientManager
 from fedmaq.core.evaluation import evaluate_fedmd_ensemble, evaluate_global_model
+from fedmaq.core.manifest import write_run_manifest
 from fedmaq.core.models import (
     DEVICE,
     get_client_model,
@@ -35,9 +38,6 @@ from fedmaq.core.partitioning import (
     get_client_loader,
     get_server_loaders,
 )
-from fedmaq.core.checkpoint import write_final_global_model
-from fedmaq.core.client_manager import SeededPartitionClientManager
-from fedmaq.core.manifest import write_run_manifest
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
@@ -93,10 +93,7 @@ def build_ray_init_args(cfg: DictConfig) -> dict[str, ConfigRecordValues]:
         # from Windows, where ``PurePath('/tmp/ray-cjb').is_absolute()`` is False for
         # want of a drive letter. A platform-native check would reject the correct hub
         # value on the development rig.
-        if not (
-            PurePosixPath(resolved).is_absolute()
-            or PureWindowsPath(resolved).is_absolute()
-        ):
+        if not (PurePosixPath(resolved).is_absolute() or PureWindowsPath(resolved).is_absolute()):
             raise ValueError(
                 f"ray.temp_dir must be an absolute path, got '{temp_dir}'. Ray builds "
                 "its session directory beneath it and requires an absolute root."

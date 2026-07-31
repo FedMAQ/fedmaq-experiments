@@ -20,7 +20,7 @@ import logging
 import os
 import platform
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +110,7 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
 
     return {
         "config_sha256": config_sha256(cfg_dict),
-        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "created_utc": datetime.now(UTC).isoformat(),
         "run": {
             "algorithm": algorithm.get("name"),
             "algorithm_config": cfg_dict.get("_algorithm_config_name")
@@ -152,7 +152,9 @@ def write_run_manifest(cfg_dict: dict[str, Any], log_dir: Path) -> Path | None:
                 "§4.3.1 a confirmation run must be launched from a clean, "
                 "tagged state; this run is not reproducible from its commit."
             )
-        logger.info(f"Run manifest written: {path} (config_sha256={manifest['config_sha256'][:12]})")
+        logger.info(
+            f"Run manifest written: {path} (config_sha256={manifest['config_sha256'][:12]})"
+        )
         return path
     except Exception as exc:  # pragma: no cover - provenance must never break a run
         logger.warning(f"Failed to write run manifest: {exc}")

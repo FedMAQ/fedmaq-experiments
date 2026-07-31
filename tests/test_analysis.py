@@ -159,9 +159,7 @@ def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
     assert entry["winner"] == 0
 
 
-def _explore_run(
-    tmp_path, label, seed, final_acc, refinements, alpha=0.3, group=EXPLORATION_GROUP
-):
+def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3, group=EXPLORATION_GROUP):
     """One exploration-phase run at the held-out skew, with its refinement flags.
 
     Defaults to the factorial's group because that is the stage that makes the
@@ -202,17 +200,17 @@ def test_exploration_margin_is_scaled_above_sigma_not_equal_to_it(tmp_path):
     # Unrefined cell: 0.70 / 0.72 / 0.74 -> sigma = 0.02, margin = 0.0283.
     runs = [
         _explore_run(tmp_path, "off", s, acc, OFF)
-        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74))
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
     ]
     # Mean 0.7450 -> delta 0.0250. Above sigma (0.02), below the margin (0.0283).
     runs += [
         _explore_run(tmp_path, "sv", s, acc, SOFT_VOTING_ON)
-        for s, acc in zip((0, 42, 123), (0.735, 0.745, 0.755))
+        for s, acc in zip((0, 42, 123), (0.735, 0.745, 0.755), strict=True)
     ]
     # Mean 0.7800 -> delta 0.0600, clears the margin.
     runs += [
         _explore_run(tmp_path, "ema", s, acc, EMA_ON)
-        for s, acc in zip((0, 42, 123), (0.77, 0.78, 0.79))
+        for s, acc in zip((0, 42, 123), (0.77, 0.78, 0.79), strict=True)
     ]
 
     result = exploration_noise_margin(runs)
@@ -234,7 +232,7 @@ def test_exploration_margin_flags_contamination_from_reported_skews(tmp_path):
     """
     runs = [
         _explore_run(tmp_path, "off", s, acc, OFF)
-        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74))
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
     ]
     runs.append(_explore_run(tmp_path, "leak", 0, 0.71, OFF, alpha=0.1))
 

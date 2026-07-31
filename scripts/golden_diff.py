@@ -88,10 +88,14 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-def _diff(golden_rows: list[dict[str, str]], compare_rows: list[dict[str, str]], label: str) -> list[str]:
+def _diff(
+    golden_rows: list[dict[str, str]], compare_rows: list[dict[str, str]], label: str
+) -> list[str]:
     problems: list[str] = []
     if len(golden_rows) != len(compare_rows):
-        problems.append(f"[{label}] row count differs: golden={len(golden_rows)} compare={len(compare_rows)}")
+        problems.append(
+            f"[{label}] row count differs: golden={len(golden_rows)} compare={len(compare_rows)}"
+        )
         return problems
 
     golden_cols = set(golden_rows[0].keys()) if golden_rows else set()
@@ -108,7 +112,8 @@ def _diff(golden_rows: list[dict[str, str]], compare_rows: list[dict[str, str]],
                 continue
             if g_row.get(col) != c_row.get(col):
                 problems.append(
-                    f"[{label}] row {i} column {col!r}: golden={g_row.get(col)!r} compare={c_row.get(col)!r}"
+                    f"[{label}] row {i} column {col!r}: "
+                    f"golden={g_row.get(col)!r} compare={c_row.get(col)!r}"
                 )
     return problems
 
@@ -125,7 +130,9 @@ def compare() -> None:
     for algorithm in GOLDEN_SET:
         golden_csv = GOLDEN_ROOT / algorithm / "experiment_log.csv"
         if not golden_csv.exists():
-            all_problems.append(f"[{algorithm}] no golden output found at {golden_csv} — run `capture` first")
+            all_problems.append(
+                f"[{algorithm}] no golden output found at {golden_csv} — run `capture` first"
+            )
             continue
 
         target = COMPARE_ROOT / algorithm

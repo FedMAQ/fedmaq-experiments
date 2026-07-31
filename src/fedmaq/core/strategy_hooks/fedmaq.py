@@ -10,8 +10,6 @@ from flwr.common import (
     FitIns,
     Parameters,
     Scalar,
-    ndarrays_to_parameters,
-    parameters_to_ndarrays,
 )
 from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager

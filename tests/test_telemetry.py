@@ -123,8 +123,6 @@ def test_confirmatory_runs_log_online_while_smoke_runs_stay_off():
             ("ci", False, "offline"),
             ("preliminary", False, "offline"),
         ):
-            cfg = compose(
-                config_name="config", overrides=[f"experiment={experiment}"]
-            )
+            cfg = compose(config_name="config", overrides=[f"experiment={experiment}"])
             assert cfg.experiment.telemetry.wandb_enabled is enabled, experiment
             assert cfg.experiment.telemetry.mode == mode, experiment

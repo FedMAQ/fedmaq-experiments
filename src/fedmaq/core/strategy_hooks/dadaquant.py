@@ -145,8 +145,7 @@ class DAdaQuantHook(StrategyHook):
 
         q_i_list = compute_dadaquant_client_q(sizes, self.q_t, q_min=q_min, q_max=q_max)
         client_q = {
-            client.cid: q_i
-            for (client, _), q_i in zip(client_instructions, q_i_list, strict=True)
+            client.cid: q_i for (client, _), q_i in zip(client_instructions, q_i_list, strict=True)
         }
         for client, _ in client_instructions:
             logger.info(
