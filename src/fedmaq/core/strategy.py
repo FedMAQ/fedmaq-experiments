@@ -243,6 +243,14 @@ class TelemetryFedAvg(FedAvg):
         results: list[tuple[ClientProxy, FitRes]],
         failures: list[tuple[ClientProxy, FitRes] | BaseException],
     ) -> tuple[Parameters | None, dict[str, Scalar]]:
+        # Flower's fit_clients collects results via concurrent.futures.wait() into a
+        # set, so iteration order tracks completion timing (and thus client_gpus
+        # concurrency), not client identity. Sequential float32 summation in
+        # aggregate() is order-dependent, so an unsorted results list makes the
+        # aggregated model non-reproducible across concurrency settings. Canonical
+        # cid order restores that determinism for every downstream consumer below.
+        results = sorted(results, key=lambda r: r[0].cid)
+
         # 1. Check if the hook wants to bypass FedAvg aggregation entirely
         pre_result = self.hook.pre_aggregate_fit(self, server_round, results, failures)
         if pre_result is not None:

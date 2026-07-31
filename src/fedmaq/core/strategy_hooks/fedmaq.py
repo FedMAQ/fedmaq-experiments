@@ -75,6 +75,8 @@ class FedMAQHook(StrategyHook):
             strategy.cost_model.client_memory,
             ctx,
             ctx.alg_cfg,
+            self._config.get("seed", 42),
+            server_round,
         )
         return inject_client_q(client_instructions, self._current_plan.client_q)
 

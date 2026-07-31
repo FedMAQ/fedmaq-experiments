@@ -249,13 +249,15 @@ class QuantizationPlanner:
         client_memory: dict[int, float] | list[float],
         ctx: RunContext,
         qp_cfg: dict[str, Any],
+        seed_base: int,
+        server_round: int,
     ) -> QuantPlan:
         """Probe -> EMA-smooth -> normalize -> assign, for one round's sampled clients."""
         qp = _QuantParams.from_cfg(qp_cfg)
         temp_model = self._ensure_grad_norm_model(parameters, ctx)
 
         grad_norms, dataset_sizes = self._probe_grad_norms(
-            temp_model, client_pids, ctx, client_indices_dict
+            temp_model, client_pids, ctx, client_indices_dict, seed_base, server_round
         )
         grad_norms = self._smooth_grad_norms(client_pids, grad_norms, qp_cfg)
 
@@ -280,6 +282,8 @@ class QuantizationPlanner:
         client_pids: list[int],
         ctx: RunContext,
         client_indices_dict: dict[int, list[int]],
+        seed_base: int,
+        server_round: int,
     ) -> tuple[list[float], list[int]]:
         """One stochastic single-batch gradient-norm probe per sampled client.
 
@@ -294,12 +298,17 @@ class QuantizationPlanner:
             n_k = partition_dataset_size(client_indices_dict, pid)
             dataset_sizes.append(n_k)
 
+            # seed=None falls back to the global torch RNG for the shuffle, whose
+            # state drifts differently under concurrent vs. serial client execution
+            # (client_gpus). A deterministic per-client-per-round seed removes that
+            # dependency while still varying the sampled batch across rounds.
             loader = get_client_loader(
                 dataset_name=ctx.dataset_name,
                 client_id=pid,
                 client_indices_dict=client_indices_dict,
                 batch_size=ctx.batch_size,
                 train=True,
+                seed=seed_base + pid * 100_000 + server_round,
             )
             try:
                 images, labels = next(iter(loader))
