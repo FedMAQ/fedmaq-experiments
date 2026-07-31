@@ -673,3 +673,193 @@ Closes the architecture-deepening candidate this session named "A" (Decision 20'
     section was dropped, which is the whole point. `docs-management.md` now
     forbids the pattern, and the `docs-audit` skill treats a tracked handoff file
     as a finding rather than as something to audit.
+
+---
+
+## 2026-08-01 — Experiment-Defensibility Audit, Pass 3
+
+Third audit pass over the frozen-configuration design, run against the standard of
+the previous two (find defects that would make the frozen configuration not mean
+what the manuscript says it means) with an explicit feasibility constraint: a fix
+that costs weeks of runs is not a fix. Three of the prior handoff's six leads
+cleared on inspection and are recorded here as non-findings so they are not
+re-audited — FEMNIST's `num_clients` and throughput constants agree across Table 4.1
+note (a), `conf/experiment/femnist.yaml` and §4.3.4 (the `L40S` in config comments is
+the *modeled* server, correctly distinguished from the A100 execution host at
+`chapter_4.tex:286`); Configuration 4's parity-anchor claim holds, because
+`formulation_study.yaml` sets no refinement overrides and therefore inherits the
+freeze through `fedmaq.yaml`; and `entropy_weight`/`precision_weight` ship at the
+neutral `1.0`/`1.0` that §4.3.1 requires.
+
+64. **A formulation winner that splits across skews now has a rule: the α = 0.1
+    winner freezes.** `scripts/analysis.py:select_winner` is per-`(dataset, alpha)`
+    and the formulation study runs CIFAR-10 at both skews, so two verdicts are
+    structural, not exceptional. The freeze takes one scalar (`fedmaq.yaml`'s
+    `formulation:`), the 105-run grid runs one FedMAQ, and every §4.3.7 arm inherits
+    one formulation — and §4.3.6 saw the possibility ("should the winning formulation
+    shift with skew, that is itself a headline finding") without resolving it, leaving
+    three downstream branches undefined: Configuration 4's expressibility, which is
+    conditioned on whether Formulation 3 won; the reserved recheck, conditioned on the
+    same; and the freeze itself. The rule is now agreement-or-severe-skew: if both
+    skews pick the same formulation it freezes, and if they diverge the α = 0.1 winner
+    freezes and the split is reported as the finding §4.3.6 already promises. Severe
+    skew breaks the tie because it is the regime this thesis's claims are staked on,
+    so selecting where the problem is hardest is the conservative direction rather
+    than the flattering one. A symmetric aggregate was considered and rejected on
+    technical grounds, not rhetorical ones: `compute_target_floor` is called *inside*
+    the per-skew loop, so each skew's cumulative-MB is measured against its own floor
+    at its own convergence speed, and summing incommensurable quantities hands the
+    decision to whichever skew has the larger absolute MB scale. Normalizing to fix
+    that introduces exactly the second free parameter §4.3.6 forbids.
+    Implemented as `scripts/analysis.py:resolve_frozen_formulation`.
+
+65. **Total disqualification is pre-registered, and per-seed disqualification is
+    stated in the manuscript rather than inferred from a docstring.** `select_winner`
+    already returned `winner = None` when the accuracy-floor guard caught all five
+    formulations; §4.3.6 had no branch for it. This is not hypothetical — the floor is
+    90% of *uncompressed* FedAvg, and the formulation study deliberately runs FedMAQ
+    in its least communication-efficient state (quantized under a
+    U(2048, 16384) MB ceiling with the post-processing pipeline withheld so the
+    formulas are judged on mathematical merit). Clearing that at α = 0.1 is genuinely
+    uncertain. The rule is also stricter than the prose read: `if round_num is None`
+    sits inside the per-seed loop, so **one** failing seed of three disqualifies the
+    formulation, where §4.3.6's "any formulation that fails to reach the target
+    accuracy" reads naturally as a claim about its mean. The strict rule is the right
+    one — it refuses to average away a seed that never converged — and is now written
+    as such. Branches: a wipeout at one skew defers to the other outright (Decision
+    64's divergence rule does not apply, there being only one valid verdict); a
+    wipeout at both falls back to highest mean top-1 at R=100 at α = 0.1, the
+    criterion already pre-registered as the near-tie break, **and withdraws §4.3.6's
+    framing of formulation selection as the thesis's primary methodological
+    contribution**, with §5.7 recording that no formulation reached the
+    FedAvg-relative target. This deliberately does *not* mirror Decision 60's
+    empty-freeze branch, which withdraws a claim rather than manufacturing a winner.
+    The disanalogy is that "ship unrefined" is a coherent configuration and "ship no
+    formulation" is not: `fedmaq.yaml:18` gets a number either way, so the only real
+    choice is whether it is picked empirically or left at whatever the implementation
+    already contained — and freezing the incumbent by default would mean the thesis's
+    self-described primary contribution was settled by a default value.
+
+66. **The near-tie tie-break compares against within-candidate spread, never pooled
+    spread.** The implementation concatenated both candidates' `crossing_mbs` and took
+    the sample standard deviation of the combined six, which folds the *between*-
+    candidate separation into the threshold. With within-candidate sd `s` and
+    separation `d`, the combined sample variance is `(4s² + 1.5d²)/5`, so the rule
+    fired at `d < 1.069s` and the threshold grew with the very margin it was judging.
+    A pre-registered rule cannot be self-referential, the behaviour breaks
+    asymmetrically when the two candidates have unequal spread, and it is not what
+    §4.3.6 published ("smaller than either candidate's seed-to-seed variability").
+    Now `max` of the two candidates' own standard deviations, with §4.3.6 corrected to
+    say exactly that and to state that the rule applies to the **top two** candidates
+    only — which is what the code has always done and the prose never said. The
+    sharper statistic, the standard error of the difference `sqrt(s1²/3 + s2²/3)`, was
+    considered and rejected: §4.4 already argues that at n = 3 the σ estimate itself
+    carries a roughly twelvefold interval, so a finer instrument built on top of it is
+    false precision. A difference smaller than one candidate's own run-to-run spread
+    should not decide the thesis's primary methodological contribution.
+
+67. **Baseline matched-tuning exists as a real stage: `conf/matrix/baseline_tuning.yaml`,
+    55 runs, Stage 1b.** Decision 31 pre-registered the budget, Decision 29 sequenced
+    it, §4.3.1 promises "the baseline hyperparameter table (Table 4.1)" is locked and
+    tagged at the freeze, and `STATUS.md` carried a standing warning that a
+    MobileNetV2GN sweep was required — and nothing produced it. No matrix file, no
+    stage in `RUNBOOK.md`, and the word "tuning" appeared in `chapter_4.tex` only in
+    the phrase "rather than a single unstructured tuning pass". **The gap is transfer,
+    not provenance** — §4.3.2 already sources every baseline constant carefully (FedProx's
+    μ = 1 cited to the image benchmarks of its own paper's sweep, DAdaQuant's φ = 10
+    derived from a published rule instantiated at R = 100, FedPAQ's 8-bit adopted from
+    the precision another paper benchmarks it at since FedPAQ publishes levels rather
+    than bit-widths, FedKD's SVD endpoints declared as ours rather than inherited). That
+    paragraph was found *after* this decision was first drafted and corrects it: the
+    baselines are not unprovenanced. What no published value can establish is that it
+    still holds on MobileNetV2GN at α ∈ {0.1, 1.0}, which is a different architecture
+    and a different skew from any of the sources. FedMAQ meanwhile received a 38-run
+    exploration phase and a 30-run formulation study on exactly this configuration.
+    *You verified yours on this grid and theirs on someone else's* is the surviving form
+    of the attack, and it had no answer.
+
+    Design: five baselines (FedAvg is the uncompressed control and has no knob), one
+    key hyperparameter each, a five-seed reference cell at the shipped Table 4.1 value
+    plus two three-seed challengers = 5 × 11 = 55 runs, at the held-out α = 0.3, under
+    FedMAQ's own √2σ rule, uncounted among the 183. **R=100, not the R=50 every other
+    exploration stage screens at**: baselines get no confirmation stage, so a
+    truncated-horizon pick would ship into the reported grid uncorrected. That is most
+    of the ~26 GPU-hour cost and it is the one place worth spending rather than
+    economizing. Reference cells are deepened to five seeds by Decision 61's argument
+    applied per baseline; standardizing to three would save ten runs and leave the
+    baselines' margins estimated more coarsely than FedMAQ's own freeze gate, which is
+    an indefensible ordering.
+
+    **The null result is the product.** The likely outcome is that no challenger
+    clears and every baseline freezes at the value it would have had with no sweep —
+    which converts an appeal to authority into a measurement, and answers the question
+    the zero-run alternative cannot: how do you know a constant tuned on a different
+    architecture transfers to MobileNetV2GN under Dirichlet skew? FedProx's μ is the
+    sharp case, being the proximal-strength knob and skew-sensitive by construction.
+    A cheaper selective sweep (tune only the knobs that "look sensitive") was rejected
+    for its shape rather than its cost: the person whose algorithm benefits would be
+    deciding which of his competitors' knobs deserved tuning, which invites the exact
+    suspicion the sweep exists to dispel. Uniform treatment has no soft spot.
+
+    **This supersedes Decision 31's knob list for FedKD.** Decision 31 named
+    "FedDistill/FedKD distillation temp"; FedDistill has no temperature (its knob is
+    `reg_alpha`) and FedKD's `temperature` governs client-side mutual KD while `tmax`,
+    the SVD energy cutoff, governs the accuracy–communication trade-off this grid
+    actually compares on. Each baseline is tuned on the knob governing its own
+    accuracy–communication trade-off, because that is the axis every claim rests on.
+    Recorded rather than silently substituted.
+
+68. **The reserved 6-run recheck is promoted from a YAML comment into §4.3.6, and the
+    freeze is tagged once, at the end of exploration.** `formulation_study.yaml`
+    pre-registers that a winner other than Formulation 3 triggers a 6-run recheck of
+    the frozen refinement layer under the winning formulation, and that a failed
+    recheck removes `soft_voting` from the frozen set, rewrites `fedmaq.yaml` and every
+    §4.3.7 arm, and shrinks or drops Configuration 8. A procedure that spends uncounted
+    runs and mutates the frozen configuration was visible nowhere in the manuscript,
+    while §4.3.1 said flatly that exploration ends once the third stage's confirmation
+    has held. That is the failure Decision 60 exists to prevent: a branch only in code
+    comments cannot function as pre-registration. Kept rather than deleted, because
+    this is one named mechanistic coupling and not the generic sequential-selection
+    caveat already in §5.7 — `soft_voting` reweights teacher logits *by quantization
+    level*, so it is specifically the mechanism whose value depends on which formula
+    assigns those levels, and the expected cost is 6 runs × P(F3 loses) on an
+    incumbent default. §4.3.6 now states it as a **veto, not a search**: it can only
+    remove from the frozen set, never add; the factorial is never re-opened; no subset
+    is retried. Auditing this surfaced a second defect — `RUNBOOK.md` git-tagged at
+    the refinement freeze, but §4.3.1 locks and tags three artifacts together (fixed
+    mechanism set, selected formulation, baseline hyperparameter table) and two of them
+    do not exist at that point. The tag moved to a new Stage 2b after the formulation
+    study resolves.
+
+69. **`docs/plans/formal-experiment-plan.md` is deleted.** Per
+    `.claude/rules/docs-management.md`, plans are active-only. Its resolved content had
+    gone beyond stale to actively wrong: it asserted "Pass 1 Complete (provisional
+    pick: `ew=2.0`, `pw=0.5`)" while `fedmaq.yaml:59–60` ships `1.0`/`1.0`, because
+    §4.3.1 now requires neutral-point hyperparameters throughout exploration — a reader
+    following the plan would reintroduce the tuned values and silently violate the
+    protocol. Its Pass 1/2/3 vocabulary also collided with §4.3.1's three stages
+    (its "Pass 3" is the formulation study, now a 30-run first-class experiment, not a
+    stage), and its "Execution Structure (tentative)" duplicated `RUNBOOK.md`.
+    `STATUS.md` cited it twice as authoritative; both links now point at `RUNBOOK.md`
+    and the `conf/matrix/*.yaml` headers, which are authoritative over prose describing
+    them. One item existed nowhere else and is carried forward here: **FedMAQ must be
+    compared against the pure-quantization baselines (FedPAQ, DAdaQuant) at matched bit
+    budgets**, since an accuracy-vs-compression frontier plotted across unmatched
+    budgets is apples-to-oranges. `baseline_tuning.yaml` brackets FedPAQ's `q` at
+    {4, 8, 16} partly to make that comparison constructible; the plot itself remains
+    unbuilt and is tracked in `STATUS.md`, not in a revived plan file.
+
+70. **`client_kd_reg` and `kd_prox_mu` are retired from the exploration roster, and the
+    retirement is recorded because a standing decision promised the opposite.**
+    Decision 29 put "client-KD-reg + proximal (μ)" on the Pass 2 roster and Decision 32
+    closed with "`client_kd_reg=true` runs as-is in Pass 2; no code change needed". It
+    does not run: `pass2_explore.yaml` screens `soft_voting`, `ema_student` and
+    `grad_norm_ema`, `pass2_factorial` is a 2³ over those same three, and
+    `fedmaq.yaml:71,74` ship `client_kd_reg: false`, `kd_prox_mu: 0.0`. So a mechanism
+    left the roster with a decision on record saying it would be evaluated and none
+    retiring it. §4.3.1 is unaffected — its refinement list is explicitly "illustrative
+    rather than closed" — but the repo record contradicted itself. Retired rather than
+    reinstated: adding a fourth factor makes Stage 2 a 2⁴ factorial, doubling it from
+    26 runs to 50 for a mechanism whose only prior evaluation (Decision 32) concluded
+    its implementation cost was not worth paying. The code path remains for
+    reproducibility, as with FedMD.

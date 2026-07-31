@@ -421,9 +421,83 @@ def test_formulation_study_never_turns_the_post_process_pipeline_on():
     assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 30
 
 
+def test_baseline_tuning_gives_every_baseline_the_same_budget_as_fedmaq():
+    """Decision 67. §4.3.2's fairness claim is procedural, so the file has to
+    hold its shape or the claim is an assertion again.
+
+    Until 2026-08-01 no matrix file tuned a baseline at all, while FedMAQ had a
+    38-run exploration phase and a 30-run formulation study. `You tuned yours and
+    not theirs` is the most predictable attack on the grid, and the only answer
+    that survives is uniform treatment: every baseline with a knob gets one, at
+    the same seed depth, under the same rule, at the same held-out skew.
+    """
+    matrix = _matrix("baseline_tuning")
+    assert matrix["phase"] == "explore", (
+        "These runs select a configuration and therefore cannot sit in the "
+        "confirmatory grid they configure. They are not among the 183."
+    )
+    assert matrix["heterogeneities"] == ["dirichlet_alpha_0.3"], (
+        "Baselines must be tuned at the same held-out skew as FedMAQ's own "
+        "mechanisms, or a baseline is selected on a skew it is later reported on."
+    )
+    assert matrix["total_rounds"] == 100, (
+        "R=50 would be a truncated-horizon pick shipped straight into the "
+        "reported grid: unlike the factorial, this stage has no confirmation "
+        "stage behind it to catch one."
+    )
+
+    enabled = _post_process_overrides(matrix)
+    assert not any(enabled.values()), (
+        "Every baseline ships post_process: false and the primary grid enables "
+        "the pipeline on FedMAQ only, so tuning must happen in the regime the "
+        "baselines are actually reported in."
+    )
+
+    by_alg: dict[str, list] = {}
+    for run in matrix["runs"]:
+        by_alg.setdefault(run["alg"], []).append(run)
+
+    assert "fedavg" not in by_alg, (
+        "FedAvg is the uncompressed control and has no key hyperparameter; "
+        "including it would tune the reference the target floor is defined from."
+    )
+    assert set(by_alg) == {"fedprox", "fedpaq", "dadaquant", "feddistill", "fedkd"}, (
+        f"Tuned baselines are {sorted(by_alg)}. A baseline dropped from this file "
+        "reintroduces the selective-sweep shape Decision 67 rejected: the person "
+        "whose algorithm benefits deciding whose knobs deserve tuning."
+    )
+
+    default_seeds = list(matrix["seeds"])
+    total = 0
+    for alg, runs in by_alg.items():
+        assert len(runs) == 3, (
+            f"{alg} has {len(runs)} cells; the budget is one reference + two challengers."
+        )
+        deep = [r for r in runs if len(r.get("seeds") or default_seeds) == 5]
+        assert len(deep) == 1, (
+            f"{alg} must deepen exactly its shipped-value reference cell to five "
+            "seeds. That cell's spread is the sigma its two challengers are judged "
+            "against, so it sets the precision of two decisions while each "
+            "challenger's sets none (§4.4, Decision 61 applied per baseline)."
+        )
+        assert deep[0]["label"].endswith("-ref")
+        total += sum(len(r.get("seeds") or default_seeds) for r in runs)
+
+    assert total * len(matrix["heterogeneities"]) == 55, (
+        f"conf/matrix/baseline_tuning.yaml dispatches {total} runs; Decision 67 "
+        "and docs/RUNBOOK.md Stage 1b both quote 55 (5 baselines x (5 + 3 + 3))."
+    )
+
+
 @pytest.mark.parametrize(
     "matrix_name",
-    ["benchmark_grid", "ablation", "uniform_memory_control", "formulation_study"],
+    [
+        "benchmark_grid",
+        "ablation",
+        "uniform_memory_control",
+        "formulation_study",
+        "baseline_tuning",
+    ],
 )
 def test_matrix_runs_never_collide_on_an_output_directory(matrix_name):
     """Two runs writing to one directory means one of them is silently discarded.

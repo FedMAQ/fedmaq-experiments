@@ -2,7 +2,7 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-07-31 (HANDOFF.md retired into `docs/RUNBOOK.md`; exploration Stage 1 recorded)
+**Last updated**: 2026-08-01 (baseline matched-tuning stage added; `formal-experiment-plan.md` retired into `DECISIONS.md`)
 
 ---
 
@@ -15,7 +15,10 @@ Single source of truth for current project state. Updated after each experiment 
 > **The refinement layer is not frozen.** `soft_voting`, `ema_student`, and `grad_norm_ema` all ship `true` in `conf/algorithm/fedmaq.yaml`, but that is a default, not an exploration result. The freeze happens at the end of Stage 1 in [docs/RUNBOOK.md](RUNBOOK.md)'s dispatch order. If exploration drops a mechanism, manuscript §3.5 and Chapter 5's $T = 1.0$ justification both need revisiting.
 
 > [!WARNING]
-> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression _ratio_ — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see Decision 1). All prior ResNet18GN smoke test results are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override. A full hyperparameter sweep on MobileNetV2GN is required before formal experiments.
+> **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression _ratio_ — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see Decision 1). All prior ResNet18GN smoke test results are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override.
+
+> [!IMPORTANT]
+> **Baselines have never been tuned on MobileNetV2GN, and until 2026-08-01 nothing was scheduled to do it.** Decision 31 pre-registered a matched-tuning budget and Decision 29 sequenced it, but no matrix file existed, no `RUNBOOK.md` stage dispatched it, and `chapter_4.tex` had no prose describing it — while FedMAQ received a 38-run exploration phase and a 30-run formulation study on exactly this configuration. The baseline constants are *provenanced* (§4.3.2 sources each one) but their **transfer** to MobileNetV2GN at α ∈ {0.1, 1.0} is untested, every source having published for a different architecture and skew. `conf/matrix/baseline_tuning.yaml` (55 runs, Stage 1b, Decision 67) closes that gap.
 
 ---
 
@@ -23,6 +26,10 @@ Single source of truth for current project state. Updated after each experiment 
 
 Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
 
+- **2026-08-01** — §4.3.2 gains the baseline matched-tuning stage (Decision 67); §4.3.6
+  gains the split-skew freeze rule, the total-disqualification branch, per-seed
+  disqualification, the corrected tie-break, and the reserved recheck (Decisions 64–66,
+  68); §4.4 restates the uncounted exploration arithmetic (Decisions 64–70).
 - **2026-07-31** — §4.3.1 rewritten to state the noise-margin *rule* rather than seed
   counts that contradicted §4.4, and to describe exploration as three stages; the
   empty-freeze branch pre-registered in §4.3.1 and §4.3.7 body text; §4.3.7's
@@ -60,13 +67,13 @@ SimpleCNN. Its archived smoke results stay in
 
 ## Critical Decisions — RESOLVED (2026-07-16)
 
-All framing/methodology decisions were resolved in a grilling session on 2026-07-16. Full list + rationale: **[docs/DECISIONS.md](DECISIONS.md)**. Grid design detail: [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md).
+All framing/methodology decisions were resolved in a grilling session on 2026-07-16. Full list + rationale: **[docs/DECISIONS.md](DECISIONS.md)**. Grid design detail: [docs/RUNBOOK.md](RUNBOOK.md) ("Dispatch Order") and each `conf/matrix/*.yaml` header, which is authoritative over any prose describing it.
 
 ---
 
 ## Key Novel Findings (Smoke Tests)
 
-Full list with rationale: [docs/experiments/archive/RESNET18GN-SUMMARY.md](experiments/archive/RESNET18GN-SUMMARY.md) §"Key Novel Findings". Flagged for MobileNetV2GN re-validation per [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md) ("Exploration Phase Mechanisms").
+Full list with rationale: [docs/experiments/archive/RESNET18GN-SUMMARY.md](experiments/archive/RESNET18GN-SUMMARY.md) §"Key Novel Findings". Flagged for MobileNetV2GN re-validation by the three-stage exploration phase in [docs/RUNBOOK.md](RUNBOOK.md) ("Dispatch Order"), which supersedes the retired `formal-experiment-plan.md`'s Pass 1/2/3 decomposition (Decision 69).
 
 ---
 
@@ -84,16 +91,33 @@ Every one is dispatched through a matrix file. See [docs/RUNBOOK.md](RUNBOOK.md)
 | Uniform-memory control | `uniform_memory_control` | 6 | §4.1, §4.3 |
 | **Total** | | **183** | |
 
-The exploration phase (`pass2_explore` 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8)
-runs at the held-out α = 0.3 and is **not** counted among the 183. The factorial and the
-freeze confirmation each deepen their unrefined reference cell to five seeds, because that
-cell's spread *is* the margin every other cell is judged against (manuscript §4.4).
+The exploration phase (`pass2_explore` 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8,
+`baseline_tuning` 55 — 93 runs) runs at the held-out α = 0.3 and is **not** counted among
+the 183, nor is the conditional 6-run recheck that fires if the frozen formulation is not
+Formulation 3. The factorial, the freeze confirmation, and each baseline's shipped-value
+cell all deepen their reference to five seeds, because that cell's spread *is* the margin
+everything else in its stage is judged against (manuscript §4.4).
 
 The three `benchmark_grid*` files share one `experiment_group`, so `scripts/analysis.py`
 reads them as a single 105-run grid. Before 2026-07-30 only the CIFAR-10 file existed and
 the other 63 runs lived as a commented `--multirun` in `conf/config.yaml` that also omitted
 `algorithm.post_process=true`; `test_primary_grid_files_dispatch_all_105_runs` and the
 parametrized `test_primary_grid_turns_the_post_process_pipeline_on` now guard both.
+
+---
+
+## Open Analysis Deliverables
+
+Analyses the grid's outputs support but which are not yet built. Not experiments —
+no runs attach to these.
+
+- **Matched-bit-budget Pareto comparison** (Decision 69, carried forward from the
+  retired `formal-experiment-plan.md`). FedMAQ against the pure-quantization
+  baselines FedPAQ and DAdaQuant on an accuracy-vs-compression frontier, at
+  *matched* bit budgets. Plotting the frontier across unmatched budgets is
+  apples-to-oranges and is the reading an examiner will reach for first.
+  `conf/matrix/baseline_tuning.yaml` brackets FedPAQ's `q` at {4, 8, 16} partly so
+  this is constructible from runs that already exist.
 
 ---
 

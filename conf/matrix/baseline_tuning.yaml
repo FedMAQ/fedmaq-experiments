@@ -1,0 +1,207 @@
+# Exploration-phase BASELINE MATCHED-TUNING stage, manuscript §4.3.2. 55 runs.
+#
+# Stage 1b of the exploration phase. This file exists because until 2026-08-01
+# nothing produced the baseline hyperparameter table that §4.3.1 promises is
+# "locked and tagged" at the freeze. Decision 31 pre-registered the budget and
+# Decision 29 sequenced it after FedMAQ's own mechanisms resolve, but no matrix
+# file was ever written, no stage in docs/RUNBOOK.md dispatched it, and
+# chapter_4.tex contained no prose describing it.
+#
+# THE GAP IS TRANSFER, NOT PROVENANCE. §4.3.2 already sources every baseline
+# constant with care -- FedProx's mu=1 cited to the image benchmarks of its own
+# paper's sweep, DAdaQuant's phi=10 derived from a published rule at R=100,
+# FedPAQ's 8-bit adopted from the precision another paper benchmarks it at
+# because FedPAQ publishes levels rather than bit-widths, FedKD's SVD endpoints
+# declared as ours rather than inherited. None of that is in question. What no
+# published value can establish is that it still holds on MobileNetV2GN at
+# alpha in {0.1, 1.0}, a different architecture and a different skew from every
+# source -- while FedMAQ got a 38-run exploration phase and a 30-run formulation
+# study on exactly this configuration. "You verified yours on this grid and
+# theirs on someone else's" is what this stage answers.
+#
+# WHAT THIS STAGE BUYS, AND WHY THE NULL RESULT IS THE PRODUCT
+#
+# Each baseline's reference cell is the value it already ships, which is the
+# value Table 4.1 reports and which derives from its originating paper. The
+# overwhelmingly likely outcome is that no challenger clears the margin and
+# every baseline freezes at exactly the configuration it would have had with no
+# sweep at all. That is not a wasted stage. It converts an appeal to authority
+# ("we used the published value") into a measurement ("the published value was
+# tested against alternatives under our own pre-registered decision rule and
+# held"), and it answers the one question the zero-run alternative cannot: how
+# do you know a constant tuned on a different architecture transfers to
+# MobileNetV2GN under Dirichlet skew? FedProx's mu is the sharp case -- it is
+# the proximal-strength knob, skew-sensitive by construction, and running it at
+# a single value across alpha in {0.1, 1.0} is a citable weakness on its own.
+#
+# WHY EVERY BASELINE AND NOT ONLY THE SENSITIVE ONES
+#
+# A selective sweep has a fatal shape: the person whose algorithm benefits
+# decided which of his competitors' knobs deserved tuning. "We tuned FedProx and
+# FedPAQ because those seemed most sensitive" invites "why not DAdaQuant?" and
+# the answer is a judgment call made under exactly the suspicion the sweep was
+# meant to dispel. Uniform treatment has no soft spot. FedAvg is absent because
+# it is the uncompressed control and has no key hyperparameter to tune; the
+# remaining five each get one.
+#
+# WHY R=100 AND NOT R=50
+#
+# Every other exploration stage screens at R=50 and relies on
+# conf/matrix/pass3_freeze_confirm.yaml to re-test the survivors at the full
+# budget. Baselines get no confirmation stage, so a truncated-horizon pick here
+# would ship straight into the reported grid uncorrected. This is the one place
+# in the exploration phase worth spending on the full horizon rather than
+# economizing; it is most of why this stage costs ~26 GPU-hours and not ~13.
+#
+# WHY THE REFERENCE CELLS RUN FIVE SEEDS
+#
+# Same argument as conf/matrix/pass2_factorial.yaml, applied per baseline: the
+# reference cell's spread IS the sigma its own two challengers are judged
+# against, so that one cell sets the precision of two decisions while each
+# challenger's spread sets none. At n=3 the 95% interval for sigma spans roughly
+# a twelvefold range; at n=5, roughly fivefold. Two extra runs per baseline buy
+# that. Standardizing every cell to three seeds would save ten runs and leave
+# the baselines' margins estimated more coarsely than FedMAQ's own freeze gate,
+# which is an indefensible ordering.
+#
+# THE DECISION RULE IS FEDMAQ'S OWN, UNCHANGED
+#
+# scripts/analysis.py:exploration_noise_margin, held-out alpha = 0.3, threshold
+# sqrt(2)*sigma on the delta against the reference cell. A challenger is adopted
+# only if it clears; a challenger that merely scores higher is not adopted,
+# because selecting the best of several noisy measurements manufactures winners.
+# If both challengers clear, the larger delta wins. This is the same rule, the
+# same skew and the same seed budget applied to FedMAQ's own refinements, which
+# is what makes the parity claim in §4.3.2 a procedural fact rather than an
+# assertion.
+#
+# REGIME. Every baseline ships post_process: false and the primary grid enables
+# the post-processing pipeline on FedMAQ only, so these runs are already in the
+# regime the baselines are reported in. No override is needed and none is set;
+# tests/test_simulation.py enforces the absence.
+#
+# PHASE. These runs are `explore`, not `formal`, and are NOT among the 183.
+# They sit at the held-out alpha = 0.3 with every other exploration run, and
+# their verdict is written into conf/algorithm/*.yaml and tagged with the rest
+# of the freeze.
+#
+# WHICH KNOB EACH BASELINE GETS, AND WHY FEDKD DIFFERS FROM DECISION 31
+#
+# Decision 31 named "FedDistill/FedKD distillation temp". FedDistill has no
+# temperature -- its knob is reg_alpha, the label-wise logit-distillation
+# regularizer weight -- and FedKD's temperature governs its client-side mutual
+# KD while tmax, the SVD energy cutoff, governs the accuracy-communication
+# trade-off that this grid actually compares on. Each baseline is therefore
+# tuned on the single knob governing its own accuracy-communication trade-off,
+# because that is the axis of every claim the grid supports. Recorded as a
+# decision superseding Decision 31's knob list rather than silently substituted.
+phase: explore
+experiment_group: baseline_tuning
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.3
+
+runs:
+  # --- FedProx: proximal coefficient mu. Reference is the shipped 1.0;
+  # challengers are the next two values down FedProx's own published grid
+  # {0.001, 0.01, 0.1, 1.0}, since 1.0 is already its ceiling.
+  - alg: fedprox
+    label: fedprox-mu1.0-ref
+    variant: mu1p0
+    seeds: [0, 42, 123, 7, 21]
+    overrides:
+      - algorithm.mu=1.0
+  - alg: fedprox
+    label: fedprox-mu0.1
+    variant: mu0p1
+    overrides:
+      - algorithm.mu=0.1
+  - alg: fedprox
+    label: fedprox-mu0.01
+    variant: mu0p01
+    overrides:
+      - algorithm.mu=0.01
+
+  # --- FedPAQ: uniform quantization bit-width q. Reference is the shipped 8;
+  # challengers bracket it by a factor of two either way, which is also the
+  # bracket the matched-bit-budget comparison of Decision 69 needs.
+  - alg: fedpaq
+    label: fedpaq-q8-ref
+    variant: q8
+    seeds: [0, 42, 123, 7, 21]
+    overrides:
+      - algorithm.q=8
+  - alg: fedpaq
+    label: fedpaq-q4
+    variant: q4
+    overrides:
+      - algorithm.q=4
+  - alg: fedpaq
+    label: fedpaq-q16
+    variant: q16
+    overrides:
+      - algorithm.q=16
+
+  # --- DAdaQuant: the schedule period phi, which sets how fast the adaptive
+  # bit-width escalates. psi (the escalation factor) is left at its published
+  # 0.9; one knob per baseline is the budget.
+  - alg: dadaquant
+    label: dadaquant-phi10-ref
+    variant: phi10
+    seeds: [0, 42, 123, 7, 21]
+    overrides:
+      - algorithm.phi=10
+  - alg: dadaquant
+    label: dadaquant-phi5
+    variant: phi5
+    overrides:
+      - algorithm.phi=5
+  - alg: dadaquant
+    label: dadaquant-phi20
+    variant: phi20
+    overrides:
+      - algorithm.phi=20
+
+  # --- FedDistill: reg_alpha, the label-wise logit-distillation regularizer
+  # weight. This is FedDistill's distillation knob; it has no temperature.
+  - alg: feddistill
+    label: feddistill-alpha1.0-ref
+    variant: a1p0
+    seeds: [0, 42, 123, 7, 21]
+    overrides:
+      - algorithm.reg_alpha=1.0
+  - alg: feddistill
+    label: feddistill-alpha0.5
+    variant: a0p5
+    overrides:
+      - algorithm.reg_alpha=0.5
+  - alg: feddistill
+    label: feddistill-alpha2.0
+    variant: a2p0
+    overrides:
+      - algorithm.reg_alpha=2.0
+
+  # --- FedKD: tmax, the target SVD energy cutoff T_SVD reported in Table 4.1.
+  # This is the knob that sets FedKD's compression ratio, and therefore the one
+  # that decides whether its position on the accuracy-communication frontier is
+  # a property of the algorithm or of an untuned constant.
+  - alg: fedkd
+    label: fedkd-tmax0.95-ref
+    variant: t0p95
+    seeds: [0, 42, 123, 7, 21]
+    overrides:
+      - algorithm.tmax=0.95
+  - alg: fedkd
+    label: fedkd-tmax0.85
+    variant: t0p85
+    overrides:
+      - algorithm.tmax=0.85
+  - alg: fedkd
+    label: fedkd-tmax0.99
+    variant: t0p99
+    overrides:
+      - algorithm.tmax=0.99

@@ -5,7 +5,7 @@ operational controls that keep a sweep recoverable. Durable operational referenc
 not session context. Per-session orientation belongs in a temporary handoff file,
 not in this repo.
 
-**Last updated**: 2026-07-31
+**Last updated**: 2026-08-01
 
 ---
 
@@ -64,14 +64,17 @@ the 183.
    smallest *cell* that cleared the margin, never a union across cells.
 4. `--matrix pass3_freeze_confirm` — R=100, **8 runs** (unrefined arm at five seeds,
    surviving-set arm at three). Use `--run_timeout_seconds 4200`.
-5. **Freeze.** Write the surviving set into `conf/algorithm/fedmaq.yaml` — **and only
-   there.** The §4.3.7 arms inherit that file via their Hydra defaults list and
-   restate only their own removal, so one edit reaches all of them (Decision 58). Then
+5. **Freeze the refinement layer.** Write the surviving set into
+   `conf/algorithm/fedmaq.yaml` — **and only there.** The §4.3.7 arms inherit that
+   file via their Hydra defaults list and restate only their own removal, so one edit
+   reaches all of them (Decision 58). Then
    `uv run python scripts/dump_frozen_configs.py` to refresh
    `docs/freeze/resolved_configs.yaml` (the arms are no longer self-describing, and
-   that generated snapshot is what makes the tagged state readable — Decision 59), run
-   `uv run python -m pytest tests/test_simulation.py`, and git-tag. Manuscript §6.2
-   promises that tag.
+   that generated snapshot is what makes the tagged state readable — Decision 59) and
+   run `uv run python -m pytest tests/test_simulation.py`.
+   **Do not tag here.** §4.3.1 locks and tags three things together — the fixed
+   mechanism set, the selected formulation, and the baseline hyperparameter table
+   (Table 4.1) — and two of them do not exist until step 8. The single tag is step 9.
    **If nothing clears at R=100** the surviving set is empty — pre-registered, not a
    judgement call (Decision 60, manuscript §4.3.1 and §4.3.7). FedMAQ freezes
    unrefined, Configuration 8 drops from `conf/matrix/ablation.yaml`, and the
@@ -79,34 +82,78 @@ the 183.
    retries, no tuning to rescue a mechanism.
    `test_configuration_8_exists_only_while_there_is_a_layer_to_remove` enforces it.
 
+### Stage 1b — Baseline matched-tuning (55 runs)
+
+Independent of everything above — no baseline shares configuration with FedMAQ — so
+it may run concurrently with Stage 1. It is placed after it only because Decision 29
+sequenced it that way and because nothing is lost by the ordering. Held-out
+α = 0.3, uncounted among the 183, and its verdict enters the same tag at step 9.
+
+6. `--matrix baseline_tuning`. R=100, 55 runs (each of five baselines: a five-seed
+   reference cell at its shipped Table 4.1 value, plus two three-seed challengers).
+   Use `--run_timeout_seconds 4200`. Then
+   `scripts/analysis.py:exploration_noise_margin` with
+   `experiment_group="baseline_tuning"`, same √2σ rule as the factorial.
+   **Write any challenger that clears into `conf/algorithm/<baseline>.yaml` and into
+   Table 4.1.** The expected outcome is that none clears and every baseline keeps its
+   published value — that is a result, not a null sweep, and §4.3.2 reports it as one.
+   FedAvg is absent by design: it is the uncompressed control and has no knob.
+
 ### Stage 2 — Formulation study (30 runs)
 
-6. `--matrix formulation_study`. Must carry Stage 1's surviving layer: its
+7. `--matrix formulation_study`. Must carry Stage 1's surviving layer: its
    Formulation 1 cell is Ablation Configuration 4's parity anchor, and an anchor only
    anchors if it carries the same refinement layer as the arm.
+8. **Resolve the verdict, then write the formulation.** `select_winner` returns one
+   verdict *per skew* — two, structurally, since the study runs both. Collapse them
+   with `scripts/analysis.py:resolve_frozen_formulation`, which implements the
+   pre-registered rule (Decisions 64–65, §4.3.6): skews agreeing freezes that
+   formulation; skews diverging freezes the α = 0.1 winner and reports the split as a
+   finding; one skew disqualifying its whole field defers to the other; both
+   disqualifying falls back to highest mean top-1 at R=100 at α = 0.1 **and withdraws
+   §4.3.6's contribution claim**. Write the result to `conf/algorithm/fedmaq.yaml`.
+   **If the frozen formulation is not 3**, the reserved 6-run recheck fires — surviving
+   layer vs. unrefined, 3 seeds, under the winning formulation, at α = 0.3. It is a
+   veto on that layer, never a second search: the factorial is not re-opened and no
+   mechanism is reconsidered. If it no longer clears, `soft_voting` leaves the frozen
+   set, `fedmaq.yaml` and every §4.3.7 arm are rewritten, and Configuration 8 shrinks
+   or drops. Header of `conf/matrix/formulation_study.yaml` has the full rule.
+
+### Stage 2b — Tag the pre-registration
+
+9. Re-run `scripts/dump_frozen_configs.py` and `pytest tests/test_simulation.py`, then
+   **git-tag once.** The tag carries all three of §4.3.1's locked artifacts: the fixed
+   mechanism set (step 5), the baseline hyperparameter table (step 6), and the selected
+   formulation (step 8). Manuscript §6.2 promises this tag. Nothing downstream of here
+   may edit a frozen config; an anomaly during confirmation opens a new labelled
+   exploration round instead (§4.3.1).
 
 ### Stage 3 — Ablation (42 runs)
 
-7. **Before dispatch**, if Formulation 1 or 2 won Stage 2, revisit `fedmaq_no_data`
-   and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` — `fedmaq_no_data`'s removal
-   becomes `gamma2=0`, and `fedmaq_no_state` drops its `formulation` override and
-   stops being the fallback arm. Each is now a one-line change in a file that
-   contains only its removal. The arms are currently pinned to Formulation 3 through
-   `fedmaq.yaml`. Re-run `scripts/dump_frozen_configs.py` afterwards.
-8. `--matrix ablation`.
+10. **Before dispatch**, if Formulation 1 or 2 was frozen at step 8, revisit
+    `fedmaq_no_data` and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` —
+    `fedmaq_no_data`'s removal becomes `gamma2=0`, and `fedmaq_no_state` drops its
+    `formulation` override and stops being the fallback arm. Each is now a one-line
+    change in a file that contains only its removal. The arms are currently pinned to
+    Formulation 3 through `fedmaq.yaml`. Re-run `scripts/dump_frozen_configs.py`
+    afterwards.
+11. `--matrix ablation`.
 
 ### Stage 4 — Primary grid (105 runs) and control arm (6 runs)
 
-The six baselines here are independent of Stages 1–3 and may run at any time;
-FedMAQ's own rows need the freeze.
+The six baselines here need Stage 1b's verdict, not Stage 1's; FedMAQ's own rows need
+the freeze.
 
-9. `--matrix benchmark_grid` (CIFAR-10, 42), `--matrix benchmark_grid_cifar100` (42),
-   `--matrix benchmark_grid_femnist` (21). All three share one `experiment_group`, so
-   `analysis.py` reads them as the single 105-run grid the manuscript describes.
-10. `--matrix uniform_memory_control` (6).
+12. `--matrix benchmark_grid` (CIFAR-10, 42), `--matrix benchmark_grid_cifar100` (42),
+    `--matrix benchmark_grid_femnist` (21). All three share one `experiment_group`, so
+    `analysis.py` reads them as the single 105-run grid the manuscript describes.
+13. `--matrix uniform_memory_control` (6).
 
 **42 + 42 + 21 + 42 + 6 = 153 confirmatory, plus the 30-run formulation study = 183
-reported.** The formulation study declares `phase: explore`, not `formal`: §4.3.1
+reported.** The exploration phase's own runs are outside that total: `pass2_explore`
+4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs at
+the held-out α = 0.3, plus the conditional 6-run recheck at step 8 if the frozen
+formulation is not 3. The formulation study declares `phase: explore`, not `formal`: §4.3.1
 makes it the culmination of the exploration phase, whose verdict is frozen and
 tagged, so it necessarily precedes the grid it configures. The headline total is
 unchanged; only the labelling is. `test_primary_grid_files_dispatch_all_105_runs`

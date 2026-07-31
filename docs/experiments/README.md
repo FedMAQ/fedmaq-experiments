@@ -36,7 +36,7 @@ Consolidated historical accuracy standings and best-known configs for these runs
 > [!NOTE]
 > **Smoke-run caveats, resolved as of 2026-07-18** (see [docs/audits/distillation-direction-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/distillation-direction-audit.md)): FedKD's near-chance smoke result was a rank-starvation bug (F10), fixed and re-confirmed on a real 50R MobileNetV2GN run — FedKD is unblocked for comparison tables. F13 (KD-baseline coverage gap) closed 2026-07-17: FedDistill/FedAvg+KD ran clean; CFD collapsed to chance both α and was **dropped from the formal stack** (F15, structural — `docs/DECISIONS.md` Decision 26), same disposition as **FedMD** (infeasible pretrain cost, Decision 25). Formal baseline stack is now 6 + FedMAQ.
 
-New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) for the exploration/confirmation pipeline.
+New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/RUNBOOK.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/RUNBOOK.md) ("Dispatch Order") for the exploration/confirmation pipeline; it replaced `formal-experiment-plan.md`, which was retired 2026-08-01 (Decision 69).
 
 ## Run Execution & Declarative Matrix Runner
 

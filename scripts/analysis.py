@@ -505,6 +505,18 @@ def select_winner(runs: list[RunRecord]) -> dict:
     For each formulation (0-4), a formulation is disqualified if ANY of its 3 seeds
     never crosses the target-accuracy floor. Among qualified formulations, the winner
     minimizes mean cumulative-MB-to-target across seeds.
+
+    Per-seed, not per-mean: one failing seed out of three disqualifies the
+    formulation. §4.3.6 states this explicitly as of 2026-08-01 -- it is the
+    stricter reading and the one that has always run, and it refuses to average
+    away a seed that never converged. At alpha = 0.1, where seed spread is
+    widest, that distinction is where a wipeout would come from.
+
+    This returns one verdict *per skew* and is therefore not the freeze. The
+    formulation study runs CIFAR-10 at both skews, so two verdicts are structural;
+    :func:`resolve_frozen_formulation` collapses them into the single formulation
+    written into ``conf/algorithm/fedmaq.yaml``, including the branches for a
+    split verdict and for a field in which nothing qualified.
     """
     result: dict = {}
     runs = confirmatory_runs(runs)
@@ -564,12 +576,28 @@ def select_winner(runs: list[RunRecord]) -> dict:
                     qualified[top2]["mean_cumulative_mb"] - qualified[top1]["mean_cumulative_mb"]
                 )
                 # Statistical tie-break (chapter_4.tex tie-break rule): if the MB
-                # margin between the top-2 candidates is smaller than their
-                # pooled seed-to-seed variability, it's noise, not a real gap --
-                # re-select by higher mean top-1 accuracy at R=100 instead.
-                pooled = qualified[top1]["crossing_mbs"] + qualified[top2]["crossing_mbs"]
-                pooled_stdev = statistics.stdev(pooled) if len(pooled) > 1 else 0.0
-                if margin < pooled_stdev:
+                # margin between the top-2 candidates is smaller than the larger
+                # of their two seed-to-seed standard deviations, it's noise, not
+                # a real gap -- re-select by higher mean top-1 accuracy at R=100.
+                #
+                # WITHIN-CANDIDATE, NEVER POOLED. This concatenated both
+                # candidates' crossing-MB values and took the stdev of the
+                # combined six until 2026-08-01, which folded the between-
+                # candidate separation into the threshold: with within-candidate
+                # sd s and separation d, the combined sample variance is
+                # (4s^2 + 1.5d^2)/5, so the rule fired at d < 1.069s and the
+                # threshold grew with the very margin it was judging. A
+                # pre-registered rule cannot be self-referential, and the
+                # published rule says "either candidate's seed-to-seed
+                # variability", not their pooled spread. See Decision 66.
+                stdevs = [
+                    statistics.stdev(qualified[f]["crossing_mbs"])
+                    if len(qualified[f]["crossing_mbs"]) > 1
+                    else 0.0
+                    for f in (top1, top2)
+                ]
+                tie_threshold = max(stdevs)
+                if margin < tie_threshold:
                     winner = max((top1, top2), key=lambda f: qualified[f]["mean_accuracy_r100"])
         else:
             winner = None
@@ -586,6 +614,117 @@ def select_winner(runs: list[RunRecord]) -> dict:
         }
 
     return result
+
+
+def resolve_frozen_formulation(winner_result: dict, dataset: str = "cifar10") -> dict:
+    """Collapse the per-skew verdicts of :func:`select_winner` into the one
+    formulation that is frozen into ``conf/algorithm/fedmaq.yaml``.
+
+    ``select_winner`` is deliberately per-``(dataset, alpha)``: the formulation
+    study runs CIFAR-10 at both skews, so it structurally produces two verdicts.
+    The freeze takes one scalar, the 105-run grid runs one FedMAQ, and every
+    §4.3.7 arm inherits one formulation -- and three downstream branches are
+    conditioned on there being a single answer (Configuration 4's expressibility,
+    the reserved recheck, and the freeze itself). This function is the
+    pre-registered rule that produces it. See Decisions 64-65 and §4.3.6.
+
+    The rule, in order:
+
+    1. **Agreement.** If the same formulation wins at both skews, it is frozen.
+    2. **Divergence.** If the skews disagree, the alpha = 0.1 winner is frozen
+       and the split is reported as a headline finding -- §4.3.6 already promises
+       that a formulation shifting with skew is itself a result. Severe skew
+       breaks the tie because it is the regime this thesis's claims are staked
+       on, so selecting where the problem is hardest is the conservative
+       direction rather than the flattering one.
+    3. **One-sided wipeout.** If every formulation is disqualified at one skew
+       but not the other, the surviving skew's winner is frozen outright. Rule 2
+       does not apply: there is only one valid verdict to compare against.
+    4. **Total wipeout.** If every formulation is disqualified at both skews, the
+       accuracy-floor guard has caught the entire field. The winner is taken by
+       highest mean top-1 at R=100 at alpha = 0.1 -- the criterion already
+       pre-registered as the near-tie break, so no new parameter enters -- and
+       ``contribution_withdrawn`` is set. §4.3.6's framing of formulation
+       selection as the thesis's primary methodological contribution does not
+       survive a field in which nothing reached the FedAvg-relative target, and
+       §5.7 records that rather than letting a rescued winner paper over it.
+
+    Rule 4 deliberately does *not* mirror Decision 60's empty-freeze branch,
+    which withdraws a claim instead of manufacturing a winner. The disanalogy is
+    that "ship unrefined" is a coherent configuration and "ship no formulation"
+    is not: ``fedmaq.yaml`` gets a number either way, so the only real choice is
+    whether it is picked empirically or left at whatever the implementation
+    already had. Freezing the incumbent by default would mean the thesis's
+    self-described primary contribution was settled by a default value.
+    """
+    entries = {e["alpha"]: e for e in winner_result.values() if e["dataset"] == dataset}
+    if not entries:
+        raise ValueError(
+            f"No formulation-study verdicts for dataset {dataset!r}. "
+            f"Available: {sorted({e['dataset'] for e in winner_result.values()})}"
+        )
+
+    severe, moderate = 0.1, 1.0
+    missing = {severe, moderate} - set(entries)
+    if missing:
+        raise ValueError(
+            f"resolve_frozen_formulation needs both skews for {dataset!r}; "
+            f"missing alpha {sorted(missing)}. The formulation study runs "
+            f"alpha in {{0.1, 1.0}} by design (conf/matrix/formulation_study.yaml) "
+            f"and the freeze rule is undefined on a partial sweep."
+        )
+
+    severe_entry, moderate_entry = entries[severe], entries[moderate]
+    severe_winner = severe_entry["winner"]
+    moderate_winner = moderate_entry["winner"]
+
+    def _verdict(rule: str, formulation, **extra) -> dict:
+        out = {
+            "dataset": dataset,
+            "frozen_formulation": formulation,
+            "rule": rule,
+            "alpha_0.1_winner": severe_winner,
+            "alpha_1.0_winner": moderate_winner,
+            "skews_agree": severe_winner == moderate_winner,
+            "contribution_withdrawn": False,
+            "recheck_required": None,
+        }
+        out.update(extra)
+        # conf/matrix/formulation_study.yaml reserves a 6-run recheck of the
+        # frozen refinement layer whenever the winner is not Formulation 3, the
+        # formulation the layer was selected under. It is a veto on that layer,
+        # never a second search.
+        if out["frozen_formulation"] is not None:
+            out["recheck_required"] = out["frozen_formulation"] != 3
+        return out
+
+    if severe_winner is None and moderate_winner is None:
+        # Rule 4. Fall back to accuracy at the severe skew, and withdraw the
+        # contribution claim that a qualified field would have supported.
+        detail = severe_entry["formulations"]
+        fallback = max(detail, key=lambda f: detail[f]["mean_accuracy_r100"])
+        return _verdict(
+            "total_disqualification_accuracy_fallback",
+            fallback,
+            contribution_withdrawn=True,
+            fallback_mean_accuracy_r100=detail[fallback]["mean_accuracy_r100"],
+            target_accuracy_floor=severe_entry["target_accuracy_floor"],
+        )
+
+    if severe_winner is None or moderate_winner is None:
+        # Rule 3. Exactly one skew produced a qualified field.
+        surviving_alpha = moderate if severe_winner is None else severe
+        surviving = moderate_winner if severe_winner is None else severe_winner
+        return _verdict(
+            "one_sided_disqualification",
+            surviving,
+            surviving_alpha=surviving_alpha,
+        )
+
+    if severe_winner == moderate_winner:
+        return _verdict("agreement", severe_winner)  # Rule 1.
+
+    return _verdict("divergence_severe_skew_breaks", severe_winner)  # Rule 2.
 
 
 def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:

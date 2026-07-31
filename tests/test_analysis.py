@@ -15,6 +15,7 @@ from analysis import (
     build_ablation_table,
     compare_to_baselines,
     exploration_noise_margin,
+    resolve_frozen_formulation,
     select_winner,
 )
 
@@ -113,7 +114,7 @@ def test_compare_to_baselines_reports_rounds_to_target_per_side(tmp_path):
 
 
 def test_select_winner_near_tie_reselects_by_accuracy(tmp_path):
-    """margin_mb (0.5) < pooled stdev of top-2 candidates' crossing MBs (~0.94)
+    """margin_mb (0.5) < max of the top-2 candidates' own crossing-MB stdevs (1.0)
     -> near-tie -> re-select by higher mean accuracy at R=100, even though
     formulation 0 has the lower mean MB."""
     fedavg_runs = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
@@ -137,7 +138,7 @@ def test_select_winner_near_tie_reselects_by_accuracy(tmp_path):
 
 
 def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
-    """margin_mb (20) >> pooled stdev of top-2 candidates' crossing MBs (~11)
+    """margin_mb (20) >> max of the top-2 candidates' own crossing-MB stdevs (1.0)
     -> not a near-tie -> the lower-mean-MB formulation still wins even though
     the other formulation has much higher accuracy."""
     fedavg_runs = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
@@ -157,6 +158,133 @@ def test_select_winner_clear_margin_keeps_min_mb_winner(tmp_path):
     entry = result["cifar10_alpha_0.5"]
     assert entry["margin_mb"] == pytest.approx(20.0, abs=1e-6)
     assert entry["winner"] == 0
+
+
+def test_near_tie_threshold_is_within_candidate_spread_not_pooled_spread(tmp_path):
+    """Decision 66. The threshold must be each candidate's own seed-to-seed
+    spread, never the spread of both candidates' values concatenated.
+
+    Pooling folds the between-candidate separation into the threshold, so it
+    grows with the very margin it is judging: with within-candidate sd ``s`` and
+    separation ``d``, the combined sample variance is ``(4s^2 + 1.5d^2)/5`` and
+    the rule fires whenever ``d < 1.069s`` rather than ``d < s``. That band is
+    exactly what this fixture sits in. Both formulations have sd 1.0 and are
+    separated by 1.03, so the pooled stdev is ~1.058 and the old rule would call
+    a near-tie and hand the win to formulation 1 on accuracy; the published rule
+    is that 1.03 exceeds either candidate's own spread, so the lower-MB
+    formulation 0 wins on the scalar rule as written.
+    """
+    fedavg_runs = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    # floor = 0.9*0.80 = 0.72; crossing MB is the second row in each run.
+    formulation_a = [  # crossing mbs [10, 11, 9] -> mean 10.0, stdev 1.0
+        _write_run(tmp_path, "fedmaq", 0, 1, [0.5, 0.80], [5, 10]),
+        _write_run(tmp_path, "fedmaq", 0, 2, [0.5, 0.81], [5, 11]),
+        _write_run(tmp_path, "fedmaq", 0, 3, [0.5, 0.79], [5, 9]),
+    ]
+    formulation_b = [  # crossing mbs [11.03, 12.03, 10.03] -> mean 11.03, stdev 1.0
+        _write_run(tmp_path, "fedmaq", 1, 1, [0.5, 0.85], [5, 11.03]),
+        _write_run(tmp_path, "fedmaq", 1, 2, [0.5, 0.84], [5, 12.03]),
+        _write_run(tmp_path, "fedmaq", 1, 3, [0.5, 0.86], [5, 10.03]),
+    ]
+
+    entry = select_winner(fedavg_runs + formulation_a + formulation_b)["cifar10_alpha_0.5"]
+
+    assert entry["margin_mb"] == pytest.approx(1.03, abs=1e-6)
+    assert entry["winner"] == 0, (
+        "1.03 MB exceeds either candidate's own seed-to-seed spread (1.0), so this "
+        "is not a near-tie and the accuracy tie-break must not fire. A winner of 1 "
+        "means the threshold was computed from the two candidates' pooled values, "
+        "which is self-referential -- see Decision 66."
+    )
+
+
+def _verdict(alpha, winner, formulations=None, floor=0.72):
+    """One per-skew entry shaped like ``select_winner``'s output."""
+    return {
+        "dataset": "cifar10",
+        "alpha": alpha,
+        "target_accuracy_floor": floor,
+        "formulations": formulations or {},
+        "winner": winner,
+        "margin_mb": None,
+    }
+
+
+def _winner_result(severe, moderate, severe_detail=None):
+    return {
+        "cifar10_alpha_0.1": _verdict(0.1, severe, severe_detail),
+        "cifar10_alpha_1.0": _verdict(1.0, moderate),
+    }
+
+
+def test_agreeing_skews_freeze_that_formulation(tmp_path):
+    """Decision 64, rule 1. The common case needs no tie-break."""
+    out = resolve_frozen_formulation(_winner_result(severe=3, moderate=3))
+    assert out["frozen_formulation"] == 3
+    assert out["rule"] == "agreement"
+    assert out["skews_agree"] is True
+    # Formulation 3 is the one the refinement layer was selected under, so the
+    # reserved recheck of conf/matrix/formulation_study.yaml does not fire.
+    assert out["recheck_required"] is False
+
+
+def test_diverging_skews_freeze_the_severe_skew_winner(tmp_path):
+    """Decision 64, rule 2. §4.3.6 promises a skew-dependent winner is a finding;
+    the freeze still takes one scalar, and alpha = 0.1 is the regime the thesis's
+    claims are staked on."""
+    out = resolve_frozen_formulation(_winner_result(severe=1, moderate=3))
+    assert out["frozen_formulation"] == 1
+    assert out["rule"] == "divergence_severe_skew_breaks"
+    assert out["skews_agree"] is False
+    assert out["alpha_0.1_winner"] == 1 and out["alpha_1.0_winner"] == 3
+    # Not Formulation 3, so the layer must be re-tested where it now has to live.
+    assert out["recheck_required"] is True
+
+
+def test_one_skew_disqualifying_its_whole_field_defers_to_the_other(tmp_path):
+    """Decision 65, rule 3. Rule 2 does not apply: there is only one valid
+    verdict, so there is nothing to break a tie between."""
+    out = resolve_frozen_formulation(_winner_result(severe=None, moderate=2))
+    assert out["frozen_formulation"] == 2
+    assert out["rule"] == "one_sided_disqualification"
+    assert out["surviving_alpha"] == 1.0
+    assert out["contribution_withdrawn"] is False
+
+
+def test_total_disqualification_falls_back_to_accuracy_and_withdraws_the_claim(tmp_path):
+    """Decision 65, rule 4. The accuracy-floor guard catching all five is a live
+    outcome, not a hypothetical: the floor is 90% of *uncompressed* FedAvg and
+    the study runs FedMAQ quantized with the post-processing pipeline withheld.
+
+    A winner is still produced, because ``fedmaq.yaml`` takes a number either way
+    and freezing the incumbent by default would settle the thesis's primary
+    methodological contribution with a default value. What is withdrawn is the
+    contribution *claim*, not the configuration.
+    """
+    detail = {
+        0: {"mean_accuracy_r100": 0.61, "disqualified": True},
+        3: {"mean_accuracy_r100": 0.68, "disqualified": True},
+        4: {"mean_accuracy_r100": 0.55, "disqualified": True},
+    }
+    out = resolve_frozen_formulation(_winner_result(None, None, severe_detail=detail))
+
+    assert out["frozen_formulation"] == 3, "highest mean top-1 at R=100 at alpha=0.1"
+    assert out["rule"] == "total_disqualification_accuracy_fallback"
+    assert out["contribution_withdrawn"] is True, (
+        "§4.3.6 frames formulation selection as the thesis's primary methodological "
+        "contribution. A field in which nothing reached the FedAvg-relative target "
+        "does not support that framing, and the fallback must say so rather than "
+        "letting a rescued winner paper over it."
+    )
+    assert out["fallback_mean_accuracy_r100"] == pytest.approx(0.68)
+
+
+def test_freeze_rule_refuses_a_partial_sweep(tmp_path):
+    """The formulation study runs both skews by design. Resolving from one of
+    them would silently apply rule 3 to a sweep that simply had not finished."""
+    partial = {"cifar10_alpha_0.1": _verdict(0.1, 3)}
+    with pytest.raises(ValueError, match="missing alpha"):
+        resolve_frozen_formulation(partial)
 
 
 def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3, group=EXPLORATION_GROUP):
