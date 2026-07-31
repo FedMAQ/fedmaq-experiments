@@ -26,7 +26,7 @@ experiment_group: pass2_exploration
 dataset: cifar10
 model: mobilenetv2
 total_rounds: 50
-client_gpus: 1.0
+client_gpus: 0.5
 seeds: [0]
 heterogeneities:
   - dirichlet_alpha_0.3

@@ -31,7 +31,7 @@ dataset: femnist
 model: simplecnn
 experiment: femnist
 total_rounds: 100
-client_gpus: 1.0
+client_gpus: 0.5
 seeds: [0, 42, 123]
 heterogeneities:
   - femnist

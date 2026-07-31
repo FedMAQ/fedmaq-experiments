@@ -25,7 +25,7 @@ experiment_group: benchmark_grid
 dataset: cifar100
 model: mobilenetv2
 total_rounds: 100
-client_gpus: 1.0
+client_gpus: 0.5
 seeds: [0, 42, 123]
 heterogeneities:
   - dirichlet_alpha_0.1
