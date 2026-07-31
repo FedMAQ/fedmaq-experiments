@@ -50,39 +50,66 @@ def mock_dataset(monkeypatch):
     return mock_ds
 
 
-# Manuscript §4.3.7 defines the ablation as a leave-one-out design: each arm is
-# full FedMAQ with exactly one thing removed. That property is what makes an
-# arm's delta against Configuration 7 attributable to the component it drops.
-# It lives entirely in YAML, so nothing else in the suite can catch a config edit
-# that quietly reintroduces a second difference — which is the defect that made
-# the pre-2026-07-25 arms unattributable. Each entry below is the complete set of
-# keys an arm may differ from ``fedmaq.yaml`` in.
-ABLATION_ARM_DIFFS = {
-    # Configuration 2: Tier-1 memory ceiling lifted.
-    "fedmaq_no_resource": {"resource_aware"},
-    # Configuration 3: Formulation 3's data modulator removed at kappa = 0.
-    # One key, because the arm stays on the winner's formulation.
-    "fedmaq_no_data": {"lambda_val"},
-    # Configuration 4: the pre-registered fallback arm. Formulation 3 carries no
-    # weight on the gradient term and cannot express state-awareness removal, so
-    # this arm alone changes formulation, and is anchored to the formulation
-    # study's own Formulation 1 runs rather than to Configuration 7.
-    "fedmaq_no_state": {"formulation", "gamma1", "gamma2"},
-    # Configuration 5: KD removed. soft_voting goes with it as INAPPLICABLE
-    # (it weights teacher logits, and this arm distills nothing).
-    "fedmaq_no_kd": {"kd_epochs", "soft_voting"},
-    # Configuration 8: the frozen refinement layer removed.
-    "fedmaq_no_refinements": {"soft_voting", "ema_student", "grad_norm_ema"},
-}
-
-
 def _algorithm_cfg(algorithm):
     with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
         cfg = compose(config_name="config", overrides=[f"algorithm={algorithm}"])
     return OmegaConf.to_container(cfg.algorithm, resolve=True)
 
 
-@pytest.mark.parametrize("arm,expected_diff", sorted(ABLATION_ARM_DIFFS.items()))
+REFINEMENTS = ("soft_voting", "ema_student", "grad_norm_ema")
+
+
+def _frozen_refinements():
+    """The refinement mechanisms ``fedmaq.yaml`` currently ships as active.
+
+    This is the freeze itself: conf/matrix/pass3_freeze_confirm.yaml writes the
+    surviving set here, and everything downstream is derived from it rather than
+    restated. Before that write it holds the pre-freeze defaults, which is why
+    nothing below asserts a specific membership -- the point is that the arms
+    agree with whatever is frozen, not that a particular set was frozen.
+    """
+    full = _algorithm_cfg("fedmaq")
+    return {flag for flag in REFINEMENTS if full[flag]}
+
+
+# Manuscript §4.3.7 defines the ablation as a leave-one-out design: each arm is
+# full FedMAQ with exactly one thing removed. That property is what makes an
+# arm's delta against Configuration 7 attributable to the component it drops.
+# It lives entirely in YAML, so nothing else in the suite can catch a config edit
+# that quietly reintroduces a second difference — which is the defect that made
+# the pre-2026-07-25 arms unattributable. Each entry is the complete set of keys
+# an arm may differ from ``fedmaq.yaml`` in.
+#
+# Two entries are computed from the freeze rather than written down. A literal
+# list would have to be hand-edited in lockstep with fedmaq.yaml at exactly the
+# moment the freeze lands, and a test that needs editing to keep passing after a
+# config change is not a guard against that change. Deriving them means the
+# freeze can write any surviving set -- including the empty one -- and these
+# tests still describe the arms correctly.
+def _ablation_arm_diffs():
+    frozen = _frozen_refinements()
+    return {
+        # Configuration 2: Tier-1 memory ceiling lifted.
+        "fedmaq_no_resource": {"resource_aware"},
+        # Configuration 3: Formulation 3's data modulator removed at kappa = 0.
+        # One key, because the arm stays on the winner's formulation.
+        "fedmaq_no_data": {"lambda_val"},
+        # Configuration 4: the pre-registered fallback arm. Formulation 3 carries
+        # no weight on the gradient term and cannot express state-awareness
+        # removal, so this arm alone changes formulation, and is anchored to the
+        # formulation study's own Formulation 1 runs rather than to Config 7.
+        "fedmaq_no_state": {"formulation", "gamma1", "gamma2"},
+        # Configuration 5: KD removed. soft_voting goes with it as INAPPLICABLE
+        # (it weights teacher logits, and this arm distills nothing) -- but it
+        # only registers as a *difference* if the freeze turned it on.
+        "fedmaq_no_kd": {"kd_epochs"} | ({"soft_voting"} & frozen),
+        # Configuration 8: the frozen refinement layer removed. Removing the
+        # layer is removing exactly what was frozen, no more and no less.
+        "fedmaq_no_refinements": set(frozen),
+    }
+
+
+@pytest.mark.parametrize("arm,expected_diff", sorted(_ablation_arm_diffs().items()))
 def test_ablation_arm_is_one_removal_from_full_fedmaq(arm, expected_diff):
     """Each §4.3.7 arm must differ from full FedMAQ in exactly its declared keys.
 
@@ -117,24 +144,72 @@ def test_ablation_arms_share_one_refinement_layer():
     the exception list itself: only the two mechanisms that have no signal to act
     on may deviate, and only in the arms that remove that signal.
     """
-    refinements = ("soft_voting", "ema_student", "grad_norm_ema")
     full = _algorithm_cfg("fedmaq")
     # Arms that remove an awareness signal must carry the layer untouched.
     for arm in ("fedmaq_no_resource", "fedmaq_no_data", "fedmaq_no_state"):
         arm_cfg = _algorithm_cfg(arm)
-        for flag in refinements:
+        for flag in REFINEMENTS:
             assert arm_cfg[flag] == full[flag], (
                 f"{arm} deviates from the shared refinement layer on {flag}; "
                 f"§4.3.7 requires the difference between arms to be the "
                 f"awareness signal alone."
             )
 
-    # ema_student is quantization-independent, so the no-quantization arm carries
-    # it too. The other two act on a quantization signal it never produces.
     fedavg_kd = _algorithm_cfg("fedavg_kd")
-    assert fedavg_kd["ema_student"] is True
+    # ema_student is quantization-independent, so the no-quantization arm carries
+    # whatever the freeze decided. Asserted against fedmaq.yaml rather than a
+    # literal: pinning it to True here would mean a freeze that drops ema_student
+    # leaves Configuration 6 as the one arm still running it, turning §4.3.7's
+    # shared layer into a second difference on the arm that can least afford one.
+    assert fedavg_kd["ema_student"] == full["ema_student"], (
+        "fedavg_kd (Configuration 6) must carry the frozen ema_student setting; "
+        "it removes quantization, which ema_student does not depend on."
+    )
+    # soft_voting and grad_norm_ema stay literal. Both act on a quantization
+    # signal this arm never produces, so they are INAPPLICABLE here regardless of
+    # what the freeze decides -- deriving them would assert nothing.
     assert fedavg_kd["soft_voting"] is False
     assert fedavg_kd["grad_norm_ema"] is False
+
+
+def test_configuration_8_exists_only_while_there_is_a_layer_to_remove():
+    """conf/matrix/pass3_freeze_confirm.yaml pre-registers the empty surviving set
+    as a real outcome: if nothing clears the margin at R=100, FedMAQ freezes
+    unrefined and Configuration 8 has nothing left to remove.
+
+    An arm that removes nothing is not an ablation arm -- it is a second copy of
+    Configuration 7 dispatched under a different label, and its delta would be
+    pure noise reported as a component's contribution. This is the check that
+    makes the pre-registered branch enforceable rather than merely written down.
+    """
+    frozen = _frozen_refinements()
+    arm_present = any(run["alg"] == "fedmaq_no_refinements" for run in _matrix("ablation")["runs"])
+
+    if frozen:
+        assert arm_present, (
+            f"fedmaq.yaml freezes {sorted(frozen)}, so §4.3.7's Configuration 8 "
+            "must be dispatched to price that layer."
+        )
+    else:
+        assert not arm_present, (
+            "fedmaq.yaml carries no active refinements, so Configuration 8 "
+            "removes nothing and duplicates Configuration 7. Drop it from "
+            "conf/matrix/ablation.yaml and drop the chapter 6 contribution "
+            "bullet that rests on its contrast."
+        )
+
+
+def test_configuration_8_can_express_any_freeze():
+    """fedmaq_no_refinements must hold every mechanism off, not merely the ones
+    that happen to be frozen today. Its job is to be the layer's absence, so a
+    freeze that later turns on a mechanism this arm leaves enabled would silently
+    make Configuration 8 a partial removal."""
+    arm = _algorithm_cfg("fedmaq_no_refinements")
+    still_on = [flag for flag in REFINEMENTS if arm[flag]]
+    assert not still_on, (
+        f"fedmaq_no_refinements leaves {still_on} enabled. Configuration 8 must "
+        "disable all three so it removes whatever the freeze turns on."
+    )
 
 
 def _matrix(name):
