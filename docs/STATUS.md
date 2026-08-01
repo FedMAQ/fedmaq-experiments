@@ -37,7 +37,11 @@ Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
   matched-tuning stage may rewrite, with nowhere to land until now — plus a
   footnote on the levels-versus-bit-widths trap that had DAdaQuant capped at 5
   bits beside FedPAQ's 8 (Decision 73). The table is also now `\resizebox`'d; it
-  had been running ~187pt past the text block since before this pass.
+  had been running ~187pt past the text block since before this pass. §6.2's two
+  contribution bullets now carry the branches §4.3.1 and §4.3.6 pre-register for
+  them, and Chapters 1, 5 and 6 stop calling the 183 reported runs a
+  "183-run confirmatory grid" — 30 of them are the formulation study, which
+  precedes the grid rather than sitting in it (Decision 74).
 - **2026-08-01** — §4.3.2 gains the baseline matched-tuning stage (Decision 67); §4.3.6
   gains the split-skew freeze rule, the total-disqualification branch, per-seed
   disqualification, the corrected tie-break, and the reserved recheck (Decisions 64–66,
