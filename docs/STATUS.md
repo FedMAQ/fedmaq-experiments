@@ -32,7 +32,12 @@ Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
   before the tag that locks their hyperparameter table, restating August--October as
   baseline *reproduction* and giving the 147-run confirmatory block late January plus
   February (Decision 72). The Gantt gains a `Baseline Matched-Tuning` row, absent
-  since §4.3.2 was written.
+  since §4.3.2 was written. Table 4.1 gains DAdaQuant's quantization-level bounds
+  and FedDistill's regularizer weight — the latter one of the five constants the
+  matched-tuning stage may rewrite, with nowhere to land until now — plus a
+  footnote on the levels-versus-bit-widths trap that had DAdaQuant capped at 5
+  bits beside FedPAQ's 8 (Decision 73). The table is also now `\resizebox`'d; it
+  had been running ~187pt past the text block since before this pass.
 - **2026-08-01** — §4.3.2 gains the baseline matched-tuning stage (Decision 67); §4.3.6
   gains the split-skew freeze rule, the total-disqualification branch, per-seed
   disqualification, the corrected tie-break, and the reserved recheck (Decisions 64–66,

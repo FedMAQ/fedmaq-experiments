@@ -4,8 +4,26 @@ psi: 0.9
 # constant. At R=100 that is 10, not the 5 this file used to carry. If R changes,
 # re-derive rather than reusing this number. Manuscript §4.3.2, Table 4.1.
 phi: 10
+# UNITS: DAdaQuant's q counts quantization levels PER SIGN (codes in [-q, q],
+# hence 2q+1 levels and ceil(log2(2q+1)) bits per element). FedPAQ's q and
+# FedMAQ's q_min/q_max are true BIT-WIDTHS. The three configs use the same key
+# names for different quantities, which is why q_max=8 here read as "matched to
+# FedPAQ's 8-bit" and was not: 8 levels per sign is 5 bits.
+#
+# q_min=1 is published -- it is the max(1, .) floor in DAdaQuant's own
+# client-adaptive formula (Hönig et al. 2022, §3.5). q_max is OURS: the paper
+# doubles q_t with no stated ceiling and applies no upper clamp to the
+# per-client q_i, so some bound is needed to keep a large-share client inside
+# the communication budget. 127 sets that bound at 2*127+1 = 255 codes = 8 bits,
+# the same precision ceiling FedPAQ runs at, so the two pure-quantization
+# baselines differ by adaptivity rather than by budget.
+#
+# It was 8 until 2026-08-01 (Decision 73). At that value DAdaQuant's schedule
+# saturated after three doublings, around round 30 of 100, leaving the remaining
+# 70 rounds effectively static -- which is the one thing the algorithm's
+# time-adaptive contribution consists of. Manuscript §4.3.2, Table 4.1.
 q_min: 1
-q_max: 8
+q_max: 127
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

@@ -146,9 +146,13 @@ runs:
     overrides:
       - algorithm.q=16
 
-  # --- DAdaQuant: the schedule period phi, which sets how fast the adaptive
-  # bit-width escalates. psi (the escalation factor) is left at its published
-  # 0.9; one knob per baseline is the budget.
+  # --- DAdaQuant: the patience phi, which sets how fast the quantization level
+  # escalates -- q_t doubles once the loss moving average has failed to improve
+  # for phi rounds. psi (the weight of that moving average, not an escalation
+  # factor) is left at its published 0.9; one knob per baseline is the budget.
+  # phi carries more weight since Decision 73 raised q_max from 8 levels to 127:
+  # the schedule now has seven doublings to climb rather than three, so how fast
+  # it climbs is what decides where DAdaQuant lands on the frontier.
   - alg: dadaquant
     label: dadaquant-phi10-ref
     variant: phi10

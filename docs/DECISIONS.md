@@ -974,3 +974,58 @@ Decision 67 and §4.3.2 one day after they were added.
 matched-tuning shares no configuration with FedMAQ, so it is unordered with respect
 to the refinement search; it sits at Stage 1b because Decision 29 sequenced it there.
 The only hard ordering the tag imposes on it is that it must finish before the tag.
+
+### Decision 73 — DAdaQuant was capped at 5 bits by a constant of ours that read as 8
+
+**Finding.** `conf/algorithm/dadaquant.yaml` carried `q_max: 8` beside
+`conf/algorithm/fedpaq.yaml`'s `q: 8` and `conf/algorithm/fedmaq.yaml`'s
+`q_max: 16`, and the three do not denominate the same quantity. FedPAQ's `q` and
+FedMAQ's bounds are bit-widths; DAdaQuant's `q` counts quantization levels *per
+sign* — codes in $[-q, q]$, so $2q+1$ levels and $\lceil\log_2(2q+1)\rceil$ bits
+per element. `DAdaQuantCompressionHook`'s docstring states this plainly; nothing
+outside that docstring did. Eight levels per sign is five bits, so the baseline a
+reader would take to be matched to FedPAQ's 8-bit budget was running at roughly
+five-eighths of it.
+
+Two consequences, neither disclosed anywhere. First, the precision ceiling of a
+competitor on the exact accuracy-versus-communication frontier every claim in the
+thesis is drawn on was set by a constant we chose, absent from Table 4.1, absent
+from §4.3.2's list of values marked as ours, and not among the five the
+matched-tuning stage tests. Second, and worse for the baseline's own integrity:
+`q_t` starts at `q_min = 1` and doubles, so a ceiling of 8 is reached after three
+doublings — around round 30 of 100 at $\phi = 10$ — leaving DAdaQuant effectively
+static for the remaining seventy rounds. Time-adaptive escalation is what
+DAdaQuant *is*; the cap suppressed most of it.
+
+**Resolved: `q_max = 127`, and the table says why.** 127 levels per sign is
+$2 \times 127 + 1 = 255$ codes, exactly eight bits, so DAdaQuant's ceiling now
+equals FedPAQ's and the two pure-quantization baselines are separated by
+adaptivity rather than by budget. `q_min = 1` is left alone — it is published, the
+$\max(1, \cdot)$ floor of DAdaQuant's own client-adaptive formula (Hönig et al.
+2022, §3.5). Some upper bound is still required, the source clamping none on the
+per-client $q_i$ and stating no ceiling on the doubling of $q_t$, so a
+large-share client would otherwise be assignable outside any budget; the change
+is which bound, not whether.
+
+Table 4.1 gains the row, footnote (d) states the levels-versus-bit-widths trap
+outright, and §4.3.2 now marks $q_{\max}$ as ours — five values warranting
+comment rather than four. `dadaquant.yaml` carries the units in the file, since
+the key name is what made the mismatch invisible.
+
+**Zero run cost:** nothing has been dispatched. Had the grid already run, this
+would have been a re-run of DAdaQuant's fifteen rows rather than an edit, and the
+right call would still have been to make it — a baseline held below the budget its
+neighbour gets is the asymmetry §4.3.2 exists to remove, in a place §4.3.2 does
+not look.
+
+**Direction of the correction.** It strengthens a competitor. That is deliberate:
+of the two available fixes, disclosing the 5-bit cap and leaving it, or matching
+the budget and disclosing that, only the second cannot be read as the author of
+FedMAQ choosing how much precision his competitors are allowed.
+
+**Also corrected:** `baseline_tuning.yaml` described $\psi$ as "the escalation
+factor". It is the weight of the loss moving average (`dadaquant.py:190`); the
+escalation is the doubling of `q_t`. The same header's `phi` rationale now notes
+that $\phi$ decides more under a 127 ceiling — seven doublings to climb rather
+than three — which makes its $\{5, 10, 20\}$ bracket more consequential than when
+it was written, not less.
