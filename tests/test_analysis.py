@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -16,10 +17,14 @@ from analysis import (
     accuracy_at_round,
     build_ablation_table,
     compare_to_baselines,
+    discover_runs,
     exploration_noise_margin,
     resolve_frozen_formulation,
     select_winner,
 )
+from common import get_canonical_output_dir
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _df(rounds, accs, mbs):
@@ -893,3 +898,152 @@ def test_exploration_margin_ignores_confirmatory_runs_entirely(tmp_path):
 
     assert result["other_skews_present"] == []
     assert result["unrefined_seeds"] == 3
+
+
+# --------------------------------------------------------------------------
+# End-to-end readback: matrix file -> canonical path -> discover_runs -> margin.
+#
+# Every other fixture in this file constructs RunRecord directly, which skips
+# the path-composition and path-parsing seam entirely. That is exactly how three
+# exploration matrices shipped for months dispatching every cell of a stage into
+# one directory (Decision 76): nothing here ever built a path or read one back.
+# --------------------------------------------------------------------------
+
+
+def _write_discoverable_run(root, out_dir, *, seed, refinements, accuracy, alpha=0.3):
+    """Write the artifacts discover_runs actually requires, at a real path."""
+    job_dir = root / out_dir
+    (job_dir / ".hydra").mkdir(parents=True, exist_ok=True)
+    OmegaConf.save(
+        OmegaConf.create(
+            {
+                "dataset": {"name": "cifar10"},
+                "heterogeneity": {"alpha": alpha},
+                "seed": seed,
+                "algorithm": {
+                    "name": "fedmaq",
+                    "soft_voting": refinements[0],
+                    "ema_student": refinements[1],
+                    "grad_norm_ema": refinements[2],
+                    "post_process": False,
+                },
+            }
+        ),
+        job_dir / ".hydra" / "config.yaml",
+    )
+    OmegaConf.save(
+        OmegaConf.create({"hydra": {"runtime": {"choices": {"algorithm": "fedmaq"}}}}),
+        job_dir / ".hydra" / "hydra.yaml",
+    )
+    _df([1, 25, 50], [0.1, 0.2, accuracy], [1.0, 2.0, 3.0]).to_csv(
+        job_dir / "experiment_log.csv", index=False
+    )
+
+
+def _expand_matrix(name):
+    """Expand a shipped matrix exactly as run_matrix.py does (seed-major)."""
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(REPO_ROOT / "conf" / "matrix" / f"{name}.yaml"), resolve=True
+    )
+    matrix_seeds = [int(s) for s in matrix.get("seeds", [0])]
+
+    def seeds_for(run):
+        return [int(s) for s in run.get("seeds", matrix_seeds)]
+
+    all_seeds = list(matrix_seeds)
+    for run in matrix["runs"]:
+        for seed in seeds_for(run):
+            if seed not in all_seeds:
+                all_seeds.append(seed)
+
+    tasks = []
+    for het in matrix["heterogeneities"]:
+        for seed in all_seeds:
+            for run in matrix["runs"]:
+                if seed not in seeds_for(run):
+                    continue
+                flags = dict(o.split("=", 1) for o in run.get("overrides", []))
+                tasks.append(
+                    {
+                        "label": run.get("label", run["alg"]),
+                        "seed": seed,
+                        "refinements": tuple(
+                            flags.get(f"algorithm.{n}", "false") == "true"
+                            for n in ("soft_voting", "ema_student", "grad_norm_ema")
+                        ),
+                        "out_dir": get_canonical_output_dir(
+                            phase=matrix["phase"],
+                            dataset=matrix["dataset"],
+                            model=matrix["model"],
+                            exp_group=matrix["experiment_group"],
+                            algorithm=run["alg"],
+                            heterogeneity=het,
+                            seed=seed,
+                            variant=run.get("variant", ""),
+                        ),
+                    }
+                )
+    return matrix, tasks
+
+
+def test_factorial_on_disk_reads_back_as_eight_distinct_cells(tmp_path):
+    """The shipped pass2_factorial layout must survive a round trip to disk.
+
+    Asserting directory uniqueness (test_simulation.py) proves the runs do not
+    overwrite each other. It does not prove analysis.py can still *find* them:
+    ``phase_and_group_of`` keys on a path length of exactly 7 and reads the group
+    from ``parts[3]``, so the ``fedmaq__<variant>`` segment introduced by
+    Decision 76 is only safe while it stays one path component. This walks the
+    real matrix file to real paths to a real margin.
+
+    It reads conf/matrix/pass2_factorial.yaml rather than a fixture on purpose:
+    delete a ``variant:`` and this fails, which is the failure that cost Stage
+    1.1 and would have cost the 26-run factorial.
+    """
+    matrix, tasks = _expand_matrix("pass2_factorial")
+    assert len(tasks) == 26, f"factorial expanded to {len(tasks)} tasks, §4.3.1 dispatches 26"
+
+    # Unrefined cell gets real spread (so sigma > 0); one cell clears decisively.
+    unrefined_accs = {0: 0.500, 42: 0.510, 123: 0.490, 7: 0.505, 21: 0.495}
+    for task in tasks:
+        if task["refinements"] == (False, False, False):
+            acc = unrefined_accs[task["seed"]]
+        elif task["refinements"] == (True, True, True):
+            acc = 0.600
+        else:
+            acc = 0.500
+        _write_discoverable_run(
+            tmp_path,
+            task["out_dir"],
+            seed=task["seed"],
+            refinements=task["refinements"],
+            accuracy=acc,
+        )
+
+    runs = discover_runs(tmp_path)
+    assert len(runs) == 26, (
+        f"discover_runs found {len(runs)} of 26 written runs. Cells are colliding "
+        "on disk or the path no longer parses as an exploration layout."
+    )
+    assert {r.experiment_group for r in runs} == {"pass2_factorial"}, (
+        "the fedmaq__<variant> segment broke group parsing; phase_and_group_of "
+        "reads the group from parts[3] of a 7-part path."
+    )
+    assert {r.algorithm for r in runs} == {"fedmaq"}
+    assert {r.phase for r in runs} == {"explore"}
+
+    by_cell = {}
+    for run in runs:
+        by_cell.setdefault(run.refinements, []).append(run.seed)
+    assert len(by_cell) == 8, f"read back {len(by_cell)} distinct cells, the 2^3 factorial has 8"
+    assert sorted(by_cell[(False, False, False)]) == [0, 7, 21, 42, 123], (
+        "the unrefined reference must read back at all five seeds -- it is the "
+        "cell sigma is measured from"
+    )
+
+    result = exploration_noise_margin(runs, alpha=0.3, experiment_group="pass2_factorial")
+    assert "error" not in result, f"margin refused the shipped layout: {result.get('error')}"
+    assert result["unrefined_seeds"] == 5
+    assert result["sigma_unrefined"] > 0
+    assert len(result["verdicts"]) == 7, "seven non-reference cells are judged against the margin"
+    assert result["surviving_cell"] == "soft_voting+ema_student+grad_norm_ema"
