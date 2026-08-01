@@ -2,14 +2,14 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-08-01 (audit pass 4: Stage 1c pulls the grid's FedAvg reference rows forward, the calendar moves every other confirmatory run behind the tag, DAdaQuant's ceiling is unmixed from FedPAQ's units, Chapter 6 learns its own failure branches, and the uniform-memory arm is reframed as the memory-blind condition it actually is — Decisions 71–75)
+**Last updated**: 2026-08-01 (pass 5, pre-dispatch: the three exploration matrices were writing every cell of a stage into one output directory — fixed with `variant:` and a guard test across all twelve matrices, Decision 76. Pass 4 before it: Stage 1c pulls the grid's FedAvg reference rows forward, the calendar moves every other confirmatory run behind the tag, DAdaQuant's ceiling is unmixed from FedPAQ's units, Chapter 6 learns its own failure branches, and the uniform-memory arm is reframed as the memory-blind condition it actually is — Decisions 71–75)
 
 ---
 
 ## Important Context
 
 > [!IMPORTANT]
-> **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. **Nothing in the 183-run confirmatory grid has been executed.** Of the three-stage exploration phase that gates it, only Stage 1 (`pass2_explore`, screening) has run, on 2026-07-31; Stages 2 and 3 are pending, so the refinement layer is unselected. Manuscript Chapters 5 and 6 are ~90% `{[PLACEHOLDER]}` for that reason; nothing there may be written as though results exist.
+> **All experiments conducted so far are exploratory smoke tests** — short-round sweeps (40–50R) on single seeds to validate the algorithm direction and identify which hyperparameters matter. They are **not** the formal thesis results. **Nothing in the 183-run confirmatory grid has been executed.** Of the three-stage exploration phase that gates it, only Stage 1 (`pass2_explore`, screening) has run, on 2026-07-31 — and its four arms collided into one output directory, so its screening comparison is unrecoverable and is **not** being re-run, because nothing consumes it (Decision 76). Stages 2 and 3 are pending, so the refinement layer is unselected. Manuscript Chapters 5 and 6 are ~90% `{[PLACEHOLDER]}` for that reason; nothing there may be written as though results exist.
 
 > [!IMPORTANT]
 > **The refinement layer is not frozen.** `soft_voting`, `ema_student`, and `grad_norm_ema` all ship `true` in `conf/algorithm/fedmaq.yaml`, but that is a default, not an exploration result. The freeze happens at the end of Stage 1 in [docs/RUNBOOK.md](RUNBOOK.md)'s dispatch order. If exploration drops a mechanism, manuscript §3.5 and Chapter 5's $T = 1.0$ justification both need revisiting.

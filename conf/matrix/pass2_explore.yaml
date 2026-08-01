@@ -31,11 +31,15 @@ seeds: [0]
 heterogeneities:
   - dirichlet_alpha_0.3
 
+# All four arms dispatch `alg: fedmaq` and differ only by override, so each needs
+# its own `variant` to key a distinct output directory -- see scripts/common.py:
+# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
 runs:
   # Unrefined reference: all three mechanisms off. This is also the cell whose
   # seed-to-seed spread defines the noise margin (rerun at 3 seeds for sigma).
   - alg: fedmaq
     label: fedmaq-unrefined
+    variant: unrefined
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=false
@@ -44,18 +48,21 @@ runs:
   # One-at-a-time screening: each mechanism against the unrefined reference.
   - alg: fedmaq
     label: fedmaq-soft-voting-on
+    variant: sv-on
     overrides:
       - algorithm.soft_voting=true
       - algorithm.ema_student=false
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: fedmaq-ema-student-on
+    variant: ema-on
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=true
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: fedmaq-grad-norm-ema-on
+    variant: gne-on
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=false

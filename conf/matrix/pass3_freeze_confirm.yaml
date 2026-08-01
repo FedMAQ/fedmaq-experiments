@@ -58,9 +58,13 @@ seeds: [0, 42, 123]
 heterogeneities:
   - dirichlet_alpha_0.3
 
+# Both arms dispatch `alg: fedmaq` and differ only by override, so each needs its
+# own `variant` to key a distinct output directory -- see scripts/common.py:
+# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
 runs:
   - alg: fedmaq
     label: fedmaq-unrefined
+    variant: unrefined
     # Defines this stage's sigma; deepened for the same reason as the factorial's
     # reference cell. Must stay a superset of the matrix-level seeds.
     seeds: [0, 42, 123, 7, 21]
@@ -70,6 +74,7 @@ runs:
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: fedmaq-surviving-set
+    variant: surviving-set
     overrides:
       # PLACEHOLDER — set from exploration_margin.json before dispatch.
       - algorithm.soft_voting=true

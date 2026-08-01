@@ -1118,3 +1118,51 @@ claim now holds only while `floor(uniform_memory_mb / c_unit) >= q_max`; raise
 `c_unit`, lower the capacity, or raise `q_max` and the test fails rather than the
 manuscript silently going false. §4.1 also now reports the three-in-seven binding
 fraction as the quantity §5.1 must report as realized.
+
+## Pass 5 — 2026-08-01
+
+Opened by the pre-dispatch dry run that Pass 4's handoff prescribed, not by a
+fresh audit. One finding, blocking.
+
+76. **The three exploration matrices dispatched every cell of a stage into a
+    single output directory; `variant:` now disambiguates them, and a guard test
+    asserts no matrix can do it again.** `get_canonical_output_dir` keys the run
+    path on the *algorithm*, not the run label, so a matrix that sweeps an
+    override across one `alg` writes every cell into the same directory and keeps
+    only whichever finished last. `variant` is the disambiguator and exists for
+    exactly this; `formulation_study.yaml` and `baseline_tuning.yaml` set it on
+    every run and were correct. `pass2_explore.yaml`, `pass2_factorial.yaml` and
+    `pass3_freeze_confirm.yaml` set it on none — all their cells declare
+    `alg: fedmaq` and differ only by override.
+
+    The arithmetic: `pass2_factorial`'s 26 tasks resolved to **5** distinct
+    directories, `pass3_freeze_confirm`'s 8 to **5**, `pass2_explore`'s 4 to
+    **1**. Nothing would have failed. Each sweep exits 0, reports its full task
+    count, and writes a `sweep_status.json` with no failures; the loss surfaces
+    only at analysis time, as cells that appear never to have run.
+
+    **`pass2_factorial` is the stage this mattered most on.** Its dispatch order
+    is seed-major, so the last writer at each of seeds 0/42/123 is the final
+    run in file order — `sv1-ema1-gne1` — while seeds 7 and 21 carry only the
+    reference cell. `exploration_noise_margin` would therefore have seen the
+    unrefined cell at two seeds, not five, and returned its "cannot measure
+    sigma: requires at least three" error. Fail-loud rather than a corrupt
+    freeze, which is the one piece of good news here — but only after ~26 runs
+    of allocation time, and with every keep-or-drop delta unrecoverable.
+    `--skip_completed` would have made recovery worse, not better: after the
+    first cell at a seed writes `final_global_model.pt`, the other seven at that
+    seed resolve to the same directory and are skipped as complete.
+
+    **Stage 1.1's already-spent runs are not re-run.** `pass2_explore` completed
+    4/4 on 2026-07-31 into one directory, so its screening comparison is
+    unrecoverable — and costs nothing, because nothing consumes it. The margin
+    function refuses `pass2_explore` by design (one seed), `pass2_factorial` is a
+    fully crossed 2³ over the same three mechanisms and so does not narrow on the
+    screening result, and no `.tex` file cites the stage. It located a region;
+    the factorial re-measures all eight cells regardless.
+
+    `test_no_matrix_dispatches_two_runs_into_one_output_directory` composes every
+    file in `conf/matrix/` and asserts task count equals distinct-directory
+    count. Written across all twelve rather than the three that were wrong: the
+    next matrix to sweep an override on one algorithm has no reason to know the
+    rule exists. Suite is 183 passed (was 182).

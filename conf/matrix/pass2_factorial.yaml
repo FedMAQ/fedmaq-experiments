@@ -59,9 +59,15 @@ seeds: [0, 42, 123]
 heterogeneities:
   - dirichlet_alpha_0.3
 
+# Every cell dispatches `alg: fedmaq` and differs only by override, so each needs
+# its own `variant` to key a distinct output directory. The canonical path keys on
+# the algorithm, not the run label, so without it all eight cells at a given seed
+# write into one directory and only the last survives -- see scripts/common.py:
+# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
 runs:
   - alg: fedmaq
     label: sv0-ema0-gne0   # unrefined reference; defines sigma
+    variant: sv0-ema0-gne0
     # Deepened to five seeds -- see "WHY THE REFERENCE CELL RUNS FIVE SEEDS"
     # above. This list must stay a superset of the matrix-level seeds.
     seeds: [0, 42, 123, 7, 21]
@@ -71,42 +77,49 @@ runs:
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: sv1-ema0-gne0
+    variant: sv1-ema0-gne0
     overrides:
       - algorithm.soft_voting=true
       - algorithm.ema_student=false
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: sv0-ema1-gne0
+    variant: sv0-ema1-gne0
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=true
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: sv0-ema0-gne1
+    variant: sv0-ema0-gne1
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=false
       - algorithm.grad_norm_ema=true
   - alg: fedmaq
     label: sv1-ema1-gne0
+    variant: sv1-ema1-gne0
     overrides:
       - algorithm.soft_voting=true
       - algorithm.ema_student=true
       - algorithm.grad_norm_ema=false
   - alg: fedmaq
     label: sv1-ema0-gne1
+    variant: sv1-ema0-gne1
     overrides:
       - algorithm.soft_voting=true
       - algorithm.ema_student=false
       - algorithm.grad_norm_ema=true
   - alg: fedmaq
     label: sv0-ema1-gne1
+    variant: sv0-ema1-gne1
     overrides:
       - algorithm.soft_voting=false
       - algorithm.ema_student=true
       - algorithm.grad_norm_ema=true
   - alg: fedmaq
     label: sv1-ema1-gne1
+    variant: sv1-ema1-gne1
     overrides:
       - algorithm.soft_voting=true
       - algorithm.ema_student=true
