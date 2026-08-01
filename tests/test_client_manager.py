@@ -12,7 +12,14 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fedmaq.core.client_manager import SeededPartitionClientManager
+import pytest
+
+from fedmaq.core import client_manager as cm_module
+from fedmaq.core.client_manager import (
+    _PARTITION_QUERY_MAX_ATTEMPTS,
+    PartitionResolutionError,
+    SeededPartitionClientManager,
+)
 
 
 class _FakeProxy:
@@ -81,6 +88,59 @@ def test_oversized_request_returns_empty() -> None:
     mgr = _make_manager(3, list(range(3)))
     mgr.set_round_seed(1)
     assert mgr.sample(5) == []
+
+
+class _FlakyProxy:
+    """A proxy whose ``get_properties`` fails ``fail_times`` times, then succeeds."""
+
+    def __init__(self, node_id: str, partition_id: int, fail_times: int) -> None:
+        self.cid = node_id
+        self._pid = partition_id
+        self._remaining_failures = fail_times
+        self.calls = 0
+
+    def get_properties(self, ins, timeout=None, group_id=None):  # noqa: ANN001
+        self.calls += 1
+        if self._remaining_failures > 0:
+            self._remaining_failures -= 1
+            raise ValueError(
+                "Message contains an Error (reason: Error: Message Unavailable - "
+                "the destination SuperNode was removed from the federation.)"
+            )
+        return SimpleNamespace(properties={"cid": str(self._pid)})
+
+
+@pytest.fixture
+def _no_backoff(monkeypatch):
+    """Collapse the retry backoff so these tests do not actually sleep ~20s."""
+    monkeypatch.setattr(cm_module.time, "sleep", lambda _seconds: None)
+
+
+def test_partition_id_survives_transient_query_failures(_no_backoff) -> None:
+    # A SuperNode that blips but recovers must not kill the run: the round trip is
+    # retried and the resolved ID is correct. Regression for the 2026-08-01 sweep,
+    # where a single unguarded attempt lost three runs mid-sweep (Decision 77).
+    proxy = _FlakyProxy("node-abc", partition_id=7, fail_times=_PARTITION_QUERY_MAX_ATTEMPTS - 1)
+    mgr = SeededPartitionClientManager(seed=42, num_clients=10)
+
+    assert mgr._partition_id(proxy) == 7
+    assert proxy.calls == _PARTITION_QUERY_MAX_ATTEMPTS
+
+
+def test_partition_id_raises_rather_than_guessing_when_node_is_gone(_no_backoff) -> None:
+    # Permanent loss must abort. The alternatives -- a hash-based fallback ID, or
+    # dropping the proxy and sampling a short round -- would both silently change
+    # WHICH clients train, which is precisely the property this class provides.
+    proxy = _FlakyProxy("node-gone", partition_id=3, fail_times=_PARTITION_QUERY_MAX_ATTEMPTS)
+    mgr = SeededPartitionClientManager(seed=42, num_clients=10)
+
+    with pytest.raises(PartitionResolutionError, match="skip_completed"):
+        mgr._partition_id(proxy)
+
+    assert proxy.calls == _PARTITION_QUERY_MAX_ATTEMPTS
+    # Nothing may be cached from a failed resolution -- a guessed entry would be
+    # served silently to every later round.
+    assert mgr._partition_cache == {}
 
 
 def test_partition_id_cached_after_first_query() -> None:

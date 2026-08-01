@@ -1166,3 +1166,76 @@ fresh audit. One finding, blocking.
     count. Written across all twelve rather than the three that were wrong: the
     next matrix to sweep an override on one algorithm has no reason to know the
     rule exists. Suite is 183 passed (was 182).
+
+## Stage 1.2 Dispatch Failure — 2026-08-01
+
+Not an audit pass. Opened by the `pass2_factorial` sweep dying on its first three
+tasks, and closed by measurement rather than by inspection.
+
+77. **`client_gpus: 0.5` was the obvious suspect, was measured, and was
+    innocent; the actual defect is that partition-ID resolution had no retry, and
+    it now aborts loudly instead of failing at the first blip.** The sweep lost
+    task 1 at 495 s and task 2 at 188 s to `ValueError: Message contains an Error
+    (... the destination SuperNode was removed from the federation ...)` raised
+    from `client_manager.py:_partition_id`, then task 3 to a TTL error and a
+    2100 s timeout.
+
+    **Why the first suspect was wrong, and why the docs made it plausible.**
+    `f216abf` flipped `client_gpus` from 1.0 to 0.5 across nine matrices at 16:46
+    on 2026-07-31; `pass2_explore` ran 09:03–10:13 the same day, so it ran at
+    **1.0**, and `pass2_factorial` was the first FedMAQ sweep ever attempted at
+    0.5. `docs/RUNBOOK.md` nonetheless credited that completed screening run to
+    `client_gpus: 0.5` — a false claim that made an unexercised setting look
+    validated and pointed triage at the wrong variable. Corrected, with the
+    timestamps that settle it. `f216abf`'s own 1.88× justification was measured
+    with **FedAvg**, not with FedMAQ, which additionally carries a server-side
+    grad-norm probe model and KD.
+
+    **The measurement.** Two 5-round FedMAQ runs, back to back in one session so
+    the shared host's co-tenant load could not drift between them, differing only
+    in `client_gpus`; overrides otherwise identical to the failing task. Both
+    completed cleanly. Peak VRAM 16,702 MiB at 0.5 and 14,666 MiB at 1.0 of a
+    40,960 MiB A100, against a co-tenant holding 11,677 MiB — so ~5.0 GB and
+    ~3.0 GB of our own, with ~24 GB spare. There is no VRAM ceiling near where
+    this operates, and 0.5 was *faster* (2m46s vs 3m12s). **A revert of the five
+    pre-tag matrices to 1.0 was drafted and not taken**: it would have fixed
+    nothing and cost throughput. Every matrix stays at 0.5. The end-to-end
+    speed-up for FedMAQ measured 1.16×, not 1.88×; startup dominates a 5-round
+    run so the per-round figure is better, but no schedule estimate should be
+    re-derived from 1.88×.
+
+    **What actually broke.** `_partition_id` caches by node ID, so all 100
+    `get_properties` round trips happen in round 1 and every later round is a
+    cache hit — and a cache hit cannot raise. A 50-round run takes ~1050 s, so a
+    failure at 495 s is roughly round 20, long after the cache was warm. The only
+    way back into that code path mid-run is a node ID that is not in the cache:
+    a SuperNode that left the federation, exactly as the error text said. This is
+    a membership change on a shared host, not a cold-start storm and not resource
+    exhaustion. It met a single unguarded attempt with no retry and killed the run.
+
+    **The fix, and why it aborts.** Five attempts with linear backoff, sized so
+    only *permanent* node loss exhausts the budget; then
+    `PartitionResolutionError`. Deliberately the opposite of its sibling
+    `strategy_hooks/_partition.py`, which falls back to
+    `hash(cid) % num_clients`. A guessed ID here would not mislabel one client —
+    it would change *which* partitions are drawn, silently and differently each
+    run, destroying the one property `SeededPartitionClientManager` exists to
+    provide. Dropping the proxy and sampling 99 is no better: that is not the
+    `K = 100, C = 0.1` protocol of Table 4.1, and nothing downstream would record
+    the deviation. Aborting costs one run, recoverable with `--skip_completed`; a
+    silently non-reproducible run costs the reproducibility claim and cannot be
+    detected afterwards.
+
+    **What this does not establish.** The probes never reproduced the failure at
+    either setting — 5 rounds cannot, since the trigger is a mid-run membership
+    change. So the measurement exonerates `client_gpus`; it does not validate the
+    fix. The retry is justified by inspection and will be validated by the sweep
+    completing.
+
+    **Pre-registered, before the re-dispatch.** If aborts recur — node loss being
+    routine on this shared VM rather than rare — the response is
+    *tolerate-and-record*: drop the unresolvable client, proceed, and write the
+    deviation into that run's `experiment_log.csv` so affected rounds are
+    auditable and analysis can flag them. It is not a silent drop, and it is not
+    chosen now, because a fix adopted before the failure rate is known would trade
+    the reproducibility guarantee for a problem that may not exist.

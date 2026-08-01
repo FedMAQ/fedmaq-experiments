@@ -48,7 +48,13 @@ no mechanism is ever selected at a skew it is later reported on. Not counted amo
 the 183.
 
 1. `--matrix pass2_explore` — screening, R=50, one seed, 4 runs. **Done 2026-07-31**
-   (~70 min at `client_gpus: 0.5`, 4/4 completed).
+   (~70 min at `client_gpus: 1.0`, 4/4 completed). Its four cells collided into one
+   output directory and the screening comparison is unrecoverable; it is not re-run,
+   because nothing consumes it (Decision 76). **This line read `0.5` until
+   2026-08-01 and was wrong** — `f216abf` did not change that value until 16:46 that
+   day and this run ended at 10:13. The error was load-bearing: it made a
+   never-exercised setting look like the one a completed sweep had validated, and
+   sent the first triage of the Stage 1.2 failure at the wrong suspect (Decision 77).
 2. `--matrix pass2_factorial` — keep-or-drop, fully crossed $2^3$, three seeds, **26
    runs**: the unrefined reference cell carries five seeds, not three, because its
    spread *is* the margin every other cell is judged against and at n=3 that
