@@ -1061,3 +1061,60 @@ now say what they mean. The distinction is load-bearing, not pedantic: the
 formulation study selects the configuration the confirmatory grid then runs, and
 a reader who believes it is *inside* that grid has been told the freeze was
 decided by runs it was supposed to precede.
+
+---
+
+### Decision 75 — The uniform-memory control arm is the memory-blind condition, not a distillation isolator
+
+**Finding.** §4.1 said the uniform-memory arm "isolates the accuracy-recovery
+capabilities of Server-Side Knowledge Distillation from the confounding variable
+of memory-based gradient quantization." It does not, and cannot. Distillation is
+active and identically configured on both sides of that contrast, so the contrast
+holds it fixed rather than pricing it; the arm that prices it is Configuration 5
+(`fedmaq_no_kd`). Chapter 5 carried the non-sequitur through to a reading rule —
+"if FedMAQ's accuracy is similar under both regimes, distillation is doing most
+of the accuracy-recovery work" — which would have been written into the results
+chapter as an inference the design does not support.
+
+**What the arm actually is.** At `c_unit = 512` MB, `floor(8192 / 512) = 16`,
+which equals `fedmaq.yaml`'s `q_max`; the Tier-2 target is itself clamped to
+`q_max`, so `min(Q_k^max, q_hat) = q_hat` for every client. The Tier-1 ceiling
+does not merely stop *varying* in this arm — it never binds at all. The arm is
+therefore FedMAQ in the memory-blind condition, which is Ablation Configuration
+2, and the two assign **identical bit-widths**. §3.3.3 had already proved this
+("every client holding at least 8192 MB is therefore functionally identical in
+achievable precision"); §4.1 contradicted its own Chapter 3.
+
+**Resolved — the arm is kept, at 8192 MB, and reframed.** Three alternatives were
+weighed:
+
+1. *Lower the capacity until Tier-1 binds uniformly* (e.g. 4096 MB → an 8-bit
+   clamp on everyone). Rejected. Over half the sampled population of
+   `U(2048, 16384)` already sits above the binding threshold — the clamp is
+   active on exactly three sampled clients in seven — so every binding uniform
+   value lies below the population's central tendency, and the arm would confound
+   uniformity of capacity with a reduction in it. That trades one confound for a
+   worse one.
+2. *Delete the arm and let Configuration 2 carry the measurement* (saving 6 runs).
+   Rejected. It would unwind §4.1, Table 4.1, a Chapter 5 subsection and the
+   183-run accounting four chapters now cite, to save 3% of the budget and lose a
+   real measurement.
+3. *Keep it and say what it measures.* Taken.
+
+The arm's independent content is the **coding regime**, not the condition: the
+ablation runs pipeline-free, while every headline comparison in §5.2 runs with
+error compensation active — and error compensation, which carries the
+quantization residual into the following round, is the one downstream mechanism
+that could absorb a clamp-induced loss of precision. Agreement between the two
+transfers the ablation's price for memory blindness to the regime the reported
+claims live in; disagreement localizes the difference to the pipeline. Chapter 5
+gains a bullet requiring the two deltas be reported side by side.
+
+**Pinned.** `test_uniform_memory_arm_is_the_memory_blind_condition` composes the
+shipped configs through Hydra and asserts the equivalence across all five
+formulations and a grid of signal values, plus that a low-capacity client *is*
+clamped — so the equality is a property of 8192 MB and not of the formula. The
+claim now holds only while `floor(uniform_memory_mb / c_unit) >= q_max`; raise
+`c_unit`, lower the capacity, or raise `q_max` and the test fails rather than the
+manuscript silently going false. §4.1 also now reports the three-in-seven binding
+fraction as the quantity §5.1 must report as realized.

@@ -1,9 +1,31 @@
 # Uniform-memory control arm, manuscript §4.1 and §4.3. 6 runs.
 #
-# Every client gets the same 8192 MB capacity, so Tier-1 never binds differently
-# across clients and the memory-driven part of quantization is held constant.
-# What the arm isolates is server-side KD's accuracy recovery, separated from the
-# memory-based quantization that would otherwise confound it.
+# Every client gets the same 8192 MB capacity. Read the consequence exactly:
+# floor(8192 / c_unit=512) = 16 = fedmaq.yaml's q_max, and the Tier-2 target is
+# itself clamped to q_max, so min(Q_k^max, q_hat) = q_hat for every client. The
+# Tier-1 ceiling does not merely stop varying here -- it never binds at all. This
+# arm is the MEMORY-BLIND condition, and its contrast against FedMAQ's
+# variable-memory grid rows prices the memory ceiling.
+#
+# It does NOT isolate server-side KD. KD is on and identically configured on both
+# sides of the contrast, so the contrast cannot price it; that is Configuration 5
+# (fedmaq_no_kd) in conf/matrix/ablation.yaml. The header said otherwise until
+# Decision 75, as did manuscript §4.1, while §3.3.3 had already proved the arm
+# memory-blind ("every client holding at least 8192 MB is functionally identical
+# in achievable precision").
+#
+# Nor is this arm redundant with ablation Configuration 2, which lifts Tier-1 and
+# therefore assigns IDENTICAL bit-widths. The two differ only in post_process:
+# the ablation is pipeline-free, this arm is not. Error feedback carries the
+# quantization residual into the next round and is the one downstream mechanism
+# that could absorb a clamp-induced precision loss, so the pair reads one
+# condition in both coding regimes. Agreement transfers the ablation's verdict to
+# the regime the headline claims live in; disagreement localizes to the pipeline.
+#
+# Do not "fix" 8192 downward to make Tier-1 bind. Over half the sampled
+# population (U(2048,16384)) already sits above the binding threshold, so any
+# binding uniform value is below the population's central tendency and confounds
+# uniform capacity with less capacity.
 #
 # post_process=true, and that is not a copy-paste from benchmark_grid.yaml. This
 # arm's comparison partner is FedMAQ's own CIFAR-10 rows in the primary

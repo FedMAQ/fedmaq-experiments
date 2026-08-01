@@ -1298,6 +1298,65 @@ def test_ablation_leave_one_out_arms():
     ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=1.0, **kw)
 
 
+def test_uniform_memory_arm_is_the_memory_blind_condition():
+    """The uniform-memory control arm is Configuration 2 in the coding regime.
+
+    Manuscript §4.1 and §5.1 now say so explicitly (Decision 75), which makes it a
+    claim about *shipped values* rather than about the formula: it holds only while
+    floor(uniform_memory_mb / c_unit) >= q_max. Raise c_unit, lower the arm's
+    capacity, or raise q_max and the Tier-1 clamp starts binding inside the arm,
+    at which point §4.1's "binds on no client" is false and §5.1's cross-check
+    against Configuration 2 is comparing two different conditions. Pinned here
+    because nothing else would notice.
+    """
+    from pathlib import Path
+
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+
+    conf_root = Path(__file__).resolve().parents[1] / "conf"
+    with initialize_config_dir(config_dir=str(conf_root), version_base="1.3"):
+        composed = compose(
+            config_name="config",
+            overrides=["algorithm=fedmaq", "heterogeneity=uniform_memory_alpha_0.1"],
+        )
+    alg = OmegaConf.to_container(composed.algorithm, resolve=True)
+    uniform_mb = float(composed.heterogeneity.uniform_memory_mb)
+
+    q_max = int(alg["q_max"])
+    assert uniform_mb // float(alg["c_unit"]) >= q_max, (
+        f"{uniform_mb} MB at c_unit={alg['c_unit']} no longer clears q_max={q_max}; "
+        "the arm's Tier-1 clamp now binds and manuscript §4.1 is wrong"
+    )
+
+    shared = dict(
+        c_unit=float(alg["c_unit"]),
+        g_max=1.0,
+        n_max=200,
+        q_min=int(alg["q_min"]),
+        q_max=q_max,
+        bit_widths=tuple(alg["bit_widths"]),
+    )
+    signals = [(g, n) for g in (0.0, 0.25, 0.5, 0.75, 1.0) for n in (1, 50, 200)]
+
+    # Every client in the arm receives what it would receive with Tier-1 removed.
+    for formulation in (0, 1, 2, 3, 4):
+        for g_k, n_k in signals:
+            kw = dict(g_k=g_k, n_k=n_k, formulation=formulation, **shared)
+            assert compute_fedmaq_q_k_t(c_k=uniform_mb, **kw) == compute_fedmaq_q_k_t(
+                c_k=uniform_mb, resource_aware=False, **kw
+            )
+
+    # And the equality is a property of that capacity, not of the formula: a client
+    # drawn from the low end of U(2048, 16384) is clamped below its soft target.
+    bound = dict(g_k=1.0, n_k=200, formulation=3, **shared)
+    assert compute_fedmaq_q_k_t(c_k=2048.0, **bound) < compute_fedmaq_q_k_t(
+        c_k=2048.0, resource_aware=False, **bound
+    )
+
+
 def test_compute_fedmaq_q_k_t():
     """Test FedMAQ quantization helper formulas."""
     from fedmaq.core.strategy import compute_fedmaq_q_k_t

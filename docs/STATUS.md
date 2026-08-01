@@ -2,7 +2,7 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-08-01 (audit pass 4: Stage 1c pulls the grid's FedAvg reference rows forward, analysis scopes candidates by `experiment_group`, and the calendar moves every other confirmatory run behind the tag — Decisions 71–72)
+**Last updated**: 2026-08-01 (audit pass 4: Stage 1c pulls the grid's FedAvg reference rows forward, the calendar moves every other confirmatory run behind the tag, DAdaQuant's ceiling is unmixed from FedPAQ's units, Chapter 6 learns its own failure branches, and the uniform-memory arm is reframed as the memory-blind condition it actually is — Decisions 71–75)
 
 ---
 
@@ -41,7 +41,14 @@ Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
   contribution bullets now carry the branches §4.3.1 and §4.3.6 pre-register for
   them, and Chapters 1, 5 and 6 stop calling the 183 reported runs a
   "183-run confirmatory grid" — 30 of them are the formulation study, which
-  precedes the grid rather than sitting in it (Decision 74).
+  precedes the grid rather than sitting in it (Decision 74). §4.1 stops claiming
+  the uniform-memory control arm isolates server-side distillation — distillation
+  is on and identical on both sides of that contrast — and states what the arm is:
+  at 8192 MB with `c_unit = 512` the Tier-1 ceiling reaches `q_max` and binds on
+  no client, so the arm is Ablation Configuration 2's memory-blind condition read
+  in the post-processing regime. §4.1 also now reports the binding fraction
+  (three sampled clients in seven) and §5.1 gains a bullet requiring the two
+  deltas be cross-checked (Decision 75).
 - **2026-08-01** — §4.3.2 gains the baseline matched-tuning stage (Decision 67); §4.3.6
   gains the split-skew freeze rule, the total-disqualification branch, per-seed
   disqualification, the corrected tie-break, and the reserved recheck (Decisions 64–66,
