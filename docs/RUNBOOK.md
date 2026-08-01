@@ -41,6 +41,30 @@ running out of order costs runs rather than just time. Each matrix file's own he
 carries the reason it sits where it does; read it before dispatching that stage.
 **Per the execution model above, "dispatch" means handing the command to the user.**
 
+### Every dispatch on the allocation carries the Ray host flags
+
+```
+-o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4
+```
+
+Not optional, and omitted from every command in this file until 2026-08-01. Both
+default to `null`, which reproduces Ray's stock behaviour — and stock behaviour is
+wrong on this host in two ways `conf/config.yaml` already documents. Ray sizes its
+object store at ~30% of *total* RAM, so ~19 GB on a 64 GB box that has ~39 GB
+actually free, on top of the sweep's own footprint; 4 GB is ample, since the store
+only carries parameter payloads and MobileNetV2GN is ~27 MB. And the allocation is
+one shared VM with per-user accounts and a **shared `/tmp`**, so a co-tenant's Ray
+session collides with ours at the default `/tmp/ray`. A co-tenant is not
+hypothetical: `nvidia-smi` on 2026-08-01 showed 11.6 GB of VRAM held by a process
+this account cannot see.
+
+Keep the path short and outside `$HOME` — Ray builds Unix domain sockets beneath it
+and those paths cap near 107 characters.
+
+Neither is proven to have caused the Stage 1.2 aborts (Decision 77 records what was
+and was not established there). Both are cheap, documented, and remove the two known
+ways this host starves a sweep that the runner's own docstring already warned about.
+
 ### Stage 1 — Exploration (gates everything downstream)
 
 Runs at the held-out $\alpha = 0.3$, absent from the confirmatory grid by design, so
