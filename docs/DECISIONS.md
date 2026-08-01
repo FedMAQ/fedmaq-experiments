@@ -1239,3 +1239,39 @@ tasks, and closed by measurement rather than by inspection.
     auditable and analysis can flag them. It is not a silent drop, and it is not
     chosen now, because a fix adopted before the failure rate is known would trade
     the reproducibility guarantee for a problem that may not exist.
+
+78. **The re-dispatched `pass2_factorial` aborted again at tasks 12–14, but not
+    from Decision 77's trigger — it is a teardown gap, not routine node loss,
+    and the pre-registered `tolerate-and-record` switch does not fire.** Three
+    different failures, one origin:
+
+    - **Task 12** (`sv0-ema0-gne1`, seed 42) hung silently for ~26 minutes after
+      sampling clients for round 20 and was killed by the 2100 s timeout. Cause
+      unknown — no evidence points at our code; a shared-host stall is the
+      likeliest explanation and is not diagnosable from these logs.
+    - **Task 13** failed within 30 s: Ray's GCS server never started
+      (`Timed out waiting for ... gcs_server_port`). `kill_ray_processes()`
+      (`scripts/common.py`) ran `ray stop` before it, same as always, but on
+      Linux `ray stop` was the *only* teardown step — the unconditional
+      force-kill (`taskkill /F /T`) that already existed for Windows had no
+      Linux counterpart. A raylet/GCS wedged by task 12's hard timeout-kill (the
+      driver process dies; Ray's grandchildren do not) can survive a polite
+      `ray stop` and block the next task's `ray.init()` on stale port/session
+      state.
+    - **Task 14** reached `[ROUND 1]` and registered 100 nodes — its Ray init
+      *succeeded* — then lost one partition-ID resolution after 5 retries and
+      hit Decision 77's abort. A working init argues against blaming leftover
+      Ray state; this one is presented as possibly independent, not confidently
+      downstream of 12/13.
+
+    **The fix:** `kill_ray_processes()` now force-kills `raylet`, `gcs_server`,
+    and `plasma_store` (`pkill -9 -f`) on non-Windows, unconditionally, mirroring
+    the existing Windows branch. This hardens the *cascade* — one bad task no
+    longer contaminates the next — not the task-12 hang itself, which may be an
+    irreducible shared-host event. Tests: `tests/test_common.py`.
+
+    **Explicitly not done:** did not raise `max_consecutive_failures`. The abort
+    is working as designed; the bug was that unrelated failures were chaining
+    into it, not that the threshold is wrong. Did not touch `client_gpus` (still
+    settled by Decision 77) or adopt `tolerate-and-record` (still not triggered —
+    none of the three failures is a routine mid-run departure).

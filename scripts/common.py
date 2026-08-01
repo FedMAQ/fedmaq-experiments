@@ -55,6 +55,21 @@ def kill_ray_processes() -> None:
             stderr=subprocess.DEVNULL,
             check=False,
         )
+    else:
+        # `ray stop` asks nicely; a raylet/GCS wedged by a timeout-killed run (the
+        # driver process is dead, but Ray's grandchildren survive it) can outlive
+        # that request with nothing here to force it down -- unlike the Windows
+        # branch above, which always force-kills unconditionally. The surviving
+        # process then holds the port/session state the next task's `ray.init()`
+        # needs, so that task fails at Ray startup rather than running at all,
+        # turning one stall into a chain of unrelated-looking failures.
+        for pattern in ("raylet", "gcs_server", "plasma_store"):
+            subprocess.run(
+                ["pkill", "-9", "-f", pattern],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
     time.sleep(3)
 
 
