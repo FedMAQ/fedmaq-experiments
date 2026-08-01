@@ -1029,3 +1029,35 @@ escalation is the doubling of `q_t`. The same header's `phi` rationale now notes
 that $\phi$ decides more under a 127 ceiling — seven doublings to climb rather
 than three — which makes its $\{5, 10, 20\}$ bracket more consequential than when
 it was written, not less.
+
+### Decision 74 — Chapter 6 claimed two contributions whose withdrawal Chapter 4 had already pre-registered
+
+**Finding.** §4.3.1 pre-registers the empty-freeze branch — no mechanism clears
+its noise margin at R = 100, FedMAQ freezes unrefined, Ablation Configuration 8
+drops for want of anything to remove — and §4.3.6 pre-registers total
+disqualification, where every formulation falls below the accuracy floor at both
+skews and the formulation contribution is withdrawn. `docs/RUNBOOK.md` step 5
+even names the consequence: *"the `chapter_6.tex` contribution bullet resting on
+its contrast goes with it."* Chapter 6 stated both contributions with no
+condition attached. Its bullets are `[PLACEHOLDER]`, so nothing false was
+asserted yet — but a branch that exists only in the chapter that will not be
+written under it is not pre-registered, it is remembered, and the RUNBOOK line
+was the only thing holding the coupling.
+
+**Resolved.** The formulation bullet now carries both §4.3.6 branches (total
+disqualification withdraws the characterization and reports the null; skew
+divergence freezes the α = 0.1 winner and reports the split as a finding rather
+than smoothing it). The Configuration 8 bullet states that it drops entirely
+under the empty freeze, leaving the allocation structure as the contribution —
+"the honest reading of that outcome rather than a diminished one."
+
+**Also corrected: "183-run confirmatory grid" in three chapters.** §4.3.4 is
+careful that the 183 reported runs are 153 confirmatory *plus* the 30-run
+formulation study, which is exploration-phase and "reported here but not counted
+among the confirmatory runs". Chapters 1, 5 and 6 each collapsed that into a
+"183-run confirmatory grid", and §4.5 called the exploration runs uncounted among
+"the 183 confirmatory runs" — the one phrase §4.3.4 exists to prevent. All four
+now say what they mean. The distinction is load-bearing, not pedantic: the
+formulation study selects the configuration the confirmatory grid then runs, and
+a reader who believes it is *inside* that grid has been told the freeze was
+decided by runs it was supposed to precede.
