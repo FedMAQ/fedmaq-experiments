@@ -1,6 +1,6 @@
 # Pilot Formulation Study: Improvement Alignment Analysis
 
-This analysis is grounded in the raw per-round training logs from [multirun/2026-07-14/11-45-55-pilot/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/multirun/2026-07-14/11-45-55-pilot), the [results.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/pilot-formulation-study-7-14/results.md), and the [smoke-test baselines](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/smoke-test-7-13/results.md).
+This analysis is grounded in the raw per-round training logs from [multirun/2026-07-14/11-45-55-pilot/](../../../../multirun/2026-07-14/11-45-55-pilot), the [results.md](../../../../experiments/pilot-formulation-study-7-14/results.md), and the [smoke-test baselines](../../../../experiments/smoke-test-7-13/results.md).
 
 ---
 

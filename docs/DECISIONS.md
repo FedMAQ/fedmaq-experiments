@@ -6,7 +6,7 @@ Single source of truth for resolved project decisions. Append-only, dated. STATU
 
 ## 2026-07-16 — Formal Experiment Framing & Grid (13 decisions)
 
-Resolved via grilling session. Full rationale: [docs/plans/formal-experiment-plan.md](plans/formal-experiment-plan.md).
+Resolved via grilling session. Full rationale: `docs/plans/formal-experiment-plan.md` (deleted — Decision 69; see git history).
 
 ### Architecture & Framing
 
@@ -311,7 +311,7 @@ algorithm=cfd` with instrumented per-round vote/loss/prediction-histogram
 
 ## 2026-07-18 — Priority 1 Exploration Campaign Scoped (grilling session)
 
-Resolves the deferred process questions in [formal-experiment-plan.md](plans/formal-experiment-plan.md) §2–§3 (mechanism sweep order, decision rule, baseline-tuning budget). Does not resolve the mechanisms themselves (capacity-EMA on/off, Formulation 3, etc.) — those await Pass 1–3 results.
+Resolves the deferred process questions in `formal-experiment-plan.md` (deleted — Decision 69) §2–§3 (mechanism sweep order, decision rule, baseline-tuning budget). Does not resolve the mechanisms themselves (capacity-EMA on/off, Formulation 3, etc.) — those await Pass 1–3 results.
 
 27. **Explore-α = 0.3** for all Priority 1 exploration-phase runs. Distinct from the confirmatory report grid {0.1, 1.0} (Decision 10) so the single frozen config isn't selected on the exact α values it will later be reported on. `conf/heterogeneity/dirichlet_alpha_0.3.yaml` added.
 28. **Exploration run budget**: 50 rounds, single seed (seed=0), per sweep run — matches prior smoke-test convention, cheap enough for repeated passes. Confirmatory grid (multi-seed, 100+ rounds, Decision 9) is unaffected; exploration only picks direction.
@@ -340,7 +340,7 @@ Round-50 top-1 accuracy: sweep-grid (16 cells) ranges 0.4601-0.5179 (median 0.49
 
 ## 2026-07-22 — Hardware & Telemetry Grounding (Late-2023 Coherent Era)
 
-Resolves telemetry calibration for physical execution time and communication energy modeling (§4.1, §4.3). Replaces former placeholder constants (`bandwidth_mbps: 10.0`, `compute_samples_per_sec: 200.0`, `server_compute_speed: 2000.0`) with a mathematically grounded, temporally aligned Late-2023 hardware ecosystem (see [docs/adr/0002-hardware-telemetry-grounding.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md)).
+Resolves telemetry calibration for physical execution time and communication energy modeling (§4.1, §4.3). Replaces former placeholder constants (`bandwidth_mbps: 10.0`, `compute_samples_per_sec: 200.0`, `server_compute_speed: 2000.0`) with a mathematically grounded, temporally aligned Late-2023 hardware ecosystem (see [docs/adr/0002-hardware-telemetry-grounding.md](../docs/adr/0002-hardware-telemetry-grounding.md)).
 
 36. **Late-2023 Hardware Standardization**:
     - **Edge Clients**: **Raspberry Pi 5 Series** (launched Oct 2023, Broadcom BCM2712 Quad Cortex-A76 @ 2.4 GHz). Memory sampling $c_k \sim \mathcal{U}(2048, 16384)$ MB with $c_{\text{unit}}=512$ MB maps to Pi 5 RAM variants (2GB $\rightarrow$ 4-bit, 4GB $\rightarrow$ 8-bit, 8GB $\rightarrow$ 16-bit, 16GB $\rightarrow$ FP32).
@@ -355,7 +355,7 @@ Resolves telemetry calibration for physical execution time and communication ene
 
 ## 2026-07-22 — Sustained-Throughput Telemetry Revision & Per-Dataset Server Speed
 
-Supersedes the peak-GFLOPS-based values in the original Decision 36. Full derivation chains in [ADR-0002](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md).
+Supersedes the peak-GFLOPS-based values in the original Decision 36. Full derivation chains in [ADR-0002](../docs/adr/0002-hardware-telemetry-grounding.md).
 
 37. **Sustained-throughput revision (client + server)**:
     - **Client 35.0 → 20.0 s/s** (CIFAR MobileNetV2GN). Peak FP32 GEMM on Pi 5 is ~31.5 GFLOPS; sustained efficiency is ~57% ($P_{\text{sustained}} = 18.0$ GFLOPS) due to PyTorch eager-mode dispatch overhead, Python GIL contention, non-optimized ARM NEON codegen, and LPDDR4X memory bandwidth sharing. $v_{\text{client}} = 18.0 / 0.90 = 20.0$ s/s. FEMNIST SimpleCNN stays at 600 s/s (DataLoader-capped: theoretical 1,200 s/s > 600 cap, so compute speed is not the binding constraint).

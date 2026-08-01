@@ -154,9 +154,9 @@ no runs attach to these.
 
 | Document                                                                                                                                                    | Purpose                                                     |
 | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- |
-| [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)                                                         | Resolved decisions log (single source of truth)             |
-| [docs/adr/0002-hardware-telemetry-grounding.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md) | Late-2023 Hardware Grounding & Telemetry specification      |
-| [docs/RUNBOOK.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/RUNBOOK.md)                                                             | Execution model, dispatch order, operational controls       |
-| [docs/experiments/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/README.md)                                       | Chronological experiment registry with per-experiment links |
-| [docs/audits/README.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/README.md)                                                 | Codebase and algorithm audit registry & archive             |
-| [CONTEXT.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/CONTEXT.md)                                                                       | Canonical glossary (resolves naming drift between repos)    |
+| [docs/DECISIONS.md](../docs/DECISIONS.md)                                                         | Resolved decisions log (single source of truth)             |
+| [docs/adr/0002-hardware-telemetry-grounding.md](../docs/adr/0002-hardware-telemetry-grounding.md) | Late-2023 Hardware Grounding & Telemetry specification      |
+| [docs/RUNBOOK.md](../docs/RUNBOOK.md)                                                             | Execution model, dispatch order, operational controls       |
+| [docs/experiments/README.md](../docs/experiments/README.md)                                       | Chronological experiment registry with per-experiment links |
+| [docs/audits/README.md](../docs/audits/README.md)                                                 | Codebase and algorithm audit registry & archive             |
+| [CONTEXT.md](../CONTEXT.md)                                                                       | Canonical glossary (resolves naming drift between repos)    |

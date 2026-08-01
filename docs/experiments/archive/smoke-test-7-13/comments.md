@@ -1,6 +1,6 @@
 # Empirical Evaluation & Hyperparameter Tuning Guide (40-Round Smoke Test)
 
-This document contains empirical performance comments and an exhaustive hyperparameter tuning guide compiled from the 40-round baseline smoke tests on CIFAR-10 (Dirichlet $\alpha=0.1$ and $\alpha=1.0$) and the [fedmaq-literature](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/) knowledge graph (KG).
+This document contains empirical performance comments and an exhaustive hyperparameter tuning guide compiled from the 40-round baseline smoke tests on CIFAR-10 (Dirichlet $\alpha=0.1$ and $\alpha=1.0$) and the [fedmaq-literature](../../../../../fedmaq-literature/kg/) knowledge graph (KG).
 
 ---
 
@@ -10,13 +10,13 @@ Based on the 40-round smoke test across severe ($\alpha=0.1$) and moderate ($\al
 
 ### Correct and Validated Implementations
 
-- **FedAvg (Seminal):** Establishes the baseline communication footprint ($1.0\times$ baseline, 34100.2 MB). The accuracy drop from 67.57% under moderate skew to 36.27% under severe statistical skew aligns with the well-documented weight divergence and client-drift phenomena in literature [\cite{mcmahanCommunicationEfficientLearningDeep2017}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/mcmahan-2017-fedavg.md).
-- **FedProx (Seminal):** Functions as expected. It maintains FedAvg's communication footprint but successfully mitigates non-IID client drift, improving accuracy to 49.71% at $\alpha=0.1$. This confirms the proximal regularization term is correctly pulling local updates closer to the global model [\cite{liFederatedOptimizationHeterogeneous2020}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/li-2020-fedprox.md).
-- **DAdaQuant & FedPAQ (Pure Quantization):** Both algorithms demonstrate the expected $1.6\times$ to $1.9\times$ communication reduction [\cite{honigDAdaQuantDoublyadaptiveQuantization2022}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/honig-2022-dadaquant.md), [\cite{reisizadehFedPAQCommunicationEfficientFederated2020}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md). DAdaQuant correctly outperforms FedPAQ in both accuracy and communication reduction across both sweeps, validating that doubly-adaptive quantization preserves more gradient features than static fixed-point quantization.
+- **FedAvg (Seminal):** Establishes the baseline communication footprint ($1.0\times$ baseline, 34100.2 MB). The accuracy drop from 67.57% under moderate skew to 36.27% under severe statistical skew aligns with the well-documented weight divergence and client-drift phenomena in literature [\cite{mcmahanCommunicationEfficientLearningDeep2017}](../../../../../fedmaq-literature/kg/papers/mcmahan-2017-fedavg.md).
+- **FedProx (Seminal):** Functions as expected. It maintains FedAvg's communication footprint but successfully mitigates non-IID client drift, improving accuracy to 49.71% at $\alpha=0.1$. This confirms the proximal regularization term is correctly pulling local updates closer to the global model [\cite{liFederatedOptimizationHeterogeneous2020}](../../../../../fedmaq-literature/kg/papers/li-2020-fedprox.md).
+- **DAdaQuant & FedPAQ (Pure Quantization):** Both algorithms demonstrate the expected $1.6\times$ to $1.9\times$ communication reduction [\cite{honigDAdaQuantDoublyadaptiveQuantization2022}](../../../../../fedmaq-literature/kg/papers/honig-2022-dadaquant.md), [\cite{reisizadehFedPAQCommunicationEfficientFederated2020}](../../../../../fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md). DAdaQuant correctly outperforms FedPAQ in both accuracy and communication reduction across both sweeps, validating that doubly-adaptive quantization preserves more gradient features than static fixed-point quantization.
 
 ### Suspicious Implementation (Potential Misalignment)
 
-- **FedDistill+ (Pure KD):** Telemetry records a 34100.5 MB footprint, which is slightly higher than FedAvg's footprint. This indicates the execution of the stronger FedDistill+ baseline, which shares both parameters and logit vectors [\cite{zhuDataFreeKnowledgeDistillation2021}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/zhu-2021-fedgen.md). However, the accuracy is 32.94% at $\alpha=0.1$, performing worse than FedAvg. Since knowledge distillation is designed to mitigate non-IID skew, this indicates a hyperparameter misalignment (e.g. `reg_alpha` is poorly tuned) rather than a structural bug.
+- **FedDistill+ (Pure KD):** Telemetry records a 34100.5 MB footprint, which is slightly higher than FedAvg's footprint. This indicates the execution of the stronger FedDistill+ baseline, which shares both parameters and logit vectors [\cite{zhuDataFreeKnowledgeDistillation2021}](../../../../../fedmaq-literature/kg/papers/zhu-2021-fedgen.md). However, the accuracy is 32.94% at $\alpha=0.1$, performing worse than FedAvg. Since knowledge distillation is designed to mitigate non-IID skew, this indicates a hyperparameter misalignment (e.g. `reg_alpha` is poorly tuned) rather than a structural bug.
 
 ### Untested / Faulty Implementations
 
@@ -24,8 +24,8 @@ Based on the 40-round smoke test across severe ($\alpha=0.1$) and moderate ($\al
 
 ### Over-compressed Implementations (Need Tuning)
 
-- **FedKD (Hybrid Q+KD):** Test accuracy at 14.09% and 29.17% is substantially lower than expected. The $1000\times+$ communication reduction indicates the Singular Value Decomposition (SVD) threshold is over-compressing the model, deteriorating the gradient updates before transmission [\cite{wuCommunicationefficientFederatedLearning2022}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/wu-2022-fedkd.md).
-- **CFD (Hybrid Q+KD):** At $\alpha=0.1$, the 10.00% accuracy equates to random guessing. While the $14,000\times+$ communication reduction matches the literature [\cite{sattlerCFDCommunicationEfficientFederated2022}](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/sattler-2022-cfd.md), the collapsed accuracy indicates the soft-label logits are deteriorating due to overly aggressive quantization prior to reaching the server (needs higher `b_up`/`b_down` values).
+- **FedKD (Hybrid Q+KD):** Test accuracy at 14.09% and 29.17% is substantially lower than expected. The $1000\times+$ communication reduction indicates the Singular Value Decomposition (SVD) threshold is over-compressing the model, deteriorating the gradient updates before transmission [\cite{wuCommunicationefficientFederatedLearning2022}](../../../../../fedmaq-literature/kg/papers/wu-2022-fedkd.md).
+- **CFD (Hybrid Q+KD):** At $\alpha=0.1$, the 10.00% accuracy equates to random guessing. While the $14,000\times+$ communication reduction matches the literature [\cite{sattlerCFDCommunicationEfficientFederated2022}](../../../../../fedmaq-literature/kg/papers/sattler-2022-cfd.md), the collapsed accuracy indicates the soft-label logits are deteriorating due to overly aggressive quantization prior to reaching the server (needs higher `b_up`/`b_down` values).
 
 ---
 
@@ -56,25 +56,25 @@ These are defined globally in `conf/experiment/default.yaml` and form the founda
 
 Configured in their respective files in `conf/algorithm/`.
 
-#### FedProx ([fedprox.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedprox.yaml))
+#### FedProx ([fedprox.yaml](../../../../conf/algorithm/fedprox.yaml))
 
-- **Method Paper:** [Federated Optimization in Heterogeneous Networks (Li et al. 2020)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/li-2020-fedprox.md)
+- **Method Paper:** [Federated Optimization in Heterogeneous Networks (Li et al. 2020)](../../../../../fedmaq-literature/kg/papers/li-2020-fedprox.md)
 
 | Parameter Key  | Symbol | Codebase Default |  Tuning Status  | Recommended Value / Range | Description & Rationale                                                                                                                                                                                                 |
 | :------------- | :----: | :--------------: | :-------------: | :-----------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `algorithm.mu` | $\mu$  |      `0.01`      | **To Be Tuned** |   $\{0.01, 0.1, 1.0\}$    | Weight of proximal regularization term. Highly sensitive to heterogeneity: larger $\mu$ (e.g. 0.1 or 1.0) is needed to curb client drift under severe skew ($\alpha=0.1$), while too large values stall local training. |
 
-#### FedPAQ ([fedpaq.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedpaq.yaml))
+#### FedPAQ ([fedpaq.yaml](../../../../conf/algorithm/fedpaq.yaml))
 
-- **Method Paper:** [FedPAQ: A Communication-Efficient FL Method with Periodic Averaging & Quantization (Reisizadeh et al. 2020)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md)
+- **Method Paper:** [FedPAQ: A Communication-Efficient FL Method with Periodic Averaging & Quantization (Reisizadeh et al. 2020)](../../../../../fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md)
 
 | Parameter Key | Symbol | Codebase Default |         Tuning Status         | Recommended Value / Range | Description & Rationale                                                                                                                         |
 | :------------ | :----: | :--------------: | :---------------------------: | :-----------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `algorithm.q` |  $q$   |       `8`        | **Fixed to Baseline Default** |            `8`            | Bit-width for model delta quantization. Keeps quantization stable and comparable to other models without sweeping multiple discrete bit-widths. |
 
-#### DAdaQuant ([dadaquant.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/dadaquant.yaml))
+#### DAdaQuant ([dadaquant.yaml](../../../../conf/algorithm/dadaquant.yaml))
 
-- **Method Paper:** [DAdaQuant: Doubly-adaptive quantization for FL (Hönig et al. 2022)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/honig-2022-dadaquant.md)
+- **Method Paper:** [DAdaQuant: Doubly-adaptive quantization for FL (Hönig et al. 2022)](../../../../../fedmaq-literature/kg/papers/honig-2022-dadaquant.md)
 
 | Parameter Key     |  Symbol   | Codebase Default |           Tuning Status           | Recommended Value / Range | Description & Rationale                                               |
 | :---------------- | :-------: | :--------------: | :-------------------------------: | :-----------------------: | :-------------------------------------------------------------------- |
@@ -83,9 +83,9 @@ Configured in their respective files in `conf/algorithm/`.
 | `algorithm.psi`   |  $\psi$   |      `0.9`       | **Fixed to Paper Recommendation** |           `0.9`           | Smoothing weight for moving average of estimated global loss.         |
 | `algorithm.phi`   |  $\phi$   |       `5`        | **Fixed to Paper Recommendation** |            `5`            | Plateau lookback window (number of rounds before doubling bit-width). |
 
-#### FedMD ([fedmd.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedmd.yaml))
+#### FedMD ([fedmd.yaml](../../../../conf/algorithm/fedmd.yaml))
 
-- **Method Paper:** [FedMD: Heterogenous FL via Model Distillation (Li and Wang 2019)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/li-2019-fedmd.md)
+- **Method Paper:** [FedMD: Heterogenous FL via Model Distillation (Li and Wang 2019)](../../../../../fedmaq-literature/kg/papers/li-2019-fedmd.md)
 
 | Parameter Key                       | Symbol | Codebase Default |           Tuning Status           | Recommended Value / Range | Description & Rationale                                                                 |
 | :---------------------------------- | :----: | :--------------: | :-------------------------------: | :-----------------------: | :-------------------------------------------------------------------------------------- |
@@ -93,17 +93,17 @@ Configured in their respective files in `conf/algorithm/`.
 | `algorithm.private_pretrain_epochs` |   -    |       `10`       | **Fixed to Paper Recommendation** |           `10`            | Number of initial training epochs on local private data.                                |
 | `algorithm.public_epochs`           |   -    |       `5`        | **Fixed to Paper Recommendation** |            `5`            | Number of distillation (digest) epochs per round. Set to 5 to avoid extra tuning steps. |
 
-#### FedDistill+ ([feddistill.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/feddistill.yaml))
+#### FedDistill+ ([feddistill.yaml](../../../../conf/algorithm/feddistill.yaml))
 
-- **Method Paper:** [Data-Free KD for Heterogeneous FL (Zhu et al. 2021)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/zhu-2021-fedgen.md)
+- **Method Paper:** [Data-Free KD for Heterogeneous FL (Zhu et al. 2021)](../../../../../fedmaq-literature/kg/papers/zhu-2021-fedgen.md)
 
 | Parameter Key         |  Symbol  | Codebase Default |           Tuning Status           | Recommended Value / Range | Description & Rationale                                                                                                      |
 | :-------------------- | :------: | :--------------: | :-------------------------------: | :-----------------------: | :--------------------------------------------------------------------------------------------------------------------------- |
 | `algorithm.reg_alpha` | $\alpha$ |      `1.0`       | **Fixed to Paper Recommendation** |           `1.0`           | Regularization weight for the label-wise logit-distillation term. Fixed at 1.0 to reflect standard literature configuration. |
 
-#### CFD ([cfd.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/cfd.yaml))
+#### CFD ([cfd.yaml](../../../../conf/algorithm/cfd.yaml))
 
-- **Method Paper:** [CFD: Communication-Efficient Federated Distillation (Sattler et al. 2022)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/sattler-2022-cfd.md)
+- **Method Paper:** [CFD: Communication-Efficient Federated Distillation (Sattler et al. 2022)](../../../../../fedmaq-literature/kg/papers/sattler-2022-cfd.md)
 
 | Parameter Key                     |   Symbol   | Codebase Default |           Tuning Status           | Recommended Value / Range | Description & Rationale                                                                                                      |
 | :-------------------------------- | :--------: | :--------------: | :-------------------------------: | :-----------------------: | :--------------------------------------------------------------------------------------------------------------------------- |
@@ -114,9 +114,9 @@ Configured in their respective files in `conf/algorithm/`.
 | `algorithm.server_distill_epochs` |     -      |       `1`        | **Fixed to Paper Recommendation** |            `1`            | Server-side dual distillation epochs.                                                                                        |
 | `algorithm.temperature`           |    $T$     |      `1.0`       | **Fixed to Paper Recommendation** |           `1.0`           | Softmax temperature for logit generation.                                                                                    |
 
-#### FedKD ([fedkd.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedkd.yaml))
+#### FedKD ([fedkd.yaml](../../../../conf/algorithm/fedkd.yaml))
 
-- **Method Paper:** [Communication-efficient FL via knowledge distillation (Wu et al. 2022)](file:///C:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/wu-2022-fedkd.md)
+- **Method Paper:** [Communication-efficient FL via knowledge distillation (Wu et al. 2022)](../../../../../fedmaq-literature/kg/papers/wu-2022-fedkd.md)
 
 | Parameter Key               |   Symbol    | Codebase Default |           Tuning Status           | Recommended Value / Range | Description & Rationale                                                      |
 | :-------------------------- | :---------: | :--------------: | :-------------------------------: | :-----------------------: | :--------------------------------------------------------------------------- |
@@ -125,7 +125,7 @@ Configured in their respective files in `conf/algorithm/`.
 | `algorithm.temperature`     |     $T$     |      `2.0`       | **Fixed to Paper Recommendation** |           `2.0`           | Client-side mutual distillation temperature.                                 |
 | `algorithm.compute_penalty` |      -      |      `2.5`       |          **Fixed (Sim)**          |           `2.5`           | Simulated compute overhead factor representing local mentor+mentee training. |
 
-#### FedMAQ (Ours) ([fedmaq.yaml](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedmaq.yaml))
+#### FedMAQ (Ours) ([fedmaq.yaml](../../../../conf/algorithm/fedmaq.yaml))
 
 - **Specification:** `fedmaq-manuscript/chapter_3.tex` Sections 3.3, 3.5; `chapter_4.tex` Sections 4.2, 4.4.
 
@@ -146,7 +146,7 @@ Configured in their respective files in `conf/algorithm/`.
 
 ## 3. Verification Note
 
-Prior to running the full 516-run grid, future agents must systematically trace the parameter dependencies in [src/fedmaq/baselines/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/baselines/) and [src/fedmaq/core/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/) to ensure no auxiliary hyperparameters (e.g. specific optimizer momentum schedules or differential privacy noise parameters) are omitted from our test configurations.
+Prior to running the full 516-run grid, future agents must systematically trace the parameter dependencies in [src/fedmaq/baselines/](../../../../src/fedmaq/baselines/) and [src/fedmaq/core/](../../../../src/fedmaq/core/) to ensure no auxiliary hyperparameters (e.g. specific optimizer momentum schedules or differential privacy noise parameters) are omitted from our test configurations.
 
 ---
 

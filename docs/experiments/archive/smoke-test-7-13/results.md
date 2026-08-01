@@ -1,6 +1,6 @@
 # Walkthrough: Completed Smoke Test Sweeps (40 Rounds)
 
-We successfully updated [run_smoke_test.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/scripts/run_smoke_test.py) to support command line arguments for `--total_rounds` and `--heterogeneity`, and executed two complete sweeps of 40 rounds each under different data partitions:
+We successfully updated [run_smoke_test.py](../../../../scripts/run_smoke_test.py) to support command line arguments for `--total_rounds` and `--heterogeneity`, and executed two complete sweeps of 40 rounds each under different data partitions:
 
 1. **Dirichlet $\alpha=0.1$** (high statistical heterogeneity/non-IID skew)
 2. **Dirichlet $\alpha=1.0$** (moderate statistical heterogeneity)
@@ -11,7 +11,7 @@ Below is the summary of changes made and the performance of all benchmarked fede
 
 ## 1. Code Changes
 
-We wrapped the execution logic of [run_smoke_test.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/scripts/run_smoke_test.py) inside a [main()](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/scripts/run_smoke_test.py#L33) function, added `argparse` to handle `--total_rounds` and `--heterogeneity`, and formatted the file using Ruff.
+We wrapped the execution logic of [run_smoke_test.py](../../../../scripts/run_smoke_test.py) inside a [main()](../../../../scripts/run_smoke_test.py#L33) function, added `argparse` to handle `--total_rounds` and `--heterogeneity`, and formatted the file using Ruff.
 
 ---
 

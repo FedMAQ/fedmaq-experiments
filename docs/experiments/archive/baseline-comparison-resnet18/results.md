@@ -14,7 +14,7 @@ All runs use:
   - `entropy_weight=1.0`, `precision_weight=1.0`
   - `temperature=1.0`
 
-Logs: [multirun/2026-07-15/baseline-comparison-resnet18/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/multirun/2026-07-15/baseline-comparison-resnet18/)
+Logs: [multirun/2026-07-15/baseline-comparison-resnet18/](../../../../multirun/2026-07-15/baseline-comparison-resnet18/)
 
 ---
 

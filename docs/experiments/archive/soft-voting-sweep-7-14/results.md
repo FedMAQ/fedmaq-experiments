@@ -3,7 +3,7 @@
 Empirical results for the two-phase soft-voting sweep run on July 14, 2026.
 All runs use Formulation 3 (Gradient-Primary), `grad_norm_ema=true` (`β=0.7`), and the regime-best EMA setting from the prior EMA decay sweep: **`ema_decay=0.7` for α=0.1** and **`ema_decay=0.1` for α=1.0**.
 
-Logs: [multirun/2026-07-14/19-13-43-soft-voting-sweep/](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/multirun/2026-07-14/19-13-43-soft-voting-sweep/)
+Logs: [multirun/2026-07-14/19-13-43-soft-voting-sweep/](../../../../multirun/2026-07-14/19-13-43-soft-voting-sweep/)
 
 ---
 

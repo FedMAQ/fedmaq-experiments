@@ -1,6 +1,6 @@
 # Hardware & Telemetry Grounding Audit
 
-Critical review of [ADR-0002](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md) and [Decision 36](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/docs/DECISIONS.md#L344-L356), plus a scan for other non-hyperparameter experimental values needing finalization.
+Critical review of [ADR-0002](../../../../fedmaq-experiments/docs/adr/0002-hardware-telemetry-grounding.md) and [Decision 36](../../../../fedmaq-experiments/docs/DECISIONS.md#L344-L356), plus a scan for other non-hyperparameter experimental values needing finalization.
 
 ---
 
@@ -79,7 +79,7 @@ This is **plausible** for a small model doing KD on a datacenter GPU (KD involve
 
 ### Server Compute Context: How It's Used
 
-Looking at [kd_utils.py](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L104-L118):
+Looking at [kd_utils.py](../../../../fedmaq-experiments/src/fedmaq/core/kd_utils.py#L104-L118):
 
 ```python
 def kd_server_sim_time(num_public, kd_epochs, num_teachers, server_compute_speed):
@@ -113,7 +113,7 @@ This is your **experiment execution platform** (the machine that actually runs t
 
 ## 5. Other Non-Hyperparameter Experimental Values — Finalization Audit
 
-Beyond compute/bandwidth/memory, here are the structural experiment parameters from [default.yaml](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/conf/experiment/default.yaml) and the formal plan:
+Beyond compute/bandwidth/memory, here are the structural experiment parameters from [default.yaml](../../../../fedmaq-experiments/conf/experiment/default.yaml) and the formal plan:
 
 | Parameter                                   | Current Value              | Status                                 | Notes                                     |
 | :------------------------------------------ | :------------------------- | :------------------------------------- | :---------------------------------------- |
@@ -135,7 +135,7 @@ Beyond compute/bandwidth/memory, here are the structural experiment parameters f
 
 #### A. `q_min=1` / `q_max=16` Interpolation Bounds
 
-These bound the _soft quality target_ interpolation range — the Tier-2 formulations interpolate $\hat{q}$ between `q_min` and `q_max`. Currently set to 1 and 16 in [fedmaq.yaml](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/conf/algorithm/fedmaq.yaml#L3-L4).
+These bound the _soft quality target_ interpolation range — the Tier-2 formulations interpolate $\hat{q}$ between `q_min` and `q_max`. Currently set to 1 and 16 in [fedmaq.yaml](../../../../fedmaq-experiments/conf/algorithm/fedmaq.yaml#L3-L4).
 
 - **Why 16 and not 32?** A client with 16GB RAM gets $Q_k^{\max} = \lfloor 16384/512 \rfloor = 32$, but the interpolation caps at 16-bit. This means the Tier-2 soft target never _requests_ 32-bit — only Tier-1 can yield 32-bit (when $Q_k^{\max} = 32$ and $\hat{q} \ge 32$, which it can't be since $q_{\max}=16$). In effect, **no client ever transmits at FP32 precision** even if their RAM allows it.
 - **Is this intentional?** Likely yes (FP16→FP32 gains are marginal for model accuracy in FL, and FP32 doubles comm cost for no benefit), but it should be documented as a design choice.
@@ -156,11 +156,11 @@ This means **8GB and 16GB clients are functionally identical** in terms of achie
 
 #### C. Datasets — CIFAR-100 Config
 
-CIFAR-100 is in your formal grid (Decision 9) but I only see [cifar10.yaml](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/conf/dataset/cifar10.yaml) in `conf/dataset/`. You'll need a `cifar100.yaml` with `num_classes: 100`. May already exist — just flagging.
+CIFAR-100 is in your formal grid (Decision 9) but I only see [cifar10.yaml](../../../../fedmaq-experiments/conf/dataset/cifar10.yaml) in `conf/dataset/`. You'll need a `cifar100.yaml` with `num_classes: 100`. May already exist — just flagging.
 
 #### D. Learning Rate / Optimizer — Not Explored, But Standard
 
-`lr=0.01`, `momentum=0.9`, `weight_decay=1e-4`, `lr_decay=0.99` are in [default.yaml](file:///c:/Users/Quirora/Documents/GitHub/BSMSCS Thesis/fedmaq-experiments/conf/experiment/default.yaml) and are standard FL values (McMahan et al., 2017 defaults). These are shared across all algorithms (iso-training-regime, per Decision 7's parity principle). No finalization needed, but confirm they're not in the baseline tuning grid — they shouldn't be.
+`lr=0.01`, `momentum=0.9`, `weight_decay=1e-4`, `lr_decay=0.99` are in [default.yaml](../../../../fedmaq-experiments/conf/experiment/default.yaml) and are standard FL values (McMahan et al., 2017 defaults). These are shared across all algorithms (iso-training-regime, per Decision 7's parity principle). No finalization needed, but confirm they're not in the baseline tuning grid — they shouldn't be.
 
 ---
 

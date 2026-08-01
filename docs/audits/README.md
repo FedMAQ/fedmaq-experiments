@@ -1,6 +1,6 @@
 # Algorithm & Code Audits
 
-**Last updated**: 2026-07-22
+**Last updated**: 2026-08-01
 
 All foundational audits conducted on the FedMAQ codebase and algorithm formulation have been completed. All audit findings (F1–F18) and code craftsmanship items have been resolved, dropped, or logged into canonical decisions.
 

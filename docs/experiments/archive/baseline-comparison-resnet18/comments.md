@@ -1,6 +1,6 @@
 # ResNet18 Baseline Comparison: Empirical Analysis & Next Steps
 
-Detailed analysis of the full-sized **FedMAQ** (ResNet18GN) baseline sweeps completed on July 15, 2026. Cross-referenced with [results.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/experiments/baseline-comparison-resnet18/results.md).
+Detailed analysis of the full-sized **FedMAQ** (ResNet18GN) baseline sweeps completed on July 15, 2026. Cross-referenced with [results.md](../../../../docs/experiments/baseline-comparison-resnet18/results.md).
 
 ---
 
@@ -35,5 +35,5 @@ Under severe statistical skew ($\alpha=0.1$):
 
 To address the local overfitting and client drift bottlenecks on larger models like ResNet18GN, we need client-side stabilization:
 
-- **Client-Side KD Regularization:** We will implement local KL-divergence matching during client epochs (leveraging global student logits as local targets) as outlined in [client-regularization.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/client-regularization.md), referencing the survey by **Salman et al. (2025)**.
+- **Client-Side KD Regularization:** We will implement local KL-divergence matching during client epochs (leveraging global student logits as local targets) as outlined in [client-regularization.md](../../../../docs/plans/client-regularization.md), referencing the survey by **Salman et al. (2025)**.
 - **Parameter-Space Regularization:** We will also evaluate enabling parameter-space regularization (FedProx's proximal term) in combination with FedMAQ to damp extreme quantization/heterogeneity noise.

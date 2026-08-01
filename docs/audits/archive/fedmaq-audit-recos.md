@@ -2,18 +2,18 @@
 
 **Last updated**: 2026-07-16
 
-Cross-referencing every point in [fedmaq-audit.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/audits/fedmaq-audit.md) and [HANDOFF.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md), plus additional findings from the codebase.
+Cross-referencing every point in [fedmaq-audit.md](../../../docs/audits/fedmaq-audit.md) and [HANDOFF.md](../../../HANDOFF.md), plus additional findings from the codebase.
 
 > [!NOTE]
-> Findings are architecture-independent (math/logic audit). Occurrences of ResNet18GN below are illustrative examples, not deprecated results — the MobileNetV2GN switch (see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)) does not invalidate these findings.
+> Findings are architecture-independent (math/logic audit). Occurrences of ResNet18GN below are illustrative examples, not deprecated results — the MobileNetV2GN switch (see [docs/DECISIONS.md](../../../docs/DECISIONS.md)) does not invalidate these findings.
 
 ---
 
 ## 1. Architecture Confounder — Switch to Iso-Architecture ✅ DONE
 
-> **Verdict**: ✅ **Applied.** Originally recommended switching FedMAQ clients to ResNet18GN; the project instead adopted **MobileNetV2GN** as the iso-architecture for all algorithms (edge-realism rationale, see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md) Decision 1). The underlying diagnosis below is still correct and explains why the change was made — only the target architecture differs from what's shown here.
+> **Verdict**: ✅ **Applied.** Originally recommended switching FedMAQ clients to ResNet18GN; the project instead adopted **MobileNetV2GN** as the iso-architecture for all algorithms (edge-realism rationale, see [docs/DECISIONS.md](../../../docs/DECISIONS.md) Decision 1). The underlying diagnosis below is still correct and explains why the change was made — only the target architecture differs from what's shown here.
 
-The audit correctly identified that FedMAQ clients originally trained **SimpleCNN** (~2.16M params) while baselines trained **ResNet18GN** (~11.17M params), confounding comm-reduction numbers with model-size reduction, not purely quantization. Current code (`get_client_model` in [models.py](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/models.py#L380-L388)) now routes `fedmaq` through `get_model()` (default `mobilenetv2gn`), same as all baselines — only `fedkd` and `fedmaq_lite` still use the smaller KD-student path. This makes FedMAQ clients train **the same MobileNetV2GN** as FedAvg/FedProx/etc., turning server-side KD into **self-distillation** (MobileNetV2GN → MobileNetV2GN).
+The audit correctly identified that FedMAQ clients originally trained **SimpleCNN** (~2.16M params) while baselines trained **ResNet18GN** (~11.17M params), confounding comm-reduction numbers with model-size reduction, not purely quantization. Current code (`get_client_model` in [models.py](../../../src/fedmaq/core/models.py#L380-L388)) now routes `fedmaq` through `get_model()` (default `mobilenetv2gn`), same as all baselines — only `fedkd` and `fedmaq_lite` still use the smaller KD-student path. This makes FedMAQ clients train **the same MobileNetV2GN** as FedAvg/FedProx/etc., turning server-side KD into **self-distillation** (MobileNetV2GN → MobileNetV2GN).
 
 ### Impact on Thesis Narrative
 
@@ -38,7 +38,7 @@ The audit's own analysis concludes the ordering is _actually correct_. The EMA a
 
 ### Recommendation
 
-Add a **formal comment block** at [fedmaq.py:L316](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L316) explaining this. Prepare a 2-paragraph defense for the thesis Chapter 4 discussion section. The key argument: "EMA is applied to the _output_ of the full aggregation+KD pipeline, not _within_ it. This is equivalent to Polyak averaging of the server model trajectory, a well-established technique (Tarvainen & Valpola, 2017)."
+Add a **formal comment block** at [fedmaq.py:L316](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L316) explaining this. Prepare a 2-paragraph defense for the thesis Chapter 4 discussion section. The key argument: "EMA is applied to the _output_ of the full aggregation+KD pipeline, not _within_ it. This is equivalent to Polyak averaging of the server model trajectory, a well-established technique (Tarvainen & Valpola, 2017)."
 
 ---
 
@@ -147,21 +147,21 @@ Add a single-line note in the thesis acknowledging the assumption: "FedMAQ assum
 
 > **Severity**: ⚠️ Medium
 
-[fedmaq.yaml:L45](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/conf/algorithm/fedmaq.yaml#L45) sets `ema_decay: 0.99` but the EMA sweep found that $\beta = 0.99$ was never tested (sweep range was 0.1–0.9) and the best values are $0.7$ and $0.1$. The default of `0.99` would produce very heavy smoothing, likely introducing severe convergence lag.
+[fedmaq.yaml:L45](../../../conf/algorithm/fedmaq.yaml#L45) sets `ema_decay: 0.99` but the EMA sweep found that $\beta = 0.99$ was never tested (sweep range was 0.1–0.9) and the best values are $0.7$ and $0.1$. The default of `0.99` would produce very heavy smoothing, likely introducing severe convergence lag.
 
 **Recommendation**: Update `fedmaq.yaml` default to `ema_decay: 0.5` (neutral compromise) or `ema_decay: 0.7` (best for the harder/more interesting severe-skew regime).
 
 ### 10.2 `get_kd_student_model` Import Cleanup — ✅ Verify Applied
 
-Recommendation 1's switch implies `fedmaq.py` no longer needs `get_kd_student_model` for its main client/grad-norm-probe/KD-factory paths. Spot-check [fedmaq.py:L26](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L26) for a dead import if not already cleaned up.
+Recommendation 1's switch implies `fedmaq.py` no longer needs `get_kd_student_model` for its main client/grad-norm-probe/KD-factory paths. Spot-check [fedmaq.py:L26](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L26) for a dead import if not already cleaned up.
 
 ### 10.3 Evaluation Uses `get_client_model` — Correct After Switch
 
-[simulation.py:L179](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/simulation.py#L179) uses `get_client_model(alg_name, ...)` for the `evaluate_fn`. After the switch, `get_client_model("fedmaq", "cifar10", 10)` correctly returns `MobileNetV2GN`, so the evaluation model matches the aggregated parameters. **No change needed here** — it auto-propagates.
+[simulation.py:L179](../../../src/fedmaq/simulation.py#L179) uses `get_client_model(alg_name, ...)` for the `evaluate_fn`. After the switch, `get_client_model("fedmaq", "cifar10", 10)` correctly returns `MobileNetV2GN`, so the evaluation model matches the aggregated parameters. **No change needed here** — it auto-propagates.
 
 ### 10.4 `_grad_norm_ema` Unbounded Growth
 
-[fedmaq.py:L136](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L136): `self._grad_norm_ema: dict[int, float] = {}` grows monotonically — every client ever sampled gets a persistent entry. With $K = 100$ clients and a typical participation rate of 10%, this dict will have at most 100 entries, so it's not a problem at thesis scale. But for production use with $K \gg 1000$, consider an LRU eviction policy.
+[fedmaq.py:L136](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L136): `self._grad_norm_ema: dict[int, float] = {}` grows monotonically — every client ever sampled gets a persistent entry. With $K = 100$ clients and a typical participation rate of 10%, this dict will have at most 100 entries, so it's not a problem at thesis scale. But for production use with $K \gg 1000$, consider an LRU eviction policy.
 
 **Recommendation**: No action for thesis. Add a brief "scalability note" comment in the code.
 
@@ -190,7 +190,7 @@ Recommendation 1's switch implies `fedmaq.py` no longer needs `get_kd_student_mo
 ## Recommended Execution Order
 
 > [!NOTE]
-> Superseded by [HANDOFF.md §5](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md) and [docs/plans/formal-experiment-plan.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/plans/formal-experiment-plan.md) as the canonical next-steps list (2026-07-16 grilling). The list below is retained for historical context on how items 1-6 were originally sequenced; items 1-6 are done. See HANDOFF §5 for current priorities on MobileNetV2GN.
+> Superseded by [HANDOFF.md §5](../../../HANDOFF.md) and [docs/plans/formal-experiment-plan.md](../../../docs/plans/formal-experiment-plan.md) as the canonical next-steps list (2026-07-16 grilling). The list below is retained for historical context on how items 1-6 were originally sequenced; items 1-6 are done. See HANDOFF §5 for current priorities on MobileNetV2GN.
 
 1. ~~Fix the config default (`ema_decay: 0.99` → `0.5`)~~ — done.
 2. ~~Implement iso-architecture switch (Recommendation 1)~~ — done, MobileNetV2GN.

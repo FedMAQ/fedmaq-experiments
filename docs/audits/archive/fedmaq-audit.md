@@ -2,10 +2,10 @@
 
 **Last updated**: 2026-07-16
 
-Full audit of the original and improved FedMAQ algorithm covering mathematical grounding, implementation correctness, literature defensibility, and potential thesis-defense vulnerabilities. Grounded in the [fedmaq-literature KG](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/) and the [fedmaq-experiments](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/) codebase.
+Full audit of the original and improved FedMAQ algorithm covering mathematical grounding, implementation correctness, literature defensibility, and potential thesis-defense vulnerabilities. Grounded in the [fedmaq-literature KG](../../../../fedmaq-literature/kg/) and the [fedmaq-experiments](../../../) codebase.
 
 > [!NOTE]
-> Findings are architecture-independent (math/logic audit). Occurrences of ResNet18GN below are illustrative examples, not deprecated results — the MobileNetV2GN switch (see [docs/DECISIONS.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/docs/DECISIONS.md)) does not invalidate these findings.
+> Findings are architecture-independent (math/logic audit). Occurrences of ResNet18GN below are illustrative examples, not deprecated results — the MobileNetV2GN switch (see [docs/DECISIONS.md](../../../docs/DECISIONS.md)) does not invalidate these findings.
 
 ---
 
@@ -33,7 +33,7 @@ Full audit of the original and improved FedMAQ algorithm covering mathematical g
 
 ### 1.1 Tier 1 — Hard Memory Cap ✅
 
-**Implementation**: [fedmaq.py:L81](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L81)
+**Implementation**: [fedmaq.py:L81](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L81)
 
 ```python
 q_k_max_raw = max(1.0, np.floor(c_k / c_unit))
@@ -48,7 +48,7 @@ q_k_max_raw = max(1.0, np.floor(c_k / c_unit))
 |    8192    |             16              | Raspberry Pi 4/5 8GB |
 |   16384    |             32              | Jetson Orin NX 16GB  |
 
-**Literature grounding**: Directly adapts DynFed's Eq. 2 ($q_k = \min(c_{max}, \lfloor c_k / c_p \rfloor)$) from [He et al. 2025](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/he-2025-dynfed.md#L44-L47). FedMAQ applies `floor()` rather than `min(c_max, ...)` because the permissible set $\mathcal{Q}$ already provides an implicit upper bound at 32. This is equivalent and defensible.
+**Literature grounding**: Directly adapts DynFed's Eq. 2 ($q_k = \min(c_{max}, \lfloor c_k / c_p \rfloor)$) from [He et al. 2025](../../../../fedmaq-literature/kg/papers/he-2025-dynfed.md#L44-L47). FedMAQ applies `floor()` rather than `min(c_max, ...)` because the permissible set $\mathcal{Q}$ already provides an implicit upper bound at 32. This is equivalent and defensible.
 
 **Defense note**: A reviewer might ask why $c_{unit} = 512$ MB per bit. This is a calibration constant, not a fundamental parameter — it simply sets the mapping between real device memory and bit-width. The choice makes the 2GB→4-bit / 8GB→16-bit / 16GB→32-bit mapping align with practical edge hardware, which is a reasonable engineering choice. If challenged, note that $c_{unit}$ doesn't affect the algorithm's mathematical properties — only the range of bit-widths assigned to a given memory profile.
 
@@ -56,7 +56,7 @@ q_k_max_raw = max(1.0, np.floor(c_k / c_unit))
 
 ### 1.2 Tier 2 — Soft Quality Target (Formulation 3) ✅
 
-**Implementation**: [fedmaq.py:L97-L100](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L97-L100)
+**Implementation**: [fedmaq.py:L97-L100](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L97-L100)
 
 ```python
 # Alternative 3: Gradient-Primary, Data-Modulated
@@ -75,7 +75,7 @@ The modulator is well-behaved:
 
 **Literature grounding**: This is FedMAQ's primary novel contribution. DynFed's Eq. 4 uses a recursive inertial tracker $b_i^{(t)} = b_i^{(t-1)} + \eta \cdot (\ldots)$, which introduces history dependence and an additional learning rate hyperparameter. FedMAQ replaces this with a direct per-round measurement, removing the path-dependent state. The data-richness signal $\tilde{n}_k$ is entirely absent from DynFed and is FedMAQ's unique addition.
 
-**Defensibility**: The formulation study ([pilot results](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/pilot-formulation-study-7-14/results.md)) empirically validates Formulation 3 as the winner across both skew regimes. The key defense argument is that gradient-primary logic with data modulation is more robust than alternatives because:
+**Defensibility**: The formulation study ([pilot results](../../../experiments/pilot-formulation-study-7-14/results.md)) empirically validates Formulation 3 as the winner across both skew regimes. The key defense argument is that gradient-primary logic with data modulation is more robust than alternatives because:
 
 1. It avoids the catastrophic failure mode of Formulation 4 (threshold-based).
 2. It achieves lower communication than Formulation 0 (resource-only) with equal or better accuracy.
@@ -85,7 +85,7 @@ The modulator is well-behaved:
 
 ### 1.3 Two-Tier Combination ✅
 
-**Implementation**: [fedmaq.py:L114-L119](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L114-L119)
+**Implementation**: [fedmaq.py:L114-L119](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L114-L119)
 
 ```python
 q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
@@ -98,16 +98,16 @@ return _snap_floor(min(q_k_max_raw, q_hat), bit_widths)
 2. Take $\min(Q_k^{max}, \hat{q})$ (Tier-1 hard cap wins if memory is limited).
 3. Floor into $\mathcal{Q}$ via `_snap_floor`.
 
-The `_snap_floor` function ([fedmaq.py:L47-L50](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L47-L50)) correctly returns the largest permissible bit-width ≤ the combined value, falling back to `min(bit_widths) = 1` if no eligible value exists.
+The `_snap_floor` function ([fedmaq.py:L47-L50](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L47-L50)) correctly returns the largest permissible bit-width ≤ the combined value, falling back to `min(bit_widths) = 1` if no eligible value exists.
 
 > [!IMPORTANT]
-> The comment at [fedmaq.py:L117-L118](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L117-L118) states "Memory-limited clients may receive fewer bits than $q_{min}$ — intentional, the physical bound wins over the soft quality target." This is a correct design choice — a 2GB device physically cannot support more than 4 bits, regardless of what the soft quality target says. This is the key architectural distinction between Tier 1 and Tier 2 and should be highlighted in the thesis as a safety property.
+> The comment at [fedmaq.py:L117-L118](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L117-L118) states "Memory-limited clients may receive fewer bits than $q_{min}$ — intentional, the physical bound wins over the soft quality target." This is a correct design choice — a 2GB device physically cannot support more than 4 bits, regardless of what the soft quality target says. This is the key architectural distinction between Tier 1 and Tier 2 and should be highlighted in the thesis as a safety property.
 
 ---
 
 ### 1.4 Gradient Norm Computation ⚠️
 
-**Implementation**: [fedmaq.py:L180-L217](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L180-L217)
+**Implementation**: [fedmaq.py:L180-L217](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L180-L217)
 
 The server computes gradient norms for each sampled client by:
 
@@ -117,7 +117,7 @@ The server computes gradient norms for each sampled client by:
 
 **Subtle design choice**: The gradient norm is computed using the **global model evaluated on client-local data**, not the client's locally-trained model. This is a deliberate choice documented in the code — it measures "how much this client's data would change the global model" rather than "how much the client has already changed." This is actually more informative for bit-width allocation because it captures the _current_ gradient magnitude of the client's data partition relative to the global model's state, which is a better proxy for how much information that client's update carries.
 
-**Probe-model note**: The code at [fedmaq.py:L170-L173](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L170-L173) selects the grad-norm probe architecture by variant: `fedmaq_lite` uses `get_kd_student_model` (the KD student — TinyCNN/SimpleCNN), while plain `fedmaq` uses the full `get_model` (MobileNetV2GN on CIFAR). Each variant probes the same architecture its clients train, so the loaded global parameters always match the probe model — no zeroed-norm mismatch.
+**Probe-model note**: The code at [fedmaq.py:L170-L173](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L170-L173) selects the grad-norm probe architecture by variant: `fedmaq_lite` uses `get_kd_student_model` (the KD student — TinyCNN/SimpleCNN), while plain `fedmaq` uses the full `get_model` (MobileNetV2GN on CIFAR). Each variant probes the same architecture its clients train, so the loaded global parameters always match the probe model — no zeroed-norm mismatch.
 
 **Potential defense question**: "Why compute gradient norms server-side rather than having clients report them?"
 
@@ -125,7 +125,7 @@ The server computes gradient norms for each sampled client by:
 
 **Potential defense question**: "Single-batch gradient norms are noisy — how do you handle this?"
 
-- **Answer**: This is exactly what Priority 3 (gradient norm smoothing) addresses. The per-client EMA at [fedmaq.py:L219-L230](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L219-L230) with $\beta=0.7$ smooths out mini-batch sampling noise across rounds.
+- **Answer**: This is exactly what Priority 3 (gradient norm smoothing) addresses. The per-client EMA at [fedmaq.py:L219-L230](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L219-L230) with $\beta=0.7$ smooths out mini-batch sampling noise across rounds.
 
 ---
 
@@ -133,7 +133,7 @@ The server computes gradient norms for each sampled client by:
 
 ### 2.1 Priority 1 — Quantization-Aware Soft-Voting ⚠️
 
-**Implementation**: [kd_utils.py:L62-L86](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L62-L86)
+**Implementation**: [kd_utils.py:L62-L86](../../../src/fedmaq/core/kd_utils.py#L62-L86)
 
 ```python
 entropy_weights = torch.exp(-entropy_weight_scale * entropy)  # [T, B]
@@ -156,7 +156,7 @@ The normalization over teachers per sample (dim=0) is correct. The $\epsilon = 1
 - The weights $W_k(x)$ are non-negative and sum to 1 over $k$ (teachers).
 - A convex combination of probability distributions is a probability distribution.
 
-**Literature grounding**: Per-sample confidence gating via entropy is used in DynFed's "comprehensive score" (Eq. 7), though DynFed applies it for _teacher selection_ (hard gate), not weighting (soft gate). FedMAQ's soft-voting is more principled because it preserves all teachers' contributions while downweighting unreliable ones — avoiding the information-theoretic waste of hard exclusion. The precision weighting $(q_k / q_{max})^{\gamma_p}$ is novel and directly addresses the gap identified in [Gap: heterogeneity-aware quantization](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/gaps/heterogeneity-aware-quantization.md).
+**Literature grounding**: Per-sample confidence gating via entropy is used in DynFed's "comprehensive score" (Eq. 7), though DynFed applies it for _teacher selection_ (hard gate), not weighting (soft gate). FedMAQ's soft-voting is more principled because it preserves all teachers' contributions while downweighting unreliable ones — avoiding the information-theoretic waste of hard exclusion. The precision weighting $(q_k / q_{max})^{\gamma_p}$ is novel and directly addresses the gap identified in [Gap: heterogeneity-aware quantization](../../../../fedmaq-literature/kg/gaps/heterogeneity-aware-quantization.md).
 
 > [!WARNING]
 > **Potential vulnerability — Soft-voting normalizing to a mixture, not a single distribution**: The blended output $P_{ensemble}(x)$ may have higher entropy than any individual teacher's prediction, because mixing distributions increases entropy (Jensen's inequality on $H$). Under extreme heterogeneity where teachers violently disagree, the blended target could be near-uniform, providing a weak learning signal. This is the "ensemble softening" effect.
@@ -164,13 +164,13 @@ The normalization over teachers per sample (dim=0) is correct. The $\epsilon = 1
 > **Defense**: Empirically, the EMA sweep shows FedMAQ already outperforms all baselines under severe skew. The soft-voting is not the sole mechanism — the student EMA (Priority 2) provides an independent stabilization path. If pressed, argue that the entropy weighting _precisely_ mitigates the ensemble softening effect by suppressing uncertain teachers before the mix, keeping the resulting distribution peaky.
 
 > [!NOTE]
-> **Implementation detail worth noting**: The `q_max` used in precision weighting ([kd_utils.py:L71](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L71)) is computed as `max(teacher_bit_widths)` — the max among _participating_ teachers, not the global config `q_max`. This means the precision weight is relative to the best-precision client in the current round. This is actually correct — it normalizes precision weights relative to the round's context. If the config `q_max=16` were used instead, a round where all clients have $q \le 4$ would see all precision weights $\le 0.25$, wasting the dynamic range. Using the round-local max is more principled.
+> **Implementation detail worth noting**: The `q_max` used in precision weighting ([kd_utils.py:L71](../../../src/fedmaq/core/kd_utils.py#L71)) is computed as `max(teacher_bit_widths)` — the max among _participating_ teachers, not the global config `q_max`. This means the precision weight is relative to the best-precision client in the current round. This is actually correct — it normalizes precision weights relative to the round's context. If the config `q_max=16` were used instead, a round where all clients have $q \le 4$ would see all precision weights $\le 0.25$, wasting the dynamic range. Using the round-local max is more principled.
 
 ---
 
 ### 2.2 Priority 2 — EMA Student Model ⚠️
 
-**Implementation**: [fedmaq.py:L316-L328](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L316-L328)
+**Implementation**: [fedmaq.py:L316-L328](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L316-L328)
 
 ```python
 if aggregated_parameters is not None and alg_cfg.get("ema_student", False):
@@ -199,7 +199,7 @@ This is standard Polyak averaging, well-established in optimization theory. The 
 > 2. KD refines $\theta_{agg}^{(t)}$ using the teacher ensemble → $\theta_{KD}^{(t)}$
 > 3. EMA blends: $\theta_{EMA}^{(t)} = \beta \cdot \theta_{EMA}^{(t-1)} + (1-\beta) \cdot \theta_{KD}^{(t)}$
 >
-> The EMA output $\theta_{EMA}^{(t)}$ is then sent to clients in the _next_ round. But when the KD step in round $t+1$ starts, it initializes the student from the FedAvg-aggregated parameters (step 1), **not** from $\theta_{EMA}^{(t)}$. This is because the KD student is initialized from `aggregated_parameters` at [fedmaq.py:L303-L304](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L303-L304), which is the output of `super().aggregate_fit()` — i.e., the raw FedAvg aggregation of client updates that were trained starting from $\theta_{EMA}^{(t-1)}$.
+> The EMA output $\theta_{EMA}^{(t)}$ is then sent to clients in the _next_ round. But when the KD step in round $t+1$ starts, it initializes the student from the FedAvg-aggregated parameters (step 1), **not** from $\theta_{EMA}^{(t)}$. This is because the KD student is initialized from `aggregated_parameters` at [fedmaq.py:L303-L304](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L303-L304), which is the output of `super().aggregate_fit()` — i.e., the raw FedAvg aggregation of client updates that were trained starting from $\theta_{EMA}^{(t-1)}$.
 >
 > **This is actually correct behavior**, but the reasoning is subtle and worth articulating for defense:
 >
@@ -213,7 +213,7 @@ This is standard Polyak averaging, well-established in optimization theory. The 
 
 **Literature grounding**: Polyak averaging / EMA of model parameters is standard in deep learning (Kingma & Ba 2014 — Adam, Tarvainen & Valpola 2017 — Mean Teacher). Its application to server-side FL models is less common but has precedent in FedProx's analysis where parameter-space regularization is discussed. The key insight — that EMA stabilizes late-round convergence under noisy distillation — is empirically validated by the sweep results.
 
-**Empirical validation**: The [EMA decay sweep](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/ema-decay-sweep-7-14/results.md) shows a clear heterogeneity-dependent optimal:
+**Empirical validation**: The [EMA decay sweep](../../../experiments/ema-decay-sweep-7-14/results.md) shows a clear heterogeneity-dependent optimal:
 
 - $\alpha=0.1$: $\beta=0.7$ best (52.51% vs 40.01% at $\beta=0.1$) — +12.5pp from EMA alone.
 - $\alpha=1.0$: $\beta=0.1$ best (60.62% vs 57.15% at $\beta=0.9$) — moderate EMA helps, heavy EMA hurts.
@@ -224,7 +224,7 @@ The inverse relationship between optimal EMA strength and data homogeneity is we
 
 ### 2.3 Priority 3 — Gradient Norm Smoothing ✅
 
-**Implementation**: [fedmaq.py:L219-L230](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L219-L230)
+**Implementation**: [fedmaq.py:L219-L230](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L219-L230)
 
 ```python
 if alg_cfg.get("grad_norm_ema", False):
@@ -252,7 +252,7 @@ if alg_cfg.get("grad_norm_ema", False):
 
 ### 3.1 KD Loss Function ✅
 
-**Implementation**: [kd_utils.py:L46](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L46) and [kd_utils.py:L95](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L95)
+**Implementation**: [kd_utils.py:L46](../../../src/fedmaq/core/kd_utils.py#L46) and [kd_utils.py:L95](../../../src/fedmaq/core/kd_utils.py#L95)
 
 ```python
 kl_criterion = nn.KLDivLoss(reduction="batchmean")
@@ -262,7 +262,7 @@ loss = kl_criterion(student_log_soft, teacher_soft_preds) * (temperature**2)
 **Mathematical correctness**: PyTorch's `KLDivLoss` expects log-probabilities for the first argument and probabilities for the second. The code correctly passes `F.log_softmax(student_logits / temperature, dim=1)` as the first argument and the teacher ensemble's soft probabilities (output of softmax) as the second. The $T^2$ scaling is the standard Hinton et al. (2015) gradient-magnitude correction for temperature-scaled distillation.
 
 > [!NOTE]
-> **$T=1.0$ is non-standard but defensible**: Most KD literature uses $T > 1$ (typically $T \in [2, 20]$) to soften the teacher's output distribution and reveal inter-class similarities ([Hinton 2015](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/hinton-2015-distillation.md)). FedMAQ uses $T=1.0$, which means no additional softening beyond the natural softmax output.
+> **$T=1.0$ is non-standard but defensible**: Most KD literature uses $T > 1$ (typically $T \in [2, 20]$) to soften the teacher's output distribution and reveal inter-class similarities ([Hinton 2015](../../../../fedmaq-literature/kg/papers/hinton-2015-distillation.md)). FedMAQ uses $T=1.0$, which means no additional softening beyond the natural softmax output.
 >
 > **Defense**: In FedMAQ's context, the teachers are already _quantized_ models with lower-precision weights. Their logit outputs are inherently noisier and less peaked than a full-precision teacher's would be. Applying $T > 1$ would further flatten already-noisy distributions, potentially degrading the distillation signal. The choice $T=1.0$ preserves whatever confidence structure the quantized teachers retain. Additionally, at $T=1.0$ the $T^2$ multiplier is 1, making the KD loss and the standard CE loss on the same scale.
 >
@@ -272,12 +272,12 @@ loss = kl_criterion(student_log_soft, teacher_soft_preds) * (temperature**2)
 
 The full pipeline per round:
 
-1. **FedAvg weighted aggregation** → warm-start global model ([strategy.py:L204](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy.py#L204))
-2. **Teacher ensemble loading** → each client's returned model ([kd_utils.py:L149-L161](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L149-L161))
-3. **Server-side KD** → refine student from warm-start using ensemble labels ([kd_utils.py:L168-L180](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/kd_utils.py#L168-L180))
-4. **Student EMA** → temporal smoothing of KD output ([fedmaq.py:L316-L328](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L316-L328))
+1. **FedAvg weighted aggregation** → warm-start global model ([strategy.py:L204](../../../src/fedmaq/core/strategy.py#L204))
+2. **Teacher ensemble loading** → each client's returned model ([kd_utils.py:L149-L161](../../../src/fedmaq/core/kd_utils.py#L149-L161))
+3. **Server-side KD** → refine student from warm-start using ensemble labels ([kd_utils.py:L168-L180](../../../src/fedmaq/core/kd_utils.py#L168-L180))
+4. **Student EMA** → temporal smoothing of KD output ([fedmaq.py:L316-L328](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L316-L328))
 
-This ordering is correct. The FedAvg step first cancels the zero-mean quantization noise (variance ∝ $1/K_{active}$), then KD addresses the non-IID drift that parameter averaging leaves behind. The KG explicitly notes this: "FedAvg-style parameter averaging [...] this stage, not distillation, attenuates the zero-mean quantization noise" ([fedmaq.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/methods/fedmaq.md#L55-L57)).
+This ordering is correct. The FedAvg step first cancels the zero-mean quantization noise (variance ∝ $1/K_{active}$), then KD addresses the non-IID drift that parameter averaging leaves behind. The KG explicitly notes this: "FedAvg-style parameter averaging [...] this stage, not distillation, attenuates the zero-mean quantization noise" ([fedmaq.md](../../../../fedmaq-literature/kg/methods/fedmaq.md#L55-L57)).
 
 ---
 
@@ -285,7 +285,7 @@ This ordering is correct. The FedAvg step first cancels the zero-mean quantizati
 
 ### 4.1 FedPAQ Symmetric Quantizer ✅
 
-**Implementation**: [quantization.py:L54-L102](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/baselines/quantization.py#L54-L102)
+**Implementation**: [quantization.py:L54-L102](../../../src/fedmaq/baselines/quantization.py#L54-L102)
 
 FedMAQ uses `FedPAQCompressionHook` (not `DAdaQuantCompressionHook`) for client-side quantization. This is explicitly documented and correct: FedMAQ's `q` is a true bit-width from $\mathcal{Q}$, while DAdaQuant's `q` represents quantization _levels per sign_ — semantically different. Using DAdaQuant's quantizer with `q=16` would give 33 levels (~5 bits effective), not 16-bit precision.
 
@@ -295,18 +295,18 @@ The quantizer implements:
 - **$q = 1$**: Sign quantization — each element maps to $\text{sign}(d) \cdot \text{scale}$.
 - **$q = 0$**: Falls through to sign quantization via the `max(1, ...)` guard on `levels`.
 
-**Byte accounting**: [quantization.py:L45-L46](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/baselines/quantization.py#L45-L46)
+**Byte accounting**: [quantization.py:L45-L46](../../../src/fedmaq/baselines/quantization.py#L45-L46)
 
 ```python
 element_bits = d.size * bits_per_element
 total_bytes += int(math.ceil(element_bits / 8.0)) + 4
 ```
 
-The +4 accounts for the float32 scale factor stored per tensor. This is standard practice per [FedPAQ](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md) and [QSGD](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/alistarh-2017-qsgd.md).
+The +4 accounts for the float32 scale factor stored per tensor. This is standard practice per [FedPAQ](../../../../fedmaq-literature/kg/papers/reisizadeh-2020-fedpaq.md) and [QSGD](../../../../fedmaq-literature/kg/papers/alistarh-2017-qsgd.md).
 
 ### 4.2 Client-Side Delta Computation ✅
 
-**Implementation**: [standard.py:L99-L108](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/client_hooks/standard.py#L99-L108)
+**Implementation**: [standard.py:L99-L108](../../../src/fedmaq/core/client_hooks/standard.py#L99-L108)
 
 ```python
 deltas = [u - o for u, o in zip(updated_params, parameters, strict=True)]
@@ -346,7 +346,7 @@ The sweep reveals that the optimal EMA decay is strongly heterogeneity-dependent
 
 ### 5.3 Proxy Dataset Assumption
 
-FedMAQ requires a 3000-sample unlabeled public proxy dataset on the server. This is a strong assumption shared with FedMD, FedDF, and DynFed ([Proxy-dataset distillation](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/concepts/proxy-dataset-distillation.md)), but it limits applicability to domains where such data exists.
+FedMAQ requires a 3000-sample unlabeled public proxy dataset on the server. This is a strong assumption shared with FedMD, FedDF, and DynFed ([Proxy-dataset distillation](../../../../fedmaq-literature/kg/concepts/proxy-dataset-distillation.md)), but it limits applicability to domains where such data exists.
 
 **Defense**: The thesis should clearly state this assumption as a limitation. However, 3000 unlabeled samples from the target distribution is a mild requirement — it's <6% of CIFAR-10's training set and can often be obtained from public repositories without privacy concerns.
 
@@ -354,7 +354,7 @@ FedMAQ requires a 3000-sample unlabeled public proxy dataset on the server. This
 
 When soft-voting is enabled, the server needs to know each teacher's bit-width $q_k$ to compute precision weights. This information is available server-side (the strategy hook stores it in `_round_client_q`), so no additional uplink bytes are needed. However, the _computation_ of entropy weights requires evaluating each teacher model on the full proxy set — this server-side cost should be reflected in the simulated server time.
 
-**Current state**: The server-side time model at [fedmaq.py:L354-L369](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L354-L369) uses `kd_server_sim_time`, which scales with `num_public * kd_epochs * num_teachers / server_compute_speed`. The soft-voting computation happens within the same forward passes as the teacher inference, so it does not require additional forward passes — the entropy and precision weights are computed from the same teacher outputs that produce the soft labels. **No additional time cost is incurred.** ✅
+**Current state**: The server-side time model at [fedmaq.py:L354-L369](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L354-L369) uses `kd_server_sim_time`, which scales with `num_public * kd_epochs * num_teachers / server_compute_speed`. The soft-voting computation happens within the same forward passes as the teacher inference, so it does not require additional forward passes — the entropy and precision weights are computed from the same teacher outputs that produce the soft labels. **No additional time cost is incurred.** ✅
 
 ---
 
@@ -366,8 +366,8 @@ When soft-voting is enabled, the server needs to know each teacher's bit-width $
 | Soft-voting produces valid distributions |   ✅   | Convex combination of softmax outputs, weights sum to 1.                                                                                                                                                                                                                                                             |
 | EMA converges to recent model in limit   |   ✅   | Standard Polyak averaging property. $\beta < 1$ ensures the EMA tracks the current model; $\beta > 0$ provides smoothing.                                                                                                                                                                                            |
 | Tier-1 always dominates Tier-2           |   ✅   | `min(q_k_max_raw, q_hat)` guarantees the physical constraint is never violated.                                                                                                                                                                                                                                      |
-| Gradient norm is always positive         |   ✅   | `max(1e-8, norm)` guard at [fedmaq.py:L217](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L217).                                                                                                                                                             |
-| Normalization by round-local max         |   ✅   | `g_max = max(grad_norms)` at [fedmaq.py:L235](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/src/fedmaq/core/strategy_hooks/fedmaq.py#L235). This is correct — normalizing by round-local max means the highest-gradient client in each round gets $\tilde{g} = 1.0$, receiving the highest bit-width. |
+| Gradient norm is always positive         |   ✅   | `max(1e-8, norm)` guard at [fedmaq.py:L217](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L217).                                                                                                                                                             |
+| Normalization by round-local max         |   ✅   | `g_max = max(grad_norms)` at [fedmaq.py:L235](../../../src/fedmaq/core/strategy_hooks/fedmaq.py#L235). This is correct — normalizing by round-local max means the highest-gradient client in each round gets $\tilde{g} = 1.0$, receiving the highest bit-width. |
 
 ---
 

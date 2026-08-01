@@ -1,6 +1,6 @@
 # Temperature Ablation: Empirical Analysis & Thesis Defense
 
-Analysis of the temperature ablation runs ($T \in \{1.0, 2.0\}$) completed July 15, 2026. Cross-referenced with [results.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/temperature-ablation/results.md).
+Analysis of the temperature ablation runs ($T \in \{1.0, 2.0\}$) completed July 15, 2026. Cross-referenced with [results.md](../../../../experiments/temperature-ablation/results.md).
 
 ---
 
@@ -40,7 +40,7 @@ Because the teacher logits are structurally cleaner, the softening effect of $T=
 
 ## 2. Thesis Defense Strategy: Pre-empting Reviewer Questions
 
-When presenting FedMAQ's distillation mechanism, reviewers familiar with classical Knowledge Distillation ([Hinton et al. 2015](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-literature/kg/papers/hinton-2015-distillation.md)) will immediately ask:
+When presenting FedMAQ's distillation mechanism, reviewers familiar with classical Knowledge Distillation ([Hinton et al. 2015](../../../../../fedmaq-literature/kg/papers/hinton-2015-distillation.md)) will immediately ask:
 
 > _"Why did you set the distillation temperature to $T=1.0$? Classical KD requires $T > 1$ (typically $T \in [2, 8]$) to reveal inter-class relationships."_
 

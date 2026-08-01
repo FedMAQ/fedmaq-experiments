@@ -1,6 +1,6 @@
 # Soft-Voting Sweep: Empirical Analysis & Insights
 
-Analysis of the soft-voting ablation and hyperparameter sweep completed July 14, 2026. Cross-referenced with [results.md](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/experiments/soft-voting-sweep-7-14/results.md).
+Analysis of the soft-voting ablation and hyperparameter sweep completed July 14, 2026. Cross-referenced with [results.md](../../../../experiments/soft-voting-sweep-7-14/results.md).
 
 ---
 
@@ -21,7 +21,7 @@ Notably, the gain is _larger_ under moderate skew (α=1.0) than under severe ske
 
 ### 2.1 α = 0.1 (Severe Non-IID) — Best: `ew=4.0, pw=1.0`
 
-The optimal under severe skew shows **high entropy weight** (4.0) and **linear precision weight** (1.0). This aligns with the theoretical prediction in [HANDOFF.md §10](file:///c:/Users/Quirora/Documents/GitHub/fedmaq-experiments/HANDOFF.md#L163-L190):
+The optimal under severe skew shows **high entropy weight** (4.0) and **linear precision weight** (1.0). This aligns with the theoretical prediction in [HANDOFF.md §10](../../../../HANDOFF.md#L163-L190):
 
 > "Under α=0.1, client bit-widths vary widely (q=4 to q=8) and low-quality partitions produce noisy logits. Higher `precision_weight` values are likely to help more here."
 
