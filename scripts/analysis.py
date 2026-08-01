@@ -170,6 +170,25 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
 # Configuration 6 is ``fedavg_kd``, so an algorithm-level filter admits both.
 ABLATION_GROUP = "ablation"
 
+# The two groups the formulation study reads across. Both are required, and they
+# are not interchangeable: §4.3.6 evaluates the five candidate formulations
+# pipeline-free (``formulation_study``) against an accuracy floor defined from the
+# uncompressed FedAvg rows of the confirmatory grid (``benchmark_grid``).
+#
+# Scoping the candidate side by group is load-bearing, not defensive. Every
+# exploration matrix (``pass2_factorial``, ``pass3_freeze_confirm``, and the
+# conditional recheck) dispatches ``algorithm=fedmaq``, and ``fedmaq.yaml``
+# carries ``formulation: 3``, so those runs are indistinguishable from
+# formulation-study candidates on algorithm, config name and formulation alike.
+# So are the grid's own FedMAQ rows -- which additionally run with
+# ``post_process=true``. Selecting on algorithm alone therefore (a) manufactures a
+# verdict at the held-out alpha = 0.3, where no FedAvg reference exists and the
+# floor cannot be computed at all, and (b) pools the grid's pipeline-on runs into
+# Formulation 3's cell, crediting the incumbent formulation with the payload
+# savings of a pipeline the study exists to withhold. See Decision 71.
+FORMULATION_STUDY_GROUP = "formulation_study"
+GRID_GROUP = "benchmark_grid"
+
 
 def confirmatory_runs(runs: list[RunRecord]) -> list[RunRecord]:
     """Runs eligible for the formulation study and the baseline comparison.
@@ -471,12 +490,31 @@ def load_round_metrics(csv_path: Path) -> pd.DataFrame:
 
 def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> float:
     """90% of the mean final-round (R=100) top-1 accuracy of the uncompressed FedAvg
-    reference, averaged across FedAvg's 3 seeds for this (dataset, alpha)."""
+    reference, averaged across FedAvg's 3 seeds for this (dataset, alpha).
+
+    The reference is the confirmatory grid's own FedAvg rows -- chapter_4.tex:312
+    defines the floor as "reusing the FedAvg runs already present in the benchmark
+    grid", and pinning the group here is what makes that sentence true of the code
+    rather than merely of the intent. Those six CIFAR-10 rows are dispatched ahead
+    of the rest of the grid (docs/RUNBOOK.md Stage 1c) precisely so this function
+    has something to read when the formulation study needs it.
+    """
     fedavg_runs = [
-        r for r in runs if r.dataset == dataset and r.alpha == alpha and r.algorithm == "fedavg"
+        r
+        for r in runs
+        if r.dataset == dataset
+        and r.alpha == alpha
+        and r.algorithm == "fedavg"
+        and r.experiment_group == GRID_GROUP
     ]
     if not fedavg_runs:
-        raise ValueError(f"No FedAvg reference runs found for dataset={dataset}, alpha={alpha}")
+        raise ValueError(
+            f"No FedAvg reference runs found in experiment_group={GRID_GROUP!r} for "
+            f"dataset={dataset}, alpha={alpha}. The accuracy floor is defined against "
+            f"the grid's uncompressed control (chapter_4.tex:312). If the formulation "
+            f"study has run and this fails, Stage 1c was skipped: dispatch "
+            f"`run_matrix.py --matrix benchmark_grid --only fedavg` first."
+        )
     final_accs = [load_round_metrics(r.csv_path)["test/accuracy"].iloc[-1] for r in fedavg_runs]
     return 0.9 * (sum(final_accs) / len(final_accs))
 
@@ -520,9 +558,19 @@ def select_winner(runs: list[RunRecord]) -> dict:
     """
     result: dict = {}
     runs = confirmatory_runs(runs)
-    # ``algorithm_config``, not ``algorithm``: the ablation arms declare
-    # ``name: fedmaq`` and would otherwise be counted as formulation candidates.
-    fedmaq_runs = [r for r in runs if r.algorithm_config == "fedmaq" and r.formulation is not None]
+    # Three filters, each removing a different impostor:
+    #   experiment_group -- the exploration factorial, the R=100 confirmation and
+    #     the grid all dispatch ``algorithm=fedmaq`` at ``formulation: 3``;
+    #   algorithm_config -- the §4.3.7 ablation arms declare ``name: fedmaq``;
+    #   formulation      -- a run that never resolved one is not a candidate.
+    # See FORMULATION_STUDY_GROUP above for what each admission would cost.
+    fedmaq_runs = [
+        r
+        for r in runs
+        if r.experiment_group == FORMULATION_STUDY_GROUP
+        and r.algorithm_config == "fedmaq"
+        and r.formulation is not None
+    ]
     datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
 
     for dataset, alpha in datasets_alphas:
@@ -731,32 +779,45 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     """Headline baseline comparison (chapter_4.tex Section 4, statistical
     procedure + convergence-stability metric).
 
-    For each (dataset, alpha) with a qualified formulation winner, pairs that
-    winning formulation's 3 FedMAQ seed runs against each baseline algorithm's
-    3 seed runs by seed number. Reports the paired per-seed accuracy-at-R100
-    delta (FedMAQ - baseline: mean + min/max, no bootstrap/CI) and
-    rounds-to-target for both sides using the same target-accuracy floor the
-    winner rule already computed.
+    For each (dataset, alpha) in the confirmatory grid, pairs FedMAQ's 3 seed runs
+    against each baseline algorithm's 3 seed runs by seed number. Reports the
+    paired per-seed accuracy-at-R100 delta (FedMAQ - baseline: mean + min/max, no
+    bootstrap/CI) and rounds-to-target for both sides against the same
+    target-accuracy floor the winner rule uses.
+
+    **Both sides are read from the grid group, never from the formulation study.**
+    The study runs FedMAQ on CIFAR-10 at both grid skews with the same three
+    seeds, differing only in that it withholds the §4.3 post-processing pipeline.
+    Selecting FedMAQ's rows by ``(dataset, alpha, formulation)`` alone therefore
+    builds ``{seed: run}`` from twelve candidates for six slots and resolves the
+    collision by iteration order -- so the headline table could report
+    pipeline-free FedMAQ against pipeline-era baselines, understating FedMAQ's
+    own communication figures and breaking chapter_4.tex:312's rule that a FedMAQ
+    run carries the pipeline if and only if what it is compared against does.
+    ``winner_result`` is consulted only to check that the grid actually ran the
+    frozen formulation. See Decision 71.
     """
     result: dict = {}
-    runs = confirmatory_runs(runs)
-    for entry in winner_result.values():
-        if entry["winner"] is None:
-            continue
-        dataset, alpha, formulation, floor = (
-            entry["dataset"],
-            entry["alpha"],
-            entry["winner"],
-            entry["target_accuracy_floor"],
-        )
+    runs = [r for r in confirmatory_runs(runs) if r.experiment_group == GRID_GROUP]
+    frozen = {
+        (e["dataset"], e["alpha"]): e["winner"]
+        for e in winner_result.values()
+        if e["winner"] is not None
+    }
+    grid_targets = sorted({(r.dataset, r.alpha) for r in runs if r.algorithm_config == "fedmaq"})
+    for dataset, alpha in grid_targets:
+        floor = compute_target_floor(runs, dataset, alpha)
         fedmaq_by_seed = {
             r.seed: r
             for r in runs
-            if r.dataset == dataset
-            and r.alpha == alpha
-            and r.algorithm_config == "fedmaq"
-            and r.formulation == formulation
+            if r.dataset == dataset and r.alpha == alpha and r.algorithm_config == "fedmaq"
         }
+        formulations = {r.formulation for r in fedmaq_by_seed.values()}
+        formulation = next(iter(formulations)) if len(formulations) == 1 else sorted(formulations)
+        # The grid runs one frozen FedMAQ. More than one formulation here means
+        # the freeze was edited mid-grid, which §4.3.1's tag forbids outright.
+        formulation_disagreement = len(formulations) > 1
+        expected = frozen.get((dataset, alpha))
         baseline_algorithms = sorted(
             {
                 r.algorithm
@@ -795,6 +856,12 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
                 "dataset": dataset,
                 "alpha": alpha,
                 "fedmaq_formulation": formulation,
+                # None where the formulation study produced no verdict for this
+                # (dataset, alpha) -- it runs CIFAR-10 only, so CIFAR-100 and
+                # FEMNIST inherit the freeze without a local verdict to check.
+                "frozen_formulation": expected,
+                "formulation_matches_freeze": (expected is None or formulation == expected)
+                and not formulation_disagreement,
                 "baseline": baseline_algo,
                 "per_seed": per_seed,
                 "mean_delta": sum(deltas) / len(deltas),
@@ -958,7 +1025,13 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
                     if r.dataset == dataset
                     and r.alpha == alpha
                     and r.algorithm_config == "fedmaq"
-                    and r.experiment_group != ABLATION_GROUP
+                    # The study group, not merely "not the ablation": the grid
+                    # also runs ``fedmaq`` at this dataset and skew, and the
+                    # anchor's whole purpose is to sit in the arm's own regime.
+                    # ``post_process`` is checked as well because the two facts
+                    # are separable in principle and a silent regime mismatch
+                    # here would price the pipeline as if it were state awareness.
+                    and r.experiment_group == FORMULATION_STUDY_GROUP
                     and r.formulation == config4["formulation"]
                     and not r.post_process
                 ),
@@ -1042,6 +1115,19 @@ def main() -> None:
     with open(args.baseline_output, "w", encoding="utf-8") as f:
         json.dump(baseline_result, f, indent=2)
     print(f"Wrote baseline-comparison report to {args.baseline_output}")
+    drifted = sorted(
+        {
+            (e["dataset"], e["alpha"], str(e["fedmaq_formulation"]), str(e["frozen_formulation"]))
+            for e in baseline_result.values()
+            if not e["formulation_matches_freeze"]
+        }
+    )
+    for dataset, alpha, ran, frozen_formulation in drifted:
+        print(
+            f"  FREEZE DRIFT: {dataset} alpha={alpha} ran formulation {ran}, "
+            f"frozen verdict was {frozen_formulation}. §4.3.1 forbids editing a frozen "
+            "config downstream of the tag; the grid rows must be re-dispatched, not reported."
+        )
 
     # Exploration-phase margin and keep-or-drop verdicts (§4.3.1). Chapter 5 §5.1
     # reports sigma, the derived margin, and the surviving set from this file.

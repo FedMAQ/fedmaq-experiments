@@ -863,3 +863,114 @@ neutral `1.0`/`1.0` that §4.3.1 requires.
     26 runs to 50 for a mechanism whose only prior evaluation (Decision 32) concluded
     its implementation cost was not worth paying. The code path remains for
     reproducibility, as with FedMD.
+
+## Pass 4 — 2026-08-01
+
+Terminal audit pass before dispatch. One finding, with three code sites and a
+dispatch-order change; it is the last structural defect the freeze machinery had.
+
+71. **The formulation study's accuracy floor was circularly dependent on the grid it
+    configures, and its candidate set admitted three populations of impostor runs.**
+    Both halves are the same defect seen from either end: `select_winner` identified
+    formulation-study runs by algorithm rather than by matrix, and identified the
+    FedAvg reference by algorithm rather than by matrix.
+
+    *The circularity.* §4.3.6 defines the target accuracy as 90% of the uncompressed
+    FedAvg reference "reusing the FedAvg runs already present in the benchmark grid",
+    and `compute_target_floor` implements exactly that. But FedAvg appears only in
+    `benchmark_grid.yaml`, dispatched at Stage 4 — after the Stage 2b tag that freezes
+    the formulation those very runs are needed to select. Run `analysis.py` at the
+    point `RUNBOOK.md` says to resolve the verdict and it raised `ValueError: No
+    FedAvg reference runs found` before writing anything. **Resolved by pulling the
+    grid's six CIFAR-10 `fedavg` rows forward into a new Stage 1c** (`run_matrix.py
+    --matrix benchmark_grid --only fedavg`, a new label filter on the runner). They
+    keep the grid's `experiment_group`, overrides and output directories, so Stage 4's
+    `--skip_completed` passes over them: six of 42 rows moved, not six added, and the
+    183-run total is unchanged.
+
+    Considered and rejected: a dedicated 6-run FedAvg reference cell inside
+    `formulation_study.yaml` at `phase: explore`. It keeps every confirmatory run
+    behind the tag, which is the honest attraction, but it creates two FedAvg
+    populations at the same config, skew and seeds — the floor computed from one, the
+    grid reported from the other. A reader recomputing the floor from the published
+    table would then be entitled to a different disqualification set than the one that
+    actually fired, which is a worse property for a pre-registered rule than an
+    ordering exception. The exception is admissible and is disclosed in §4.3.6:
+    FedAvg is invariant to all three artifacts §4.3.1's tag locks — no refinement
+    layer, no formulation, and no tunable constant, which is why Stage 1b excludes it
+    as the uncompressed control. It extends to nothing else.
+
+    *The impostors.* `select_winner` selected candidates as `algorithm_config ==
+    "fedmaq" and formulation is not None`, excluding only the ablation group. Three
+    populations satisfy that and should not: (a) `pass2_factorial` and
+    `pass3_freeze_confirm`, which dispatch `algorithm=fedmaq` at the held-out
+    α = 0.3 while `fedmaq.yaml` carries `formulation: 3` — these manufacture a verdict
+    at a skew where no FedAvg reference exists by design, so the observable failure is
+    the whole analysis dying rather than a subtly wrong winner; (b) the grid's own
+    FedMAQ rows, same dataset, skews and seeds as the study, differing only by
+    `post_process=true` — pooled into Formulation 3's cell they credit the *incumbent*
+    formula with the pipeline savings §4.3.6 exists to withhold, so the contamination
+    flatters the status quo rather than perturbing it randomly; (c) in
+    `compare_to_baselines`, the same collision resolved by dict-iteration order, which
+    could report pipeline-free FedMAQ against pipeline-era baselines and break
+    §4.3.6's own regime rule in the one direction that understates FedMAQ.
+    All three are closed by scoping on `experiment_group`: candidates from
+    `formulation_study`, floor and headline comparison from `benchmark_grid`,
+    Configuration 4's parity anchor from `formulation_study` (tightened from "not the
+    ablation group"). `compare_to_baselines` no longer takes its targets from the
+    winner verdict at all — it enumerates the grid and uses the verdict only to assert
+    the grid ran the frozen formulation, reporting `formulation_matches_freeze` and
+    printing a `FREEZE DRIFT` line when it did not. Four regression tests; the
+    fixtures now carry an `experiment_group`, since a fixture without one describes a
+    run no matrix could produce.
+
+**Non-findings this pass** (verified, do not re-audit): `build_ablation_table`'s
+Configuration 4 guard does not assume a single unambiguous formulation winner — it
+reads the arm's own `formulation` field, so `resolve_frozen_formulation` cannot
+desynchronize it. The `not r.post_process` condition in that guard already excluded
+the grid's rows before the group filter was added; the filter makes the intent
+explicit rather than repairing a live bug.
+
+### Decision 72 — Every confirmatory run postdates the pre-registration tag; the calendar moves to fit
+
+**Finding.** Manuscript §4.5 read *"the six baselines complete their full dataset ×
+skew × seed grid during the August--October window"*, which is why *"the February
+benchmarking block carries only FedMAQ's own main-grid runs, the uniform-memory
+control arm, and the 42 net-new ablation runs rather than the entire 183-run grid."*
+That places all 90 reported baseline runs (6 baselines × 5 dataset-skew cells × 3
+seeds) — 75 of them belonging to the five *tuned* baselines — before the January tag that §4.3.1 uses to lock the baseline hyperparameter
+table those very runs are configured by — and §4.3.2's matched-tuning stage
+(Decision 67) is entitled to rewrite five of those constants right up until the tag
+fires. Five of six baselines would therefore have reported accuracies measured under
+values the freeze had not yet fixed. This is the exact tuning asymmetry §4.3.2 was
+added to remove, reintroduced through the schedule.
+
+It also made the §4.3.6 disclosure added under Decision 71 false as written: FedAvg's
+six CIFAR-10 rows could not be *"the only confirmatory runs that execute before the
+pre-registration tag"* while 90 baseline rows preceded it too.
+
+**Resolved: the confirmatory block runs whole, after the freeze.** August--October is
+now stated as baseline *reproduction* — implementation, correctness checks against
+published behaviour, and short validation runs — with no confirmatory measurement in
+it. The 147 confirmatory runs remaining after Stage 1c's six FedAvg rows are allotted
+the second half of January together with February, rather than February alone. Two
+Gantt rows change and one is added (`Baseline Matched-Tuning`, November, previously
+absent from the chart although §4.3.2 requires it).
+
+*Rejected: a pre-registered conditional re-run* — baselines keep the early window,
+and any baseline whose matched-tuning stage changes its constant has its 15 grid rows
+re-run after the tag. Expected cost is near zero, since §4.3.2 expects no challenger
+to clear, and it preserves the calendar's feasibility argument untouched. It was
+rejected because the common case still reports rows measured before the table locking
+them was tagged, and one only knows no re-run was needed *after* seeing the tuning
+result — a pre-registration that is partly retrospective. The calendar was tentative
+and the compute is allocation-bound rather than month-bound, so there was no reason
+to buy schedule with defensibility.
+
+*Rejected: dropping Table 4.1 from the tagged artifacts* — cheapest, and it unwinds
+Decision 67 and §4.3.2 one day after they were added.
+
+**Stage 1b's placement is unchanged and is not an ordering constraint.** Baseline
+matched-tuning shares no configuration with FedMAQ, so it is unordered with respect
+to the refinement search; it sits at Stage 1b because Decision 29 sequenced it there.
+The only hard ordering the tag imposes on it is that it must finish before the tag.

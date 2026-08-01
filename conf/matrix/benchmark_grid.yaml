@@ -13,6 +13,20 @@
 # Pipeline on: the three primary-grid files and uniform_memory_control.yaml,
 # whose comparison partner is FedMAQ's rows here. Pipeline off: ablation.yaml and
 # formulation_study.yaml. See the header of fedmaq.yaml and of each matrix.
+#
+# THE `fedavg` ROW DOES NOT WAIT FOR THE REST OF THIS FILE. Its six CIFAR-10 runs
+# define the formulation study's accuracy floor (90% of uncompressed FedAvg at the
+# same skew, §4.3.6), and that study's verdict is what freezes the FedMAQ config
+# the other 36 rows here run. Dispatched in file order the dependency is circular,
+# so Stage 1c pulls the row forward:
+#
+#     run_matrix.py --matrix benchmark_grid --only fedavg
+#
+# then Stage 4 runs this file whole with --skip_completed, which passes over them.
+# Same group, same overrides, same directories -- six of these 42 runs, not six
+# more. They are the only confirmatory runs preceding the §4.3.1 tag, admissible
+# because FedAvg carries none of the three artifacts that tag locks. Decision 71
+# and docs/RUNBOOK.md Stage 1c.
 phase: formal
 experiment_group: benchmark_grid
 dataset: cifar10

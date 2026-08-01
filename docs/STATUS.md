@@ -2,7 +2,7 @@
 
 Single source of truth for current project state. Updated after each experiment batch.
 
-**Last updated**: 2026-08-01 (baseline matched-tuning stage added; `formal-experiment-plan.md` retired into `DECISIONS.md`)
+**Last updated**: 2026-08-01 (audit pass 4: Stage 1c pulls the grid's FedAvg reference rows forward, analysis scopes candidates by `experiment_group`, and the calendar moves every other confirmatory run behind the tag — Decisions 71–72)
 
 ---
 
@@ -26,6 +26,13 @@ Single source of truth for current project state. Updated after each experiment 
 
 Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
 
+- **2026-08-01** (pass 4) — §4.3.6 discloses that the benchmark grid's six CIFAR-10
+  FedAvg rows are dispatched ahead of the rest of the grid and why that position is
+  admissible (Decision 71); §4.5 stops scheduling the baselines' 90 confirmatory runs
+  before the tag that locks their hyperparameter table, restating August--October as
+  baseline *reproduction* and giving the 147-run confirmatory block late January plus
+  February (Decision 72). The Gantt gains a `Baseline Matched-Tuning` row, absent
+  since §4.3.2 was written.
 - **2026-08-01** — §4.3.2 gains the baseline matched-tuning stage (Decision 67); §4.3.6
   gains the split-skew freeze rule, the total-disqualification branch, per-seed
   disqualification, the corrected tie-break, and the reserved recheck (Decisions 64–66,
@@ -97,6 +104,12 @@ the 183, nor is the conditional 6-run recheck that fires if the frozen formulati
 Formulation 3. The factorial, the freeze confirmation, and each baseline's shipped-value
 cell all deepen their reference to five seeds, because that cell's spread *is* the margin
 everything else in its stage is judged against (manuscript §4.4).
+
+Six of `benchmark_grid`'s 42 rows — the CIFAR-10 `fedavg` label — are dispatched early
+at Stage 1c (`--only fedavg`), because they define the formulation study's accuracy
+floor and the study's verdict is what freezes the config the other 36 run. They are the
+only confirmatory runs preceding the §4.3.1 tag; Stage 4's `--skip_completed` passes
+over them. Decision 71, and Decision 72 for why nothing else may join them.
 
 The three `benchmark_grid*` files share one `experiment_group`, so `scripts/analysis.py`
 reads them as a single 105-run grid. Before 2026-07-30 only the CIFAR-10 file existed and

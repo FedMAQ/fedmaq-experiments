@@ -9,6 +9,7 @@ Usage:
     uv run python scripts/run_matrix.py --matrix ci_test --dry_run
     uv run python scripts/run_matrix.py --matrix pass2_explore --start_at 3
     uv run python scripts/run_matrix.py --matrix benchmark_grid --skip_completed
+    uv run python scripts/run_matrix.py --matrix benchmark_grid --only fedavg
     uv run python scripts/run_matrix.py --matrix benchmark_grid \
         -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4 \
         --run_timeout_seconds 5400
@@ -120,6 +121,24 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="LABEL",
+        dest="only_labels",
+        help=(
+            "Dispatch only the matrix rows carrying these labels; repeatable. The "
+            "rows keep the matrix's own phase, experiment_group, rounds and "
+            "overrides, so they land in exactly the directories the full sweep "
+            "would have written and a later full dispatch with --skip_completed "
+            "passes over them. This exists for one pre-registered case: the "
+            "formulation study's accuracy floor is defined against the benchmark "
+            "grid's uncompressed FedAvg rows, which must therefore be dispatched "
+            "before the study that the rest of the grid waits on (docs/RUNBOOK.md "
+            "Stage 1c). Do not use it to run a grid piecemeal for convenience."
+        ),
+    )
+    parser.add_argument(
         "--max_consecutive_failures",
         type=int,
         default=3,
@@ -163,6 +182,19 @@ def main() -> None:
     seeds = [int(s) for s in cfg.get("seeds", [0])]
     heterogeneities = list(cfg.get("heterogeneities", ["dirichlet_alpha_0.1"]))
     runs_spec = cfg.get("runs", [])
+
+    if args.only_labels:
+        available = [str(r.get("label", r.get("alg"))) for r in runs_spec]
+        unknown = [label for label in args.only_labels if label not in available]
+        if unknown:
+            # Hard error, never a silent empty sweep. A mistyped --only on a
+            # shared allocation otherwise reports "Total Runs Scheduled: 0" and
+            # exits successfully, which reads as a completed stage.
+            parser.error(
+                f"--only label(s) {unknown} not in {matrix_path.name}; "
+                f"available labels: {available}"
+            )
+        runs_spec = [r for r in runs_spec if str(r.get("label", r.get("alg"))) in args.only_labels]
 
     # A run may declare its own ``seeds:``, overriding the matrix-level list. This
     # exists so a single cell can be measured at more seeds than the rest of its
@@ -245,6 +277,8 @@ def main() -> None:
         extra = [s for s in seeds_for(run_item) if s not in seeds]
         if extra:
             print(f"  + {run_item.get('label', run_item.get('alg'))}: deepened with {extra}")
+    if args.only_labels:
+        print(f"Label filter (--only): {args.only_labels}")
     print(f"Total Runs Scheduled: {len(tasks)}")
     if args.overrides:
         print(f"Sweep-wide overrides: {' '.join(args.overrides)}")

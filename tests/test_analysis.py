@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from analysis import (
     EXPLORATION_GROUP,
+    FORMULATION_STUDY_GROUP,
+    GRID_GROUP,
     RunRecord,
     accuracy_at_round,
     build_ablation_table,
@@ -40,21 +42,33 @@ def test_accuracy_at_round_falls_back_to_last_row_when_round_missing():
     assert accuracy_at_round(df, 100) == pytest.approx(0.5)
 
 
-def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs):
+def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs, group=None, alpha=0.5):
     """Write a fake job dir with an experiment_log.csv; return a RunRecord
-    pointing at it (dataset/alpha fixed to keep fixtures small)."""
-    job_dir = tmp_path / f"{algorithm}_{formulation}_{seed}"
+    pointing at it (dataset/alpha fixed to keep fixtures small).
+
+    ``experiment_group`` is not decoration: ``select_winner`` reads formulation
+    candidates from the study group alone and the accuracy floor from the grid's
+    FedAvg rows alone (Decision 71), so a fixture that leaves the group unset is
+    testing a run that no matrix could have produced. FedMAQ therefore defaults
+    to the study group and everything else to the grid.
+    """
+    group = group or (FORMULATION_STUDY_GROUP if algorithm == "fedmaq" else GRID_GROUP)
+    # The group belongs in the path for the same reason it belongs in the record:
+    # the study and the grid run the same algorithm at the same formulation, skew
+    # and seed, and are separated by nothing else.
+    job_dir = tmp_path / f"{group}_{algorithm}_{formulation}_{seed}_{alpha}"
     job_dir.mkdir()
     csv_path = job_dir / "experiment_log.csv"
     _df(list(range(1, len(accs) + 1)), accs, mbs).to_csv(csv_path, index=False)
     return RunRecord(
         job_dir=job_dir,
         dataset="cifar10",
-        alpha=0.5,
+        alpha=alpha,
         algorithm=algorithm,
         formulation=formulation,
         seed=seed,
         csv_path=csv_path,
+        experiment_group=group,
     )
 
 
@@ -63,11 +77,12 @@ def test_compare_to_baselines_computes_paired_per_seed_accuracy_delta(tmp_path):
     fedavg_runs = [
         _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [10, 20, 30]) for s in (1, 2, 3)
     ]
-    # Winning FedMAQ formulation (2): final acc 0.85/0.83/0.81 per seed
+    # The grid's frozen FedMAQ rows (formulation 2): final acc 0.85/0.83/0.81 per
+    # seed. Grid group, because the headline table is a grid-internal contrast.
     fedmaq_runs = [
-        _write_run(tmp_path, "fedmaq", 2, 1, [0.6, 0.75, 0.85], [5, 10, 15]),
-        _write_run(tmp_path, "fedmaq", 2, 2, [0.6, 0.74, 0.83], [5, 10, 15]),
-        _write_run(tmp_path, "fedmaq", 2, 3, [0.6, 0.73, 0.81], [5, 10, 15]),
+        _write_run(tmp_path, "fedmaq", 2, 1, [0.6, 0.75, 0.85], [5, 10, 15], group=GRID_GROUP),
+        _write_run(tmp_path, "fedmaq", 2, 2, [0.6, 0.74, 0.83], [5, 10, 15], group=GRID_GROUP),
+        _write_run(tmp_path, "fedmaq", 2, 3, [0.6, 0.73, 0.81], [5, 10, 15], group=GRID_GROUP),
     ]
     # Baseline FedPAQ: final acc 0.75/0.78/0.70 per seed
     fedpaq_runs = [
@@ -97,7 +112,8 @@ def test_compare_to_baselines_reports_rounds_to_target_per_side(tmp_path):
     ]
     # FedMAQ crosses 0.72 at round 3 (0.85); FedPAQ never crosses (caps at 0.70)
     fedmaq_runs = [
-        _write_run(tmp_path, "fedmaq", 0, s, [0.6, 0.70, 0.85], [5, 10, 15]) for s in (1, 2, 3)
+        _write_run(tmp_path, "fedmaq", 0, s, [0.6, 0.70, 0.85], [5, 10, 15], group=GRID_GROUP)
+        for s in (1, 2, 3)
     ]
     fedpaq_runs = [
         _write_run(tmp_path, "fedpaq", None, s, [0.5, 0.65, 0.70], [8, 16, 24]) for s in (1, 2, 3)
@@ -111,6 +127,128 @@ def test_compare_to_baselines_reports_rounds_to_target_per_side(tmp_path):
     for seed_detail in entry["per_seed"].values():
         assert seed_detail["fedmaq_rounds_to_target"] == 3
         assert seed_detail["baseline_rounds_to_target"] is None
+
+
+def test_exploration_fedmaq_runs_never_become_formulation_candidates(tmp_path):
+    """Decision 71. ``pass2_factorial`` and ``pass3_freeze_confirm`` dispatch
+    ``algorithm=fedmaq`` at the held-out alpha = 0.3, and ``fedmaq.yaml`` carries
+    ``formulation: 3``, so on algorithm and formulation alone they are
+    indistinguishable from study candidates.
+
+    Admitting them manufactures a verdict at a skew the study never ran, where no
+    FedAvg reference exists by design -- so the failure is not a subtly wrong
+    winner but a ``ValueError`` out of the floor, taking the whole analysis run
+    down at the point in the dispatch order where the freeze is written.
+    """
+    fedavg = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    study = [
+        _write_run(tmp_path, "fedmaq", f, s, [0.5, 0.80 + 0.01 * f], [5, 10 + f])
+        for f in (0, 3)
+        for s in (1, 2, 3)
+    ]
+    exploration = [
+        _write_run(
+            tmp_path,
+            "fedmaq",
+            3,
+            s,
+            [0.5, 0.82],
+            [5, 4],  # far cheaper: would win outright if it were admitted
+            group=EXPLORATION_GROUP,
+            alpha=0.3,
+        )
+        for s in (4, 5, 6)
+    ]
+
+    result = select_winner(fedavg + study + exploration)
+
+    assert set(result) == {"cifar10_alpha_0.5"}, (
+        "an entry at alpha=0.3 means the exploration factorial was read as a "
+        "formulation-study arm; there is no FedAvg reference at the held-out skew"
+    )
+    assert set(result["cifar10_alpha_0.5"]["formulations"][3]["seeds"]) == {1, 2, 3}
+
+
+def test_grid_fedmaq_rows_never_enter_the_formulation_study(tmp_path):
+    """Decision 71. The grid runs FedMAQ at the study's own dataset, skews and
+    seeds, differing only by ``algorithm.post_process=true``.
+
+    That flag is the whole point: §4.3.6 withholds the pipeline so the formulas
+    are judged on their mathematical merit, and the pipeline's payload savings
+    land in exactly the cumulative-MB figure the winner rule minimizes. Pooling
+    the grid's rows into Formulation 3's cell would credit the incumbent
+    formulation with savings the study exists to exclude -- and Formulation 3 is
+    the incumbent that ships in ``fedmaq.yaml``, so the contamination flatters
+    the status quo rather than perturbing it randomly.
+    """
+    fedavg = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    study = [  # formulation 0 wins pipeline-free: 10 MB vs formulation 3's 20 MB
+        *[_write_run(tmp_path, "fedmaq", 0, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)],
+        *[_write_run(tmp_path, "fedmaq", 3, s, [0.5, 0.80], [5, 20]) for s in (1, 2, 3)],
+    ]
+    grid = [  # same seeds, same skew, pipeline on -> 2 MB
+        _write_run(tmp_path, "fedmaq", 3, s, [0.5, 0.80], [1, 2], group=GRID_GROUP)
+        for s in (1, 2, 3)
+    ]
+
+    entry = select_winner(fedavg + study + grid)["cifar10_alpha_0.5"]
+
+    assert entry["winner"] == 0, (
+        "formulation 3 can only win here by absorbing the grid's pipeline-on "
+        "payloads, which chapter_4.tex:312 withholds from the study"
+    )
+    assert entry["formulations"][3]["mean_cumulative_mb"] == pytest.approx(20.0)
+
+
+def test_baseline_comparison_pairs_grid_fedmaq_not_the_pipeline_free_study(tmp_path):
+    """Decision 71. Both sides of the headline table must carry the pipeline.
+
+    The study and the grid share ``(dataset, alpha, seed, formulation)``, so a
+    ``{seed: run}`` map built without a group filter takes twelve candidates for
+    six slots and resolves by iteration order. The wrong resolution reports
+    pipeline-free FedMAQ against pipeline-era baselines, which is the one
+    direction chapter_4.tex:312's regime rule exists to forbid.
+    """
+    fedavg = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    study = [  # pipeline-free: final accuracy 0.60, deliberately far lower
+        _write_run(tmp_path, "fedmaq", 3, s, [0.5, 0.60], [5, 40]) for s in (1, 2, 3)
+    ]
+    grid = [
+        _write_run(tmp_path, "fedmaq", 3, s, [0.5, 0.90], [1, 4], group=GRID_GROUP)
+        for s in (1, 2, 3)
+    ]
+    fedpaq = [_write_run(tmp_path, "fedpaq", None, s, [0.5, 0.70], [8, 16]) for s in (1, 2, 3)]
+
+    result = compare_to_baselines(
+        fedavg + study + grid + fedpaq, select_winner(fedavg + study + fedpaq)
+    )
+
+    entry = result["cifar10_alpha_0.5_vs_fedpaq"]
+    assert entry["mean_delta"] == pytest.approx(0.20, abs=1e-6), (
+        "0.90 - 0.70 is the grid contrast; -0.10 means the pipeline-free study "
+        "run stood in for FedMAQ's grid row"
+    )
+    assert entry["formulation_matches_freeze"] is True
+
+
+def test_baseline_comparison_flags_a_grid_that_ran_a_different_formulation(tmp_path):
+    """§4.3.1's tag forbids editing a frozen config downstream of it, so a grid
+    row carrying a formulation the study did not select is a pre-registration
+    breach and must surface in the report rather than be silently averaged."""
+    fedavg = [_write_run(tmp_path, "fedavg", None, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    study = [_write_run(tmp_path, "fedmaq", 3, s, [0.5, 0.80], [5, 10]) for s in (1, 2, 3)]
+    grid = [
+        _write_run(tmp_path, "fedmaq", 1, s, [0.5, 0.90], [1, 4], group=GRID_GROUP)
+        for s in (1, 2, 3)
+    ]
+    fedpaq = [_write_run(tmp_path, "fedpaq", None, s, [0.5, 0.70], [8, 16]) for s in (1, 2, 3)]
+
+    result = compare_to_baselines(fedavg + study + grid + fedpaq, select_winner(fedavg + study))
+
+    entry = result["cifar10_alpha_0.5_vs_fedpaq"]
+    assert entry["frozen_formulation"] == 3
+    assert entry["fedmaq_formulation"] == 1
+    assert entry["formulation_matches_freeze"] is False
 
 
 def test_select_winner_near_tie_reselects_by_accuracy(tmp_path):
@@ -608,7 +746,7 @@ def _full_ablation_grid(tmp_path, include_anchor=True, **overrides):
                         0.78 + seed * 1e-4,
                         33.0,
                         alpha=alpha,
-                        group=None,
+                        group=FORMULATION_STUDY_GROUP,
                         formulation=1,
                     )
                 )
@@ -699,7 +837,9 @@ def test_ablation_arms_never_enter_the_formulation_study(tmp_path):
     fedavg = [r for r in grid if r.algorithm_config == "fedavg"]
     arms = [r for r in grid if r.experiment_group == "ablation"]
     study = [
-        _ablation_run(tmp_path, "fedmaq", s, 0.85, 30.0, group=None, formulation=f)
+        _ablation_run(
+            tmp_path, "fedmaq", s, 0.85, 30.0, group=FORMULATION_STUDY_GROUP, formulation=f
+        )
         for f in (1, 3)
         for s in (0, 42, 123)
     ]

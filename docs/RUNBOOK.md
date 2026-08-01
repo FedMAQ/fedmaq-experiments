@@ -74,7 +74,7 @@ the 183.
    run `uv run python -m pytest tests/test_simulation.py`.
    **Do not tag here.** §4.3.1 locks and tags three things together — the fixed
    mechanism set, the selected formulation, and the baseline hyperparameter table
-   (Table 4.1) — and two of them do not exist until step 8. The single tag is step 9.
+   (Table 4.1) — and two of them do not exist until step 9. The single tag is step 10.
    **If nothing clears at R=100** the surviving set is empty — pre-registered, not a
    judgement call (Decision 60, manuscript §4.3.1 and §4.3.7). FedMAQ freezes
    unrefined, Configuration 8 drops from `conf/matrix/ablation.yaml`, and the
@@ -87,7 +87,7 @@ the 183.
 Independent of everything above — no baseline shares configuration with FedMAQ — so
 it may run concurrently with Stage 1. It is placed after it only because Decision 29
 sequenced it that way and because nothing is lost by the ordering. Held-out
-α = 0.3, uncounted among the 183, and its verdict enters the same tag at step 9.
+α = 0.3, uncounted among the 183, and its verdict enters the same tag at step 10.
 
 6. `--matrix baseline_tuning`. R=100, 55 runs (each of five baselines: a five-seed
    reference cell at its shipped Table 4.1 value, plus two three-seed challengers).
@@ -99,12 +99,31 @@ sequenced it that way and because nothing is lost by the ordering. Held-out
    published value — that is a result, not a null sweep, and §4.3.2 reports it as one.
    FedAvg is absent by design: it is the uncompressed control and has no knob.
 
+### Stage 1c — The grid's FedAvg reference rows (6 runs, not net-new)
+
+The formulation study's accuracy floor is 90% of the uncompressed FedAvg reference
+at the same dataset and skew, *"reusing the FedAvg runs already present in the
+benchmark grid"* (§4.3.6). Dispatched in file order, those runs arrive at step 13 —
+after the freeze they are supposed to decide. The dependency is circular unless
+FedAvg's rows are pulled forward, so they are (Decision 71).
+
+7. `--matrix benchmark_grid --only fedavg`. CIFAR-10, α ∈ {0.1, 1.0}, 3 seeds.
+   **These are six of Stage 4's own 42 rows, not additional runs**, dispatched
+   early under the same `experiment_group` and into the same directories; step 13's
+   `--skip_completed` passes over them. `--only` refuses an unrecognized label
+   rather than scheduling an empty sweep.
+   They are the one confirmatory cell that runs before the step-10 tag. That is
+   disclosed in §4.3.6 rather than finessed, and it is admissible because FedAvg is
+   invariant to all three artifacts the tag locks: it carries no refinement layer,
+   no formulation, and no tunable constant (which is why Stage 1b excludes it).
+   Nothing else may move across the tag on this argument.
+
 ### Stage 2 — Formulation study (30 runs)
 
-7. `--matrix formulation_study`. Must carry Stage 1's surviving layer: its
+8. `--matrix formulation_study`. Must carry Stage 1's surviving layer: its
    Formulation 1 cell is Ablation Configuration 4's parity anchor, and an anchor only
    anchors if it carries the same refinement layer as the arm.
-8. **Resolve the verdict, then write the formulation.** `select_winner` returns one
+9. **Resolve the verdict, then write the formulation.** `select_winner` returns one
    verdict *per skew* — two, structurally, since the study runs both. Collapse them
    with `scripts/analysis.py:resolve_frozen_formulation`, which implements the
    pre-registered rule (Decisions 64–65, §4.3.6): skews agreeing freezes that
@@ -121,38 +140,38 @@ sequenced it that way and because nothing is lost by the ordering. Held-out
 
 ### Stage 2b — Tag the pre-registration
 
-9. Re-run `scripts/dump_frozen_configs.py` and `pytest tests/test_simulation.py`, then
+10. Re-run `scripts/dump_frozen_configs.py` and `pytest tests/test_simulation.py`, then
    **git-tag once.** The tag carries all three of §4.3.1's locked artifacts: the fixed
    mechanism set (step 5), the baseline hyperparameter table (step 6), and the selected
-   formulation (step 8). Manuscript §6.2 promises this tag. Nothing downstream of here
+   formulation (step 9). Manuscript §6.2 promises this tag. Nothing downstream of here
    may edit a frozen config; an anomaly during confirmation opens a new labelled
    exploration round instead (§4.3.1).
 
 ### Stage 3 — Ablation (42 runs)
 
-10. **Before dispatch**, if Formulation 1 or 2 was frozen at step 8, revisit
+11. **Before dispatch**, if Formulation 1 or 2 was frozen at step 9, revisit
     `fedmaq_no_data` and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` —
     `fedmaq_no_data`'s removal becomes `gamma2=0`, and `fedmaq_no_state` drops its
     `formulation` override and stops being the fallback arm. Each is now a one-line
     change in a file that contains only its removal. The arms are currently pinned to
     Formulation 3 through `fedmaq.yaml`. Re-run `scripts/dump_frozen_configs.py`
     afterwards.
-11. `--matrix ablation`.
+12. `--matrix ablation`.
 
 ### Stage 4 — Primary grid (105 runs) and control arm (6 runs)
 
 The six baselines here need Stage 1b's verdict, not Stage 1's; FedMAQ's own rows need
 the freeze.
 
-12. `--matrix benchmark_grid` (CIFAR-10, 42), `--matrix benchmark_grid_cifar100` (42),
+13. `--matrix benchmark_grid --skip_completed` (CIFAR-10, 42), `--matrix benchmark_grid_cifar100` (42),
     `--matrix benchmark_grid_femnist` (21). All three share one `experiment_group`, so
     `analysis.py` reads them as the single 105-run grid the manuscript describes.
-13. `--matrix uniform_memory_control` (6).
+14. `--matrix uniform_memory_control` (6).
 
 **42 + 42 + 21 + 42 + 6 = 153 confirmatory, plus the 30-run formulation study = 183
 reported.** The exploration phase's own runs are outside that total: `pass2_explore`
 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs at
-the held-out α = 0.3, plus the conditional 6-run recheck at step 8 if the frozen
+the held-out α = 0.3, plus the conditional 6-run recheck at step 9 if the frozen
 formulation is not 3. The formulation study declares `phase: explore`, not `formal`: §4.3.1
 makes it the culmination of the exploration phase, whose verdict is frozen and
 tagged, so it necessarily precedes the grid it configures. The headline total is

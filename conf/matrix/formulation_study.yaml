@@ -24,6 +24,22 @@
 # carry its surviving refinement layer, and Configuration 4's anchor only anchors
 # if it carries the same layer as the arm.
 #
+# ALSO BEFORE DISPATCH: the benchmark grid's six CIFAR-10 `fedavg` rows (Stage 1c,
+# `run_matrix.py --matrix benchmark_grid --only fedavg`). The winner rule here is
+# not scale-free -- every candidate is judged against a floor of 90% of
+# uncompressed FedAvg's final accuracy at its own skew, and analysis.py raises
+# rather than guessing if those runs are absent. They are grid rows dispatched
+# early, not extra runs; see benchmark_grid.yaml's header and Decision 71.
+#
+# The five arms below are the ONLY formulation candidates. scripts/analysis.py
+# scopes them by this file's `experiment_group`, because the exploration
+# factorial, the R=100 confirmation, the conditional recheck and the grid all
+# dispatch `algorithm=fedmaq` and fedmaq.yaml carries `formulation: 3` -- so on
+# algorithm and formulation alone they are indistinguishable from a candidate
+# here. The grid's rows are the dangerous ones: they run with post_process=true,
+# and pooling them into Formulation 3's cell would credit the incumbent formula
+# with the payload savings this study exists to withhold.
+#
 # SELECTION IS SEQUENTIAL, AND THE CIRCULARITY IS BOUNDED
 #
 # The refinements were selected with the formulation held at 3, and the
