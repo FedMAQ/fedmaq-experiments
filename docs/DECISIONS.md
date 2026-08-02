@@ -1316,12 +1316,55 @@ tasks, and closed by measurement rather than by inspection.
       `grad_norm_ema` all discard. Per Decision 60 / the `pass3_freeze_confirm.yaml`
       header, an empty Stage-2 set means `fedmaq.yaml` freezes unrefined and
       Ablation Configuration 8 drops — no subset retries, no tuning rescue.
-    - **Open, not decided here:** whether `pass3_freeze_confirm` (Stage 3, 8
-      R=100 runs, ~10h) still dispatches given the surviving-set arm would be
-      config-identical to the unrefined arm (both all-`false`) — a
-      re-test-against-itself the manuscript's stage description didn't
-      anticipate being degenerate. Leaning toward skipping it as redundant
-      given the evidence is already unanimous across three independent cells,
-      but this is manuscript-visible (skips a pre-registered stage) and left
-      for explicit sign-off next session rather than decided unilaterally under
-      a fading context window.
+    - **Resolved same day:** user confirmed skipping `pass3_freeze_confirm`
+      given the surviving-set arm would be config-identical to unrefined — see
+      Decision 80.
+
+---
+
+## 2026-08-02 — Empty-freeze branch executed: `pass3_freeze_confirm` skipped, refinement layer frozen unrefined
+
+80. **`pass3_freeze_confirm` (Stage 1 step 4, 8 R=100 runs) skipped as degenerate,
+    and the pre-registered empty-freeze branch (Decision 60) executed directly
+    from Decision 79's Stage-2 verdict.** User sign-off: both of Stage 3's arms
+    would have been config-identical to unrefined (surviving set = ∅), so it
+    would have spent ~10h of allocation time re-testing unrefined against
+    itself. This is a documented interpretation, not something the
+    manuscript's stage description explicitly anticipates — chapter_4.tex
+    §4.3.1 frames Stage 3 as running unconditionally to re-test "the surviving
+    set... against the unrefined configuration," without an explicit
+    empty-set-at-Stage-2 branch. Flagged here rather than silently elided.
+    - **`conf/algorithm/fedmaq.yaml`**: `soft_voting`, `ema_student`,
+      `grad_norm_ema` all set `false`, with an inline comment pointing at this
+      decision so a future edit doesn't casually flip them back to chase a
+      config-level improvement.
+    - **Ablation Configuration 8 dropped** from `conf/matrix/ablation.yaml`
+      (`fedmaq_no_refinements` arm removed; header comment updated 7→6 net-new
+      arms, 42→36 runs) — nothing left for it to remove, per
+      `test_configuration_8_exists_only_while_there_is_a_layer_to_remove`
+      (already existed, already enforcing this; it started passing once the
+      freeze landed).
+    - **`conf/algorithm/fedavg_kd.yaml`** (Ablation Configuration 6):
+      `ema_student` flipped `true`→`false` to keep mirroring the frozen value
+      per `test_ablation_arms_share_one_refinement_layer`'s existing rule —
+      not a new decision, just the existing rule's output changing with the
+      freeze.
+    - **`tests/test_simulation.py::test_ablation_grid_never_turns_the_post_process_pipeline_on`**
+      had a literal `len(matrix["runs"]) == 7`; changed to derive the expected
+      count from `_frozen_refinements()` (6 when empty, 7 otherwise) so it
+      doesn't need hand-editing at the next freeze the way this literal did.
+    - **Regenerated** `docs/freeze/resolved_configs.yaml`
+      (`scripts/dump_frozen_configs.py`). Full suite: 188 passed.
+    - **Confirmatory grid total now 177, not 183** (147 confirmatory + 30
+      formulation study; ablation 42→36). `docs/STATUS.md` and
+      `docs/RUNBOOK.md` updated to match.
+    - **Not done, explicitly out of scope for this repo:** the sibling
+      `fedmaq-manuscript` repo's `chapter_6.tex` §6.2 contribution bullet that
+      rests on Configuration 8's contrast needs withdrawing, and any other
+      run-count prose (§4.5's 183, ablation's 42) needs updating there. Left
+      for a session with that repo in scope.
+    - **Not done, deliberately:** no git tag. RUNBOOK.md step 10 (Stage 2b)
+      is explicit that the tag locks three things together — mechanism set,
+      baseline hyperparameter table, and selected formulation — and only the
+      first exists yet. Stage 1b (`baseline_tuning`) and Stage 2
+      (`formulation_study`) still gate it.

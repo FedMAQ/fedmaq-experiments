@@ -416,9 +416,16 @@ def test_ablation_grid_never_turns_the_post_process_pipeline_on():
         "matrix. Inheriting it from benchmark_grid.yaml reintroduces the "
         "pipeline as a second removal in every other arm."
     )
-    assert len(matrix["runs"]) == 7, (
-        "§4.3.7 dispatches 7 net-new arms (42 runs); only Configuration 1, "
-        "uncompressed FedAvg, is inherited from the primary grid."
+    # Configurations 2-7 are always net-new; Configuration 8 (fedmaq_no_refinements)
+    # only exists while there is a frozen refinement layer to remove (Decision 60,
+    # test_configuration_8_exists_only_while_there_is_a_layer_to_remove). Deriving
+    # the expected count from that same condition means this assertion doesn't need
+    # hand-editing in lockstep with a freeze the way a literal would.
+    expected_arms = 7 if _frozen_refinements() else 6
+    assert len(matrix["runs"]) == expected_arms, (
+        f"§4.3.7 dispatches {expected_arms} net-new arms ({expected_arms * 6} runs) "
+        f"given the current freeze; only Configuration 1, uncompressed FedAvg, is "
+        f"inherited from the primary grid."
     )
 
 

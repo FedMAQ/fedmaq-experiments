@@ -20,5 +20,5 @@ post_process: false
 # for parity with every other arm.
 soft_voting: false        # INAPPLICABLE (weights teacher logits by bit-width; nothing is quantized)
 grad_norm_ema: false      # INAPPLICABLE (smooths the signal feeding the quantization planner)
-ema_student: true
+ema_student: false        # Mirrors the frozen value (Decision 79/80: empty surviving set) — not INAPPLICABLE, just off
 ema_decay: 0.7

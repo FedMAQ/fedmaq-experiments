@@ -94,6 +94,9 @@ the 183.
    smallest *cell* that cleared the margin, never a union across cells.
 4. `--matrix pass3_freeze_confirm` — R=100, **8 runs** (unrefined arm at five seeds,
    surviving-set arm at three). Use `--run_timeout_seconds 4200`.
+   **Skipped 2026-08-02** (Decision 79/80): Stage 1's surviving set came back
+   empty, making both arms config-identical to unrefined — nothing to confirm.
+   Went straight to step 5's empty-freeze branch instead.
 5. **Freeze the refinement layer.** Write the surviving set into
    `conf/algorithm/fedmaq.yaml` — **and only there.** The §4.3.7 arms inherit that
    file via their Hydra defaults list and restate only their own removal, so one edit
@@ -198,14 +201,17 @@ the freeze.
     `analysis.py` reads them as the single 105-run grid the manuscript describes.
 14. `--matrix uniform_memory_control` (6).
 
-**42 + 42 + 21 + 42 + 6 = 153 confirmatory, plus the 30-run formulation study = 183
-reported.** The exploration phase's own runs are outside that total: `pass2_explore`
+**42 + 42 + 21 + 36 + 6 = 147 confirmatory, plus the 30-run formulation study = 177
+reported.** (Ablation dropped from 42 to 36 on 2026-08-02 — Stage 1's noise-margin
+verdict was an empty surviving set, so Configuration 8 has nothing left to remove;
+Decisions 60, 79/80. `chapter_6.tex` §6.2's contribution bullet resting on that
+contrast still needs withdrawing in the sibling manuscript repo.) The exploration
+phase's own runs are outside that total: `pass2_explore`
 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs at
 the held-out α = 0.3, plus the conditional 6-run recheck at step 9 if the frozen
 formulation is not 3. The formulation study declares `phase: explore`, not `formal`: §4.3.1
 makes it the culmination of the exploration phase, whose verdict is frozen and
-tagged, so it necessarily precedes the grid it configures. The headline total is
-unchanged; only the labelling is. `test_primary_grid_files_dispatch_all_105_runs`
+tagged, so it necessarily precedes the grid it configures. `test_primary_grid_files_dispatch_all_105_runs`
 asserts the primary-grid share of that arithmetic.
 
 ---

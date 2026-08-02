@@ -1,5 +1,14 @@
 # Ablation study, manuscript §4.3.7. Leave-one-out: each arm is full FedMAQ with
-# exactly one component removed. 7 net-new arms x 2 alpha x 3 seeds = 42 runs.
+# exactly one component removed. 6 net-new arms x 2 alpha x 3 seeds = 36 runs.
+#
+# CONFIGURATION 8 DROPPED (Decision 79/80): pass2_factorial's surviving refinement
+# set came back empty, so fedmaq.yaml froze unrefined (soft_voting/ema_student/
+# grad_norm_ema all false). Configuration 8 removed "the frozen refinement layer";
+# an empty layer has nothing left to remove, so the arm would duplicate
+# Configuration 7 and report pure noise as a component's contribution.
+# tests/test_simulation.py::test_configuration_8_exists_only_while_there_is_a_layer_to_remove
+# enforces this — it will fail again if a future freeze re-enables any refinement
+# and this arm is not restored.
 #
 # WHY CONFIGURATION 7 IS LISTED HERE AND NOT INHERITED
 #
@@ -66,6 +75,5 @@ runs:
   # Configuration 7: full FedMAQ, pipeline-free. The study's parity anchor.
   - alg: fedmaq
     label: config7-full-fedmaq
-  # Configuration 8: frozen refinement layer removed.
-  - alg: fedmaq_no_refinements
-    label: config8-no-refinements
+  # Configuration 8 (fedmaq_no_refinements) dropped — see file header,
+  # Decision 79/80. Empty frozen refinement layer, nothing left to remove.

@@ -55,16 +55,20 @@ server_compute_speed: 5000.0  # simulated server samples/sec for MobileNetV2GN K
 post_process: false
 
 # --- Priority 1: Quantization-Aware Soft-Voting ---
-soft_voting: true          # Enable entropy + precision weighting in distillation
+# FROZEN false — Decision 79/80: pass2_factorial's noise-margin verdict was an
+# empty surviving set (none of the three refinements below cleared the margin).
+# Do not flip these to chase a config-level "improvement"; the freeze is the
+# pre-registered outcome of Decision 60, not a default awaiting a better run.
+soft_voting: false         # Enable entropy + precision weighting in distillation
 entropy_weight: 1.0        # Scaling factor for entropy confidence weighting
 precision_weight: 1.0      # Scaling factor for bit-width precision weighting
 
 # --- Priority 2: EMA Student Model ---
-ema_student: true          # Enable exponential moving average of student params
+ema_student: false         # Enable exponential moving average of student params
 ema_decay: 0.7             # EMA decay factor (higher = more smoothing)
 
 # --- Priority 3: Gradient Norm Smoothing ---
-grad_norm_ema: true        # Enable per-client EMA smoothing of gradient norms
+grad_norm_ema: false       # Enable per-client EMA smoothing of gradient norms
 grad_norm_beta: 0.7        # EMA smoothing factor for gradient norms (beta)
 
 # --- Client-Side KD Regularization (FedGKD-style) ---
