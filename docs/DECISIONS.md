@@ -1275,3 +1275,53 @@ tasks, and closed by measurement rather than by inspection.
     into it, not that the threshold is wrong. Did not touch `client_gpus` (still
     settled by Decision 77) or adopt `tolerate-and-record` (still not triggered —
     none of the three failures is a routine mid-run departure).
+
+---
+
+## 2026-08-02 — `pass2_factorial` completed; surviving set is empty
+
+79. **All 26 `pass2_factorial` runs completed clean under the Decision 78 fix, and
+    the noise-margin verdict (`scripts/analysis_output/exploration_margin.json`)
+    is an empty surviving set — none of the seven cells clears the margin.**
+    Reference cell (unrefined, 5 seeds, α=0.3): mean 0.3974, σ=0.0393 (95% CI
+    0.024–0.113), margin=√2σ=0.0556. Best cell (`soft_voting` alone, 3 seeds):
+    mean 0.4307, delta +0.0333 — positive but under the margin.
+    `soft_voting+grad_norm_ema` (+0.0349) is the factorial's overall max delta;
+    still non-clearing. `grad_norm_ema` alone: mean 0.3797, delta **−0.0176**.
+    `ema_student` alone: mean 0.3793, delta **−0.0181**, with one seed (123)
+    collapsing to 0.2829 against the other two at 0.41/0.45 — individually
+    destabilizing, not merely flat.
+    - **Verified this is not a data-quality artifact.** User raised a fair
+      concern given σ's wide 5-seed CI and the re-dispatch's troubled history
+      (Decision 78): per-seed accuracies were pulled directly (not just the
+      aggregate) for all three single-mechanism cells. Unrefined's spread
+      (0.3505–0.4433) has no single outlier driving it — it is real seed-to-seed
+      variance at α=0.3. `soft_voting`'s three seeds (0.4242/0.4297/0.4382) sit
+      **inside** the unrefined range and **below** unrefined's best seed
+      (0.4433) — a mechanism that cannot beat the control's best draw has not
+      distinguished itself from noise.
+    - **Declined to relax the margin post-hoc.** `soft_voting` is the maximum
+      delta of 7 cells; the expected max of 7 noisy comparisons is positive even
+      under a pure null, so "the best cell looks promising" is the multiplicity
+      trap the margin and the R=100 confirmation stage exist to control, not
+      evidence the margin is miscalibrated. Advancing it (or re-testing a subset
+      at R=100) is exactly the "subset retry to rescue a mechanism" the
+      `pass3_freeze_confirm.yaml` header pre-registers against. A Welch's-t
+      framing was considered and rejected as a workaround: it ignores the
+      best-of-7 selection entirely, and the only reason it reads as
+      "borderline" is `soft_voting`'s tight but noise-unreliable 3-seed
+      variance (sd≈0.007) — exactly why the protocol keys the margin off the
+      5-seed reference arm instead of a 3-seed treatment arm.
+    - **Per `surviving_refinement_set: []`**: `soft_voting`, `ema_student`,
+      `grad_norm_ema` all discard. Per Decision 60 / the `pass3_freeze_confirm.yaml`
+      header, an empty Stage-2 set means `fedmaq.yaml` freezes unrefined and
+      Ablation Configuration 8 drops — no subset retries, no tuning rescue.
+    - **Open, not decided here:** whether `pass3_freeze_confirm` (Stage 3, 8
+      R=100 runs, ~10h) still dispatches given the surviving-set arm would be
+      config-identical to the unrefined arm (both all-`false`) — a
+      re-test-against-itself the manuscript's stage description didn't
+      anticipate being degenerate. Leaning toward skipping it as redundant
+      given the evidence is already unanimous across three independent cells,
+      but this is manuscript-visible (skips a pre-registered stage) and left
+      for explicit sign-off next session rather than decided unilaterally under
+      a fading context window.
