@@ -2,7 +2,9 @@ name: feddistill
 # FedDistill+ (Zhu et al. 2021): FedAvg weights + per-class logit distillation.
 # Clients regularize local training toward the broadcast consensus logits with
 # loss = CE + reg_alpha * KLDiv(log_softmax(z), softmax(global_logits[y])).
-reg_alpha: 1.0  # weight of the label-wise logit-distillation regularizer
+# Formerly: reg_alpha: 1.0 (published value)
+# Revised: reg_alpha updated to 0.5 following Stage 1b baseline_tuning (cleared noise margin by +2.23pp on MobileNetV2GN).
+reg_alpha: 0.5  # weight of the label-wise logit-distillation regularizer
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

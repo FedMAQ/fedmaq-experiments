@@ -7,9 +7,8 @@ multirun/
 # this file. A `dir/` rule stops git descending, which makes re-inclusion of
 # anything beneath it impossible regardless of later negations.
 references/
+temp.md
 wandb/
-/experiment_log.csv
-/experiment_log.jsonl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -3,7 +3,9 @@ name: fedprox
 # report best values of 1, 1, 1, 0.001, 0.01. The 0.01 this file used to carry
 # is the best value for Sent140 (LSTM sentiment); for both image datasets the
 # published best is 1. Manuscript §4.3.2, Table 4.1.
-mu: 1.0
+# Formerly: mu: 1.0 (published value for image datasets)
+# Revised: mu updated to 0.01 following Stage 1b baseline_tuning (cleared noise margin by +2.67pp on MobileNetV2GN).
+mu: 0.01
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
