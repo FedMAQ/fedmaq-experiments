@@ -8,6 +8,7 @@ multirun/
 # anything beneath it impossible regardless of later negations.
 references/
 temp.md
+HANDOFF.md
 wandb/
 
 # Byte-compiled / optimized / DLL files
