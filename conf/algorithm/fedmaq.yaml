@@ -39,10 +39,12 @@ tau_n: 0.5       # Alternative 4 (dataset size threshold)
 # applies no temperature to its server-side ensemble at all, and DynFed (He et
 # al. 2025) never mentions one. Do NOT cite FedMD here: it aligns raw logits
 # without applying a softmax, and does so client-side.
-# More decisive here: soft_voting reads each teacher's output entropy as a
-# confidence signal (kd_utils.py entropy_weights), and raising T pushes every
-# teacher toward maximum entropy, collapsing the spread that weighting needs.
-# Rationale is written up in manuscript chapter_5.tex §5.2 and chapter_3.tex §3.4.
+# A third ground used to sit here and no longer holds: soft_voting reads teacher
+# output entropy as a confidence signal (kd_utils.py entropy_weights), which a
+# raised T would collapse. soft_voting is frozen false (Decision 79/80), so that
+# argument defends a shipped setting by a mechanism that does not ship — the same
+# error corrected in the manuscript. The two grounds above stand on their own.
+# Written up in manuscript chapter_4.tex §4.2, chapter_5.tex §5.2, chapter_6.tex §6.3.
 temperature: 1.0
 kd_epochs: 1           # distillation passes over D_proxy per round
 server_kd_lr: 0.01     # SGD learning rate for global student during KD
