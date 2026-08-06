@@ -67,6 +67,12 @@ class RunRecord:
     # of the run and not of the algorithm config; the ablation table reports it as
     # a regime note.
     post_process: bool = False
+    # The matrix's ``variant:`` label, read back off the path segment
+    # ``<algorithm>__<variant>``. Stage 1b sweeps one knob per baseline, so the
+    # cells differ in *nothing* this dataclass otherwise records -- same
+    # algorithm, same config name, same group, same skew. See
+    # :func:`baseline_tuning_margin`.
+    variant: str = ""
 
     def __post_init__(self) -> None:
         # A record built without an explicit config name (a hand-constructed
@@ -115,6 +121,25 @@ def phase_and_group_of(job_dir: Path, experiments_root: Path) -> tuple[str | Non
     return None, None
 
 
+def variant_of(job_dir: Path, experiments_root: Path) -> str:
+    """The matrix ``variant:`` label, recovered from the algorithm path segment.
+
+    ``common.get_canonical_output_dir`` writes it as ``<algorithm>__<variant>``
+    and nothing else records it -- not the resolved Hydra config, which holds the
+    *value* of the swept override but not the label, and not
+    ``hydra.runtime.choices``, which names the same ``conf/algorithm/*.yaml`` for
+    every cell of a Stage 1b baseline. Runs outside the canonical layout, and
+    matrices that set no ``variant:``, return ``""``.
+    """
+    try:
+        parts = job_dir.resolve().relative_to(experiments_root.resolve()).parts
+    except ValueError:
+        return ""
+    if len(parts) == 7 and parts[0] == "outputs" and "__" in parts[4]:
+        return parts[4].split("__", 1)[1]
+    return ""
+
+
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
     """Join every run's telemetry CSV against its resolved Hydra config.
 
@@ -159,6 +184,7 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 experiment_group=group,
                 phase=phase,
                 post_process=bool(cfg["algorithm"].get("post_process", False)),
+                variant=variant_of(job_dir, experiments_root),
             )
         )
     return runs
@@ -484,6 +510,120 @@ def exploration_noise_margin(
     }
 
 
+# Stage 1b's group and its per-baseline reference cells: the variant label of the
+# value each baseline already ships, which is the value Table 4.1 reports and the
+# one a challenger has to beat by more than the margin to displace. Sourced from
+# conf/matrix/baseline_tuning.yaml, which is authoritative.
+BASELINE_TUNING_GROUP = "baseline_tuning"
+BASELINE_REFERENCE_VARIANTS = {
+    "fedprox": "mu1p0",
+    "fedpaq": "q8",
+    "dadaquant": "phi10",
+    "feddistill": "a1p0",
+    "fedkd": "t0p95",
+}
+
+
+def baseline_tuning_margin(
+    runs: list[RunRecord],
+    alpha: float = EXPLORATION_ALPHA,
+    experiment_group: str = BASELINE_TUNING_GROUP,
+    reference_variants: dict[str, str] | None = None,
+) -> dict:
+    """Stage 1b's keep-or-drop verdicts, per baseline (§4.3.2, Decision 81).
+
+    Deliberately not :func:`exploration_noise_margin`, which
+    ``conf/matrix/baseline_tuning.yaml``'s header used to name: that function
+    filters ``algorithm == "fedmaq"`` and would report every Stage 1b run as
+    absent. The *rule* is identical -- sigma from the reference cell, margin
+    ``sqrt(2) * sigma`` because a delta carries the variance of both arms, and a
+    challenger adopted only if it strictly clears -- which is what makes §4.3.2's
+    parity claim procedural rather than asserted. What differs is only the axis:
+    the reference is each baseline's shipped value rather than unrefined FedMAQ,
+    and the arms are variants of one knob rather than refinement subsets.
+
+    Until this existed, Decision 81's numbers came from an ad-hoc script that was
+    never committed, so the two constants it moved into Table 4.1 -- FedProx's
+    ``mu`` and FedDistill's ``reg_alpha`` -- were not reproducible from the
+    repository that the pre-registration tag freezes.
+    """
+    refs = BASELINE_REFERENCE_VARIANTS if reference_variants is None else reference_variants
+    scoped = [
+        r
+        for r in runs
+        if r.phase == EXPLORATION_PHASE
+        and r.experiment_group == experiment_group
+        and r.alpha == alpha
+    ]
+    contaminated = sorted(
+        {
+            r.alpha
+            for r in runs
+            if r.phase == EXPLORATION_PHASE
+            and r.experiment_group == experiment_group
+            and r.alpha != alpha
+        }
+    )
+
+    baselines: dict[str, dict] = {}
+    for algorithm, ref_variant in sorted(refs.items()):
+        members = [r for r in scoped if r.algorithm == algorithm]
+        cells: dict[str, list[float]] = {}
+        for r in members:
+            df = load_round_metrics(r.csv_path)
+            cells.setdefault(r.variant, []).append(accuracy_at_round(df, 100))
+
+        ref_accs = cells.get(ref_variant, [])
+        if len(ref_accs) < 3:
+            baselines[algorithm] = {
+                "reference_variant": ref_variant,
+                "error": (
+                    f"reference cell '{ref_variant}' has {len(ref_accs)} run(s); "
+                    "sigma needs at least 3. No verdict is issued -- a margin "
+                    "estimated from fewer runs would decide two adoptions."
+                ),
+                "variants_present": sorted(cells),
+            }
+            continue
+
+        ref_mean = statistics.fmean(ref_accs)
+        sigma = statistics.stdev(ref_accs)
+        margin = math.sqrt(2.0) * sigma
+        challengers: dict[str, dict] = {}
+        for variant in sorted(cells):
+            if variant == ref_variant:
+                continue
+            mean = statistics.fmean(cells[variant])
+            delta = mean - ref_mean
+            challengers[variant] = {
+                "mean": mean,
+                "n": len(cells[variant]),
+                "delta": delta,
+                "clears_margin": delta > margin,
+            }
+
+        clearing = [v for v, c in challengers.items() if c["clears_margin"]]
+        adopted = max(clearing, key=lambda v: challengers[v]["delta"]) if clearing else None
+        baselines[algorithm] = {
+            "reference_variant": ref_variant,
+            "reference": {"mean": ref_mean, "sigma": sigma, "n": len(ref_accs)},
+            "margin": margin,
+            "challengers": challengers,
+            # None means the shipped value held. That is the stage's expected
+            # product, not a null sweep -- see the matrix header.
+            "adopted_variant": adopted,
+            "retained_shipped_value": adopted is None,
+        }
+
+    return {
+        "alpha": alpha,
+        "experiment_group": experiment_group,
+        "rule": "delta > sqrt(2) * sigma(reference cell); ties by larger delta",
+        "baselines": baselines,
+        "other_skews_present": contaminated,
+    }
+
+
 def load_round_metrics(csv_path: Path) -> pd.DataFrame:
     """Load a single job's per-round telemetry CSV."""
     return pd.read_csv(csv_path)
@@ -701,6 +841,13 @@ def iso_byte_scores(
             at_budget = _mean_sd(accs_at_budget)
             groups[label] = {
                 "seeds": seeds,
+                # A seed whose *first* logged round already exceeds B scores None
+                # and drops out of the mean. B = min(finals) makes that rare, but
+                # silent it must not be: it shrinks n for one arm only, and the
+                # comparison stops being at equal seeds without saying so.
+                "seeds_unscorable_at_budget": sorted(
+                    s for s, v in seeds.items() if v["accuracy_at_budget"] is None
+                ),
                 # Both the summary dict and the bare mean: the SD is what says
                 # whether a mid-climb number is a plateau or a lucky sample, and
                 # no smoothing window may be used to answer that -- a window is
@@ -1632,6 +1779,13 @@ def main() -> None:
         default=Path("scripts/analysis_output/fedavg_at_fedmaq_budget.json"),
         help="Uncompressed FedAvg scored at the frozen formulation's byte budget.",
     )
+    parser.add_argument(
+        "--baseline-tuning-output",
+        type=Path,
+        default=Path("scripts/analysis_output/baseline_tuning_margin.json"),
+        help="Stage 1b keep-or-drop verdicts -- the provenance for the two "
+        "Table 4.1 constants Decision 81 moved.",
+    )
     args = parser.parse_args()
 
     runs = discover_runs(args.experiments_root)
@@ -1754,6 +1908,22 @@ def main() -> None:
             "  WARNING: FedMAQ runs found at non-exploration skews "
             f"{exploration['other_skews_present']}. §4.3.1 holds exploration at "
             f"alpha={EXPLORATION_ALPHA}; check conf/matrix/pass2_explore.yaml."
+        )
+
+    # Stage 1b (§4.3.2, Decision 81). Table 4.1's provenance: the tag freezes that
+    # table, so it has to be reproducible from committed code.
+    baseline_tuning = baseline_tuning_margin(runs)
+    with open(args.baseline_tuning_output, "w", encoding="utf-8") as f:
+        json.dump(baseline_tuning, f, indent=2)
+    print(f"Wrote baseline matched-tuning verdicts to {args.baseline_tuning_output}")
+    for algorithm, cell in sorted(baseline_tuning["baselines"].items()):
+        if "error" in cell:
+            print(f"  {algorithm}: {cell['error']}")
+            continue
+        adopted = cell["adopted_variant"] or f"{cell['reference_variant']} (shipped, retained)"
+        print(
+            f"  {algorithm}: sigma={cell['reference']['sigma']:.4f} "
+            f"margin={cell['margin']:.4f} -> {adopted}"
         )
 
     # §4.3.7 / §5.4 ablation matrix.

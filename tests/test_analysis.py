@@ -1,5 +1,6 @@
 """Unit tests for scripts/analysis.py: baseline-comparison deltas and tie-break rule."""
 
+import math
 import sys
 from pathlib import Path
 
@@ -10,12 +11,14 @@ from omegaconf import OmegaConf
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from analysis import (
+    BASELINE_TUNING_GROUP,
     EXPLORATION_GROUP,
     FORMULATION_STUDY_GROUP,
     GRID_GROUP,
     RunRecord,
     accuracy_at_budget,
     accuracy_at_round,
+    baseline_tuning_margin,
     build_ablation_table,
     compare_to_baselines,
     compare_to_baselines_iso_byte,
@@ -31,6 +34,7 @@ from analysis import (
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
+    variant_of,
 )
 from common import get_canonical_output_dir
 
@@ -1421,3 +1425,149 @@ def test_ablation_iso_byte_refuses_a_budget_read_off_a_half_finished_arm(tmp_pat
     assert table["iso_byte"]["incomplete_runs"] == ["fedmaq_no_resource_a0.1_f3_s0"]
     assert not table["parity"]["attributable"]
     assert any("never logged round 100" in v for v in table["parity"]["violations"])
+
+
+# --- Stage 1b: baseline matched-tuning margin (§4.3.2, Decision 81) ---
+
+
+def _tuning_run(tmp_path, algorithm, variant, seed, final_acc, alpha=0.3):
+    """One Stage 1b run. The cells of a baseline's sweep differ in nothing the
+    record holds *except* ``variant`` -- same algorithm, config name, group and
+    skew -- which is why the field exists."""
+    job_dir = tmp_path / f"{algorithm}__{variant}_{seed}"
+    job_dir.mkdir()
+    csv_path = job_dir / "experiment_log.csv"
+    _df([1, 50, 100], [0.3, 0.5, final_acc], [10, 20, 30]).to_csv(csv_path, index=False)
+    return RunRecord(
+        job_dir=job_dir,
+        dataset="cifar10",
+        alpha=alpha,
+        algorithm=algorithm,
+        formulation=None,
+        seed=seed,
+        csv_path=csv_path,
+        experiment_group=BASELINE_TUNING_GROUP,
+        phase="explore",
+        variant=variant,
+    )
+
+
+def _cell(tmp_path, algorithm, variant, accs):
+    return [
+        _tuning_run(tmp_path, algorithm, variant, seed, acc)
+        for seed, acc in zip(range(len(accs)), accs, strict=True)
+    ]
+
+
+def _five_seeds_with(mean, sigma):
+    """Five accuracies whose fmean and stdev are exactly ``mean`` and ``sigma``.
+
+    Decision 81 recorded each reference cell's summary statistics but not its raw
+    per-seed values, so the fixtures reconstruct a cell consistent with what was
+    published rather than inventing unrelated numbers. Spacing ``[-2d, -d, 0, d,
+    2d]`` has stdev ``d*sqrt(2.5)``.
+    """
+    d = sigma / math.sqrt(2.5)
+    return [mean + k * d for k in (-2, -1, 0, 1, 2)]
+
+
+def test_baseline_tuning_margin_reproduces_decision_81_fedprox(tmp_path):
+    """FedProx's two challengers both clear; the larger delta is adopted.
+
+    Reconstructed from Decision 81's own published figures: reference mu=1.0 at
+    0.5423 +- 0.0124 (n=5), challengers mu=0.01 at 0.5690 and mu=0.1 at 0.5677.
+    """
+    runs = _cell(tmp_path, "fedprox", "mu1p0", _five_seeds_with(0.5423, 0.0124))
+    runs += _cell(tmp_path, "fedprox", "mu0p01", [0.5690] * 3)
+    runs += _cell(tmp_path, "fedprox", "mu0p1", [0.5677] * 3)
+
+    cell = baseline_tuning_margin(runs)["baselines"]["fedprox"]
+
+    assert cell["reference"]["mean"] == pytest.approx(0.5423)
+    assert cell["reference"]["sigma"] == pytest.approx(0.0124)
+    assert cell["margin"] == pytest.approx(0.0175, abs=5e-5)
+    assert cell["challengers"]["mu0p01"]["delta"] == pytest.approx(0.0267, abs=5e-5)
+    assert cell["challengers"]["mu0p1"]["delta"] == pytest.approx(0.0254, abs=5e-5)
+    assert cell["challengers"]["mu0p01"]["clears_margin"]
+    assert cell["challengers"]["mu0p1"]["clears_margin"]
+    # Both clear, so the tie-break decides -- and it decides on delta, which is
+    # the only reason conf/algorithm/fedprox.yaml ships 0.01 rather than 0.1.
+    assert cell["adopted_variant"] == "mu0p01"
+    assert cell["retained_shipped_value"] is False
+
+
+def test_baseline_tuning_margin_reproduces_decision_81_fedpaq_retention(tmp_path):
+    """FedPAQ's challengers both score *higher* and neither is adopted.
+
+    The retention case is the one the rule exists for: q=4 and q=16 beat the
+    shipped q=8 by 0.40pp and 0.38pp against a 3.08pp margin. Adopting a
+    higher-scoring arm here is exactly the manufactured winner §4.3.1 refuses.
+    """
+    runs = _cell(tmp_path, "fedpaq", "q8", _five_seeds_with(0.5629, 0.0218))
+    runs += _cell(tmp_path, "fedpaq", "q4", [0.5669] * 3)
+    runs += _cell(tmp_path, "fedpaq", "q16", [0.5667] * 3)
+
+    cell = baseline_tuning_margin(runs)["baselines"]["fedpaq"]
+
+    assert cell["margin"] == pytest.approx(0.0308, abs=5e-5)
+    assert not any(c["clears_margin"] for c in cell["challengers"].values())
+    assert all(c["delta"] > 0 for c in cell["challengers"].values())
+    assert cell["adopted_variant"] is None
+    assert cell["retained_shipped_value"] is True
+
+
+def test_baseline_tuning_margin_refuses_an_underpowered_reference_cell(tmp_path):
+    """A margin estimated from two runs would still decide two adoptions."""
+    runs = _cell(tmp_path, "fedkd", "t0p95", [0.40, 0.41])
+    runs += _cell(tmp_path, "fedkd", "t0p85", [0.50] * 3)
+
+    cell = baseline_tuning_margin(runs)["baselines"]["fedkd"]
+
+    assert "error" in cell
+    assert "adopted_variant" not in cell
+
+
+def test_exploration_noise_margin_cannot_analyse_stage_1b(tmp_path):
+    """The defect baseline_tuning_margin exists to fix, pinned.
+
+    conf/matrix/baseline_tuning.yaml named exploration_noise_margin as its
+    analyser until 2026-08-06. That function filters ``algorithm == "fedmaq"``,
+    so it reports a fully-completed 55-run stage as no runs at all -- silently, if
+    nobody reads the error string.
+    """
+    runs = _cell(tmp_path, "fedprox", "mu1p0", [0.54] * 5)
+
+    assert "error" in exploration_noise_margin(runs, experiment_group=BASELINE_TUNING_GROUP)
+    assert baseline_tuning_margin(runs)["baselines"]["fedprox"]["reference"]["n"] == 5
+
+
+def test_baseline_tuning_margin_flags_a_contaminating_skew(tmp_path):
+    """§4.3.1 holds every exploration stage at the held-out alpha."""
+    runs = _cell(tmp_path, "fedprox", "mu1p0", [0.54] * 5)
+    runs.append(_tuning_run(tmp_path, "fedprox", "mu1p0", 99, 0.54, alpha=0.1))
+
+    result = baseline_tuning_margin(runs)
+
+    assert result["other_skews_present"] == [0.1]
+    assert result["baselines"]["fedprox"]["reference"]["n"] == 5
+
+
+def test_variant_of_round_trips_the_canonical_output_path(tmp_path):
+    job_dir = tmp_path / get_canonical_output_dir(
+        "explore",
+        "cifar10",
+        "mobilenetv2",
+        "baseline_tuning",
+        "fedprox",
+        "dirichlet_alpha_0.3",
+        0,
+        variant="mu0p01",
+    )
+    assert variant_of(job_dir, tmp_path) == "mu0p01"
+
+
+def test_variant_of_is_empty_when_the_matrix_set_none(tmp_path):
+    job_dir = tmp_path / get_canonical_output_dir(
+        "formal", "cifar10", "mobilenetv2", "ablation", "fedmaq_no_kd", "dirichlet_alpha_0.1", 0
+    )
+    assert variant_of(job_dir, tmp_path) == ""

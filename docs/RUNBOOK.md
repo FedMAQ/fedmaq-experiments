@@ -69,7 +69,7 @@ ways this host starves a sweep that the runner's own docstring already warned ab
 
 Runs at the held-out $\alpha = 0.3$, absent from the confirmatory grid by design, so
 no mechanism is ever selected at a skew it is later reported on. Not counted among
-the 183.
+the 177.
 
 1. `--matrix pass2_explore` — screening, R=50, one seed, 4 runs. **Done 2026-07-31**
    (~70 min at `client_gpus: 1.0`, 4/4 completed). Its four cells collided into one
@@ -120,13 +120,15 @@ the 183.
 Independent of everything above — no baseline shares configuration with FedMAQ — so
 it may run concurrently with Stage 1. It is placed after it only because Decision 29
 sequenced it that way and because nothing is lost by the ordering. Held-out
-α = 0.3, uncounted among the 183, and its verdict enters the same tag at step 10.
+α = 0.3, uncounted among the 177, and its verdict enters the same tag at step 10.
 
 6. `--matrix baseline_tuning`. R=100, 55 runs (each of five baselines: a five-seed
    reference cell at its shipped Table 4.1 value, plus two three-seed challengers).
    Use `--run_timeout_seconds 4200`. Then
-   `scripts/analysis.py:exploration_noise_margin` with
-   `experiment_group="baseline_tuning"`, same √2σ rule as the factorial.
+   `scripts/analysis.py:baseline_tuning_margin`, same √2σ rule as the factorial.
+   **Not `exploration_noise_margin`**, which this line named until 2026-08-06:
+   that one filters `algorithm == "fedmaq"` and reports a completed 55-run stage
+   as no runs at all.
    **Write any challenger that clears into `conf/algorithm/<baseline>.yaml` and into
    Table 4.1.** The expected outcome is that none clears and every baseline keeps its
    published value — that is a result, not a null sweep, and §4.3.2 reports it as one.
@@ -180,7 +182,7 @@ FedAvg's rows are pulled forward, so they are (Decision 71).
    may edit a frozen config; an anomaly during confirmation opens a new labelled
    exploration round instead (§4.3.1).
 
-### Stage 3 — Ablation (42 runs)
+### Stage 3 — Ablation (36 runs)
 
 11. **Before dispatch**, if Formulation 1 or 2 was frozen at step 9, revisit
     `fedmaq_no_data` and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` —

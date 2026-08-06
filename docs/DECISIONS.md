@@ -1650,3 +1650,69 @@ tasks, and closed by measurement rather than by inspection.
       `frozen_refinement_layer()`. The artifact previously said only
       `recheck_required: true`, which reads as an owed recheck to anyone who has
       not read Decision 85.
+
+## 2026-08-06 — Table 4.1's provenance made reproducible; the tag moves
+
+87. **`conf/matrix/baseline_tuning.yaml` named an analyser that structurally
+    cannot read its own runs, so Decision 81's verdicts existed only in an
+    uncommitted script.** The header pointed at
+    `scripts/analysis.py:exploration_noise_margin`, which filters
+    `algorithm == "fedmaq"` and therefore reports a completed 55-run stage as no
+    runs at all. The two constants Decision 81 moved into Table 4.1 — FedProx
+    `mu` 1.0→0.01 and FedDistill `reg_alpha` 1.0→0.5 — were computed by the
+    ad-hoc script preserved in the gitignored `temp.md`.
+    - **`baseline_tuning_margin()` now applies the same rule from committed
+      code**: σ from each baseline's shipped-value reference cell, margin √2σ,
+      adoption only on a strictly clearing delta, tie-break by larger delta.
+      Verdicts land in `scripts/analysis_output/baseline_tuning_margin.json` and
+      are printed by `scripts/analysis.py`.
+    - **`RunRecord` gains `variant`**, recovered from the canonical path's
+      `<algorithm>__<variant>` segment. Stage 1b's cells differ in nothing else
+      the record holds — same algorithm, same config name, same group, same
+      skew — so without it a baseline's three cells are indistinguishable.
+      `variant_of()` returns `""` for matrices that set none.
+    - **Tests pin Decision 81's two outcomes**, reconstructed from its own
+      published statistics: FedProx (both challengers clear; `mu0p01` adopted on
+      the larger delta) and FedPAQ (both challengers score *higher* and neither
+      is adopted — the retention case the rule exists for). A regression test
+      pins the old defect directly.
+    - **Why this had to precede the tag.** The tag freezes Table 4.1. Tagging a
+      table whose values cannot be recomputed from the tagged tree is the weaker
+      artifact, and the tag is the thing one does not want to cut twice.
+
+88. **The `pre-registration` tag moves from `951f96a` to `b6b17b9`, and the move
+    is recorded rather than done quietly.** The old tag's message reads
+    "Formulation 3", which Decision 84 superseded, and it predates both the
+    baseline table (Decision 81) and the freeze it is supposed to carry — it
+    locked none of §4.3.1's three artifacts correctly.
+    - **The configs froze at `b6b17b9`** ("Freeze Formulation 2; re-express
+      ablation arms", 2026-08-06 14:48) — the earliest commit at which all three
+      artifacts are right: the fixed mechanism set (Decision 80, `a6419a3`), the
+      baseline table (Decision 81, `261fd62`), and the selected formulation
+      (Decision 84, `b6b17b9` itself). The `--matrix ablation` sweep dispatched
+      at ~15:00 the same day, so the arms inherited exactly that state.
+    - **The tag sits at the later `e8a5f6a`, not at `b6b17b9`, deliberately.**
+      Tagging the freeze commit was tried first and rejected on inspection: that
+      tree still names the broken `exploration_noise_margin` as Stage 1b's
+      analyser and does not contain `baseline_tuning_margin()`, so anyone who
+      checks out the tag cannot recompute Table 4.1 — which is the whole reason
+      Decision 87 was sequenced ahead of tagging. A tag whose message cites this
+      decision while its tree lacks it is self-undermining.
+      `git diff b6b17b9..e8a5f6a -- conf/algorithm/ docs/freeze/` is **empty**
+      and every `conf/` change between them is comment-only, so the later
+      placement costs nothing evidentially: the frozen values are byte-identical.
+    - **On the ordering.** RUNBOOK Stage 2b places the tag before Stage 3, and
+      the ablation ran first. That is admissible only because the tag *records* a
+      freeze rather than constituting one — and once that is granted, placement
+      is a documentation choice, so the tree that documents the freeze best wins.
+      What carries the "freeze preceded dispatch" claim is this entry, the SHAs
+      and the empty `conf/algorithm/` diff, not the tag's position. Decision 71's
+      carve-out for the Stage 1c FedAvg rows does not cover the ablation — those
+      are the uncompressed control with no knob, whereas the ablation arms are
+      removals from frozen FedMAQ. Stated here so the retrospective tag is not
+      read as a freeze reconstructed after results.
+    - Stale confirmatory totals corrected from 183 to 177 across `docs/RUNBOOK.md`,
+      `docs/STATUS.md` and four matrix headers — Decision 80 dropped Configuration
+      8 and returned the grid to 177, and every "not counted among the 183" had
+      been left behind. RUNBOOK's "Stage 3 — Ablation (42 runs)" heading, which
+      contradicted the 36 in its own arithmetic, likewise.

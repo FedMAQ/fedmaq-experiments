@@ -47,7 +47,7 @@
 # interval on sigma from roughly twelvefold to roughly fivefold. The surviving-set
 # arm stays at three: it supplies a mean, not the threshold.
 #
-# Not counted among the 183 confirmatory runs.
+# Not counted among the 177 confirmatory runs.
 phase: explore
 experiment_group: pass3_freeze_confirm
 dataset: cifar10

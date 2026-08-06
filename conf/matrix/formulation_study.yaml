@@ -67,7 +67,7 @@
 # the factorial here would spend the held-out skew's independence a second time
 # and turn a bounded sequential design into an unbounded one.
 #
-# PHASE. These runs are `explore`, not `formal`, and are not among the 183.
+# PHASE. These runs are `explore`, not `formal`, and are not among the 177.
 # chapter_4.tex:161 makes this study "the pre-registered culmination of the
 # exploration phase's search", whose verdict is written into the frozen
 # configuration and tagged -- so it necessarily precedes the freeze rather than

@@ -25,7 +25,8 @@
 # communication axis, which is the axis the ablation's claims rest on.
 #
 # So Configuration 7 runs here, without the pipeline, as the study's own parity
-# anchor. Six extra runs; the grid is 183 rather than 177. NOTHING IN THIS FILE
+# anchor. Six extra runs, which took the grid to 183 until Decision 80 dropped
+# Configuration 8 and returned it to 177. NOTHING IN THIS FILE
 # MAY SET algorithm.post_process=true -- tests/test_simulation.py enforces it.
 #
 # Configuration 1 (uncompressed FedAvg) is still inherited from the benchmark

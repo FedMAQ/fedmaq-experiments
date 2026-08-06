@@ -66,21 +66,23 @@
 #
 # THE DECISION RULE IS FEDMAQ'S OWN, UNCHANGED
 #
-# scripts/analysis.py:exploration_noise_margin, held-out alpha = 0.3, threshold
+# scripts/analysis.py:baseline_tuning_margin, held-out alpha = 0.3, threshold
 # sqrt(2)*sigma on the delta against the reference cell. A challenger is adopted
 # only if it clears; a challenger that merely scores higher is not adopted,
 # because selecting the best of several noisy measurements manufactures winners.
 # If both challengers clear, the larger delta wins. This is the same rule, the
 # same skew and the same seed budget applied to FedMAQ's own refinements, which
 # is what makes the parity claim in §4.3.2 a procedural fact rather than an
-# assertion.
+# assertion. It is a separate function from FedMAQ's own
+# `exploration_noise_margin` only because that one filters `algorithm == fedmaq`
+# and reports every run here as absent; the rule they apply is the same one.
 #
 # REGIME. Every baseline ships post_process: false and the primary grid enables
 # the post-processing pipeline on FedMAQ only, so these runs are already in the
 # regime the baselines are reported in. No override is needed and none is set;
 # tests/test_simulation.py enforces the absence.
 #
-# PHASE. These runs are `explore`, not `formal`, and are NOT among the 183.
+# PHASE. These runs are `explore`, not `formal`, and are NOT among the 177.
 # They sit at the held-out alpha = 0.3 with every other exploration run, and
 # their verdict is written into conf/algorithm/*.yaml and tagged with the rest
 # of the freeze.
