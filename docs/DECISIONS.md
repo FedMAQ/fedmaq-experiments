@@ -1691,14 +1691,14 @@ tasks, and closed by measurement rather than by inspection.
       baseline table (Decision 81, `261fd62`), and the selected formulation
       (Decision 84, `b6b17b9` itself). The `--matrix ablation` sweep dispatched
       at ~15:00 the same day, so the arms inherited exactly that state.
-    - **The tag sits at the later `e8a5f6a`, not at `b6b17b9`, deliberately.**
+    - **The tag sits at the later `0dd7ef1`, not at `b6b17b9`, deliberately.**
       Tagging the freeze commit was tried first and rejected on inspection: that
       tree still names the broken `exploration_noise_margin` as Stage 1b's
       analyser and does not contain `baseline_tuning_margin()`, so anyone who
       checks out the tag cannot recompute Table 4.1 — which is the whole reason
       Decision 87 was sequenced ahead of tagging. A tag whose message cites this
       decision while its tree lacks it is self-undermining.
-      `git diff b6b17b9..e8a5f6a -- conf/algorithm/ docs/freeze/` is **empty**
+      `git diff b6b17b9..0dd7ef1 -- conf/algorithm/ docs/freeze/` is **empty**
       and every `conf/` change between them is comment-only, so the later
       placement costs nothing evidentially: the frozen values are byte-identical.
     - **On the ordering.** RUNBOOK Stage 2b places the tag before Stage 3, and
