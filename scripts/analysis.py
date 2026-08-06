@@ -1144,7 +1144,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     return result
 
 
-def compare_to_baselines_iso_byte(runs: list[RunRecord], winner_result: dict) -> dict:
+def compare_to_baselines_iso_byte(runs: list[RunRecord], frozen_formulation: int | None) -> dict:
     """The headline baseline comparison under Decision 83's criterion.
 
     Same pairing and same freeze check as :func:`compare_to_baselines`, which is
@@ -1160,14 +1160,15 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], winner_result: dict) ->
     say) sets ``B`` itself and FedMAQ is scored mid-run for that row alone.
     FedMAQ's reported accuracy therefore differs from row to row and there is no
     single "FedMAQ vs all baselines" scalar to average out of this table.
+
+    ``frozen_formulation`` is the scalar :func:`resolve_frozen_formulation`
+    returns, not the per-skew winners. The grid runs one frozen formulation at
+    every skew by construction, so checking each skew's rows against that skew's
+    own study winner would report freeze drift wherever the two skews disagreed
+    -- which, under Decision 84, is exactly what they did.
     """
     result: dict = {}
     grid = [r for r in confirmatory_runs(runs) if r.experiment_group == GRID_GROUP]
-    frozen = {
-        (e["dataset"], e["alpha"]): e["winner"]
-        for e in winner_result.values()
-        if e["winner"] is not None
-    }
     frames: dict[Path, pd.DataFrame] = {}
     for dataset, alpha in sorted(
         {(r.dataset, r.alpha) for r in grid if r.algorithm_config == "fedmaq"}
@@ -1176,7 +1177,6 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], winner_result: dict) ->
         fedmaq_by_seed = {r.seed: r for r in cell if r.algorithm_config == "fedmaq"}
         formulations = {r.formulation for r in fedmaq_by_seed.values()}
         formulation = next(iter(formulations)) if len(formulations) == 1 else sorted(formulations)
-        expected = frozen.get((dataset, alpha))
         for baseline_algo in sorted({r.algorithm for r in cell if r.algorithm != "fedmaq"}):
             baseline_by_seed = {r.seed: r for r in cell if r.algorithm == baseline_algo}
             # Intersected before scoring, never after: a mean over whatever each
@@ -1220,8 +1220,10 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], winner_result: dict) ->
                 "budget_mb": scored["budget_mb"],
                 "budget_set_by": scored["budget_set_by"],
                 "fedmaq_formulation": formulation,
-                "frozen_formulation": expected,
-                "formulation_matches_freeze": (expected is None or formulation == expected)
+                "frozen_formulation": frozen_formulation,
+                "formulation_matches_freeze": (
+                    frozen_formulation is None or formulation == frozen_formulation
+                )
                 and len(formulations) <= 1,
                 "seeds": common_seeds,
                 "per_seed": per_seed,
@@ -1341,6 +1343,12 @@ def ablation_iso_byte(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
     than Configuration 7 does. Reading the table at R=100 therefore credits each
     arm with accuracy it bought with bandwidth, and the ablation's whole claim is
     that the removed signal is what the accuracy came from.
+
+    Gated on completeness, and that gate is not defensive. The budget is the
+    minimum *last logged* spend across the arms, so an arm still at round 30 of
+    100 reports ~30% of its true total, sets ``B`` for the whole cell, and drags
+    every other arm back to round 30 -- a table that looks entirely plausible and
+    is wrong. Reading this mid-sweep is the ordinary way to hit it.
     """
     config_of: dict[Path, int] = {}
     members: list[RunRecord] = []
@@ -1348,7 +1356,12 @@ def ablation_iso_byte(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
         for r in _ablation_arm_runs(runs, dataset, config_num, alg_config):
             config_of[r.csv_path] = config_num
             members.append(r)
-    return iso_byte_scores(members, lambda r: config_of.get(r.csv_path))
+    completeness = round_completeness(members, expected_round=100)
+    return {
+        "all_complete": completeness["all_complete"],
+        "incomplete_runs": completeness["incomplete_runs"],
+        "cells": iso_byte_scores(members, lambda r: config_of.get(r.csv_path)),
+    }
 
 
 def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
@@ -1493,12 +1506,20 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
             ),
         }
 
+    # The reportable contrast (Decision 83). ``configurations`` above keeps the
+    # equal-round figures beside it, as the superseded rule, never in place of it.
+    iso_byte = ablation_iso_byte(runs, dataset)
+    if not iso_byte["all_complete"]:
+        violations.append(
+            f"{len(iso_byte['incomplete_runs'])} arm run(s) never logged round 100, so "
+            f"the iso-byte budget is a partial spend and every arm is scored back to "
+            f"it: {iso_byte['incomplete_runs']}."
+        )
+
     return {
         "dataset": dataset,
         "configurations": by_config,
-        # The reportable contrast (Decision 83). ``configurations`` above keeps the
-        # equal-round figures beside it, as the superseded rule, never in place of it.
-        "iso_byte": ablation_iso_byte(runs, dataset),
+        "iso_byte": iso_byte,
         "parity": {
             "refinement_anchor": anchor,
             "pipeline_regime": (
@@ -1670,14 +1691,15 @@ def main() -> None:
             "config downstream of the tag; the grid rows must be re-dispatched, not reported."
         )
 
-    iso_byte_baselines = compare_to_baselines_iso_byte(runs, iso_byte_result)
+    iso_byte_baselines = compare_to_baselines_iso_byte(runs, frozen_formulation)
     with open(args.iso_byte_baseline_output, "w", encoding="utf-8") as f:
         json.dump(iso_byte_baselines, f, indent=2)
     print(f"Wrote amended (iso-byte) baseline comparison to {args.iso_byte_baseline_output}")
     for key, row in iso_byte_baselines.items():
+        drift = "" if row["formulation_matches_freeze"] else "  FREEZE DRIFT"
         print(
             f"  {key}: B={row['budget_mb']:.1f} MB set by {row['budget_set_by']['group']}  "
-            f"delta={_fmt_mean_sd(row['delta_at_budget'])}"
+            f"delta={_fmt_mean_sd(row['delta_at_budget'])}{drift}"
         )
 
     # Exploration-phase margin and keep-or-drop verdicts (§4.3.1). Chapter 5 §5.1

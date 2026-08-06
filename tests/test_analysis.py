@@ -1288,9 +1288,7 @@ def test_iso_byte_baseline_delta_is_read_at_the_budget_not_at_equal_rounds(tmp_p
     for the bytes it saved, which is the mechanism under study (Decision 83)."""
     runs = _grid_pair(tmp_path, fedmaq_mbs=[5, 10, 15], baseline_mbs=[10, 40, 60])
 
-    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
-        "cifar10_alpha_0.5_vs_fedpaq"
-    ]
+    row = compare_to_baselines_iso_byte(runs, frozen_formulation=2)["cifar10_alpha_0.5_vs_fedpaq"]
 
     assert row["budget_mb"] == pytest.approx(15.0)
     assert row["budget_set_by"]["group"] == "fedmaq"
@@ -1308,9 +1306,7 @@ def test_iso_byte_baseline_budget_is_per_row_not_per_table(tmp_path):
     be averaged across rows."""
     runs = _grid_pair(tmp_path, fedmaq_mbs=[5, 20, 30], baseline_mbs=[3, 6, 9])
 
-    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
-        "cifar10_alpha_0.5_vs_fedpaq"
-    ]
+    row = compare_to_baselines_iso_byte(runs, frozen_formulation=2)["cifar10_alpha_0.5_vs_fedpaq"]
 
     assert row["budget_mb"] == pytest.approx(9.0)
     assert row["budget_set_by"]["group"] == "baseline"
@@ -1322,9 +1318,7 @@ def test_iso_byte_baseline_intersects_seeds_before_pairing(tmp_path):
     """Three FedMAQ seeds against two baseline seeds is not a method effect."""
     runs = _grid_pair(tmp_path, [5, 10, 15], [10, 40, 60], seeds=(1, 2))
 
-    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
-        "cifar10_alpha_0.5_vs_fedpaq"
-    ]
+    row = compare_to_baselines_iso_byte(runs, frozen_formulation=2)["cifar10_alpha_0.5_vs_fedpaq"]
 
     assert row["seeds"] == [1, 2]
     assert row["delta_at_budget"]["n"] == 2
@@ -1361,7 +1355,8 @@ def test_ablation_iso_byte_scores_every_arm_at_the_stingiest_arm_budget(tmp_path
     total, including when that is not the anchor -- Configuration 7 gets scored
     mid-run here, which is the rule working rather than an exception to it."""
     table = build_ablation_table(_full_ablation_grid(tmp_path))
-    cell = table["iso_byte"]["cifar10_alpha_0.1"]
+    assert table["iso_byte"]["all_complete"] is True
+    cell = table["iso_byte"]["cells"]["cifar10_alpha_0.1"]
 
     # Configuration 5 (fedmaq_no_kd) is the cheapest arm in the fixture at 36 MB.
     assert cell["budget_mb"] == pytest.approx(36.0)
@@ -1372,3 +1367,24 @@ def test_ablation_iso_byte_scores_every_arm_at_the_stingiest_arm_budget(tmp_path
     assert cell["groups"][1]["seeds"][0]["round_at_budget"] == 1
     assert cell["groups"][7]["seeds"][0]["round_at_budget"] == 50
     assert cell["groups"][5]["seeds"][0]["round_at_budget"] == 100
+
+
+def test_ablation_iso_byte_refuses_a_budget_read_off_a_half_finished_arm(tmp_path):
+    """An arm at round 50 of 100 reports half its true spend, sets B for the
+    whole cell, and drags every other arm back to it. Mid-sweep is the ordinary
+    way to hit this, so the table has to say so rather than look plausible."""
+    runs = _full_ablation_grid(tmp_path)
+    truncated = next(
+        r
+        for r in runs
+        if r.algorithm_config == "fedmaq_no_resource" and r.alpha == 0.1 and r.seed == 0
+    )
+    # Half the rounds, and so half the spend: cheaper than every finished arm.
+    _df([1, 25, 50], [0.35, 0.45, 0.55], [4.5, 9.0, 18.0]).to_csv(truncated.csv_path, index=False)
+
+    table = build_ablation_table(runs)
+
+    assert table["iso_byte"]["all_complete"] is False
+    assert table["iso_byte"]["incomplete_runs"] == ["fedmaq_no_resource_a0.1_f3_s0"]
+    assert not table["parity"]["attributable"]
+    assert any("never logged round 100" in v for v in table["parity"]["violations"])
