@@ -1368,3 +1368,123 @@ tasks, and closed by measurement rather than by inspection.
       baseline hyperparameter table, and selected formulation — and only the
       first exists yet. Stage 1b (`baseline_tuning`) and Stage 2
       (`formulation_study`) still gate it.
+
+81. **Stage 1b (`baseline_tuning`, 55 runs, R=100, α=0.3) executed; two of five
+    baseline hyperparameters revised off their published constants.** Run
+    2026-08-05 on the allocation. Rule as pre-registered: a 5-seed reference
+    cell fixes σ, margin = √2·σ, and a 3-seed challenger must clear
+    reference + margin to displace the shipped value. Verdict per algorithm:
+    - **FedProx** — reference `mu=1.0` 0.5423 (σ=0.0124, margin 1.75pp).
+      Both challengers cleared; `mu=0.01` won on the larger delta (0.5690,
+      Δ=+2.67pp). **`conf/algorithm/fedprox.yaml` → `mu: 0.01`.**
+    - **FedDistill** — reference `reg_alpha=1.0` 0.5670 (σ=0.0145, margin
+      2.05pp). `reg_alpha=0.5` cleared (0.5893, Δ=+2.23pp); `2.0` did not.
+      **`conf/algorithm/feddistill.yaml` → `reg_alpha: 0.5`.**
+    - **FedPAQ** — reference `q=8` 0.5629 (σ=0.0218, margin 3.08pp). Neither
+      `q=4` (Δ=+0.40pp) nor `q=16` (Δ=+0.38pp) cleared. **Retained `q: 8`.**
+    - **DAdaQuant** — reference `phi=10` 0.5314 (σ=0.0420, margin 5.94pp).
+      Neither `phi=5` (Δ=+3.61pp) nor `phi=20` (Δ=+1.62pp) cleared. **Retained
+      `phi: 10`.** Note the wide σ: this cell is the noisiest of the five and
+      the margin is correspondingly permissive of the null.
+    - **FedKD** — reference `tmax=0.95` 0.4065 (σ=0.0162, margin 2.28pp).
+      Neither challenger cleared. **Retained `tmax: 0.95`.** FedKD's absolute
+      level (~41%) is ~15pp below the other baselines and is architectural,
+      not a tuning failure: its student is a width-0.5 MobileNetV2GN (~0.59M
+      params) against a 2.24M teacher (Decision 22). Do not read this row as
+      a bug.
+    - **Known gap, tracked:** this verdict was produced by an ad-hoc script
+      pasted into the allocation session, not by a tested function in
+      `scripts/analysis.py`. `conf/matrix/baseline_tuning.yaml`'s header
+      claims the decision rule is "FedMAQ's own, unchanged —
+      `scripts/analysis.py:exploration_noise_margin`", which is false:
+      `exploration_noise_margin` filters `phase == EXPLORATION_PHASE` and
+      `algorithm == "fedmaq"` and keys cells on `r.refinements`, so it
+      structurally cannot analyse `baseline_tuning` runs. A tested
+      `baseline_tuning_margin()` reproducing these numbers to the digit is
+      owed, and the header claim needs correcting.
+
+82. **Stage 2 (`formulation_study`, 30 runs, R=100, α∈{0.1, 1.0}) executed;
+    under the pre-registered rule the verdict was Formulation 3 by one-sided
+    disqualification.** Run 2026-08-05. Recorded here as the
+    pre-registered-rule verdict of record; **superseded as the selection
+    criterion by Decision 83**, which supplies the reason.
+    - **α=0.1** (floor 0.34083): all five formulations disqualified. Seed 42
+      failed to reach the floor for Formulations 0–3; all three seeds failed
+      for Formulation 4. `alpha_0.1_winner: null`. Note that the failing seed
+      is the *same* seed for four of five formulations — that is one hard
+      Dirichlet partition, not four independent method failures.
+    - **α=1.0** (floor 0.5571): Formulation 3 was the only formulation whose
+      three seeds all reached the floor (rounds 89/61/74), mean 7892.17 MB.
+      Formulations 0, 1, 2, 4 each lost a single seed. `alpha_1.0_winner: 3`.
+    - **Rule 3 (`one_sided_disqualification`)** fired: one skew wiped out, the
+      other yielded a winner, so the surviving skew's winner freezes.
+      `frozen_formulation: 3`, `contribution_withdrawn: false`,
+      `recheck_required: false`. The recheck is correctly `false` because the
+      refinement layer (Decisions 79, 80) was explored under Formulation 3, so
+      the freeze inherits an already-tested pairing.
+    - **`conf/algorithm/fedmaq.yaml` was already `formulation: 3`** (the
+      long-standing default since `5d0a5d1`) — the study confirmed the shipped
+      value rather than changing it.
+    - **The pathology that prompted Decision 83:** Formulation 3 has the
+      *lowest* mean R=100 accuracy of all five (0.5247 vs 0.5390 / 0.5432 /
+      0.5466 / 0.5517), i.e. it won the selection while finishing 3.2pp
+      *below* the very floor it had transiently crossed at rounds 61–89. All
+      five formulations end within 2.7pp of one another and 0.5–3.2pp under
+      the floor.
+
+83. **Bytes-to-target replaced as the primary selection and reporting
+    criterion; accuracy-vs-bytes becomes primary, with a minimum-common-budget
+    scalar for selection. Recorded 2026-08-06, BEFORE computing the amended
+    verdict.** This is a disclosed post-hoc amendment to the pre-registration,
+    not a correction of an implementation error — `scripts/analysis.py:531`'s
+    `first_crossing` is a faithful reading of chapter_4.tex:263/324 ("never
+    attains this floor within the fixed round budget", "fails to reach the
+    target accuracy within the fixed R = 100 round budget"). The defect is in
+    the pre-registered prose. Reasons, in the order that carries them:
+    - **The criterion feeds the 177-run primary grid, not just Stage 2.**
+      `compute_target_floor` + `first_crossing` are what chapter 5's
+      bytes-to-target column would be built on for *every* baseline. Fixing
+      the instrument before the main experiment runs is a different act from
+      re-scoring a completed one.
+    - **0.9×FedAvg-at-equal-rounds is the wrong comparator for a
+      communication-reduction method.** It charges FedMAQ for accuracy while
+      crediting nothing for the 4–8× fewer bytes per round, which is the
+      entire mechanism under study. Under this thesis's own memory-constrained
+      premise (§4.1) full-precision FedAvg cannot run on the target clients at
+      all: it is an infeasible reference bound, not a competitor.
+    - **In this regime the criterion has no discriminative power.** The floor
+      sits inside the run-to-run noise band of the final accuracies (all five
+      formulations within 2.7pp, all below the floor), so whether a given seed
+      "crosses" is close to a coin flip. First-touch, k-consecutive-rounds and
+      a final-round gate are therefore not three rival operationalizations but
+      three coin flips on the same near-tie — which is why *no* variant of the
+      crossing rule is adopted as the repair.
+    - **The amended criterion, fixed here before it is computed:**
+      1. **Primary comparison is the accuracy-vs-cumulative-MB curve.** No
+         free parameters; already mandated by
+         `.claude/rules/evaluation-metrics.md` item 6.
+      2. **Where a scalar is required for selection, it is top-1 accuracy at
+         the minimum common cumulative-MB budget across the arms being
+         compared** — i.e. B = min over arms of that arm's final cumulative
+         MB, determined by the data, chosen by nobody. This is what keeps the
+         amendment from smuggling in the free parameter that the
+         k-consecutive rule was rejected for.
+      3. **The Decision 82 verdict is reported alongside**, in an appendix, as
+         the pre-registered-but-superseded rule, together with the
+         first-touch / k-consecutive / final-round columns as a robustness
+         table (free to emit once the script exists; not worth a dispatch of
+         its own).
+    - **Acknowledged risk, stated before the result is known:** a
+      minimum-common-budget rule will tend to favour whichever formulation
+      transmits fewest bytes, and which formulation that is has not been
+      computed. The rule is fixed in this entry precisely so that it cannot be
+      tuned once that is visible.
+    - **Consequences to handle when the amended verdict lands:** if the winner
+      is no longer Formulation 3, the in-flight ablation's completed arms are
+      invalid and their output directory must be moved aside rather than
+      resumed with `--skip_completed` (which keys on those checkpoints). If
+      the winner is Formulation 0 (`q_hat = q_max`, no Tier-2 signal at all),
+      `fedmaq_no_data`'s `lambda_val: 0.0` and `fedmaq_no_state`'s
+      `formulation: 1, gamma1: 0.0` stop expressing single-signal removals —
+      that is an ablation redesign, not a re-run, and it is Configuration 8's
+      problem twice over.
