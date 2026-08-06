@@ -30,6 +30,7 @@ import argparse
 import json
 import math
 import statistics
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -537,6 +538,11 @@ def first_crossing(run_df: pd.DataFrame, floor: float) -> tuple[int | None, floa
     return int(row["round"]), float(row["communication/cumulative_mb"])
 
 
+def _last_row_within_budget(run_df: pd.DataFrame, budget_mb: float) -> pd.Series | None:
+    within = run_df[run_df["communication/cumulative_mb"] <= budget_mb]
+    return None if within.empty else within.iloc[-1]
+
+
 def accuracy_at_budget(run_df: pd.DataFrame, budget_mb: float) -> float | None:
     """Top-1 accuracy at the last round whose cumulative communication is within
     ``budget_mb``. ``None`` if the run never logged a round at or below it.
@@ -546,10 +552,30 @@ def accuracy_at_budget(run_df: pd.DataFrame, budget_mb: float) -> float | None:
     point: comparing a 4-bit method to a 32-bit one at equal rounds charges the
     former for accuracy while crediting it nothing for the bytes it saved.
     """
-    within = run_df[run_df["communication/cumulative_mb"] <= budget_mb]
-    if within.empty:
-        return None
-    return float(within.iloc[-1]["test/accuracy"])
+    row = _last_row_within_budget(run_df, budget_mb)
+    return None if row is None else float(row["test/accuracy"])
+
+
+def round_at_budget(run_df: pd.DataFrame, budget_mb: float) -> int | None:
+    """The round :func:`accuracy_at_budget` read from.
+
+    Reported alongside every accuracy-at-budget figure because the two numbers
+    mean different things at different rounds: an uncompressed baseline scored at
+    a quantized method's budget lands mid-climb, where the curve is steep and the
+    seed spread is widest, while the method setting the budget is scored at
+    convergence. The round makes that asymmetry visible instead of leaving it to
+    be inferred.
+    """
+    row = _last_row_within_budget(run_df, budget_mb)
+    return None if row is None else int(row["round"])
+
+
+def _mean_sd(values: list[float]) -> dict:
+    return {
+        "mean": statistics.fmean(values) if values else None,
+        "sd": statistics.stdev(values) if len(values) > 1 else None,
+        "n": len(values),
+    }
 
 
 def sustained_crossing(
@@ -610,6 +636,107 @@ def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict
     }
 
 
+def iso_byte_scores(
+    runs: list[RunRecord],
+    group_of: Callable[[RunRecord], object | None],
+    frames: dict[Path, pd.DataFrame] | None = None,
+) -> dict[str, dict]:
+    """Decision 83's amended criterion, applied to an arbitrary set of arms.
+
+    One implementation, three callers: the formulation study groups by
+    ``formulation``, the headline baseline table and the §4.3.7 ablation group by
+    ``algorithm_config``. A second implementation would be free to drift from
+    this one, and the amendment's whole force is that a single rule scores every
+    comparison the thesis reports.
+
+    ``group_of`` returns the label a run is scored under, or ``None`` to exclude
+    it. Membership is the caller's decision; the only thing decided here is the
+    budget ``B = min`` over every included run's final cumulative MB, read off
+    the data.
+
+    Deliberately free of both :func:`compute_target_floor` and
+    :func:`confirmatory_runs`: the floor exists only where the grid has FedAvg
+    rows and raises otherwise, and ``confirmatory_runs`` strips precisely the
+    ablation group one caller needs.
+    """
+    cache: dict[Path, pd.DataFrame] = frames if frames is not None else {}
+
+    def frame(r: RunRecord) -> pd.DataFrame:
+        if r.csv_path not in cache:
+            cache[r.csv_path] = load_round_metrics(r.csv_path)
+        return cache[r.csv_path]
+
+    scored = [(r, group_of(r)) for r in runs]
+    scored = [(r, g) for r, g in scored if g is not None]
+
+    result: dict[str, dict] = {}
+    for dataset, alpha in sorted({(r.dataset, r.alpha) for r, _ in scored}):
+        cell = [(r, g) for r, g in scored if r.dataset == dataset and r.alpha == alpha]
+        finals = {
+            r.csv_path: float(frame(r)["communication/cumulative_mb"].iloc[-1]) for r, _ in cell
+        }
+        budget_mb = min(finals.values())
+        setter, setter_group = min(cell, key=lambda rg: finals[rg[0].csv_path])
+
+        groups: dict[object, dict] = {}
+        # key=str only so the JSON reads in a stable order; ranking is by score.
+        for label in sorted({g for _, g in cell}, key=str):
+            members = sorted((r for r, g in cell if g == label), key=lambda r: r.seed)
+            seeds: dict[int, dict] = {}
+            accs_at_budget: list[float] = []
+            accs_r100: list[float] = []
+            for r in members:
+                df = frame(r)
+                acc_b = accuracy_at_budget(df, budget_mb)
+                acc_100 = accuracy_at_round(df, 100)
+                seeds[r.seed] = {
+                    "accuracy_at_budget": acc_b,
+                    "round_at_budget": round_at_budget(df, budget_mb),
+                    "accuracy_r100": acc_100,
+                    "final_cumulative_mb": finals[r.csv_path],
+                }
+                if acc_b is not None:
+                    accs_at_budget.append(acc_b)
+                accs_r100.append(acc_100)
+            at_budget = _mean_sd(accs_at_budget)
+            groups[label] = {
+                "seeds": seeds,
+                # Both the summary dict and the bare mean: the SD is what says
+                # whether a mid-climb number is a plateau or a lucky sample, and
+                # no smoothing window may be used to answer that -- a window is
+                # the free parameter Decision 83 rejected k-consecutive for.
+                "accuracy_at_budget": at_budget,
+                "mean_accuracy_at_budget": at_budget["mean"],
+                "mean_accuracy_r100": statistics.fmean(accs_r100) if accs_r100 else None,
+                "final_cumulative_mb": _mean_sd([finals[r.csv_path] for r in members]),
+            }
+
+        ranked = sorted(
+            (label for label in groups if groups[label]["mean_accuracy_at_budget"] is not None),
+            key=lambda label: groups[label]["mean_accuracy_at_budget"],
+            reverse=True,
+        )
+        margin = None
+        if len(ranked) > 1:
+            margin = (
+                groups[ranked[0]]["mean_accuracy_at_budget"]
+                - groups[ranked[1]]["mean_accuracy_at_budget"]
+            )
+
+        result[f"{dataset}_alpha_{alpha}"] = {
+            "dataset": dataset,
+            "alpha": alpha,
+            "budget_mb": budget_mb,
+            "budget_set_by": {"group": setter_group, "seed": setter.seed},
+            "groups": groups,
+            "winner": ranked[0] if ranked else None,
+            "margin_accuracy": margin,
+            "ranking": ranked,
+        }
+
+    return result
+
+
 def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dict:
     """Amended primary selection: top-1 accuracy at the minimum common
     cumulative-MB budget across the compared arms (Decision 83, 2026-08-06).
@@ -632,90 +759,52 @@ def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dic
     they are expected to disagree; that disagreement is the evidence for the
     amendment, not a finding about the formulations.
     """
-    result: dict[str, dict] = {}
-    runs = confirmatory_runs(runs)
+    eligible = confirmatory_runs(runs)
     fedmaq_runs = [
         r
-        for r in runs
+        for r in eligible
         if r.experiment_group == FORMULATION_STUDY_GROUP
         and r.algorithm_config == "fedmaq"
         and r.formulation is not None
     ]
-    datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
+    frames: dict[Path, pd.DataFrame] = {}
+    result = iso_byte_scores(fedmaq_runs, lambda r: r.formulation, frames=frames)
 
-    for dataset, alpha in datasets_alphas:
-        floor = compute_target_floor(runs, dataset, alpha)
-        cell_runs = [r for r in fedmaq_runs if r.dataset == dataset and r.alpha == alpha]
-        formulations = sorted({r.formulation for r in cell_runs})
-
-        frames = {r.job_dir: load_round_metrics(r.csv_path) for r in cell_runs}
-        budget_mb = min(float(df["communication/cumulative_mb"].iloc[-1]) for df in frames.values())
-
-        detail: dict[int, dict] = {}
-        for formulation in formulations:
-            seed_runs = [r for r in cell_runs if r.formulation == formulation]
-            seeds: dict[int, dict] = {}
-            accs_at_budget: list[float] = []
-            r100_accs: list[float] = []
+    by_seed = {(r.dataset, r.alpha, r.formulation, r.seed): r for r in fedmaq_runs}
+    for cell in result.values():
+        dataset, alpha = cell["dataset"], cell["alpha"]
+        floor = compute_target_floor(eligible, dataset, alpha)
+        detail = cell.pop("groups")
+        for formulation, entry in detail.items():
             first_touch_ok, sustained_ok, final_gate_ok = True, True, True
-            for r in seed_runs:
-                df = frames[r.job_dir]
-                acc_b = accuracy_at_budget(df, budget_mb)
-                acc_100 = accuracy_at_round(df, 100)
+            for seed, seed_entry in entry["seeds"].items():
+                df = frames[by_seed[(dataset, alpha, formulation, seed)].csv_path]
                 ft_round, ft_mb = first_crossing(df, floor)
                 sc_round, _ = sustained_crossing(df, floor, k_consecutive)
-                seeds[r.seed] = {
-                    "accuracy_at_budget": acc_b,
-                    "accuracy_r100": acc_100,
-                    "final_cumulative_mb": float(df["communication/cumulative_mb"].iloc[-1]),
-                    "first_touch_round": ft_round,
-                    "first_touch_mb": ft_mb,
-                    f"sustained_{k_consecutive}_round": sc_round,
-                    "meets_floor_at_r100": bool(acc_100 >= floor),
-                }
-                if acc_b is not None:
-                    accs_at_budget.append(acc_b)
-                r100_accs.append(acc_100)
-                first_touch_ok = first_touch_ok and ft_round is not None
-                sustained_ok = sustained_ok and sc_round is not None
                 # bool(): ``floor`` comes back from pandas as a numpy scalar, so
                 # the comparison yields ``np.bool_``, which is not ``json``
                 # serialisable and fails ``is True`` identity checks.
-                final_gate_ok = final_gate_ok and bool(acc_100 >= floor)
-            detail[formulation] = {
-                "seeds": seeds,
-                "mean_accuracy_at_budget": (
-                    sum(accs_at_budget) / len(accs_at_budget) if accs_at_budget else None
-                ),
-                "mean_accuracy_r100": sum(r100_accs) / len(r100_accs),
-                "qualifies_first_touch": first_touch_ok,
-                f"qualifies_sustained_{k_consecutive}": sustained_ok,
-                "qualifies_final_round_gate": final_gate_ok,
-            }
-
-        ranked = sorted(
-            (f for f in detail if detail[f]["mean_accuracy_at_budget"] is not None),
-            key=lambda f: detail[f]["mean_accuracy_at_budget"],
-            reverse=True,
-        )
-        winner = ranked[0] if ranked else None
-        margin = None
-        if len(ranked) > 1:
-            margin = (
-                detail[ranked[0]]["mean_accuracy_at_budget"]
-                - detail[ranked[1]]["mean_accuracy_at_budget"]
+                meets_floor = bool(seed_entry["accuracy_r100"] >= floor)
+                seed_entry.update(
+                    {
+                        "first_touch_round": ft_round,
+                        "first_touch_mb": ft_mb,
+                        f"sustained_{k_consecutive}_round": sc_round,
+                        "meets_floor_at_r100": meets_floor,
+                    }
+                )
+                first_touch_ok = first_touch_ok and ft_round is not None
+                sustained_ok = sustained_ok and sc_round is not None
+                final_gate_ok = final_gate_ok and meets_floor
+            entry.update(
+                {
+                    "qualifies_first_touch": first_touch_ok,
+                    f"qualifies_sustained_{k_consecutive}": sustained_ok,
+                    "qualifies_final_round_gate": final_gate_ok,
+                }
             )
-
-        result[f"{dataset}_alpha_{alpha}"] = {
-            "dataset": dataset,
-            "alpha": alpha,
-            "budget_mb": budget_mb,
-            "target_accuracy_floor": floor,
-            "formulations": detail,
-            "winner": winner,
-            "margin_accuracy": margin,
-            "ranking": ranked,
-        }
+        cell["target_accuracy_floor"] = floor
+        cell["formulations"] = detail
 
     return result
 
@@ -1055,6 +1144,147 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     return result
 
 
+def compare_to_baselines_iso_byte(runs: list[RunRecord], winner_result: dict) -> dict:
+    """The headline baseline comparison under Decision 83's criterion.
+
+    Same pairing and same freeze check as :func:`compare_to_baselines`, which is
+    retained beside this and reports the superseded equal-round delta. Scoring at
+    equal rounds is the defect Decision 83 amended away from, and it applies with
+    more force here than in the formulation study: FedMAQ's whole mechanism is
+    transmitting 4-8x fewer bytes per round, so an R=100 delta charges it for
+    accuracy and credits it nothing for what it bought.
+
+    **The budget is per row, not per table.** ``B`` is the minimum over the arms
+    being compared (Decision 83), and the compared arms are one FedMAQ-baseline
+    pair -- so a baseline that transmits less than FedMAQ (a low-``q`` FedPAQ,
+    say) sets ``B`` itself and FedMAQ is scored mid-run for that row alone.
+    FedMAQ's reported accuracy therefore differs from row to row and there is no
+    single "FedMAQ vs all baselines" scalar to average out of this table.
+    """
+    result: dict = {}
+    grid = [r for r in confirmatory_runs(runs) if r.experiment_group == GRID_GROUP]
+    frozen = {
+        (e["dataset"], e["alpha"]): e["winner"]
+        for e in winner_result.values()
+        if e["winner"] is not None
+    }
+    frames: dict[Path, pd.DataFrame] = {}
+    for dataset, alpha in sorted(
+        {(r.dataset, r.alpha) for r in grid if r.algorithm_config == "fedmaq"}
+    ):
+        cell = [r for r in grid if r.dataset == dataset and r.alpha == alpha]
+        fedmaq_by_seed = {r.seed: r for r in cell if r.algorithm_config == "fedmaq"}
+        formulations = {r.formulation for r in fedmaq_by_seed.values()}
+        formulation = next(iter(formulations)) if len(formulations) == 1 else sorted(formulations)
+        expected = frozen.get((dataset, alpha))
+        for baseline_algo in sorted({r.algorithm for r in cell if r.algorithm != "fedmaq"}):
+            baseline_by_seed = {r.seed: r for r in cell if r.algorithm == baseline_algo}
+            # Intersected before scoring, never after: a mean over whatever each
+            # side happens to have would silently pit three FedMAQ seeds against
+            # two baseline seeds and call the difference a method effect.
+            common_seeds = sorted(set(fedmaq_by_seed) & set(baseline_by_seed))
+            if not common_seeds:
+                continue
+            pair = [fedmaq_by_seed[s] for s in common_seeds] + [
+                baseline_by_seed[s] for s in common_seeds
+            ]
+            scored = iso_byte_scores(
+                pair,
+                lambda r: "fedmaq" if r.algorithm_config == "fedmaq" else "baseline",
+                frames=frames,
+            )[f"{dataset}_alpha_{alpha}"]
+            groups = scored["groups"]
+
+            per_seed: dict[int, dict] = {}
+            deltas = []
+            for seed in common_seeds:
+                fedmaq_seed = groups["fedmaq"]["seeds"][seed]
+                baseline_seed = groups["baseline"]["seeds"][seed]
+                delta = None
+                if (
+                    fedmaq_seed["accuracy_at_budget"] is not None
+                    and baseline_seed["accuracy_at_budget"] is not None
+                ):
+                    delta = fedmaq_seed["accuracy_at_budget"] - baseline_seed["accuracy_at_budget"]
+                    deltas.append(delta)
+                per_seed[seed] = {
+                    "fedmaq": fedmaq_seed,
+                    "baseline": baseline_seed,
+                    "delta_at_budget": delta,
+                }
+
+            result[f"{dataset}_alpha_{alpha}_vs_{baseline_algo}"] = {
+                "dataset": dataset,
+                "alpha": alpha,
+                "baseline": baseline_algo,
+                "budget_mb": scored["budget_mb"],
+                "budget_set_by": scored["budget_set_by"],
+                "fedmaq_formulation": formulation,
+                "frozen_formulation": expected,
+                "formulation_matches_freeze": (expected is None or formulation == expected)
+                and len(formulations) <= 1,
+                "seeds": common_seeds,
+                "per_seed": per_seed,
+                "fedmaq_accuracy_at_budget": groups["fedmaq"]["accuracy_at_budget"],
+                "baseline_accuracy_at_budget": groups["baseline"]["accuracy_at_budget"],
+                "delta_at_budget": _mean_sd(deltas),
+                "min_delta": min(deltas) if deltas else None,
+                "max_delta": max(deltas) if deltas else None,
+            }
+
+    return result
+
+
+def fedavg_at_fedmaq_budget(
+    runs: list[RunRecord], formulation: int, dataset: str = "cifar10"
+) -> dict:
+    """What the uncompressed control reaches on the frozen formulation's byte budget.
+
+    The single number chapters 5 and 6 are framed around, available before the
+    177-run grid finishes because both sides already exist: the formulation
+    study's FedMAQ runs (Stage 2) and the grid's CIFAR-10 FedAvg rows, dispatched
+    early at Stage 1c so the accuracy floor had something to read.
+
+    It is a preview of :func:`compare_to_baselines_iso_byte`, not a substitute
+    for it, and it is conservative in a knowable direction: FedMAQ's side is the
+    *pipeline-free* study run, so it is scored without the §4.3 post-processing
+    savings the grid's rows will carry. FedAvg is regime-neutral -- it has no
+    compression stage for the pipeline to attach to -- so only FedMAQ's number
+    moves when the grid lands, and it moves up.
+    """
+    fedmaq = {
+        r.csv_path
+        for r in runs
+        if r.dataset == dataset
+        and r.experiment_group == FORMULATION_STUDY_GROUP
+        and r.algorithm_config == "fedmaq"
+        and r.formulation == formulation
+    }
+    reference = {
+        r.csv_path
+        for r in runs
+        if r.dataset == dataset and r.experiment_group == GRID_GROUP and r.algorithm == "fedavg"
+    }
+
+    def group_of(r: RunRecord) -> str | None:
+        if r.csv_path in fedmaq:
+            return f"fedmaq_formulation_{formulation}"
+        return "fedavg" if r.csv_path in reference else None
+
+    scored = iso_byte_scores(runs, group_of)
+    for cell in scored.values():
+        groups = cell["groups"]
+        fedmaq_mean = groups.get(f"fedmaq_formulation_{formulation}", {}).get(
+            "mean_accuracy_at_budget"
+        )
+        fedavg_mean = groups.get("fedavg", {}).get("mean_accuracy_at_budget")
+        cell["mean_delta_vs_fedavg"] = (
+            None if fedmaq_mean is None or fedavg_mean is None else fedmaq_mean - fedavg_mean
+        )
+        cell["fedmaq_regime"] = "pipeline-free (formulation study); the grid's rows will carry it"
+    return scored
+
+
 # Manuscript §4.3.7's eight configurations, mapped to the algorithm config each
 # one dispatches. Configuration 1 is the only inherited arm: it is read from the
 # primary benchmark grid rather than re-run, because it has no compression stage
@@ -1083,12 +1313,42 @@ REFINEMENT_EXCEPTIONS: dict[int, set[str]] = {
 }
 
 
-def _mean_sd(values: list[float]) -> dict:
-    return {
-        "mean": statistics.fmean(values) if values else None,
-        "sd": statistics.stdev(values) if len(values) > 1 else None,
-        "n": len(values),
-    }
+def _ablation_arm_runs(
+    runs: list[RunRecord], dataset: str, config_num: int, alg_config: str
+) -> list[RunRecord]:
+    """The runs belonging to one §4.3.7 configuration.
+
+    The group test is not redundant with ``algorithm_config``: Configuration 7 is
+    ``fedmaq``, which the primary grid also runs at this dataset and both skews,
+    and Configuration 1 is inherited *from* that grid.
+    """
+    in_ablation = config_num not in INHERITED_CONFIGURATIONS
+    return [
+        r
+        for r in runs
+        if r.dataset == dataset
+        and r.algorithm_config == alg_config
+        and (r.experiment_group == ABLATION_GROUP) == in_ablation
+    ]
+
+
+def ablation_iso_byte(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
+    """The §4.3.7 arms scored under Decision 83's criterion.
+
+    Equal-round scoring is not merely imprecise here, it is signed. Under the
+    frozen multiplicative form removing a Tier-2 signal *raises* bit-widths
+    monotonically (``g̃^0.5 >= sqrt(g̃ n~)``), so every removal arm transmits more
+    than Configuration 7 does. Reading the table at R=100 therefore credits each
+    arm with accuracy it bought with bandwidth, and the ablation's whole claim is
+    that the removed signal is what the accuracy came from.
+    """
+    config_of: dict[Path, int] = {}
+    members: list[RunRecord] = []
+    for config_num, (alg_config, _) in ABLATION_CONFIGURATIONS.items():
+        for r in _ablation_arm_runs(runs, dataset, config_num, alg_config):
+            config_of[r.csv_path] = config_num
+            members.append(r)
+    return iso_byte_scores(members, lambda r: config_of.get(r.csv_path))
 
 
 def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
@@ -1110,17 +1370,7 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
 
     for config_num, (alg_config, description) in ABLATION_CONFIGURATIONS.items():
         expected_group = None if config_num in INHERITED_CONFIGURATIONS else ABLATION_GROUP
-        matched = [
-            r
-            for r in runs
-            if r.dataset == dataset
-            and r.algorithm_config == alg_config
-            and (
-                r.experiment_group == ABLATION_GROUP
-                if expected_group == ABLATION_GROUP
-                else r.experiment_group != ABLATION_GROUP
-            )
-        ]
+        matched = _ablation_arm_runs(runs, dataset, config_num, alg_config)
 
         cells: dict[str, dict] = {}
         for alpha in sorted({r.alpha for r in matched}):
@@ -1246,6 +1496,9 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
     return {
         "dataset": dataset,
         "configurations": by_config,
+        # The reportable contrast (Decision 83). ``configurations`` above keeps the
+        # equal-round figures beside it, as the superseded rule, never in place of it.
+        "iso_byte": ablation_iso_byte(runs, dataset),
         "parity": {
             "refinement_anchor": anchor,
             "pipeline_regime": (
@@ -1256,6 +1509,13 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
             "attributable": not violations,
         },
     }
+
+
+def _fmt_mean_sd(entry: dict | None) -> str:
+    if not entry or entry.get("mean") is None:
+        return "n/a"
+    sd = "" if entry.get("sd") is None else f"+-{entry['sd']:.4f}"
+    return f"{entry['mean']:.4f}{sd} (n={entry['n']})"
 
 
 def main() -> None:
@@ -1294,6 +1554,24 @@ def main() -> None:
         "--completeness-output",
         type=Path,
         default=Path("scripts/analysis_output/round_completeness.json"),
+    )
+    parser.add_argument(
+        "--freeze-output",
+        type=Path,
+        default=Path("scripts/analysis_output/frozen_formulation.json"),
+        help="resolve_frozen_formulation's verdict over the amended criterion -- "
+        "the machine-readable provenance for the freeze recorded in Decision 84.",
+    )
+    parser.add_argument(
+        "--iso-byte-baseline-output",
+        type=Path,
+        default=Path("scripts/analysis_output/baseline_comparison_iso_byte.json"),
+    )
+    parser.add_argument(
+        "--fedavg-budget-output",
+        type=Path,
+        default=Path("scripts/analysis_output/fedavg_at_fedmaq_budget.json"),
+        help="Uncompressed FedAvg scored at the frozen formulation's byte budget.",
     )
     args = parser.parse_args()
 
@@ -1339,6 +1617,40 @@ def main() -> None:
             f"winner={cell['winner']}  ranking={cell['ranking']}"
         )
 
+    # The freeze verdict as a file rather than as prose. Decision 84 currently
+    # exists only in DECISIONS.md, which is the same provenance gap Decision 81
+    # already owes a fix for.
+    frozen_formulation = None
+    try:
+        freeze = resolve_frozen_formulation(iso_byte_result)
+    except ValueError as exc:
+        print(f"  Freeze unresolved: {exc}")
+    else:
+        frozen_formulation = freeze["frozen_formulation"]
+        with open(args.freeze_output, "w", encoding="utf-8") as f:
+            json.dump(freeze, f, indent=2)
+        print(f"Wrote freeze resolution to {args.freeze_output}")
+        print(f"  rule={freeze['rule']}  frozen_formulation={frozen_formulation}")
+
+    # The number chapters 5 and 6 are framed around; available before the grid
+    # finishes, since Stage 1c dispatched the FedAvg rows early.
+    if frozen_formulation is not None:
+        preview = fedavg_at_fedmaq_budget(runs, frozen_formulation)
+        with open(args.fedavg_budget_output, "w", encoding="utf-8") as f:
+            json.dump(preview, f, indent=2)
+        print(f"Wrote FedAvg-at-FedMAQ-budget preview to {args.fedavg_budget_output}")
+        for key, cell in preview.items():
+            groups = cell["groups"]
+            fedmaq = groups.get(f"fedmaq_formulation_{frozen_formulation}", {})
+            fedavg = groups.get("fedavg", {})
+            rounds = [s["round_at_budget"] for s in fedavg.get("seeds", {}).values()]
+            print(
+                f"  {key}: B={cell['budget_mb']:.1f} MB  "
+                f"fedmaq_f{frozen_formulation}={_fmt_mean_sd(fedmaq.get('accuracy_at_budget'))}  "
+                f"fedavg={_fmt_mean_sd(fedavg.get('accuracy_at_budget'))} "
+                f"@rounds {rounds}  delta={cell['mean_delta_vs_fedavg']}"
+            )
+
     baseline_result = compare_to_baselines(runs, result)
     args.baseline_output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.baseline_output, "w", encoding="utf-8") as f:
@@ -1356,6 +1668,16 @@ def main() -> None:
             f"  FREEZE DRIFT: {dataset} alpha={alpha} ran formulation {ran}, "
             f"frozen verdict was {frozen_formulation}. §4.3.1 forbids editing a frozen "
             "config downstream of the tag; the grid rows must be re-dispatched, not reported."
+        )
+
+    iso_byte_baselines = compare_to_baselines_iso_byte(runs, iso_byte_result)
+    with open(args.iso_byte_baseline_output, "w", encoding="utf-8") as f:
+        json.dump(iso_byte_baselines, f, indent=2)
+    print(f"Wrote amended (iso-byte) baseline comparison to {args.iso_byte_baseline_output}")
+    for key, row in iso_byte_baselines.items():
+        print(
+            f"  {key}: B={row['budget_mb']:.1f} MB set by {row['budget_set_by']['group']}  "
+            f"delta={_fmt_mean_sd(row['delta_at_budget'])}"
         )
 
     # Exploration-phase margin and keep-or-drop verdicts (§4.3.1). Chapter 5 §5.1

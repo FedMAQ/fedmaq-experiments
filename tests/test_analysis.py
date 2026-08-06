@@ -18,10 +18,14 @@ from analysis import (
     accuracy_at_round,
     build_ablation_table,
     compare_to_baselines,
+    compare_to_baselines_iso_byte,
     discover_runs,
     exploration_noise_margin,
+    fedavg_at_fedmaq_budget,
     first_crossing,
+    iso_byte_scores,
     resolve_frozen_formulation,
+    round_at_budget,
     round_completeness,
     select_winner,
     select_winner_iso_byte,
@@ -1232,3 +1236,139 @@ def test_iso_byte_report_carries_all_three_crossing_verdicts(tmp_path):
     f1 = result["formulations"][1]
     assert f1["qualifies_first_touch"] is True
     assert f1["qualifies_final_round_gate"] is True
+
+
+def test_round_at_budget_reports_where_the_accuracy_came_from():
+    df = _df([1, 2, 3], [0.30, 0.40, 0.55], [10, 20, 30])
+
+    assert round_at_budget(df, 25.0) == 2
+    assert accuracy_at_budget(df, 25.0) == pytest.approx(0.40)
+    assert round_at_budget(df, 5.0) is None
+
+
+def test_iso_byte_scores_applies_one_rule_whatever_key_it_is_grouped_on(tmp_path):
+    """The core scorer is key-agnostic by design: the formulation study, the
+    baseline table and the ablation must not each get their own implementation
+    of Decision 83's rule to drift apart on."""
+    cheap = [_write_run(tmp_path, "fedmaq", 2, s, [0.40, 0.55, 0.62], [4, 8, 12]) for s in (1, 2)]
+    dear = [
+        _write_run(tmp_path, "fedpaq", None, s, [0.50, 0.58, 0.70], [10, 20, 30]) for s in (1, 2)
+    ]
+
+    scored = iso_byte_scores(cheap + dear, lambda r: r.algorithm_config)["cifar10_alpha_0.5"]
+
+    assert scored["budget_mb"] == pytest.approx(12.0)
+    assert scored["budget_set_by"]["group"] == "fedmaq"
+    # FedPAQ is one round into a 30 MB run at that budget, not finished.
+    assert scored["groups"]["fedpaq"]["seeds"][1]["round_at_budget"] == 1
+    assert scored["groups"]["fedpaq"]["mean_accuracy_at_budget"] == pytest.approx(0.50)
+    assert scored["groups"]["fedmaq"]["mean_accuracy_at_budget"] == pytest.approx(0.62)
+    assert scored["winner"] == "fedmaq"
+    # The seed spread travels with the mean: at a mid-climb round it is the only
+    # thing that says whether the number is a plateau or a lucky sample.
+    assert scored["groups"]["fedpaq"]["accuracy_at_budget"]["sd"] == pytest.approx(0.0)
+
+
+def _grid_pair(tmp_path, fedmaq_mbs, baseline_mbs, baseline="fedpaq", seeds=(1, 2, 3)):
+    fedavg = [
+        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [40, 80, 120]) for s in (1, 2, 3)
+    ]
+    fedmaq = [
+        _write_run(tmp_path, "fedmaq", 2, s, [0.50, 0.65, 0.78], fedmaq_mbs, group=GRID_GROUP)
+        for s in (1, 2, 3)
+    ]
+    baselines = [
+        _write_run(tmp_path, baseline, None, s, [0.45, 0.60, 0.70], baseline_mbs) for s in seeds
+    ]
+    return fedavg + fedmaq + baselines
+
+
+def test_iso_byte_baseline_delta_is_read_at_the_budget_not_at_equal_rounds(tmp_path):
+    """The equal-round delta charges FedMAQ for accuracy and credits it nothing
+    for the bytes it saved, which is the mechanism under study (Decision 83)."""
+    runs = _grid_pair(tmp_path, fedmaq_mbs=[5, 10, 15], baseline_mbs=[10, 40, 60])
+
+    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
+        "cifar10_alpha_0.5_vs_fedpaq"
+    ]
+
+    assert row["budget_mb"] == pytest.approx(15.0)
+    assert row["budget_set_by"]["group"] == "fedmaq"
+    # FedPAQ has bought one round by 15 MB; FedMAQ has finished.
+    assert row["per_seed"][1]["baseline"]["round_at_budget"] == 1
+    assert row["delta_at_budget"]["mean"] == pytest.approx(0.78 - 0.45)
+    # The superseded rule, on the same runs, reads the gap as a third of that.
+    equal_round = compare_to_baselines(runs, select_winner(runs))["cifar10_alpha_0.5_vs_fedpaq"]
+    assert equal_round["mean_delta"] == pytest.approx(0.78 - 0.70)
+
+
+def test_iso_byte_baseline_budget_is_per_row_not_per_table(tmp_path):
+    """A baseline that transmits less than FedMAQ sets the budget itself, and
+    FedMAQ is then scored mid-run for that row alone. Nothing in this table may
+    be averaged across rows."""
+    runs = _grid_pair(tmp_path, fedmaq_mbs=[5, 20, 30], baseline_mbs=[3, 6, 9])
+
+    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
+        "cifar10_alpha_0.5_vs_fedpaq"
+    ]
+
+    assert row["budget_mb"] == pytest.approx(9.0)
+    assert row["budget_set_by"]["group"] == "baseline"
+    assert row["per_seed"][1]["fedmaq"]["round_at_budget"] == 1
+    assert row["delta_at_budget"]["mean"] == pytest.approx(0.50 - 0.70)
+
+
+def test_iso_byte_baseline_intersects_seeds_before_pairing(tmp_path):
+    """Three FedMAQ seeds against two baseline seeds is not a method effect."""
+    runs = _grid_pair(tmp_path, [5, 10, 15], [10, 40, 60], seeds=(1, 2))
+
+    row = compare_to_baselines_iso_byte(runs, select_winner_iso_byte(runs))[
+        "cifar10_alpha_0.5_vs_fedpaq"
+    ]
+
+    assert row["seeds"] == [1, 2]
+    assert row["delta_at_budget"]["n"] == 2
+    assert row["fedmaq_accuracy_at_budget"]["n"] == 2
+
+
+def test_fedavg_at_fedmaq_budget_scores_the_control_mid_climb(tmp_path):
+    """The number chapters 5 and 6 are framed around. FedAvg is scored at the
+    frozen formulation's spend, which lands it short of its own final round."""
+    fedavg = [
+        _write_run(tmp_path, "fedavg", None, s, [0.30, 0.55, 0.62], [10, 40, 120])
+        for s in (0, 42, 123)
+    ]
+    frozen = [
+        _write_run(tmp_path, "fedmaq", 2, s, [0.20, 0.40, 0.52], [10, 20, 30]) for s in (0, 42, 123)
+    ]
+    # A losing formulation from the same study must not enter the comparison.
+    other = [
+        _write_run(tmp_path, "fedmaq", 4, s, [0.10, 0.15, 0.18], [5, 10, 15]) for s in (0, 42, 123)
+    ]
+
+    cell = fedavg_at_fedmaq_budget(fedavg + frozen + other, formulation=2)["cifar10_alpha_0.5"]
+
+    assert sorted(cell["groups"]) == ["fedavg", "fedmaq_formulation_2"]
+    assert cell["budget_mb"] == pytest.approx(30.0)
+    assert cell["groups"]["fedavg"]["seeds"][0]["round_at_budget"] == 1
+    assert cell["groups"]["fedavg"]["mean_accuracy_at_budget"] == pytest.approx(0.30)
+    assert cell["mean_delta_vs_fedavg"] == pytest.approx(0.52 - 0.30)
+
+
+def test_ablation_iso_byte_scores_every_arm_at_the_stingiest_arm_budget(tmp_path):
+    """The §4.3.7 arms differ in spend, so an equal-round table credits each one
+    with accuracy it bought with bandwidth. The budget is the cheapest arm's
+    total, including when that is not the anchor -- Configuration 7 gets scored
+    mid-run here, which is the rule working rather than an exception to it."""
+    table = build_ablation_table(_full_ablation_grid(tmp_path))
+    cell = table["iso_byte"]["cifar10_alpha_0.1"]
+
+    # Configuration 5 (fedmaq_no_kd) is the cheapest arm in the fixture at 36 MB.
+    assert cell["budget_mb"] == pytest.approx(36.0)
+    assert cell["budget_set_by"]["group"] == 5
+    assert sorted(cell["groups"]) == [1, 2, 3, 4, 5, 6, 7, 8]
+    # Configuration 1 spends 120 MB across rounds 1/50/100, so the uncompressed
+    # control has reached round 1 on the budget the compressed arms finish on.
+    assert cell["groups"][1]["seeds"][0]["round_at_budget"] == 1
+    assert cell["groups"][7]["seeds"][0]["round_at_budget"] == 50
+    assert cell["groups"][5]["seeds"][0]["round_at_budget"] == 100
