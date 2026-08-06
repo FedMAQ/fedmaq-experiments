@@ -23,6 +23,7 @@ from analysis import (
     exploration_noise_margin,
     fedavg_at_fedmaq_budget,
     first_crossing,
+    frozen_refinement_layer,
     iso_byte_scores,
     resolve_frozen_formulation,
     round_at_budget,
@@ -391,6 +392,38 @@ def test_diverging_skews_freeze_the_severe_skew_winner(tmp_path):
     assert out["alpha_0.1_winner"] == 1 and out["alpha_1.0_winner"] == 3
     # Not Formulation 3, so the layer must be re-tested where it now has to live.
     assert out["recheck_required"] is True
+
+
+def test_a_fired_recheck_carries_whether_it_is_owed_or_discharged(tmp_path):
+    """`recheck_required: true` alone reads as an outstanding obligation. Decision
+    85 discharged it because the frozen layer is empty, so the artifact has to say
+    which of the two it is."""
+    owed = resolve_frozen_formulation(
+        _winner_result(severe=1, moderate=3), refinement_layer={"soft_voting"}
+    )
+    assert owed["recheck_required"] is True
+    assert owed["recheck_discharged"] is False
+    assert "soft_voting" in owed["recheck_note"]
+
+    discharged = resolve_frozen_formulation(
+        _winner_result(severe=1, moderate=3), refinement_layer=set()
+    )
+    assert discharged["recheck_required"] is True
+    assert discharged["recheck_discharged"] is True
+
+    # Absent a layer the function must not guess in the reassuring direction.
+    assert (
+        resolve_frozen_formulation(_winner_result(severe=1, moderate=3))["recheck_discharged"]
+        is None
+    )
+
+
+def test_frozen_refinement_layer_reads_the_shipped_config(tmp_path):
+    """The discharge above is only sound while the shipped layer is empty."""
+    cfg = tmp_path / "fedmaq.yaml"
+    cfg.write_text("soft_voting: false\nema_student: true\ngrad_norm_ema: false\n")
+    assert frozen_refinement_layer(cfg) == {"ema_student"}
+    assert frozen_refinement_layer() == set()
 
 
 def test_one_skew_disqualifying_its_whole_field_defers_to_the_other(tmp_path):

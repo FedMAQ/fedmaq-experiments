@@ -936,7 +936,28 @@ def select_winner(runs: list[RunRecord]) -> dict:
     return result
 
 
-def resolve_frozen_formulation(winner_result: dict, dataset: str = "cifar10") -> dict:
+REFINEMENT_KEYS = ("soft_voting", "ema_student", "grad_norm_ema")
+
+
+def frozen_refinement_layer(config_path: Path | None = None) -> set[str]:
+    """The refinement mechanisms actually enabled in the shipped FedMAQ config.
+
+    Read rather than asserted: Decision 85 discharges the reserved recheck on the
+    grounds that this set is empty, and that argument stops holding the moment
+    someone flips one of these back on.
+    """
+    path = config_path or (
+        Path(__file__).resolve().parent.parent / "conf" / "algorithm" / "fedmaq.yaml"
+    )
+    cfg = OmegaConf.load(path)
+    return {key for key in REFINEMENT_KEYS if bool(cfg.get(key, False))}
+
+
+def resolve_frozen_formulation(
+    winner_result: dict,
+    dataset: str = "cifar10",
+    refinement_layer: set[str] | None = None,
+) -> dict:
     """Collapse the per-skew verdicts of :func:`select_winner` into the one
     formulation that is frozen into ``conf/algorithm/fedmaq.yaml``.
 
@@ -1008,6 +1029,8 @@ def resolve_frozen_formulation(winner_result: dict, dataset: str = "cifar10") ->
             "skews_agree": severe_winner == moderate_winner,
             "contribution_withdrawn": False,
             "recheck_required": None,
+            "recheck_discharged": None,
+            "recheck_note": "",
         }
         out.update(extra)
         # conf/matrix/formulation_study.yaml reserves a 6-run recheck of the
@@ -1016,6 +1039,21 @@ def resolve_frozen_formulation(winner_result: dict, dataset: str = "cifar10") ->
         # never a second search.
         if out["frozen_formulation"] is not None:
             out["recheck_required"] = out["frozen_formulation"] != 3
+        if out["recheck_required"]:
+            if refinement_layer is None:
+                out["recheck_note"] = "refinement layer not supplied; status unresolved"
+            elif not refinement_layer:
+                out["recheck_discharged"] = True
+                out["recheck_note"] = (
+                    "frozen refinement layer is empty, so both arms of the recheck "
+                    "resolve to the same configuration -- Decision 85"
+                )
+            else:
+                out["recheck_discharged"] = False
+                out["recheck_note"] = (
+                    "owed: refinement layer is non-empty "
+                    f"({sorted(refinement_layer)}) under a non-Formulation-3 freeze"
+                )
         return out
 
     if severe_winner is None and moderate_winner is None:
@@ -1643,7 +1681,9 @@ def main() -> None:
     # already owes a fix for.
     frozen_formulation = None
     try:
-        freeze = resolve_frozen_formulation(iso_byte_result)
+        freeze = resolve_frozen_formulation(
+            iso_byte_result, refinement_layer=frozen_refinement_layer()
+        )
     except ValueError as exc:
         print(f"  Freeze unresolved: {exc}")
     else:

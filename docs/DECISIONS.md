@@ -1596,3 +1596,57 @@ tasks, and closed by measurement rather than by inspection.
       vacuous here — there is no surviving mechanism whose value could depend on
       the formulation. `soft_voting`, named in the pre-registration as the
       exposed verdict, did not survive the factorial in the first place.
+
+86. **FedMAQ does not beat the uncompressed control at equal bytes. Measured
+    2026-08-06 on the allocation, from `fedavg_at_fedmaq_budget` over the frozen
+    Formulation 2 study runs and the grid's CIFAR-10 FedAvg rows.** Artifact:
+    `scripts/analysis_output/fedavg_at_fedmaq_budget.json`. No new runs; the data
+    existed at both skews.
+    - **α=1.0, budget 10585.1 MB — FedAvg wins.** FedAvg 0.5982 (sd 0.0169), read
+      at round 62 of 100; FedMAQ-F2 0.5439 (sd 0.0160). The seeds are shared, so
+      the test is paired: −6.87, −4.14, −5.30 pp, mean **−5.44pp**, paired
+      sd 1.37, t(2) = −6.87 against a two-tailed critical 4.303. **The loss
+      survives a paired test at n=3.**
+    - **α=0.1, budget 10187.9 MB — null, not a near-win.** FedAvg 0.3266
+      (sd 0.0678) at round 59; FedMAQ-F2 0.3298 (sd 0.0320). Paired: −3.97,
+      +5.93, −1.00 pp, mean **+0.32pp**, paired sd 5.08, t(2) = 0.11. The
+      marginal means make this look like a 0.3pp FedMAQ win; the pairing shows
+      one seed carrying the whole thing. It is read as no difference.
+    - **The budget is membership-dependent and that is not an error.** Decision 84
+      records 10559.5 MB at α=1.0 (minimum over all five formulations); this row
+      is 10585.1 MB because the compared set is {FedAvg, F2} and F2 sets its own
+      minimum. Anyone reconciling the two numbers should not "correct" either.
+    - **What FedMAQ does buy:** 10231.2 MB (α=0.1) and 10595.5 MB (α=1.0) to
+      round 100 against FedAvg's 17064.5 MB — **40.0% and 37.9% fewer bytes**, at
+      an equal-round cost of −4.51pp and −7.24pp. Iso-byte scoring closes the
+      α=0.1 gap entirely and about a quarter of the α=1.0 gap. That is the shape
+      of the result: quantization recovers its accuracy cost in byte terms at
+      severe skew and does not at moderate skew.
+    - **Not claimed: variance reduction.** FedMAQ's seed spread is narrower at
+      α=0.1 (sd 0.0320 vs 0.0678) and identical at α=1.0 (0.0160 vs 0.0169). The
+      α=0.1 ratio is F(2,2) = 4.5 where significance needs ~19, and it is driven
+      by one FedAvg seed (0.4961 against 0.32 for the other two). Recheck when the
+      grid raises n. Decision 84 refused to read a 0.45pp cell as informative;
+      reading this one as informative would be that refusal applied only when the
+      answer flatters.
+    - **Both numbers move when the pipeline lands, not just FedMAQ's.** These
+      study runs are pipeline-free. The §4.3 pipeline lowers FedMAQ's cumulative
+      MB, which *tightens the budget*, which pulls FedAvg back to an earlier round
+      on a curve still climbing at 59/62. The delta should move in FedMAQ's favour
+      because the control is the one mid-climb, and the size of that move is
+      estimable from FedAvg's slope near round 62 rather than assumed.
+    - **Closed:** the branch in which FedMAQ dominates the uncompressed baseline
+      at equal bytes. **Open, and where the contribution actually rests:** FedMAQ
+      against FedPAQ, DAdaQuant and FedKD at equal bytes — every one of those
+      comparisons needs the remaining confirmatory-grid runs. FedAvg is the
+      reference point, not the competitor, and no chapter framing is fixed here.
+    - **Incidental:** the run reproduced Decision 84's freeze exactly
+      (`frozen_formulation: 2`, `divergence_severe_skew_breaks`, winners 2 and 3,
+      α=0.1 budget 10187.9 MB), which confirms the refactor of
+      `select_winner_iso_byte` onto the shared `iso_byte_scores` core is
+      behaviour-preserving on the real data and not only on fixtures.
+    - `resolve_frozen_formulation` now emits `recheck_discharged` and
+      `recheck_note` beside `recheck_required`, read from the shipped config via
+      `frozen_refinement_layer()`. The artifact previously said only
+      `recheck_required: true`, which reads as an owed recheck to anyone who has
+      not read Decision 85.
