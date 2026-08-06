@@ -5,7 +5,7 @@ operational controls that keep a sweep recoverable. Durable operational referenc
 not session context. Per-session orientation belongs in a temporary handoff file,
 not in this repo.
 
-**Last updated**: 2026-08-01
+**Last updated**: 2026-08-06
 
 ---
 
@@ -208,8 +208,11 @@ Decisions 60, 79/80. `chapter_6.tex` §6.2's contribution bullet resting on that
 contrast still needs withdrawing in the sibling manuscript repo.) The exploration
 phase's own runs are outside that total: `pass2_explore`
 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs at
-the held-out α = 0.3, plus the conditional 6-run recheck at step 9 if the frozen
-formulation is not 3. The formulation study declares `phase: explore`, not `formal`: §4.3.1
+the held-out α = 0.3. The conditional 6-run recheck at step 9 fired (the freeze is
+Formulation 2, not 3) but is **not spent**: it compares the surviving refinement
+layer against unrefined, and Decisions 79/80 froze that layer empty, so both arms
+are byte-identical. It is a veto on the layer, never a second search, so it cannot
+re-populate what the ablation arms inherit and does not gate them — Decision 85. The formulation study declares `phase: explore`, not `formal`: §4.3.1
 makes it the culmination of the exploration phase, whose verdict is frozen and
 tagged, so it necessarily precedes the grid it configures. `test_primary_grid_files_dispatch_all_105_runs`
 asserts the primary-grid share of that arithmetic.
