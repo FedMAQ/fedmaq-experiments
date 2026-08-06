@@ -22,7 +22,7 @@ Single source of truth for current project state. Updated after each experiment 
 > **Model architecture switched to MobileNetV2GN.** As of 2026-07-15, the default CIFAR model has been changed from ResNet18GN (~11.17M params) to MobileNetV2GN (~2.24M params) for **edge realism** (deployable ~2.24M model on Pi/Jetson tiers). Note: this does **not** improve the compression _ratio_ — at iso-architecture the ratio (~1.7×) is set by bit-width allocation, not param count (see Decision 1). All prior ResNet18GN smoke test results are **deprecated** and must be re-run with MobileNetV2GN. ResNet18GN remains available via `model_name="resnet18gn"` config override.
 
 > [!IMPORTANT]
-> **Baselines have never been tuned on MobileNetV2GN, and until 2026-08-01 nothing was scheduled to do it.** Decision 31 pre-registered a matched-tuning budget and Decision 29 sequenced it, but no matrix file existed, no `RUNBOOK.md` stage dispatched it, and `chapter_4.tex` had no prose describing it — while FedMAQ received a 38-run exploration phase and a 30-run formulation study on exactly this configuration. The baseline constants are *provenanced* (§4.3.2 sources each one) but their **transfer** to MobileNetV2GN at α ∈ {0.1, 1.0} is untested, every source having published for a different architecture and skew. `conf/matrix/baseline_tuning.yaml` (55 runs, Stage 1b, Decision 67) closes that gap.
+> **Baselines have never been tuned on MobileNetV2GN, and until 2026-08-01 nothing was scheduled to do it.** Decision 31 pre-registered a matched-tuning budget and Decision 29 sequenced it, but no matrix file existed, no `RUNBOOK.md` stage dispatched it, and `chapter_4.tex` had no prose describing it — while FedMAQ received a 38-run exploration phase (30 of them executed — Stage 3 was skipped, Decision 80) and a 30-run formulation study on exactly this configuration. The baseline constants are *provenanced* (§4.3.2 sources each one) but their **transfer** to MobileNetV2GN at α ∈ {0.1, 1.0} was untested, every source having published for a different architecture and skew. `conf/matrix/baseline_tuning.yaml` (55 runs, Stage 1b, Decision 67) closed that gap: **executed 2026-08-06**, two of five constants moved, three retained on a margin rule — Decision 81. This callout is retained as the record of the gap and how it was closed; it no longer describes an open one.
 
 ---
 
@@ -179,9 +179,13 @@ Full list with rationale: [docs/experiments/archive/RESNET18GN-SUMMARY.md](exper
 
 ---
 
-## The Confirmatory Grid — 177 runs, all pending
+## The Confirmatory Grid — 177 runs, 36 complete
 
-Every one is dispatched through a matrix file. See [docs/RUNBOOK.md](RUNBOOK.md) ("Dispatch Order") for the sequence, which is load-bearing, and ("Execution Model") for where runs actually happen.
+Complete: the 30-run formulation study, which froze Formulation 2 (Decisions 83, 84),
+and Stage 1c's six CIFAR-10 FedAvg rows, which Decision 86 reads. The 36-run ablation
+was dispatched 2026-08-06; its state lives in that matrix's `sweep_status.json` on the
+allocation, not here. **105 runs remain unexecuted** — 99 of the primary grid plus the
+6-run control arm. Every one is dispatched through a matrix file. See [docs/RUNBOOK.md](RUNBOOK.md) ("Dispatch Order") for the sequence, which is load-bearing, and ("Execution Model") for where runs actually happen.
 
 | Stage | Matrix | Runs | Manuscript |
 | :---- | :----- | ---: | :--------- |
@@ -196,14 +200,15 @@ Every one is dispatched through a matrix file. See [docs/RUNBOOK.md](RUNBOOK.md)
 Ablation dropped from 42 to 36 runs (7 → 6 net-new arms) on 2026-08-02: Stage 2's
 noise-margin verdict was an empty surviving refinement set, so Configuration 8
 (`fedmaq_no_refinements`) has nothing left to remove and was dropped per the
-pre-registered branch (Decision 60, executed as Decision 79/80). **The
+pre-registered branch (Decision 60, executed as Decision 79/80). The
 manuscript's `chapter_6.tex` §6.2 contribution bullet resting on Configuration
-8's contrast still needs withdrawing in the sibling `fedmaq-manuscript` repo —
-not done as part of this change**, which is scoped to this repo only.
+8's contrast was **withdrawn 2026-08-07** in the sibling `fedmaq-manuscript`
+repo (`8d744c3`); it was out of scope when this note was first written.
 
 The exploration phase (`pass2_explore` 4, `pass2_factorial` 26, `pass3_freeze_confirm` 8,
-`baseline_tuning` 55 — 93 runs) runs at the held-out α = 0.3 and is **not** counted among
-the 177. The conditional 6-run recheck fired (the freeze is Formulation 2) but is not
+`baseline_tuning` 55 — 93 runs budgeted, **85 executed**: Stage 3's 8 were never
+dispatched, the stage being degenerate once the surviving set came back empty — Decision
+80) runs at the held-out α = 0.3 and is **not** counted among the 177. The conditional 6-run recheck fired (the freeze is Formulation 2) but is not
 spent — it compares an empty refinement layer against itself; Decision 85. The factorial, the freeze confirmation, and each baseline's shipped-value
 cell all deepen their reference to five seeds, because that cell's spread *is* the margin
 everything else in its stage is judged against (manuscript §4.4).

@@ -15,7 +15,7 @@ The bit-width value $\hat q_k^{(t)}$ derived from the soft quality signal, befor
 _Avoid_: soft quality function (former manuscript Ch3 wording; swept 2026-07-25, no occurrences remain)
 
 **Formulation**:
-One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, 2 = Normalized Multiplicative Scaling, 3 = Gradient-Primary Data-Modulated (current implementation default), 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
+One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, Decision 84), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
 _Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25)
 
 **Formulation constants**:
@@ -38,7 +38,7 @@ A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32
 
 **Tier 1 / Tier 2**:
 FedMAQ's two-tier precision scaling design. Tier 1 is the hard feasibility constraint from client memory ($Q_k^{max}$), computed as a separate `min()` clamp in code, never blended into the soft quality signal. Tier 2 is the soft quality optimization (signal, target, formulation) layered on top and floored by Tier 1's cap.
-_Avoid_: "three coequal dimensions of awareness" (resource, data, state) — Ch4 prose oversimplifies; resource (Tier 1) is structurally a hard clamp, not a third soft signal alongside data/state (Tier 2's two signals). Ch4 needs a rewording pass to state resource as Tier 1 and data/state as the two Tier 2 signals.
+_Avoid_: "three coequal dimensions of awareness" (resource, data, state) — resource (Tier 1) is structurally a hard clamp, not a third soft signal alongside data/state (Tier 2's two signals). The Ch4 rewording this entry once asked for has landed: `chapter_4.tex:106` now organizes the execution loop around that asymmetry "rather than around three symmetric awareness dimensions", and the phrase appears nowhere in the manuscript.
 
 ### Ablation Study (Section 4)
 
@@ -52,4 +52,10 @@ _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 
 ## Open items
 
-All previously logged Ch1-Ch6 prose fixes and nits have been applied directly to `fedmaq-manuscript` (main). None remain outstanding as of this session.
+**Last updated**: 2026-08-07.
+
+The Ch1-Ch6 prose fixes logged here through 2026-07-25 were applied directly to
+`fedmaq-manuscript` (main) and none remain. That is not a standing claim that the
+manuscript is in sync: the sync passes of 2026-08-01 through 2026-08-07 each found
+further drift, and `docs/STATUS.md` § "Manuscript Sync" is the live log. Only the
+`gamma`/`lambda_val` → `omega`/`kappa` rename above is tracked here, still deferred.

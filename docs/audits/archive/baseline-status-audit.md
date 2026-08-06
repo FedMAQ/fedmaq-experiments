@@ -46,7 +46,7 @@ table.
 ## Evidence sources
 
 - **Runs (authoritative for behaviour):**
-  [`docs/experiments/mobilenetv2-smoke-50r/`](../experiments/mobilenetv2-smoke-50r/README.md)
+  [`docs/experiments/mobilenetv2-smoke-50r/`](../../experiments/mobilenetv2-smoke-50r/)
   — MobileNetV2GN, 50R, single seed, α∈{0.1,1.0}. Covers FedAvg, FedProx, FedMAQ,
   DAdaQuant, FedPAQ, FedKD. **Smoke-scale, not a benchmark** (single seed, 50R vs
   the manuscript's R=100).
@@ -120,7 +120,7 @@ skew. Same disposition as F11/F18: report as a finding, not a run-gate.
 · FedPAQ 40.3 / 67.0 · DAdaQuant 47.8 / 65.1 · FedMAQ **53.2** / 60.9 · FedKD 30.1 / 38.3 (post-fix)
 / 33.6 (pre-fix) · FedDistill 39.0 / 58.0 · FedAvg+KD 27.0 / 53.7 · CFD 10.7 / 10.2
 (collapsed, dropped from the formal stack — Decision 26, not a comparison figure).
-Source: [`mobilenetv2-smoke-50r/results.md`](../experiments/mobilenetv2-smoke-50r/results.md).
+Source: [`mobilenetv2-smoke-50r/results.md`](../../experiments/mobilenetv2-smoke-50r/results.md).
 
 ---
 
@@ -251,7 +251,7 @@ implementation-level guard undocumented in the table. `align-manuscript` skill.
 
 Manuscript `chapter_4.tex` still specifies **ResNet-18 (~11.17M) teacher** and a
 **LeNet-5-style (~2.16M) student** for CIFAR, whereas the code and
-[DECISIONS.md #1](../DECISIONS.md) switched to **MobileNetV2GN (~2.24M) iso-arch**.
+[DECISIONS.md #1](../../DECISIONS.md) switched to **MobileNetV2GN (~2.24M) iso-arch**.
 The decision is authoritative; the manuscript is behind. **Action:** update
 manuscript §4.1 model prose (and any Table 4.1-adjacent architecture text) to
 MobileNetV2GN via `align-manuscript`. Lands in `fedmaq-manuscript`, not this repo.
@@ -319,7 +319,7 @@ call-site default; leave or align when the fix lands. Bundle with code-audit F8.
 
 - `conf/algorithm/fedmaq_lite.yaml` — **RESOLVED.** Carries an
   "EXPLORATION-APPENDIX ONLY" header so it isn't mistaken for a grid arm
-  ([DECISIONS.md #4](../DECISIONS.md)).
+  ([DECISIONS.md #4](../../DECISIONS.md)).
 
 ## Bottom line
 

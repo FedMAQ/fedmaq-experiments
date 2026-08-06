@@ -5,7 +5,7 @@ operational controls that keep a sweep recoverable. Durable operational referenc
 not session context. Per-session orientation belongs in a temporary handoff file,
 not in this repo.
 
-**Last updated**: 2026-08-06
+**Last updated**: 2026-08-07
 
 ---
 
@@ -214,10 +214,11 @@ the freeze.
 reported.** (Ablation dropped from 42 to 36 on 2026-08-02 — Stage 1's noise-margin
 verdict was an empty surviving set, so Configuration 8 has nothing left to remove;
 Decisions 60, 79/80. `chapter_6.tex` §6.2's contribution bullet resting on that
-contrast still needs withdrawing in the sibling manuscript repo.) The exploration
+contrast was withdrawn 2026-08-07, manuscript `8d744c3`.) The exploration
 phase's own runs are outside that total: `pass2_explore`
-4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs at
-the held-out α = 0.3. The conditional 6-run recheck at step 9 fired (the freeze is
+4, `pass2_factorial` 26, `pass3_freeze_confirm` 8, `baseline_tuning` 55 — 93 runs
+budgeted at the held-out α = 0.3, of which **85 executed**: step 4's 8 were never
+dispatched (Decision 80). The conditional 6-run recheck at step 9 fired (the freeze is
 Formulation 2, not 3) but is **not spent**: it compares the surviving refinement
 layer against unrefined, and Decisions 79/80 froze that layer empty, so both arms
 are byte-identical. It is a veto on the layer, never a second search, so it cannot

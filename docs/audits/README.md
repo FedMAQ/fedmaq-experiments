@@ -1,6 +1,6 @@
 # Algorithm & Code Audits
 
-**Last updated**: 2026-08-01
+**Last updated**: 2026-08-07
 
 All foundational audits conducted on the FedMAQ codebase and algorithm formulation have been completed. All audit findings (F1–F18) and code craftsmanship items have been resolved, dropped, or logged into canonical decisions.
 
@@ -8,7 +8,7 @@ All foundational audits conducted on the FedMAQ codebase and algorithm formulati
 
 ## Audit Summaries & Decision Pointers
 
-- **Resolved Decisions Log**: See **[docs/DECISIONS.md](../DECISIONS.md)** for canonical resolutions (Decisions 1–35).
+- **Resolved Decisions Log**: See **[docs/DECISIONS.md](../DECISIONS.md)** for canonical resolutions (Decisions 1–88; F1–F18 resolve within Decisions 1–35).
 - **Current Project Status**: See **[docs/STATUS.md](../STATUS.md)** for current component status.
 
 ---
