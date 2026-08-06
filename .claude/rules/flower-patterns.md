@@ -8,7 +8,7 @@
 ## Windows Ray crash mitigation
 
 **Scope: the local Windows fallback workstation only** (manuscript §4.3.4) — smoke
-tests, `run-minitest`, and pre-dispatch validation. The reported 183-run grid runs
+tests, `run-minitest`, and pre-dispatch validation. The 177 reported runs run
 on the Linux datacenter allocation via JupyterHub, where none of this applies. See
 `docs/RUNBOOK.md` § "Execution Model".
 
