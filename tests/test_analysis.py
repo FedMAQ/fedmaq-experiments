@@ -14,13 +14,18 @@ from analysis import (
     FORMULATION_STUDY_GROUP,
     GRID_GROUP,
     RunRecord,
+    accuracy_at_budget,
     accuracy_at_round,
     build_ablation_table,
     compare_to_baselines,
     discover_runs,
     exploration_noise_margin,
+    first_crossing,
     resolve_frozen_formulation,
+    round_completeness,
     select_winner,
+    select_winner_iso_byte,
+    sustained_crossing,
 )
 from common import get_canonical_output_dir
 
@@ -1047,3 +1052,154 @@ def test_factorial_on_disk_reads_back_as_eight_distinct_cells(tmp_path):
     assert result["sigma_unrefined"] > 0
     assert len(result["verdicts"]) == 7, "seven non-reference cells are judged against the margin"
     assert result["surviving_cell"] == "soft_voting+ema_student+grad_norm_ema"
+
+
+# --------------------------------------------------------------------------
+# Amended primary criterion (Decision 83): accuracy at the minimum common
+# cumulative-MB budget. These tests pin the two properties the amendment was
+# adopted for -- that the budget is data-determined rather than chosen, and
+# that there is no wipeout branch -- plus the concrete pathology that motivated
+# it, so a future edit cannot quietly restore bytes-to-target as the selector.
+# --------------------------------------------------------------------------
+
+
+def test_accuracy_at_budget_reads_the_last_round_within_the_budget():
+    df = _df([1, 2, 3, 4], [0.10, 0.40, 0.55, 0.60], [10.0, 20.0, 30.0, 40.0])
+    # 25 MB buys two rounds, not three: the third round's bytes are already spent
+    # by the time its accuracy exists.
+    assert accuracy_at_budget(df, 25.0) == pytest.approx(0.40)
+    assert accuracy_at_budget(df, 30.0) == pytest.approx(0.55)
+
+
+def test_accuracy_at_budget_is_none_when_even_round_one_overruns_the_budget():
+    df = _df([1, 2], [0.10, 0.40], [10.0, 20.0])
+    assert accuracy_at_budget(df, 5.0) is None
+
+
+def test_sustained_crossing_ignores_a_transient_spike():
+    # Touches the floor at round 2 and falls back -- the exact shape that made
+    # Formulation 3 the pre-registered winner while finishing last (Decision 82).
+    df = _df([1, 2, 3, 4, 5], [0.60, 0.75, 0.66, 0.67, 0.68], [10.0, 20.0, 30.0, 40.0, 50.0])
+    assert first_crossing(df, 0.72)[0] == 2
+    assert sustained_crossing(df, 0.72, 3) == (None, None)
+
+
+def test_sustained_crossing_reports_the_start_of_the_first_qualifying_run():
+    df = _df([1, 2, 3, 4, 5], [0.60, 0.75, 0.73, 0.74, 0.68], [10.0, 20.0, 30.0, 40.0, 50.0])
+    assert sustained_crossing(df, 0.72, 3) == (2, 20.0)
+
+
+def test_round_completeness_flags_a_run_that_died_before_the_budget(tmp_path):
+    full = _write_run(tmp_path, "fedmaq", 3, 1, [0.5] * 100, list(range(1, 101)))
+    short = _write_run(tmp_path, "fedmaq", 3, 2, [0.5] * 84, list(range(1, 85)))
+
+    report = round_completeness([full, short], expected_round=100)
+
+    assert report["all_complete"] is False
+    assert report["incomplete_runs"] == [short.job_dir.name]
+    assert report["runs"][full.job_dir.name]["max_round"] == 100
+    assert report["runs"][short.job_dir.name]["max_round"] == 84
+
+
+def _pathology_cell(tmp_path):
+    """FedAvg finishes at 0.80, so the floor is 0.72.
+
+    Formulation 3 spikes over the floor at round 2 and falls back to 0.68.
+    Formulation 1 climbs past it and stays, finishing at 0.74. Both spend the
+    same 15 MB. This is the α=1.0 shape from Decision 82 reduced to three
+    rounds: the cheap transient crossing beats the better final model under
+    bytes-to-target.
+    """
+    fedavg = [
+        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [10, 20, 30]) for s in (1, 2, 3)
+    ]
+    form3 = [
+        _write_run(tmp_path, "fedmaq", 3, s, [0.50, 0.75, 0.68], [5, 10, 15]) for s in (1, 2, 3)
+    ]
+    form1 = [
+        _write_run(tmp_path, "fedmaq", 1, s, [0.60, 0.71, 0.74], [5, 10, 15]) for s in (1, 2, 3)
+    ]
+    return fedavg + form3 + form1
+
+
+def test_bytes_to_target_prefers_the_transient_spike_over_the_better_model(tmp_path):
+    # Characterisation of the superseded rule, not an endorsement: this is what
+    # Decision 82 recorded and what Decision 83 amends away from.
+    result = select_winner(_pathology_cell(tmp_path))["cifar10_alpha_0.5"]
+
+    assert result["winner"] == 3
+    assert (
+        result["formulations"][3]["mean_accuracy_r100"]
+        < result["formulations"][1]["mean_accuracy_r100"]
+    )
+
+
+def test_iso_byte_selection_prefers_the_better_model_at_equal_spend(tmp_path):
+    result = select_winner_iso_byte(_pathology_cell(tmp_path))["cifar10_alpha_0.5"]
+
+    assert result["winner"] == 1
+    assert result["budget_mb"] == pytest.approx(15.0)
+    assert result["formulations"][1]["mean_accuracy_at_budget"] == pytest.approx(0.74)
+    assert result["formulations"][3]["mean_accuracy_at_budget"] == pytest.approx(0.68)
+
+
+def test_iso_byte_budget_is_the_minimum_final_spend_across_arms(tmp_path):
+    """The budget is read off the data. Nobody picks it -- that is what keeps
+    the amendment from relocating the free parameter it rejects k-consecutive
+    for (Decision 83)."""
+    fedavg = [
+        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [10, 20, 30]) for s in (1, 2, 3)
+    ]
+    cheap = [
+        _write_run(tmp_path, "fedmaq", 0, s, [0.40, 0.50, 0.60], [4, 8, 12]) for s in (1, 2, 3)
+    ]
+    dear = [
+        _write_run(tmp_path, "fedmaq", 2, s, [0.45, 0.55, 0.65], [20, 40, 60]) for s in (1, 2, 3)
+    ]
+
+    result = select_winner_iso_byte(fedavg + cheap + dear)["cifar10_alpha_0.5"]
+
+    # min over every compared run's final spend: 12 MB, not 60.
+    assert result["budget_mb"] == pytest.approx(12.0)
+    # The expensive arm has bought exactly nothing by 12 MB, so it cannot be
+    # scored there and does not win by default.
+    assert result["formulations"][2]["mean_accuracy_at_budget"] is None
+    assert result["winner"] == 0
+
+
+def test_iso_byte_selection_has_no_wipeout_branch(tmp_path):
+    """Every arm failing the accuracy floor collapses the pre-registered rule to
+    a null winner and fires Rule 4. The amended criterion still ranks them,
+    which is the second reason it replaces bytes-to-target."""
+    fedavg = [
+        _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.90], [10, 20, 30]) for s in (1, 2, 3)
+    ]
+    # Floor is 0.81; nothing here comes close.
+    form0 = [
+        _write_run(tmp_path, "fedmaq", 0, s, [0.30, 0.40, 0.50], [5, 10, 15]) for s in (1, 2, 3)
+    ]
+    form3 = [
+        _write_run(tmp_path, "fedmaq", 3, s, [0.30, 0.40, 0.55], [5, 10, 15]) for s in (1, 2, 3)
+    ]
+    runs = fedavg + form0 + form3
+
+    assert select_winner(runs)["cifar10_alpha_0.5"]["winner"] is None
+
+    amended = select_winner_iso_byte(runs)["cifar10_alpha_0.5"]
+    assert amended["winner"] == 3
+    assert amended["ranking"] == [3, 0]
+
+
+def test_iso_byte_report_carries_all_three_crossing_verdicts(tmp_path):
+    """The robustness table travels with the amended verdict so the superseded
+    rule stays auditable (Decision 83)."""
+    result = select_winner_iso_byte(_pathology_cell(tmp_path), k_consecutive=2)["cifar10_alpha_0.5"]
+
+    f3 = result["formulations"][3]
+    assert f3["qualifies_first_touch"] is True
+    assert f3["qualifies_sustained_2"] is False
+    assert f3["qualifies_final_round_gate"] is False
+
+    f1 = result["formulations"][1]
+    assert f1["qualifies_first_touch"] is True
+    assert f1["qualifies_final_round_gate"] is True

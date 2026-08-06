@@ -537,6 +537,180 @@ def first_crossing(run_df: pd.DataFrame, floor: float) -> tuple[int | None, floa
     return int(row["round"]), float(row["communication/cumulative_mb"])
 
 
+def accuracy_at_budget(run_df: pd.DataFrame, budget_mb: float) -> float | None:
+    """Top-1 accuracy at the last round whose cumulative communication is within
+    ``budget_mb``. ``None`` if the run never logged a round at or below it.
+
+    This is the primitive the amended criterion is built on (Decision 83). It
+    reads *down* the byte axis rather than the round axis, which is the whole
+    point: comparing a 4-bit method to a 32-bit one at equal rounds charges the
+    former for accuracy while crediting it nothing for the bytes it saved.
+    """
+    within = run_df[run_df["communication/cumulative_mb"] <= budget_mb]
+    if within.empty:
+        return None
+    return float(within.iloc[-1]["test/accuracy"])
+
+
+def sustained_crossing(
+    run_df: pd.DataFrame, floor: float, k: int
+) -> tuple[int | None, float | None]:
+    """First round that begins ``k`` consecutive rounds at or above ``floor``.
+
+    Reported only as a robustness column (Decision 83), never as the selection
+    rule: ``k`` is exactly the second free parameter that §4.3.6 refuses.
+    """
+    acc = run_df["test/accuracy"].to_numpy()
+    mb = run_df["communication/cumulative_mb"].to_numpy()
+    rounds = run_df["round"].to_numpy()
+    for i in range(len(acc) - k + 1):
+        if all(acc[i + j] >= floor for j in range(k)):
+            return int(rounds[i]), float(mb[i])
+    return None, None
+
+
+def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict:
+    """Per-run check that ``expected_round`` was actually logged.
+
+    ``accuracy_at_round`` silently falls back to the last logged row when the
+    exact round is absent, so a run that died at round 84 still yields an
+    "R=100 accuracy". Across arms that turns a like-for-like comparison into an
+    apples-to-oranges one without raising anything. Given this repo's aborted
+    dispatch history (Decisions 77, 78) that failure mode is not hypothetical,
+    so the amended report states it rather than assuming it away.
+    """
+    report: dict[str, dict] = {}
+    for r in runs:
+        df = load_round_metrics(r.csv_path)
+        max_round = int(df["round"].max())
+        report[str(r.job_dir.name)] = {
+            "algorithm_config": r.algorithm_config,
+            "formulation": r.formulation,
+            "alpha": r.alpha,
+            "seed": r.seed,
+            "max_round": max_round,
+            "has_expected_round": bool((df["round"] == expected_round).any()),
+            "final_cumulative_mb": float(df["communication/cumulative_mb"].iloc[-1]),
+        }
+    incomplete = [k for k, v in report.items() if not v["has_expected_round"]]
+    return {
+        "expected_round": expected_round,
+        "runs": report,
+        "incomplete_runs": incomplete,
+        "all_complete": not incomplete,
+    }
+
+
+def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dict:
+    """Amended primary selection: top-1 accuracy at the minimum common
+    cumulative-MB budget across the compared arms (Decision 83, 2026-08-06).
+
+    Supersedes :func:`select_winner`'s bytes-to-target rule as the *selection*
+    criterion. That rule is retained and reported alongside, because an
+    amendment made after seeing results is only legible if the superseded
+    verdict travels with it.
+
+    The budget is ``B = min`` over every compared seed-run of that run's final
+    cumulative MB. It is read off the data, not chosen: an analyst-picked ``B``
+    would reintroduce the free parameter that ``k_consecutive`` is rejected
+    for, and the whole point of the amendment is that it removes discretion
+    rather than relocating it. Every run is guaranteed to have a logged round
+    at or below ``B``, so no arm is disqualified by the budget itself -- there
+    is no wipeout branch here, which is the second thing the old rule lacked.
+
+    Also emits, per formulation, the three crossing-rule verdicts (first touch,
+    ``k``-consecutive, final-round gate) as a robustness table. In this dataset
+    they are expected to disagree; that disagreement is the evidence for the
+    amendment, not a finding about the formulations.
+    """
+    result: dict[str, dict] = {}
+    runs = confirmatory_runs(runs)
+    fedmaq_runs = [
+        r
+        for r in runs
+        if r.experiment_group == FORMULATION_STUDY_GROUP
+        and r.algorithm_config == "fedmaq"
+        and r.formulation is not None
+    ]
+    datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
+
+    for dataset, alpha in datasets_alphas:
+        floor = compute_target_floor(runs, dataset, alpha)
+        cell_runs = [r for r in fedmaq_runs if r.dataset == dataset and r.alpha == alpha]
+        formulations = sorted({r.formulation for r in cell_runs})
+
+        frames = {r.job_dir: load_round_metrics(r.csv_path) for r in cell_runs}
+        budget_mb = min(float(df["communication/cumulative_mb"].iloc[-1]) for df in frames.values())
+
+        detail: dict[int, dict] = {}
+        for formulation in formulations:
+            seed_runs = [r for r in cell_runs if r.formulation == formulation]
+            seeds: dict[int, dict] = {}
+            accs_at_budget: list[float] = []
+            r100_accs: list[float] = []
+            first_touch_ok, sustained_ok, final_gate_ok = True, True, True
+            for r in seed_runs:
+                df = frames[r.job_dir]
+                acc_b = accuracy_at_budget(df, budget_mb)
+                acc_100 = accuracy_at_round(df, 100)
+                ft_round, ft_mb = first_crossing(df, floor)
+                sc_round, _ = sustained_crossing(df, floor, k_consecutive)
+                seeds[r.seed] = {
+                    "accuracy_at_budget": acc_b,
+                    "accuracy_r100": acc_100,
+                    "final_cumulative_mb": float(df["communication/cumulative_mb"].iloc[-1]),
+                    "first_touch_round": ft_round,
+                    "first_touch_mb": ft_mb,
+                    f"sustained_{k_consecutive}_round": sc_round,
+                    "meets_floor_at_r100": bool(acc_100 >= floor),
+                }
+                if acc_b is not None:
+                    accs_at_budget.append(acc_b)
+                r100_accs.append(acc_100)
+                first_touch_ok = first_touch_ok and ft_round is not None
+                sustained_ok = sustained_ok and sc_round is not None
+                # bool(): ``floor`` comes back from pandas as a numpy scalar, so
+                # the comparison yields ``np.bool_``, which is not ``json``
+                # serialisable and fails ``is True`` identity checks.
+                final_gate_ok = final_gate_ok and bool(acc_100 >= floor)
+            detail[formulation] = {
+                "seeds": seeds,
+                "mean_accuracy_at_budget": (
+                    sum(accs_at_budget) / len(accs_at_budget) if accs_at_budget else None
+                ),
+                "mean_accuracy_r100": sum(r100_accs) / len(r100_accs),
+                "qualifies_first_touch": first_touch_ok,
+                f"qualifies_sustained_{k_consecutive}": sustained_ok,
+                "qualifies_final_round_gate": final_gate_ok,
+            }
+
+        ranked = sorted(
+            (f for f in detail if detail[f]["mean_accuracy_at_budget"] is not None),
+            key=lambda f: detail[f]["mean_accuracy_at_budget"],
+            reverse=True,
+        )
+        winner = ranked[0] if ranked else None
+        margin = None
+        if len(ranked) > 1:
+            margin = (
+                detail[ranked[0]]["mean_accuracy_at_budget"]
+                - detail[ranked[1]]["mean_accuracy_at_budget"]
+            )
+
+        result[f"{dataset}_alpha_{alpha}"] = {
+            "dataset": dataset,
+            "alpha": alpha,
+            "budget_mb": budget_mb,
+            "target_accuracy_floor": floor,
+            "formulations": detail,
+            "winner": winner,
+            "margin_accuracy": margin,
+            "ranking": ranked,
+        }
+
+    return result
+
+
 def select_winner(runs: list[RunRecord]) -> dict:
     """Apply the pre-registered winner rule independently per (dataset, alpha).
 
@@ -1100,6 +1274,18 @@ def main() -> None:
         type=Path,
         default=Path("scripts/analysis_output/ablation_table.json"),
     )
+    parser.add_argument(
+        "--iso-byte-output",
+        type=Path,
+        default=Path("scripts/analysis_output/formulation_winner_iso_byte.json"),
+        help="Amended primary criterion (Decision 83): accuracy at the minimum "
+        "common cumulative-MB budget, plus the crossing-rule robustness table.",
+    )
+    parser.add_argument(
+        "--completeness-output",
+        type=Path,
+        default=Path("scripts/analysis_output/round_completeness.json"),
+    )
     args = parser.parse_args()
 
     runs = discover_runs(args.experiments_root)
@@ -1109,6 +1295,40 @@ def main() -> None:
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
     print(f"Wrote formulation-winner verdict to {args.output}")
+
+    # Decision 83. Emitted next to the superseded verdict rather than replacing
+    # it: an amendment adopted after seeing results is only auditable if the
+    # rule it displaced is still in the output directory beside it.
+    study_runs = [
+        r
+        for r in confirmatory_runs(runs)
+        if r.experiment_group == FORMULATION_STUDY_GROUP
+        and r.algorithm_config == "fedmaq"
+        and r.formulation is not None
+    ]
+    completeness = round_completeness(study_runs, expected_round=100)
+    args.completeness_output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.completeness_output, "w", encoding="utf-8") as f:
+        json.dump(completeness, f, indent=2)
+    print(f"Wrote round-completeness audit to {args.completeness_output}")
+    if not completeness["all_complete"]:
+        print(
+            "  WARNING: "
+            f"{len(completeness['incomplete_runs'])} study run(s) never logged round 100. "
+            "accuracy_at_round falls back to the last logged row, so any R=100 "
+            "comparison across these arms is not like-for-like. Inspect before "
+            "reading the verdict below."
+        )
+
+    iso_byte_result = select_winner_iso_byte(runs)
+    with open(args.iso_byte_output, "w", encoding="utf-8") as f:
+        json.dump(iso_byte_result, f, indent=2)
+    print(f"Wrote amended (iso-byte) formulation verdict to {args.iso_byte_output}")
+    for key, cell in iso_byte_result.items():
+        print(
+            f"  {key}: budget={cell['budget_mb']:.2f} MB  "
+            f"winner={cell['winner']}  ranking={cell['ranking']}"
+        )
 
     baseline_result = compare_to_baselines(runs, result)
     args.baseline_output.parent.mkdir(parents=True, exist_ok=True)
