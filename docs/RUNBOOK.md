@@ -192,10 +192,13 @@ FedAvg's rows are pulled forward, so they are (Decision 71).
     `fedmaq_no_data` and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` —
     `fedmaq_no_data`'s removal becomes `gamma2=0`, and `fedmaq_no_state` drops its
     `formulation` override and stops being the fallback arm. Each is now a one-line
-    change in a file that contains only its removal. The arms are currently pinned to
-    Formulation 3 through `fedmaq.yaml`. Re-run `scripts/dump_frozen_configs.py`
-    afterwards.
-12. `--matrix ablation`.
+    change in a file that contains only its removal. Re-run
+    `scripts/dump_frozen_configs.py` afterwards.
+    **Fired 2026-08-06** — Formulation 2 was frozen (Decision 84), both arm files and
+    `ABLATION_ARM_DIFFS` were rewritten, and the snapshot regenerated, all in `b6b17b9`.
+    This step has no unfired contingency left; the arms are no longer pinned to
+    Formulation 3.
+12. `--matrix ablation`. **Dispatched 2026-08-06**, ~15:00.
 
 ### Stage 4 — Primary grid (105 runs) and control arm (6 runs)
 
