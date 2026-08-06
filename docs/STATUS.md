@@ -39,7 +39,11 @@ Sibling repo `../fedmaq-manuscript`. Reconciliation points, most recent first:
   carrying the study's attributability was ill-formed where a panel would check it.
   Domain widened to $\geq 0$, the joint-gating claim scoped to the strict interior
   where it actually holds, the boundary named as the removal arms' home, and $0^0 = 1$
-  stated because `tilde_g` is reachable at zero (`quantization_planner.py:161`).
+  stated so the product is total on the $[0,1]$ domain the manuscript declares for
+  $\tilde{g}$ and $\tilde{n}$. That convention is definitional, not a guard against a
+  reachable case: `_probe_grad_norms` floors each norm at `1e-8` and `g_max` defaults
+  to the same, so `tilde_g` is never exactly zero in the implementation. Do not
+  "verify" the convention against the code and conclude the manuscript is wrong.
   Formulation 1 still claimed the state-removal arm as its own — the retired fallback.
   Third refinement caught: §3.3.3 called `grad_norm_ema` "enabled in the shipped
   configuration and subject to the verdict"; it is frozen false and failed its margin
