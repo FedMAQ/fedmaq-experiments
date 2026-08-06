@@ -32,16 +32,26 @@
 # grid: it has no compression stage for the pipeline to attach to, so its
 # telemetry is identical in either regime.
 #
-# Configuration 4 (fedmaq_no_state) is the pre-registered fallback arm and is
-# compared against the formulation study's own Formulation 1 runs, not against
-# Configuration 7. Those runs are also pipeline-free, so the anchor stays valid
-# and stays free. See conf/algorithm/fedmaq_no_state.yaml.
+# Configuration 4 (fedmaq_no_state) WAS the pre-registered fallback arm, anchored
+# against the formulation study's own Formulation 1 runs. Decision 84 retired that
+# exception: the study froze Formulation 2, which can express state-awareness
+# removal in place (gamma1 = 0), so the arm is nested and anchors to Configuration
+# 7 like every other. See conf/algorithm/fedmaq_no_state.yaml.
 #
-# BEFORE DISPATCH: the arms are pinned to formulation 3 pending the formulation
-# study. If Formulation 1 or 2 wins, fedmaq_no_data's removal becomes gamma2=0
-# and fedmaq_no_state stops being the fallback arm. Revisit all four arm configs
-# and ABLATION_ARM_DIFFS first. Exploration must also have completed, since the
-# arms carry its surviving refinement layer.
+# THE PRE-DISPATCH CONTINGENCY IN THIS HEADER HAS FIRED. It used to read: "the
+# arms are pinned to formulation 3 pending the formulation study. If Formulation 1
+# or 2 wins, fedmaq_no_data's removal becomes gamma2=0 and fedmaq_no_state stops
+# being the fallback arm." Formulation 2 won (Decision 84) and both changes were
+# made, in conf/algorithm/ and in ABLATION_ARM_DIFFS. The arms now differ from
+# full FedMAQ in exactly one key each, symmetrically, with no renormalization —
+# recorded here because it is a pre-registered branch executing, not a repair.
+#
+# The reserved 6-run refinement recheck (formulation_study.yaml, "THE RESERVED
+# RECHECK") fires on any non-Formulation-3 freeze but is DEGENERATE here: it pits
+# "surviving layer" against "unrefined", and Decision 79/80 froze the surviving
+# layer EMPTY, so both arms are byte-identical. It is a veto, never a second
+# search, so it cannot re-populate the layer these arms inherit. This ablation is
+# therefore not gated on it and cannot be invalidated by it.
 phase: formal
 experiment_group: ablation
 dataset: cifar10
@@ -57,11 +67,12 @@ runs:
   # Configuration 2: Tier-1 memory ceiling lifted (memory-blind condition).
   - alg: fedmaq_no_resource
     label: config2-no-resource
-  # Configuration 3: data-richness term removed (kappa = 0). DynFed-style
+  # Configuration 3: data-richness term removed (gamma2 = 0). DynFed-style
   # reference point.
   - alg: fedmaq_no_data
     label: config3-no-data
-  # Configuration 4: state awareness removed. Fallback arm, Formulation 1.
+  # Configuration 4: state awareness removed (gamma1 = 0). Nested since
+  # Decision 84; anchors to Configuration 7.
   - alg: fedmaq_no_state
     label: config4-no-state
   # Configuration 5: server-side distillation removed.

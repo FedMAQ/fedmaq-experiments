@@ -1265,9 +1265,10 @@ def test_ablation_leave_one_out_arms():
     rather than left to config review:
 
     1. resource_aware=False lifts the Tier-1 ceiling (Configuration 2).
-    2. Formulation 3 at kappa=0 removes data awareness exactly (Configuration 3),
-       which is why that arm shares the winner's formulation instead of
-       substituting a different one.
+    2. Formulation 3 at kappa=0 removes data awareness exactly (Configuration 3).
+       Retained after Decision 84 froze Formulation 2: the arms no longer ship
+       this setting, but the property is what made Configuration 3 nestable under
+       either formulation, so losing it silently would matter.
     """
     from fedmaq.core.strategy import compute_fedmaq_q_k_t
 
@@ -1296,6 +1297,59 @@ def test_ablation_leave_one_out_arms():
     assert compute_fedmaq_q_k_t(
         n_k=10, formulation=3, lambda_val=1.0, **kw
     ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=1.0, **kw)
+
+
+def test_formulation_2_expresses_both_single_signal_removals_symmetrically():
+    """Decision 84. The freeze moved to Formulation 2, and the ablation's
+    attributability now rests on this arithmetic rather than on Formulation 3's.
+
+    Three properties, in the order the ablation needs them:
+
+    1. gamma2=0 kills the data term (Configuration 3) and gamma1=0 kills the
+       gradient term (Configuration 4) — under ONE formulation. This is what
+       retired the fallback-arm exception: Formulation 3 carried no weight on its
+       gradient term, so Configuration 4 had to switch formulations and anchor
+       against a different cell.
+    2. Neither removal needs the surviving exponent renormalized. Under the linear
+       Formulation 1, dropping one weight leaves 0.5*x, capped at half the soft
+       range, so the survivor had to be lifted to 1.0 — a second difference. The
+       multiplicative form reaches q_max on the surviving signal alone, so the
+       arms stay at one key each.
+    3. The removals are exact, not approximate: the surviving signal alone
+       reproduces full FedMAQ's own response to that signal.
+    """
+    from fedmaq.core.strategy import compute_fedmaq_q_k_t
+
+    kw = dict(c_k=16384.0, c_unit=2048.0, q_min=2, q_max=8, formulation=2)
+
+    # Configuration 3 (gamma2=0): clients differing only in dataset size collapse
+    # to one bit-width; restoring gamma2 separates them again, so the equality is
+    # the removal rather than a degenerate setup.
+    data = dict(g_k=0.5, g_max=1.0, n_max=200, **kw)
+    assert compute_fedmaq_q_k_t(n_k=10, gamma1=0.5, gamma2=0.0, **data) == compute_fedmaq_q_k_t(
+        n_k=200, gamma1=0.5, gamma2=0.0, **data
+    )
+    assert compute_fedmaq_q_k_t(n_k=10, gamma1=0.5, gamma2=0.5, **data) != compute_fedmaq_q_k_t(
+        n_k=200, gamma1=0.5, gamma2=0.5, **data
+    )
+
+    # Configuration 4 (gamma1=0): the mirror image. Formulation 3 could not do
+    # this at any parameter setting, which is the whole reason the fallback arm
+    # existed.
+    state = dict(n_k=100, n_max=200, g_max=1.0, **kw)
+    assert compute_fedmaq_q_k_t(g_k=0.1, gamma1=0.0, gamma2=0.5, **state) == compute_fedmaq_q_k_t(
+        g_k=1.0, gamma1=0.0, gamma2=0.5, **state
+    )
+    assert compute_fedmaq_q_k_t(g_k=0.1, gamma1=0.5, gamma2=0.5, **state) != compute_fedmaq_q_k_t(
+        g_k=1.0, gamma1=0.5, gamma2=0.5, **state
+    )
+
+    # No renormalization needed: the surviving signal at full strength still
+    # reaches q_max. Under Formulation 1 the same removal caps at the midpoint,
+    # which is the contrast that forced the old arm to a second key.
+    saturated = dict(c_k=16384.0, c_unit=2048.0, q_min=2, q_max=8, g_max=1.0, n_max=200, n_k=200)
+    assert compute_fedmaq_q_k_t(g_k=0.0, formulation=2, gamma1=0.0, gamma2=0.5, **saturated) == 8
+    assert compute_fedmaq_q_k_t(g_k=0.0, formulation=1, gamma1=0.0, gamma2=0.5, **saturated) < 8
 
 
 def test_uniform_memory_arm_is_the_memory_blind_condition():

@@ -1488,3 +1488,111 @@ tasks, and closed by measurement rather than by inspection.
       `formulation: 1, gamma1: 0.0` stop expressing single-signal removals —
       that is an ablation redesign, not a re-run, and it is Configuration 8's
       problem twice over.
+
+84. **Formulation 2 (Multiplicative) frozen as FedMAQ's Tier-2 rule; the §4.3.7
+    ablation arms re-expressed against it. Decided 2026-08-06, after computing
+    the Decision 83 amended verdict.** The verdict, from
+    `select_winner_iso_byte` + `resolve_frozen_formulation` over the 30
+    `formulation_study` runs (completeness re-audited at 30/30, R=100, after the
+    `71932bc` fix — the first audit silently inspected 3):
+    - **α=0.1**, budget 10187.9 MB: winner **Formulation 2** (acc@budget
+      0.3298), ranking [2, 0, 3, 1, 4], lead over the runner-up **2.1pp**.
+      Formulation 4 collapses here (0.1515 against 0.30+ for every other arm) —
+      the threshold-staged rule does not survive severe skew.
+    - **α=1.0**, budget 10559.5 MB: winner Formulation 3 (0.5464), ranking
+      [3, 1, 2, 0, 4]. **The top four span 0.45pp** (0.5464 / 0.5440 / 0.5429 /
+      0.5419). This cell does not discriminate and is not read as if it did.
+    - **Rule 2 (`divergence_severe_skew_breaks`)** fired: the skews disagree, so
+      the severe skew breaks the tie. `frozen_formulation: 2`,
+      `contribution_withdrawn: false`, `recheck_required: true` (see Decision 85).
+      The freeze therefore rests on the one cell with a real gap, which is the
+      pre-registered behaviour and also the better-supported half of the data.
+    - **Robustness columns, emitted alongside per Decision 83:** first-touch
+      qualifies exactly one cell in the study (F3 at α=1.0); 5-consecutive
+      qualifies none; the final-round gate qualifies none. Three of the four
+      rules return no usable verdict at either skew. The amended criterion is the
+      only one that ranks all five arms at both, which is the argument Decision
+      83 made in advance and did not tune afterwards.
+    - **`conf/algorithm/fedmaq.yaml` changed `formulation: 3` → `2`.** This is
+      the first time the study has moved the shipped value; Decision 82's verdict
+      had confirmed the long-standing default. Chapter 6's contribution claim
+      survives and is *strengthened* in kind rather than merely rescued:
+      Formulation 2 is `(g~^gamma1)*(n~^gamma2)`, which consumes **both** Tier-2
+      signals, so multi-adaptive fusion is what the freeze selected. Formulation
+      3 modulates a gradient primary; Formulation 0 uses no soft signal at all.
+    - **The ablation arms were re-expressed. This is a pre-registered contingency
+      executing, not a post-hoc repair** — `conf/matrix/ablation.yaml`'s header
+      has carried it, dated, since before the study ran: *"the arms are pinned to
+      formulation 3 pending the formulation study. If Formulation 1 or 2 wins,
+      fedmaq_no_data's removal becomes gamma2=0 and fedmaq_no_state stops being
+      the fallback arm. Revisit all four arm configs and ABLATION_ARM_DIFFS
+      first."* Both changes were made:
+      - **Configuration 3** (`fedmaq_no_data`): `lambda_val: 0.0` →
+        `gamma2: 0.0`. One key.
+      - **Configuration 4** (`fedmaq_no_state`): `formulation: 1, gamma1: 0.0,
+        gamma2: 1.0` → `gamma1: 0.0`. Three keys to one. **The fallback-arm
+        exception is retired.** It existed only because Formulation 3 carries no
+        weight on its gradient term and so cannot express state-awareness removal
+        at any parameter setting, forcing that arm onto Formulation 1 and onto a
+        different parity anchor. Under the multiplicative form the removal is
+        expressible in place, the arm nests like every other, and its anchor
+        reverts to Configuration 7 — which also releases the study's six
+        Formulation 1 runs from doing double duty as an anchor.
+    - **No renormalization of the surviving exponent, deliberately.** Under
+      Formulation 1 removing one weight leaves `0.5*x`, capped at half the soft
+      range, so the survivor had to be lifted to 1.0 to reach `q_max` — a second
+      difference forced by the linear form, and the reason the old arm needed
+      three keys. Multiplicatively `x^0.5` already spans [0, 1]; lifting the
+      exponent would change only response curvature and would add a difference
+      the ablation would then have to attribute. The arms are now exact mirror
+      images — full `(0.5, 0.5)`, Config 3 `(0.5, 0.0)`, Config 4 `(0.0, 0.5)` —
+      which is a cleaner leave-one-out than the design this replaces.
+    - **Enforcement:** `ABLATION_ARM_DIFFS` updated to `{"gamma2"}` / `{"gamma1"}`;
+      `tests/test_environment.py::test_formulation_2_expresses_both_single_signal_removals_symmetrically`
+      pins all three properties (both removals exact under one formulation, no
+      renormalization needed, and the Formulation 1 contrast that explains why).
+      `docs/freeze/resolved_configs.yaml` regenerated. 200 tests pass.
+    - **The completed ablation runs at Formulation 3 are invalid** and their
+      output directory is moved aside, not resumed: `--skip_completed` keys on
+      per-run final-round checkpoints and would silently retain the old arms.
+      Moved rather than deleted — the Configuration 7 cell is pipeline-free full
+      FedMAQ at Formulation 3 and remains usable as an F3 reference.
+    - **Not claimed:** that Formulation 2 is better than 1 or 0 in any general
+      sense. At α=1.0 it is inside noise of both. The defensible statement is
+      that it is the pre-registered winner under a criterion fixed before the
+      result was visible, that it wins the discriminating cell by a real margin,
+      and that it is the only survivor consistent with the multi-adaptive claim.
+
+85. **The reserved 6-run refinement recheck is degenerate under this freeze and
+    is not spent.** `resolve_frozen_formulation` sets `recheck_required: true`
+    mechanically whenever `frozen_formulation != 3`, and Decision 84 froze 2, so
+    the flag fired. Its content, however, is empty. `conf/matrix/
+    formulation_study.yaml` defines the recheck as *"surviving layer vs.
+    unrefined, 3 seeds, under the winning formulation, at the held-out
+    alpha = 0.3"*, and Decisions 79/80 froze the surviving layer **EMPTY** —
+    `soft_voting`, `ema_student` and `grad_norm_ema` are all false. Both arms of
+    the recheck therefore resolve to byte-identical configurations, and the
+    comparison has no content to test.
+    - **This is the same degeneracy that skipped `pass3_freeze_confirm`
+      (Decision 80), applied to the same empty layer**, so it is a precedent
+      inside this pre-registration rather than a new exemption invented for
+      convenience.
+    - **It cannot be substituted with a re-run factorial.** The same file: *"The
+      recheck is a veto on the layer it was given, not a second search —
+      re-opening the factorial here would spend the held-out skew's independence
+      a second time and turn a bounded sequential design into an unbounded one."*
+      A veto can only remove mechanisms. Removing from the empty set yields the
+      empty set, whatever formulation it runs under.
+    - **Consequence for dispatch order:** the §4.3.7 ablation inherits the
+      refinement layer through `defaults: [fedmaq, _self_]`, so a recheck that
+      could re-populate the layer would gate it. This one cannot, so the ablation
+      is not gated and cannot be invalidated a second time from this direction.
+      Ablation Configuration 8 also stays dropped, since the layer it would
+      remove is still empty (`test_configuration_8_exists_only_while_there_is_a_
+      layer_to_remove` enforces both directions).
+    - **Disclosed as a limitation, not hidden:** the sequential design's known
+      gap (§4.3.6) is that a refinement helping under Formulation 3 and hurting
+      under the winner would go uncaught. With an empty frozen layer that gap is
+      vacuous here — there is no surviving mechanism whose value could depend on
+      the formulation. `soft_voting`, named in the pre-registration as the
+      exposed verdict, did not survive the factorial in the first place.

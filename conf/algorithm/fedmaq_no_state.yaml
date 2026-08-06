@@ -1,15 +1,24 @@
 # Ablation Configuration 4 (manuscript §4.3.7): FedMAQ minus state awareness.
 #
-# THIS IS THE FALLBACK ARM. Formulation 3 makes the gradient norm a multiplicative
-# primary term carrying no weight of its own, so it cannot express the removal of
-# state awareness at any parameter setting. Per the pre-registered rule in §4.3.7,
-# this arm therefore runs on the nearest formulation that CAN express the removal
-# (Formulation 1, gamma1 = 0) and is compared against the Formulation 1
-# full-FedMAQ runs from the formulation study, NOT against Configuration 7.
+# THIS IS NO LONGER THE FALLBACK ARM (Decision 84). It was, for as long as
+# fedmaq.yaml froze on Formulation 3: that form makes the gradient norm a
+# multiplicative primary term carrying no weight of its own, so it could not
+# express the removal of state awareness at any parameter setting, and the arm
+# had to run on Formulation 1 (gamma1 = 0) and anchor against the formulation
+# study's Formulation 1 runs rather than against Configuration 7.
 #
-# If Formulation 1 or 2 wins the formulation study, this arm becomes nested like
-# every other: drop the `formulation` override below and the parity anchor
-# reverts to Configuration 7.
+# The §4.3.6 study froze Formulation 2, which carries an exponent on each signal,
+# so the removal is now expressible in place: gamma1 = 0 sends the gradient term
+# to g~^0 = 1 and leaves q_hat = q_min + (q_max - q_min)*n~^gamma2. The arm is
+# nested like every other, the formulation override is gone, and the parity
+# anchor reverts to Configuration 7 -- which also frees the six formulation-study
+# Formulation 1 runs from doing double duty as an anchor.
+#
+# NO RENORMALIZATION of the surviving gamma2. Under Formulation 1 it was forced:
+# gamma2*n~ caps at 0.5, so the surviving signal could not reach q_max without
+# lifting gamma2 to 1.0. Multiplicatively, n~^0.5 already spans [0, 1], so lifting
+# it would change only the response curvature and add a second difference. That is
+# why this arm drops from three keys to one.
 #
 # INHERITS full FedMAQ and states only its removal, so the frozen refinement
 # layer reaches this arm from one place and no second difference is expressible.
@@ -19,6 +28,4 @@ defaults:
   - fedmaq
   - _self_
 
-formulation: 1             # fallback formulation, see header
-gamma1: 0.0                # <-- the removal defining this arm
-gamma2: 1.0                # renormalized so the surviving data term carries full weight
+gamma1: 0.0                # <-- the single removal defining this arm

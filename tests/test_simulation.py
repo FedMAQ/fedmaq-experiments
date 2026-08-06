@@ -91,14 +91,16 @@ def _ablation_arm_diffs():
     return {
         # Configuration 2: Tier-1 memory ceiling lifted.
         "fedmaq_no_resource": {"resource_aware"},
-        # Configuration 3: Formulation 3's data modulator removed at kappa = 0.
-        # One key, because the arm stays on the winner's formulation.
-        "fedmaq_no_data": {"lambda_val"},
-        # Configuration 4: the pre-registered fallback arm. Formulation 3 carries
-        # no weight on the gradient term and cannot express state-awareness
-        # removal, so this arm alone changes formulation, and is anchored to the
-        # formulation study's own Formulation 1 runs rather than to Config 7.
-        "fedmaq_no_state": {"formulation", "gamma1", "gamma2"},
+        # Configuration 3: Formulation 2's data term removed at gamma2 = 0
+        # (n~^0 = 1). One key, because the arm stays on the winner's formulation.
+        "fedmaq_no_data": {"gamma2"},
+        # Configuration 4: Formulation 2's gradient term removed at gamma1 = 0.
+        # Decision 84 retired the fallback-arm exception: this arm carried
+        # {formulation, gamma1, gamma2} only while the freeze was Formulation 3,
+        # which cannot express state-awareness removal at any parameter setting.
+        # Under the multiplicative freeze it is nested like every other arm and
+        # anchors to Configuration 7, not to the study's Formulation 1 runs.
+        "fedmaq_no_state": {"gamma1"},
         # Configuration 5: KD removed. soft_voting goes with it as INAPPLICABLE
         # (it weights teacher logits, and this arm distills nothing) -- but it
         # only registers as a *difference* if the freeze turned it on.

@@ -15,7 +15,15 @@ resource_aware: true  # Tier-1 ceiling active. False only in the §4.3.7 ablatio
 
 # Tier 2 soft quality formulation selection
 # 0: Resource-Only Hard Cap, 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
-formulation: 3
+#
+# FROZEN 2 — Decision 84. The §4.3.6 formulation study's verdict under the
+# Decision 83 amended criterion (accuracy at the minimum common cumulative-MB
+# budget): Formulation 2 wins the severe skew by 2.1pp and Rule 2
+# (`divergence_severe_skew_breaks`) breaks the α=1.0 near-tie in its favour.
+# This REPLACED the long-standing default of 3, which won only under the
+# superseded bytes-to-target rule while finishing last on accuracy.
+# Do not revert this to 3 to match an older doc; the docs are what is stale.
+formulation: 2
 
 # Formulation-specific parameters
 gamma1: 0.5      # Alternative 1 & 2 (gradient weight)

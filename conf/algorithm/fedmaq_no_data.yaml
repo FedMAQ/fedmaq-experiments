@@ -2,11 +2,17 @@
 # The DynFed-style reference point: gradient-norm-adaptive quantization under the
 # Tier-1 memory ceiling with server-side KD, and no data-richness signal.
 #
-# Under Formulation 3 the data term is the modulator (1 + kappa*n~)/(1 + kappa),
-# so kappa = 0 removes it exactly and leaves q_hat = q_min + (q_max - q_min)*g~.
-# This arm stays on the winner's formulation, hence one key. If Formulation 1 or 2
-# wins the formulation study instead, the removal becomes `gamma2: 0.0` and this
-# file changes to that one line.
+# Under the frozen Formulation 2 the soft target is (g~^gamma1)*(n~^gamma2), so
+# gamma2 = 0 sends the data term to n~^0 = 1 and leaves
+# q_hat = q_min + (q_max - q_min)*g~^gamma1. The removal is exact, and costs one key.
+#
+# NO RENORMALIZATION, and that is the point. Under Formulation 1 this same removal
+# leaves gamma1*g~ capped at 0.5, so the surviving signal cannot reach q_max and
+# gamma1 has to be lifted to 1.0 to compensate -- a second difference forced by the
+# linear form. Multiplicatively, g~^0.5 still spans [0, 1]; lifting gamma1 would
+# alter only the response curvature, adding a difference the ablation would then
+# have to attribute. See conf/algorithm/fedmaq_no_state.yaml, which under this
+# freeze is this file's mirror image rather than a special case.
 #
 # INHERITS full FedMAQ and states only its removal, so the frozen refinement
 # layer reaches this arm from one place and no second difference is expressible.
@@ -16,4 +22,4 @@ defaults:
   - fedmaq
   - _self_
 
-lambda_val: 0.0            # <-- the single removal defining this arm
+gamma2: 0.0                # <-- the single removal defining this arm

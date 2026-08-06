@@ -11,7 +11,7 @@
 # arm, not the run.
 
 fedmaq:
-  config_sha256: 4ad6e5abdcf651f6f810aeaf2a947916ba578178d1b4007126d4ffc597e3e881
+  config_sha256: 03fc2de1af26643de814f5f4305673b3b369f17da0d0730d7939a324203ef6b2
   bit_widths:
   - 1
   - 2
@@ -28,7 +28,7 @@ fedmaq:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 3
+  formulation: 2
   gamma1: 0.5
   gamma2: 0.5
   grad_norm_beta: 0.7
@@ -53,7 +53,7 @@ fedmaq:
   temperature: 1.0
 
 fedmaq_no_data:
-  config_sha256: a15e804383e903deae85195bd0a3f00ef11768c8845ceebc46140940f1089dce
+  config_sha256: 5d7afbf19e21116d452660f768b034f23ae9dfa2d5ee2a6beed38927a2bc9b8e
   bit_widths:
   - 1
   - 2
@@ -70,16 +70,16 @@ fedmaq_no_data:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 3
+  formulation: 2
   gamma1: 0.5
-  gamma2: 0.5
+  gamma2: 0.0
   grad_norm_beta: 0.7
   grad_norm_ema: false
   kd_epochs: 1
   kd_prox_mu: 0.0
   kd_reg_alpha: 0.5
   kd_reg_temp: 2.0
-  lambda_val: 0.0
+  lambda_val: 1.0
   name: fedmaq
   post_process: false
   precision_weight: 1.0
@@ -95,7 +95,7 @@ fedmaq_no_data:
   temperature: 1.0
 
 fedmaq_no_kd:
-  config_sha256: 06f98aae77c4701b28902f21e47adba2367e42d67b8e24de3222d9d50c5c9abf
+  config_sha256: 641ae40e0d5ae29c03caf9776bf32a680bfc38bd50c49f9ea3b59b1b20d6e016
   bit_widths:
   - 1
   - 2
@@ -112,7 +112,7 @@ fedmaq_no_kd:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 3
+  formulation: 2
   gamma1: 0.5
   gamma2: 0.5
   grad_norm_beta: 0.7
@@ -137,7 +137,7 @@ fedmaq_no_kd:
   temperature: 1.0
 
 fedmaq_no_refinements:
-  config_sha256: 4ad6e5abdcf651f6f810aeaf2a947916ba578178d1b4007126d4ffc597e3e881
+  config_sha256: 03fc2de1af26643de814f5f4305673b3b369f17da0d0730d7939a324203ef6b2
   bit_widths:
   - 1
   - 2
@@ -154,7 +154,7 @@ fedmaq_no_refinements:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 3
+  formulation: 2
   gamma1: 0.5
   gamma2: 0.5
   grad_norm_beta: 0.7
@@ -179,7 +179,7 @@ fedmaq_no_refinements:
   temperature: 1.0
 
 fedmaq_no_resource:
-  config_sha256: 6a9a4e938bbe6f03f5bc7df9605100df7d24e14f0f370a581115388dec193364
+  config_sha256: 478241f8ffbc0ad748fb91a729f1f74367b04daaaadf139d292223e9e8f3fdc9
   bit_widths:
   - 1
   - 2
@@ -196,7 +196,7 @@ fedmaq_no_resource:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 3
+  formulation: 2
   gamma1: 0.5
   gamma2: 0.5
   grad_norm_beta: 0.7
@@ -221,7 +221,7 @@ fedmaq_no_resource:
   temperature: 1.0
 
 fedmaq_no_state:
-  config_sha256: 6c3a543f72826d89e98b8b937a3465dc24feeb3210efe792aad245a9bf65adb8
+  config_sha256: f1f4eb2a2c10f0e938a21c27367476f7b484bcae015f47136f0b1c3bf852c6c5
   bit_widths:
   - 1
   - 2
@@ -238,9 +238,9 @@ fedmaq_no_state:
   ema_decay: 0.7
   ema_student: false
   entropy_weight: 1.0
-  formulation: 1
+  formulation: 2
   gamma1: 0.0
-  gamma2: 1.0
+  gamma2: 0.5
   grad_norm_beta: 0.7
   grad_norm_ema: false
   kd_epochs: 1
