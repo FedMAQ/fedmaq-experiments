@@ -181,6 +181,10 @@ FedAvg's rows are pulled forward, so they are (Decision 71).
    formulation (step 9). Manuscript §6.2 promises this tag. Nothing downstream of here
    may edit a frozen config; an anomaly during confirmation opens a new labelled
    exploration round instead (§4.3.1).
+   **Done 2026-08-06** — `pre-registration` at `0dd7ef1`, moved from `951f96a`
+   (whose message said "Formulation 3" and which predated the baseline table).
+   Decision 88 records the move, the SHA it came from, and why the tag sits after
+   the ablation dispatch rather than before it.
 
 ### Stage 3 — Ablation (36 runs)
 
