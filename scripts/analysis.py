@@ -583,7 +583,16 @@ def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict
     for r in runs:
         df = load_round_metrics(r.csv_path)
         max_round = int(df["round"].max())
-        report[str(r.job_dir.name)] = {
+        # Keyed on the fields that identify a run, NOT on ``job_dir.name``: the
+        # canonical output dir does not encode formulation, so all five
+        # formulations at one (alpha, seed) share a directory name and a
+        # name-keyed dict silently collapses 30 study runs onto 3 entries --
+        # reporting ``all_complete`` for whichever arm happened to be written
+        # last. An audit that quietly drops 90% of its input is worse than no
+        # audit, because it reads as a pass.
+        key = f"{r.algorithm_config}_a{r.alpha}_f{r.formulation}_s{r.seed}"
+        report[key] = {
+            "job_dir": str(r.job_dir),
             "algorithm_config": r.algorithm_config,
             "formulation": r.formulation,
             "alpha": r.alpha,

@@ -1089,16 +1089,45 @@ def test_sustained_crossing_reports_the_start_of_the_first_qualifying_run():
     assert sustained_crossing(df, 0.72, 3) == (2, 20.0)
 
 
+def test_round_completeness_keeps_one_entry_per_run_not_per_directory_name(tmp_path):
+    """The canonical output dir does not encode formulation, so every arm at one
+    (alpha, seed) shares a directory name. Keying the audit on that name
+    collapsed all 30 study runs onto 3 entries and reported ``all_complete``
+    for whichever arm happened to be written last -- an audit that passes by
+    discarding 90% of its input, which is worse than no audit at all."""
+    runs = []
+    for formulation, n_rounds in ((0, 100), (1, 100), (2, 84)):
+        for seed in (1, 2):
+            r = _write_run(
+                tmp_path,
+                "fedmaq",
+                formulation,
+                seed,
+                [0.5] * n_rounds,
+                list(range(1, n_rounds + 1)),
+            )
+            r.job_dir = tmp_path  # force the collision the real output tree produces
+            runs.append(r)
+
+    report = round_completeness(runs, expected_round=100)
+
+    assert len(report["runs"]) == 6, "one entry per run, not per directory name"
+    assert len(report["incomplete_runs"]) == 2, "both seeds of the short arm"
+    assert report["all_complete"] is False
+
+
 def test_round_completeness_flags_a_run_that_died_before_the_budget(tmp_path):
     full = _write_run(tmp_path, "fedmaq", 3, 1, [0.5] * 100, list(range(1, 101)))
     short = _write_run(tmp_path, "fedmaq", 3, 2, [0.5] * 84, list(range(1, 85)))
 
     report = round_completeness([full, short], expected_round=100)
 
+    full_key = "fedmaq_a0.5_f3_s1"
+    short_key = "fedmaq_a0.5_f3_s2"
     assert report["all_complete"] is False
-    assert report["incomplete_runs"] == [short.job_dir.name]
-    assert report["runs"][full.job_dir.name]["max_round"] == 100
-    assert report["runs"][short.job_dir.name]["max_round"] == 84
+    assert report["incomplete_runs"] == [short_key]
+    assert report["runs"][full_key]["max_round"] == 100
+    assert report["runs"][short_key]["max_round"] == 84
 
 
 def _pathology_cell(tmp_path):
