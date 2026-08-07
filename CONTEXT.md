@@ -2,6 +2,56 @@
 
 Multi-adaptive quantization and knowledge distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
 
+> **This file is deliberately a glossary**, which the workspace's reference layout
+> ([`../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md`](../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md))
+> forbids for a `CONTEXT.md`. The exemption is explicit there: that repo avoids
+> being a glossary *because* "All shared vocabulary defers to
+> `fedmaq-experiments/CONTEXT.md`." This is the file that rule was written to
+> protect. Do not "fix" it toward pointer-only. See
+> [ADR-0014](docs/adr/0014-agentic-context-layout.md).
+
+## Authority map
+
+Five-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
+index its `.claude/rules/` rather than duplicating domain content.
+
+| Repo | Owns | Agent entry |
+| --- | --- | --- |
+| [fedmaq-experiments](./) | Code, Hydra, Flower, WandB, **the domain rules** | `CLAUDE.md` |
+| [fedmaq-literature](../fedmaq-literature/) | PDFs, markdown conversions, OKF knowledge graph | `CLAUDE.md` |
+| [fedmaq-analyses](../fedmaq-analyses/) | Notebooks, thesis figures | `CLAUDE.md` |
+| [fedmaq-manuscript](../fedmaq-manuscript/) | LaTeX thesis (Ch 1–6), **its own writing rules** | `README.md` |
+| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides | `CLAUDE.md` |
+
+**Cross-repo rule:** non-experiments repos must not duplicate domain content; they
+index `../fedmaq-experiments/.claude/rules/`.
+
+**Within this repo**, when two sources disagree: `conf/**` beats prose describing
+it; `docs/adr/` beats everything for *why*; the pinned GitHub Issues beat every
+file for *what is true right now*. Run counts, dispatch state and sync status live
+only in Issues — if you find a number in a tracked file, it is stale by
+construction.
+
+## Working conventions
+
+- **One canonical home per fact.** A number, status or decision lives in exactly
+  one place; everything else points at it and never restates it.
+- **No archives.** Git history is the record — a superseded doc is deleted, not
+  parked in an `archive/` folder.
+- **Reference lives behind pointers.** Settled, rarely-touched material belongs in
+  `docs/agents/`, out of the always-loaded rules.
+- **No committed handoff file.** Session-to-session orientation is a temporary
+  artifact of the `handoff` skill, never tracked here. A tracked `HANDOFF.md`
+  failed exactly once and predictably: it accreted durable operational content
+  that went stale while cited from three other docs. If you are about to write
+  next-session context into a tracked file, this is the rule that names the
+  mistake.
+- **No section numbers in heading titles** (`## Important Context`, not
+  `## 1. Important Context`) — avoids renumbering churn and broken anchors.
+  Explicit IDs stay: `ADR-0007`, audit finding `F10`, manuscript `§4.1`.
+- **`docs/plans/` is active-only.** A plan exists only while it has open
+  questions; on resolution it becomes an ADR and the plan file is deleted.
+
 ## Language
 
 ### Precision Scaling (Section 3.3)
