@@ -101,6 +101,45 @@ _Avoid_: state-only-plus-distillation ablation, DynFed-core reference arm
 The role Ablation Configuration 4 plays in analysis (Ch4 §4, sec:ablation) — reproduces DynFed's core mechanism (gradient-norm-adaptive quantization, memory-capped, server-side multi-teacher distillation), absent DynFed's non-reproducible active teacher-selection. Explicitly framed as a comparison anchor, not a claimed win over DynFed itself (no public DynFed codebase exists to benchmark directly). Names WHY the arm exists.
 _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 
+### Communication Comparison (Section 4, `sec:metrics_communication`)
+
+Three terms, one amendment. [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)
+replaced the primary criterion; these name what replaced it and what was demoted.
+**A sentence that measures communication efficiency and leaves no slot for the first
+two is defective even when every word in it is accurate** — that is the shape found
+in Ch1 §1.3, Ch6 §6.1 and Ch2 §2.2, three passes running.
+
+**Accuracy-vs-cumulative-MB curve**:
+The **primary** communication-efficiency comparison. No free parameters. Mandated for
+every run by the evaluation-metrics rule, and the axis on which every selection verdict
+is read.
+_Avoid_: single-round compression ratio as a stand-in (measures a different thing)
+
+**Minimum common cumulative-MB budget**:
+Where a scalar head-to-head is required: top-1 accuracy at $B = \min$ over the arms
+compared of each arm's final cumulative MB. The budget is read off the data, chosen by
+nobody — which is what keeps it free of the tunable parameter the $k$-consecutive rule
+was rejected for.
+_Avoid_: iso-byte budget, matched-byte budget, equal-expenditure budget (all appear in
+pass notes as informal shorthand; none is the canonical term). Note that the $R = 100$
+round budget equalizes **training** expenditure, not bytes — do not conflate the two.
+
+**Bytes-to-target**:
+Cumulative megabytes transmitted per client to reach a per-configuration target
+accuracy. **Demoted 2026-08-06 from primary criterion to descriptor**, reported beside
+the two above, never as the verdict. The target accuracy floor it rests on
+(0.9 x FedAvg-at-equal-rounds) is **superseded**; cite it as such.
+_Avoid_: **bits-to-target-accuracy**, **bits-to-accuracy**, **cumulative-MB-to-target**
+— all three are live in the manuscript as non-canonical spellings of this one quantity.
+A 2026-08-07 keyword sweep on `bytes-to-target` alone returned Ch2 clean; the chapter
+was carrying the demoted quantity as primary under the `bits-` spelling. **Sweep the
+whole variant set or the sweep proves nothing.**
+
+**Rounds-to-target**:
+A **different** quantity — the rounds term of the bytes-to-target product, not a
+communication measure on its own. Pass 7 caught §5.2.4 reading it as a judgment on
+total bytes. Pair it with per-round payload or do not cite it.
+
 ## Open items
 
 **Last updated**: 2026-08-07.
