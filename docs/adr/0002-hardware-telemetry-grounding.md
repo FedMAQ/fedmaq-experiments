@@ -1,6 +1,6 @@
 # ADR-0002: Late-2023 Hardware Grounding for Simulation Telemetry
 
-- **Status**: Accepted (Revised)
+- **Status**: Accepted (Revised 2026-07-22; amended 2026-08-08 — see §2)
 - **Date**: 2026-07-22
 - **Authors**: Antigravity & Research Team
 - **Decider(s)**: Thesis Committee & Lead Researcher
@@ -56,17 +56,20 @@ We standardize the physical simulation environment on a **Late-2023 Edge-Cloud E
 
 Derived from **sustained** FP32 GEMM throughput on Quad Cortex-A76 @ 2.4 GHz.
 
-**Step 1 — Peak FP32 throughput** ($P_{\text{peak}} \approx 31.5 \text{ GFLOPS}$):
-Based on 4 cores × NEON FP32 FMLA throughput × 2.4 GHz clock.
+**Step 1 — Peak FP32 throughput** ($P_{\text{peak}} = 153.6 \text{ GFLOPS}$):
+The Cortex-A76 carries two 128-bit ASIMD pipes per core, each retiring one FP32 FMLA per
+cycle: 4 lanes × 2 FLOPs = 8 FLOPs per pipe per cycle, so 16 FLOPs per cycle per core. At
+2.4 GHz that is 38.4 GFLOPS per core and **153.6 GFLOPS** across four.
 
-**Step 2 — Sustained efficiency** ($\eta_{\text{sustained}} \approx 57\%$):
-Real PyTorch training workloads achieve ~55–60% of peak FP32 on ARM Cortex-A76 CPUs due to:
+**Step 2 — Sustained efficiency** ($\eta_{\text{sustained}} \approx 11.7\%$):
+PyTorch eager-mode training of depthwise-separable convolutions reaches roughly an eighth
+of vector peak on this class of part, for three compounding reasons:
 
 - **Framework overhead**: PyTorch's eager-mode dispatch, Python GIL contention, and non-optimized NEON kernel codegen (PyTorch lacks TFLite/ACL-level ARM SIMD optimizations)
 - **Memory subsystem**: Cache pressure and LPDDR4X-4267 bandwidth sharing across 4 cores (~34 GB/s total, ~8.5 GB/s per core)
 - **MobileNetV2 workload**: Depthwise separable convolutions have low arithmetic intensity, increasing memory stall cycles relative to dense GEMM
 
-$$P_{\text{sustained}} = P_{\text{peak}} \times \eta_{\text{sustained}} = 31.5 \times 0.571 \approx 18.0 \text{ GFLOPS}$$
+$$P_{\text{sustained}} = P_{\text{peak}} \times \eta_{\text{sustained}} = 153.6 \times 0.117 \approx 18.0 \text{ GFLOPS}$$
 
 **Step 3 — Model-specific throughput:**
 
@@ -77,6 +80,33 @@ $$P_{\text{sustained}} = P_{\text{peak}} \times \eta_{\text{sustained}} = 31.5 \
   $$v_{\text{theoretical}} = \frac{18.0}{0.015} = 1{,}200 \text{ samples/sec}$$
   $$v_{\text{client}} = \mathbf{600.0\text{ samples/sec}}$$
   Capped well below theoretical — the binding constraint is PyTorch DataLoader throughput on ARM (Python GIL scheduling, I/O overhead for small 28×28 images), not raw FP32 compute. The cap is independent of the sustained-efficiency revision.
+
+**Amendment, 2026-08-08 — the 31.5 GFLOPS figure is withdrawn.** Steps 1 and 2 previously
+read $P_{\text{peak}} \approx 31.5$ GFLOPS "based on 4 cores × NEON FP32 FMLA throughput ×
+2.4 GHz clock", derated by $\eta_{\text{sustained}} \approx 57\%$. **The stated inputs do
+not yield the stated output**: that product is 153.6 GFLOPS, and no NEON FP32 pipeline
+width produces 31.5 across four cores at 2.4 GHz (it implies ~3.3 FLOPs/cycle/core, which
+is not a pipeline geometry). The companion claim that "real PyTorch training workloads
+achieve ~55–60% of peak FP32 on ARM Cortex-A76" was false on the same reading of "peak" —
+eager-mode training of depthwise-separable convolutions does not reach half of vector peak
+on any part of this class. Both are removed rather than reconciled.
+
+31.5 was most likely an *achievable dense-GEMM* measurement that entered the chain
+mislabelled as a theoretical peak. It is **not** restored under a corrected label: doing so
+would substitute one unsourceable assertion for another, since its provenance is
+unrecoverable and no citation in this repo supports it. The single derate now carries the
+whole gap, justified by the three bullets in Step 2 that were always the real argument.
+
+**No value downstream of $P_{\text{sustained}}$ moves.** $P_{\text{sustained}} = 18.0$
+GFLOPS is unchanged, and with it $v_{\text{client}} = 20.0$ and $600.0$ samples/sec, every
+number in §4 and §5, and the ~8:1 compute-to-communication ratio in *Consequences* — that
+ratio hangs off 20.0 s/s, not off the peak. This amendment repairs a derivation chain, not
+a result.
+
+**Two frozen configs preserve the superseded wording.** `conf/experiment/default.yaml:23`
+and `conf/experiment/preliminary.yaml:22` annotate `compute_samples_per_sec: 20.0` as
+"~57% of 31.5 GFLOPS peak". Both are frozen behind the `pre-registration` tag and are not
+editable; the divergence is in a comment, never in a value. **This ADR governs.**
 
 ### 3. FL Server Hardware: High-Density Data Center Node (Late 2023)
 
