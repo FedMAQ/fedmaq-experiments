@@ -1,48 +1,44 @@
-# FedMAQ Experiment Registry & Roadmap
+# Experiment Registry
 
-This directory houses all experimental sweeps, ablation studies, and hyperparameter tuning results conducted for the FedMAQ thesis.
+**Scope: exploratory sweeps that carry hand-written analysis.** Each lives in its own
+directory with `results.md` (tabular data, Hydra config paths) and `comments.md`
+(empirical analysis and narrative alignment).
 
-Every experiment is self-contained within its own directory and adheres to a strict organization standard:
+**Formal, matrix-dispatched stages are not registered here.** They are defined by
+their `conf/matrix/*.yaml` header, which is authoritative, and their execution state
+lives in the pinned dispatch-state Issue. Registering them here too would be a second
+tracker for the same fact, which is what this registry's rule exists to prevent — see
+`CONTEXT.md` § Working conventions.
 
-- `results.md`: Detailed tabular data (accuracy, loss, communication footprint, simulated latency) and Hydra configuration paths.
-- `comments.md`: In-depth empirical analysis, physical mechanisms, and Master's thesis narrative alignment.
+| Experiment | Directory | Description |
+| :-- | :-- | :-- |
+| MobileNetV2GN smoke (50R) | [mobilenetv2-smoke-50r/](mobilenetv2-smoke-50r/) | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ and FedKD across α ∈ {0.1, 1.0}. |
+| Soft-voting explore (Pass 1) | [soft-voting-explore-mobilenetv2/](soft-voting-explore-mobilenetv2/) | `entropy_weight` × `precision_weight` sweep plus soft-voting ablation, explore-α = 0.3, 50R single-seed. **Superseded** — see the banner in that directory. |
 
 > [!IMPORTANT]
-> **Archived: ResNet18GN-era smoke tests (July 13–15, 2026).** Nine exploratory smoke-test experiments (40–50 round, single-seed) were run on ResNet18GN to validate the algorithm direction. They are **deprecated** following the switch to MobileNetV2GN as the iso-architecture (see [ADR-0004](../adr/0004-confirmatory-grid-design.md)). Directory index below.
+> **Everything here is exploratory.** These are short-round, single-seed sweeps run to
+> validate direction, not thesis results. Their decision rules were superseded by the
+> √2σ protocol in [ADR-0008](../adr/0008-exploration-protocol-and-the-empty-refinement-layer.md),
+> and the factorial that protocol dispatched discarded every refinement mechanism the
+> soft-voting sweep was exploring. Read them as history.
 
-## Archived (ResNet18GN, deprecated)
+ResNet18GN-era smoke tests (July 13–15, 2026) were deleted with the archive directory
+in the 2026-08-07 context migration; they were deprecated by the MobileNetV2GN switch
+([ADR-0004](../adr/0004-confirmatory-grid-design.md)) and are recoverable from git
+history.
 
-|  #  | Experiment           | Directory                                                                                                                                                    |
-| :-: | :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  1  | Baseline Smoke Test  | [archive/smoke-test-7-13/](../../docs/experiments/archive/smoke-test-7-13/)                           |
-|  2  | Formulation Study    | [archive/pilot-formulation-study-7-14/](../../docs/experiments/archive/pilot-formulation-study-7-14/) |
-|  3  | EMA Decay Sweep      | [archive/ema-decay-sweep-7-14/](../../docs/experiments/archive/ema-decay-sweep-7-14/)                 |
-|  4  | Soft-Voting Sweep    | [archive/soft-voting-sweep-7-14/](../../docs/experiments/archive/soft-voting-sweep-7-14/)             |
-|  5  | Temperature Ablation | [archive/temperature-ablation/](../../docs/experiments/archive/temperature-ablation/)                 |
-|  6  | ResNet18GN Baselines | [archive/baseline-comparison-resnet18/](../../docs/experiments/archive/baseline-comparison-resnet18/) |
-|  7  | Client KD Reg Sweep  | [archive/client-kd-reg-sweep-7-15/](../../docs/experiments/archive/client-kd-reg-sweep-7-15/)         |
-|  8  | Stacked Reg Sweep    | [archive/stacked-reg-sweep-7-15/](../../docs/experiments/archive/stacked-reg-sweep-7-15/)             |
-|  9  | No-EMA (ResNet18GN)  | [archive/fedmaq-normal-no-ema-50r/](../../docs/experiments/archive/fedmaq-normal-no-ema-50r/)         |
+FedKD's near-chance smoke result was a rank-starvation bug, since fixed and
+re-confirmed; CFD's collapse was structural and dropped it from the stack. Both are
+[ADR-0005](../adr/0005-baseline-stack-membership.md).
 
-Consolidated historical accuracy standings and best-known configs for these runs live in [archive/RESNET18GN-SUMMARY.md](../../docs/experiments/archive/RESNET18GN-SUMMARY.md).
+## Running a sweep
 
-## Current (MobileNetV2GN)
-
-|  #  | Experiment                     | Directory                                                                                                                                          | Description                                                                                                                                                                                                  |
-| :-: | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  1  | MobileNetV2GN Smoke Test (50R) | [mobilenetv2-smoke-50r/](../../docs/experiments/mobilenetv2-smoke-50r/)                     | 50-round sweeps of FedAvg, FedProx, FedMAQ, DAdaQuant, FedPAQ, and FedKD across $\alpha \in \{0.1, 1.0\}$.                                                                                                   |
-|  2  | Soft-Voting Explore (Pass 1)   | [soft-voting-explore-mobilenetv2/](../../docs/experiments/soft-voting-explore-mobilenetv2/) | Priority 1 exploration Pass 1: `entropy_weight` × `precision_weight` sweep + soft-voting ablation, explore-α=0.3, 50R single-seed. Provisional pick ew=2.0/pw=0.5/sv_on, pending multi-seed re-verification. |
-
-> [!NOTE]
-> **Smoke-run caveats, resolved as of 2026-07-18** (see [docs/audits/distillation-direction-audit.md](../../docs/audits/archive/distillation-direction-audit.md)): FedKD's near-chance smoke result was a rank-starvation bug (F10), fixed and re-confirmed on a real 50R MobileNetV2GN run — FedKD is unblocked for comparison tables. F13 (KD-baseline coverage gap) closed 2026-07-17: FedDistill/FedAvg+KD ran clean; CFD collapsed to chance both α and was **dropped from the formal stack** (F15, structural), same disposition as **FedMD** (infeasible pretrain cost) — see [ADR-0005](../adr/0005-baseline-stack-membership.md). Formal baseline stack is now 6 + FedMAQ.
-
-New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/agents/execution-model.md](../agents/execution-model.md) ("Dispatch Order") for the exploration/confirmation pipeline.
-
-## Run Execution & Declarative Matrix Runner
-
-- **Declarative Matrix Runner**: All sweeps are defined in YAML manifests (`conf/matrix/*.yaml`) and executed using `uv run python scripts/run_matrix.py --matrix <name>`.
-- **Process-Isolated Execution**: `scripts/run_matrix.py` enforces process isolation and calls `kill_ray_processes()` between runs to eliminate CUDA VRAM leaks and Ray worker accumulation.
-- **Hardware Grounding**: Simulates edge client memory sizes matching **Raspberry Pi variants (2GB/4GB/8GB)** and **Jetson Edge Nodes (16GB)** capping quantization bit-widths (1–16 bits).
-- **Canonical Output Hierarchy**: All raw experiment logs and Hydra configs land strictly in:
+- **Declarative matrices only**: `uv run python scripts/run_matrix.py --matrix <name>`.
+  Never Hydra `--multirun`.
+- **Process-isolated**: the runner calls `kill_ray_processes()` between runs to
+  eliminate CUDA VRAM leaks and Ray worker accumulation.
+- **Canonical output path**:
   `outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<heterogeneity>/seed_<seed>/`
-  _(Phases: `ci` [2R], `smoke` [50R], `explore` [50R], `formal` [100R])._
+  (phases: `ci` 2R, `smoke` 50R, `explore` 50R, `formal` 100R).
+
+Full dispatch order and operational controls: [docs/agents/execution-model.md](../agents/execution-model.md).

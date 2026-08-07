@@ -1,27 +1,21 @@
-# Algorithm & Code Audits
+# Audits
 
-**Last updated**: 2026-08-07
+All foundational audits of the FedMAQ codebase and algorithm formulation are
+complete. Every finding (F1–F18) and code-craftsmanship item was resolved, dropped,
+or folded into a decision record.
 
-All foundational audits conducted on the FedMAQ codebase and algorithm formulation have been completed. All audit findings (F1–F18) and code craftsmanship items have been resolved, dropped, or logged into canonical decisions.
+**Where the findings went:**
 
----
+| Findings | Resolved in |
+| :-- | :-- |
+| F1–F9 (FL engineering & code quality) | [ADR-0001](../adr/0001-client-kd-teacher-deepcopy-is-structural.md), [ADR-0007](../adr/0007-architecture-deepening-seams.md) |
+| F10–F18 (distillation baseline health) | [ADR-0005](../adr/0005-baseline-stack-membership.md) |
+| Telemetry grounding | [ADR-0002](../adr/0002-hardware-telemetry-grounding.md) |
+| Experiment-defensibility passes 3–5 | [ADR-0009](../adr/0009-run-identity-and-analysis-scoping.md) through [ADR-0012](../adr/0012-formulation-selection-and-the-iso-byte-amendment.md) |
 
-## Audit Summaries & Decision Pointers
+The detailed audit logs were deleted with the archive directory in the 2026-08-07
+context migration ([ADR-0014](../adr/0014-agentic-context-layout.md)). They are
+recoverable from git history; nothing live cites them, because every verdict they
+reached is stated in the ADR that carries it.
 
-- **Resolved decisions**: See **[docs/adr/](../adr/)**. F1–F18 resolve across ADR-0001 and ADR-0005 through ADR-0009.
-- **Current project status**: tracked in GitHub Issues.
-
----
-
-## Historical Audit Archive
-
-Detailed historical audit logs and line-by-line analyses are archived in **[docs/audits/archive/](archive/)**:
-
-| Audit Document                                                             | Scope / Summary                                                |
-| :------------------------------------------------------------------------- | :------------------------------------------------------------- |
-| [baseline-status-audit.md](archive/baseline-status-audit.md)               | Baseline implementation status and MobileNetV2GN audit         |
-| [distillation-direction-audit.md](archive/distillation-direction-audit.md) | Distillation baseline health audit (F10–F18)                   |
-| [fedmaq-audit.md](archive/fedmaq-audit.md)                                 | Comprehensive FedMAQ mathematical & architectural audit        |
-| [fedmaq-audit-recos.md](archive/fedmaq-audit-recos.md)                     | Priority table for formulation and algorithmic recommendations |
-| [fedmaq-code-audit.md](archive/fedmaq-code-audit.md)                       | FL engineering & code quality audit (F1–F9)                    |
-| [telemetry-audit.md](archive/telemetry-audit.md)                           | Hardware telemetry grounding & simulation speed audit          |
+Current project state is tracked in GitHub Issues, not here.

@@ -2,6 +2,14 @@
 
 This document analyzes the physical training dynamics of the default **MobileNetV2GN** model under statistical heterogeneity, based on the 50-round smoke sweeps of FedMAQ and five baselines.
 
+> [!WARNING]
+> **FedKD's numbers below are retired.** They were measured before the SVD rank-floor
+> fix and on the old SimpleCNN student, so they are architecture-confounded with
+> everything measured since. **Do not compare them against any post-fix figure** — the
+> causal evidence for the fix is a same-model A/B, not a pre/post delta across the
+> student swap. See [ADR-0005](../../adr/0005-baseline-stack-membership.md). The rest
+> of this document stands.
+
 ---
 
 ## Key Findings & Physical Mechanisms
@@ -16,7 +24,7 @@ Under severe Non-IID skew, local updates on edge nodes diverge significantly due
   - **DAdaQuant** peaks at **47.75%** (R43) and finishes at **46.76%** (R50).
   - This shows that adaptive-precision quantization methods are inherently robust under extreme skew, preventing the parameter-space divergence that plagued FedProx. FedMAQ's client-side KD regularization gives it a higher peak performance (**+5.42pp** over DAdaQuant's peak).
 - **FedPAQ Degradation**: FedPAQ (fixed 8-bit quantization) lacks adaptive scaling, leading to a lower final accuracy of **36.69%** (R50).
-- **SVD Capacity Collapse (FedKD)**: While FedKD achieves a highly compressed footprint of **36.2 MB**, SVD energy-based compression causes a severe degradation of representation capacity, with accuracy peaking at only **20.80%** and finishing at **17.09%**. **Root cause (audit F10, telemetry-confirmed):** `mean_rank_retained` is starved to **~3.7% of full rank** through the convergence window (rounds 2–~35), and accuracy rises only as rank recovers late. This is **two joint effects**, not just SVD lossiness: (1) the linear energy schedule (`tmin=0.1, tmax=0.95`) parks early rounds in a low-rank regime, and (2) energy→rank is non-monotonic with a ceiling of only ~16% rank even at 0.95 energy — so SVD truncation is punishingly aggressive for depthwise-separable weights. See [docs/audits/distillation-direction-audit.md](../../../docs/audits/archive/distillation-direction-audit.md#f10).
+- **SVD Capacity Collapse (FedKD)**: While FedKD achieves a highly compressed footprint of **36.2 MB**, SVD energy-based compression causes a severe degradation of representation capacity, with accuracy peaking at only **20.80%** and finishing at **17.09%**. **Root cause (audit F10, telemetry-confirmed):** `mean_rank_retained` is starved to **~3.7% of full rank** through the convergence window (rounds 2–~35), and accuracy rises only as rank recovers late. This is **two joint effects**, not just SVD lossiness: (1) the linear energy schedule (`tmin=0.1, tmax=0.95`) parks early rounds in a low-rank regime, and (2) energy→rank is non-monotonic with a ceiling of only ~16% rank even at 0.95 energy — so SVD truncation is punishingly aggressive for depthwise-separable weights. Diagnosed as audit finding F10 and fixed with a minimum-rank floor — see [ADR-0005](../../adr/0005-baseline-stack-membership.md).
 
 ### B. Moderate Skew ($\alpha = 1.0$): The Capacity-EMA Duality
 
