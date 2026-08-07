@@ -8,6 +8,10 @@ operational controls that keep a sweep recoverable.
 dispatch-state Issue. If you need to know what has actually run, read that Issue or
 ask for the relevant matrix's `sweep_status.json`. Do not add status here.
 
+> **Provenance.** This was `docs/RUNBOOK.md` until 2026-08-07. It moved and was
+> rewritten in the same commit, so `git log --follow` does not traverse the rename —
+> the prior history is at `75df164^:docs/RUNBOOK.md`.
+
 ---
 
 ## Execution model

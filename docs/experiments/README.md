@@ -24,8 +24,8 @@ tracker for the same fact, which is what this registry's rule exists to prevent 
 
 ResNet18GN-era smoke tests (July 13–15, 2026) were deleted with the archive directory
 in the 2026-08-07 context migration; they were deprecated by the MobileNetV2GN switch
-([ADR-0004](../adr/0004-confirmatory-grid-design.md)) and are recoverable from git
-history.
+([ADR-0004](../adr/0004-confirmatory-grid-design.md)). Recoverable at
+**`f7a095d^:docs/experiments/archive/`**.
 
 FedKD's near-chance smoke result was a rank-starvation bug, since fixed and
 re-confirmed; CFD's collapse was structural and dropped it from the stack. Both are

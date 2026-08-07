@@ -112,5 +112,8 @@ future agent, and goes stale the moment the confirmatory grid lands.
 - **New decisions get a new numbered ADR**, not an entry appended to a log.
 - **Nothing in `docs/` carries a run count.** If you find one, it is a bug.
 - The `docs-audit` skill audits the full context surface against this layout.
-- The two entries with no ADR, and the deleted archives, are recoverable from git
-  history. Nothing cites them.
+- **Recovery SHAs, named because `git log --follow` traverses none of these**
+  (a wholesale directory delete, and a move-plus-rewrite in one commit):
+  - `47fca68:docs/DECISIONS.md` — all 88 entries in full
+  - `f7a095d^:docs/audits/archive/`, `f7a095d^:docs/experiments/archive/`
+  - `75df164^:docs/RUNBOOK.md`, `75df164^:docs/STATUS.md`

@@ -14,8 +14,9 @@ or folded into a decision record.
 | Experiment-defensibility passes 3–5 | [ADR-0009](../adr/0009-run-identity-and-analysis-scoping.md) through [ADR-0012](../adr/0012-formulation-selection-and-the-iso-byte-amendment.md) |
 
 The detailed audit logs were deleted with the archive directory in the 2026-08-07
-context migration ([ADR-0014](../adr/0014-agentic-context-layout.md)). They are
-recoverable from git history; nothing live cites them, because every verdict they
-reached is stated in the ADR that carries it.
+context migration ([ADR-0014](../adr/0014-agentic-context-layout.md)). Nothing live
+cites them, because every verdict they reached is stated in the ADR that carries it.
+They are recoverable at **`f7a095d^:docs/audits/archive/`** — named explicitly
+because `git log --follow` does not traverse a wholesale directory delete.
 
 Current project state is tracked in GitHub Issues, not here.
