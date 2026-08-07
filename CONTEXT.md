@@ -107,7 +107,11 @@ Three terms, one amendment. [ADR-0012](docs/adr/0012-formulation-selection-and-t
 replaced the primary criterion; these name what replaced it and what was demoted.
 **A sentence that measures communication efficiency and leaves no slot for the first
 two is defective even when every word in it is accurate** — that is the shape found
-in Ch1 §1.3, Ch6 §6.1 and Ch2 §2.2, three passes running.
+in Ch1 §1.3, Ch6 §6.1, Ch2 §2.2 and Ch3 §3.3.2, four passes running. **No sweep can
+find it.** It is a shape, not a keyword: Ch3 §3.3.2 called the product "the true
+communication cost" while the criterion sweep that covered Ch3 returned it as a
+non-hit. Only a full read of the surface catches this class — which is why a sweep's
+clean bill never licenses skipping it.
 
 **Accuracy-vs-cumulative-MB curve**:
 The **primary** communication-efficiency comparison. No free parameters. Mandated for
@@ -139,6 +143,8 @@ whole variant set or the sweep proves nothing.**
 A **different** quantity — the rounds term of the bytes-to-target product, not a
 communication measure on its own. Pass 7 caught §5.2.4 reading it as a judgment on
 total bytes. Pair it with per-round payload or do not cite it.
+_Avoid_: **rounds-to-converge** (former Ch3 §3.3.2 wording, fixed 2026-08-07;
+`chapter_4.tex:280` is canonical)
 
 ## Open items
 
