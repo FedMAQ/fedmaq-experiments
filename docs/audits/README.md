@@ -8,8 +8,8 @@ All foundational audits conducted on the FedMAQ codebase and algorithm formulati
 
 ## Audit Summaries & Decision Pointers
 
-- **Resolved Decisions Log**: See **[docs/DECISIONS.md](../DECISIONS.md)** for canonical resolutions (Decisions 1–88; F1–F18 resolve within Decisions 1–35).
-- **Current Project Status**: See **[docs/STATUS.md](../STATUS.md)** for current component status.
+- **Resolved decisions**: See **[docs/adr/](../adr/)**. F1–F18 resolve across ADR-0001 and ADR-0005 through ADR-0009.
+- **Current project status**: tracked in GitHub Issues.
 
 ---
 

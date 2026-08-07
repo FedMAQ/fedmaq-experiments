@@ -1,7 +1,7 @@
 # ADR-0003 — TrainingSkeleton seam: a narrow `run_epochs` atom, not one class per baseline
 
 **Status**: Accepted · 2026-07-23
-**Related**: `docs/plans/architecture-deepening.md` Step 2 (Candidate A); `DECISIONS.md` Decision 40 (bit-exact golden-diff gate).
+**Related**: ADR-0006 (the bit-exact golden-diff gate this was verified against); ADR-0007 (what landed).
 
 ## Context
 
@@ -39,7 +39,7 @@ No unification of the metrics dict. Step 1 (`StrategyHook.metric_keys()`) alread
 ## Consequences
 
 - **`standard.py` is not one behavior for golden-diff purposes.** It's the shared `fit()` entry for FedAvg, FedProx, FedPAQ, FedAvgKD, FedDistill's non-hook path, plus the `DAdaQuantFit`/`FedMAQFit` subclasses — each exercises a different branch (FedProx: `on_after_backward` instrumentation + prox-penalty loss hook; KD: `ClientKDLossHook`; DAdaQuant: `_pretrain_local_loss` + dynamic `q`; FedMAQ: `_reported_local_loss` reading `last_loss`). The S2a golden set must run **one config per branch**, not just one algorithm — a harness that only diffs plain FedAvg passes green while silently breaking FedProx or KD, since those branches are never exercised by the diff.
-- S2a scope (per the plan) is: build `run_epochs` + `compress_and_reconstruct`, migrate `standard.py` onto both (all its branches), migrate `fedkd.py` onto `compress_and_reconstruct` only (its loop stays hand-rolled). Bit-exact golden-diff each branch against pre-refactor output (Decision 40).
+- S2a scope (per the plan) is: build `run_epochs` + `compress_and_reconstruct`, migrate `standard.py` onto both (all its branches), migrate `fedkd.py` onto `compress_and_reconstruct` only (its loop stays hand-rolled). Bit-exact golden-diff each branch against pre-refactor output (ADR-0006).
 - S2b scope is: migrate `feddistill`/`cfd`/`fedmd` onto `run_epochs` only (called 1/2/4 times respectively), with each hook's own upload-assembly code untouched. Bit-exact golden-diff each.
 - `run_epochs` must preserve the exact existing per-batch sequence (`zero_grad → forward → loss → backward → step`) and epoch/batch nesting order — no reordering of RNG-consuming operations — since this is the mechanism the golden-diff gate checks.
 - If a future baseline needs a joint-optimizer loop like `fedkd`'s, it follows `fedkd`'s precedent (hand-rolled, no forced fit into `run_epochs`) rather than widening the atom.

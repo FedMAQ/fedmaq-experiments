@@ -1,7 +1,7 @@
 # ADR-0001 — The client-KD teacher deepcopy is structural, not a defect
 
 **Status**: Accepted · 2026-07-18
-**Related**: `DECISIONS.md` Decision 32 (F9 WONTFIX); audit `docs/audits/fedmaq-code-audit.md` (F9); superseded plan candidate "C" in `docs/plans/architecture-deepening.md`.
+**Related**: ADR-0008 (the mechanism this closed was later retired from the exploration roster entirely).
 
 ## Context
 
@@ -13,7 +13,7 @@ Decisive facts (verified in code):
 
 2. **The only persistence path is `context.state` / a Ray process-global.** To keep a teacher alive past client re-instantiation it must be stashed in per-node state (as the compressor's error-feedback accumulator is, `simulation.py:168 state=context.state`) or a Ray global. Any "widen the contract" framing collapses into exactly this — the already-rejected prototype (a partition-id-keyed teacher-shell cache).
 
-3. **That prototype was reviewed and reverted the same day** (Decision 32). It keeps a GPU-resident model copy alive per client per Ray worker for the whole run — the Ray/PyTorch VRAM-accumulation class the process-isolated runners exist to prevent (`hydra-config.md`, `flower-patterns.md`). Cache hit-rate isn't even guaranteed: flwr simulation does not pin partitions to actors.
+3. **That prototype was reviewed and reverted the same day.** It keeps a GPU-resident model copy alive per client per Ray worker for the whole run — the Ray/PyTorch VRAM-accumulation class the process-isolated runners exist to prevent (`hydra-config.md`, `flower-patterns.md`). Cache hit-rate isn't even guaranteed: flwr simulation does not pin partitions to actors.
 
 4. **The prize is negligible.** The deepcopy is one ~9MB allocation per client per round. Even a perfect cache cannot skip the per-round `load_state_dict` — the teacher must equal *this* round's incoming global model, which changes every round. Meanwhile the real KD cost is the teacher **forward pass every batch** (`standard.py:87`), inherent to KD and untouched by any caching. The optimization targets the cheap part.
 

@@ -15,7 +15,7 @@ The bit-width value $\hat q_k^{(t)}$ derived from the soft quality signal, befor
 _Avoid_: soft quality function (former manuscript Ch3 wording; swept 2026-07-25, no occurrences remain)
 
 **Formulation**:
-One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, Decision 84), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
+One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
 _Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25)
 
 **Formulation constants**:

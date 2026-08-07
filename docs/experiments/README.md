@@ -8,7 +8,7 @@ Every experiment is self-contained within its own directory and adheres to a str
 - `comments.md`: In-depth empirical analysis, physical mechanisms, and Master's thesis narrative alignment.
 
 > [!IMPORTANT]
-> **Archived: ResNet18GN-era smoke tests (July 13–15, 2026).** Nine exploratory smoke-test experiments (40–50 round, single-seed) were run on ResNet18GN to validate the algorithm direction. They are **deprecated** following the switch to MobileNetV2GN as the iso-architecture (see [docs/DECISIONS.md](../../docs/DECISIONS.md)). Directory index below.
+> **Archived: ResNet18GN-era smoke tests (July 13–15, 2026).** Nine exploratory smoke-test experiments (40–50 round, single-seed) were run on ResNet18GN to validate the algorithm direction. They are **deprecated** following the switch to MobileNetV2GN as the iso-architecture (see [ADR-0004](../adr/0004-confirmatory-grid-design.md)). Directory index below.
 
 ## Archived (ResNet18GN, deprecated)
 
@@ -34,9 +34,9 @@ Consolidated historical accuracy standings and best-known configs for these runs
 |  2  | Soft-Voting Explore (Pass 1)   | [soft-voting-explore-mobilenetv2/](../../docs/experiments/soft-voting-explore-mobilenetv2/) | Priority 1 exploration Pass 1: `entropy_weight` × `precision_weight` sweep + soft-voting ablation, explore-α=0.3, 50R single-seed. Provisional pick ew=2.0/pw=0.5/sv_on, pending multi-seed re-verification. |
 
 > [!NOTE]
-> **Smoke-run caveats, resolved as of 2026-07-18** (see [docs/audits/distillation-direction-audit.md](../../docs/audits/archive/distillation-direction-audit.md)): FedKD's near-chance smoke result was a rank-starvation bug (F10), fixed and re-confirmed on a real 50R MobileNetV2GN run — FedKD is unblocked for comparison tables. F13 (KD-baseline coverage gap) closed 2026-07-17: FedDistill/FedAvg+KD ran clean; CFD collapsed to chance both α and was **dropped from the formal stack** (F15, structural — `docs/DECISIONS.md` Decision 26), same disposition as **FedMD** (infeasible pretrain cost, Decision 25). Formal baseline stack is now 6 + FedMAQ.
+> **Smoke-run caveats, resolved as of 2026-07-18** (see [docs/audits/distillation-direction-audit.md](../../docs/audits/archive/distillation-direction-audit.md)): FedKD's near-chance smoke result was a rank-starvation bug (F10), fixed and re-confirmed on a real 50R MobileNetV2GN run — FedKD is unblocked for comparison tables. F13 (KD-baseline coverage gap) closed 2026-07-17: FedDistill/FedAvg+KD ran clean; CFD collapsed to chance both α and was **dropped from the formal stack** (F15, structural), same disposition as **FedMD** (infeasible pretrain cost) — see [ADR-0005](../adr/0005-baseline-stack-membership.md). Formal baseline stack is now 6 + FedMAQ.
 
-New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/RUNBOOK.md](../../docs/RUNBOOK.md) ("Dispatch Order") for the exploration/confirmation pipeline; it replaced `formal-experiment-plan.md`, which was retired 2026-08-01 (Decision 69).
+New experiments land as top-level dirs in this directory following the same `results.md` / `comments.md` structure. See [docs/agents/execution-model.md](../agents/execution-model.md) ("Dispatch Order") for the exploration/confirmation pipeline.
 
 ## Run Execution & Declarative Matrix Runner
 

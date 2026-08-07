@@ -11,7 +11,7 @@
 
 Simulated physical execution time ($t_{\text{round}} = \max_k (t_{\text{download}, k} + t_{\text{train}, k} + t_{\text{upload}, k})$) and communication energy overhead are core telemetry metrics reported in the FedMAQ thesis manuscript (§4.1, §4.3). Prior experiment configs used placeholder constants (`bandwidth_mbps: 10.0`, `compute_samples_per_sec: 200.0`, `server_compute_speed: 2000.0`).
 
-Audit review identified that `200.0 samples/sec` overestimates edge client CPU training throughput for modern vision models (MobileNetV2GN, ~2.24M params, ~0.90 GFLOPs per sample) on Raspberry Pi hardware by 5× to 10×. A subsequent review (Decision 37) further revised client throughput to use **sustained** rather than **peak** GFLOPS, and added a first-principles server-side derivation. To ensure telemetry defensibility during thesis defense, all simulated network and compute parameters must be anchored to a single coherent physical deployment ecosystem with explicit derivation chains.
+Audit review identified that `200.0 samples/sec` overestimates edge client CPU training throughput for modern vision models (MobileNetV2GN, ~2.24M params, ~0.90 GFLOPs per sample) on Raspberry Pi hardware by 5× to 10×. A subsequent review further revised client throughput to use **sustained** rather than **peak** GFLOPS, and added a first-principles server-side derivation. To ensure telemetry defensibility during thesis defense, all simulated network and compute parameters must be anchored to a single coherent physical deployment ecosystem with explicit derivation chains.
 
 ---
 
