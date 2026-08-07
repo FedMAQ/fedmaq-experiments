@@ -546,8 +546,10 @@ def test_baseline_tuning_gives_every_baseline_the_same_budget_as_fedmaq():
         total += sum(len(r.get("seeds") or default_seeds) for r in runs)
 
     assert total * len(matrix["heterogeneities"]) == 55, (
-        f"conf/matrix/baseline_tuning.yaml dispatches {total} runs; Decision 67 "
-        "and docs/RUNBOOK.md Stage 1b both quote 55 (5 baselines x (5 + 3 + 3))."
+        f"conf/matrix/baseline_tuning.yaml dispatches {total} runs; the design is "
+        "55 (5 baselines x (5 + 3 + 3)) per ADR-0011. This test is where that "
+        "count is pinned -- docs/agents/execution-model.md states the shape, not "
+        "the number, so it cannot drift out of agreement with the matrix."
     )
 
 

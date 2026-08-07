@@ -1,38 +1,33 @@
 # Domain Docs
 
-**Last updated**: 2026-07-18
-
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root, or
-- **`CONTEXT-MAP.md`** at the repo root if it exists — it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`CONTEXT.md`** at the repo root — the canonical glossary plus the authority map
+  naming which repo and which file wins when two sources disagree.
+- **`docs/adr/`** — read the ADRs that touch the area you're about to work in.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+Single-context repo: one root `CONTEXT.md`, one flat `docs/adr/`. There is no
+`CONTEXT-MAP.md` and no per-context ADR directory.
 
-## File structure
-
-Single-context repo (this repo):
-
-```
-/
-├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-....md
-│   └── 0002-....md
-└── src/
-```
+The `domain-modeling` skill creates and extends these lazily, when terms or decisions
+actually get resolved — not upfront.
 
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
 
-If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
+If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `domain-modeling`).
+
+The glossary's `_Avoid_` lines are load-bearing: several record collisions checked against the literature corpus, so a "clearer" synonym may be one this project deliberately rejected.
 
 ## Flag ADR conflicts
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+> _Contradicts ADR-0007 (quantization policy lives in `quantization_planner.py`) — but worth reopening because…_
+
+Some ADRs record constraints a change **cannot** override without invalidating
+experiments already run — the freeze (ADR-0010), the bit-exactness gate (ADR-0006),
+and the frozen `conf/` files. Treat a contradiction with those as a stop, not a flag.

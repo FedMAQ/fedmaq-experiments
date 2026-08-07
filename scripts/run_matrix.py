@@ -134,7 +134,7 @@ def main() -> None:
             "passes over them. This exists for one pre-registered case: the "
             "formulation study's accuracy floor is defined against the benchmark "
             "grid's uncompressed FedAvg rows, which must therefore be dispatched "
-            "before the study that the rest of the grid waits on (docs/RUNBOOK.md "
+            "before the study that the rest of the grid waits on (docs/agents/execution-model.md "
             "Stage 1c). Do not use it to run a grid piecemeal for convenience."
         ),
     )

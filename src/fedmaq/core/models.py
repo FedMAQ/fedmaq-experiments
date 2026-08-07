@@ -326,7 +326,7 @@ _CIFAR_MODELS: dict[str, type[nn.Module]] = {
 
 # Default CIFAR model architecture. Changed from ResNet18GN (~11.17M params) to
 # MobileNetV2GN (~2.3M params) for edge-realistic federated learning experiments.
-# See STATUS.md §2 for rationale.
+# See docs/adr/0004-confirmatory-grid-design.md for rationale.
 DEFAULT_CIFAR_MODEL: str = "mobilenetv2gn"
 
 

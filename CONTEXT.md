@@ -107,5 +107,5 @@ _Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
 The Ch1-Ch6 prose fixes logged here through 2026-07-25 were applied directly to
 `fedmaq-manuscript` (main) and none remain. That is not a standing claim that the
 manuscript is in sync: the sync passes of 2026-08-01 through 2026-08-07 each found
-further drift, and `docs/STATUS.md` § "Manuscript Sync" is the live log. Only the
+further drift, and the pinned **Manuscript sync log** Issue is the live record. Only the
 `gamma`/`lambda_val` → `omega`/`kappa` rename above is tracked here, still deferred.

@@ -637,7 +637,7 @@ def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> f
     defines the floor as "reusing the FedAvg runs already present in the benchmark
     grid", and pinning the group here is what makes that sentence true of the code
     rather than merely of the intent. Those six CIFAR-10 rows are dispatched ahead
-    of the rest of the grid (docs/RUNBOOK.md Stage 1c) precisely so this function
+    of the rest of the grid (docs/agents/execution-model.md Stage 1c) precisely so this function
     has something to read when the formulation study needs it.
     """
     fedavg_runs = [
