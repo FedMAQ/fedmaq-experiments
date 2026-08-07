@@ -12,7 +12,7 @@ Multi-adaptive quantization and knowledge distillation for memory-constrained fe
 
 ## Authority map
 
-Five-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
+Six-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
 index its `.claude/rules/` rather than duplicating domain content.
 
 | Repo | Owns | Agent entry |
@@ -22,6 +22,7 @@ index its `.claude/rules/` rather than duplicating domain content.
 | [fedmaq-analyses](../fedmaq-analyses/) | Notebooks, thesis figures | `CLAUDE.md` |
 | [fedmaq-manuscript](../fedmaq-manuscript/) | LaTeX thesis (Ch 1–6), **its own writing rules** | `README.md` |
 | [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides | `CLAUDE.md` |
+| [fedmaq-journal-paper](../fedmaq-journal-paper/) | IEEE Access submission, **the agentic-context reference layout** ([ADR-0012](../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md)) | `CLAUDE.md` |
 
 **Cross-repo rule:** non-experiments repos must not duplicate domain content; they
 index `../fedmaq-experiments/.claude/rules/`.

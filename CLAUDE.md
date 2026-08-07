@@ -2,7 +2,7 @@
 
 Multi-adaptive quantization and knowledge distillation for memory-constrained
 federated learning under non-IID data. A uv monorepo (Flower, Hydra, PyTorch,
-WandB). One of five repos in the FedMAQ workspace, and the domain **hub** — siblings
+WandB). One of six repos in the FedMAQ workspace, and the domain **hub** — siblings
 index this repo's rules rather than duplicating them.
 
 **Read `CONTEXT.md` first.** It holds the canonical glossary, the authority map
