@@ -67,7 +67,7 @@ _Avoid_: soft quality function (former manuscript Ch3 wording; swept 2026-07-25,
 
 **Formulation**:
 One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
-_Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25)
+_Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25). _Avoid_: **"additive"** for Formulation 1 — the config spells it *linear* (`formulation1-linear-sum`); both spellings were live, and Ch2 §2.5 carried them in one paragraph (swept 2026-08-08, Ch2 fixed; Ch1/Ch3/Ch4/Ch6 sites remain and are the cross-chapter sweep's). _Avoid_: **"non-adaptive control"** for Formulation 0 — it *is* adaptive at Tier 1, being memory-clamped like every other arm, and only Tier-2-blind; say **resource-only control** (repointed manuscript-wide 2026-08-08).
 
 **Formulation constants**:
 The tunable constants inside Formulations 1-4. **The manuscript's Greek symbols are canonical**; the config keys currently differ and are pending a rename:
