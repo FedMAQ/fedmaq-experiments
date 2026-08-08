@@ -1,6 +1,6 @@
 # FedMAQ Thesis Domain
 
-Multi-adaptive quantization and knowledge distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
+Multi-adaptive quantization and ensemble distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
 
 > **This file is deliberately a glossary**, which the workspace's reference layout
 > ([`../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md`](../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md))

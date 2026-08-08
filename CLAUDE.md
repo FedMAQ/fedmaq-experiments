@@ -1,6 +1,6 @@
 # FedMAQ Experiments — Agent Instructions
 
-Multi-adaptive quantization and knowledge distillation for memory-constrained
+Multi-adaptive quantization and ensemble distillation for memory-constrained
 federated learning under non-IID data. A uv monorepo (Flower, Hydra, PyTorch,
 WandB). One of six repos in the FedMAQ workspace, and the domain **hub** — siblings
 index this repo's rules rather than duplicating them.
