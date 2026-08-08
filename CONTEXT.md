@@ -111,7 +111,7 @@ The general family, correct for others' work and for the client-side negation at
 | `fedmaq-literature/markdown/**` and `kg/papers/**` | Extracted text of and notes on **others'** papers. ~490 hits; none are FedMAQ's mechanism. |
 | `fedmaq-journal-paper` keyword list (`paper.tex:76`) | ADR-0016 §2 — surfaces need not converge. Separate artifact, separate title. |
 
-**Both abstracts and the title page are out of this sweep.** `abstract_en.tex:20` and `abstract_fil.tex:7` read "ensemble knowledge distillation"; `abstract_fil.tex` is the author's to write, so changing only the English would desynchronize a translation against a file agents may not touch. With [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-paper/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 already holding that different surfaces need not converge, this is a **user call, not a defect**.
+**The abstract is resolved; the title page stays as the author set it.** `abstract_en.tex:20` read "ensemble knowledge distillation" and was left alone at first, because `abstract_fil.tex` mirrored the phrase and is the author's to write — changing only the English would have desynchronized a translation agents may not touch. **The author removed the Filipino abstract from the draft on 2026-08-08**, which dissolved the constraint, and the English now reads "ensemble distillation". `abstract_fil.tex` still exists and is still the author's; it is simply no longer built (`main.tex:9`, commented). `title_page.tex:12` is the author's own wording and is not swept — [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-paper/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 holds that surfaces need not converge anyway.
 
 ### Ablation Study (Section 4)
 
