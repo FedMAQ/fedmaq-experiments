@@ -91,6 +91,17 @@ A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32
 FedMAQ's two-tier precision scaling design. Tier 1 is the hard feasibility constraint from client memory ($Q_k^{max}$), computed as a separate `min()` clamp in code, never blended into the soft quality signal. Tier 2 is the soft quality optimization (signal, target, formulation) layered on top and floored by Tier 1's cap.
 _Avoid_: "three coequal dimensions of awareness" (resource, data, state) — resource (Tier 1) is structurally a hard clamp, not a third soft signal alongside data/state (Tier 2's two signals). The Ch4 rewording this entry once asked for has landed: `chapter_4.tex:106` now organizes the execution loop around that asymmetry "rather than around three symmetric awareness dimensions", and the phrase appears nowhere in the manuscript.
 
+### Ensemble Distillation (Section 3.5, Section 4.2)
+
+**Ensemble distillation**:
+The head term for **FedMAQ's own** server-side second aggregation stage — the one the thesis title names. `server-side`, `proxy-based` and `multi-teacher` are licensed *contrastive prefixes*, not drift: each earns its place against a different foil (client-side schemes such as AdaDQ-KD; data-free schemes such as FedGen; single-teacher schemes). Use whichever contrast the sentence is actually drawing, or none. Declared by two headings — `chapter_3.tex:242` *Proxy-Based Ensemble Distillation* and `chapter_4.tex:116` *Server-Side Ensemble Distillation*. Bare "distillation" is fine as short form after a qualified first mention (118 occurrences, all correct).
+_Avoid_: **any form putting "knowledge" on FedMAQ's own mechanism** — server-side knowledge distillation, server-side ensemble knowledge distillation, proxy-based ensemble knowledge distillation. Swept 2026-08-08 (pass 17), 19 sites. The title moved *off* "Knowledge" on 2026-08-08; this entry follows it.
+
+**Knowledge distillation** — reserved, do **not** sweep:
+The general family, correct for others' work and for the client-side negation at `chapter_3.tex:240` ("clients do not perform any local function-space regularization or knowledge distillation" — the claim is about *all* KD, not FedMAQ's variant, and narrowing it would weaken it). Also correct for the baseline *category* (`chapter_1.tex:207`, the Gantt row), for Ch2's literature treatment, and for DynFed's mechanism at `chapter_2.tex:207`. "KD" is defined once at `chapter_2.tex:163` and stays the abbreviation. Likewise **federated distillation** = the FedDistill/FD lineage; **data-free distillation** = others' work.
+
+**Both abstracts and the title page are out of this sweep.** `abstract_en.tex:20` and `abstract_fil.tex:7` read "ensemble knowledge distillation"; `abstract_fil.tex` is the author's to write, so changing only the English would desynchronize a translation against a file agents may not touch. With [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-paper/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 already holding that different surfaces need not converge, this is a **user call, not a defect**.
+
 ### Ablation Study (Section 4)
 
 **State-only ablation**:
