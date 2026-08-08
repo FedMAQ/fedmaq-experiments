@@ -107,8 +107,18 @@ defect is in the prose. Reasons, in the order that carries them:
    arm's final cumulative MB, determined by the data, chosen by nobody. This is
    what keeps the amendment from smuggling in the free parameter the k-consecutive
    rule was rejected for.
-3. **The superseded verdict is reported alongside**, in an appendix, with
-   first-touch / k-consecutive / final-round columns as a robustness table.
+3. **The superseded verdict is reported alongside**, with first-touch /
+   k-consecutive / final-round columns as a robustness table.
+
+   *Placement corrected 2026-08-08 (pass 15).* This clause read "in an appendix"
+   until the manuscript was checked against it. The table is not in an appendix and
+   never was: `chapter_4.tex:349` promises it in `sec:results_pilot`, `chapter_5.tex:23`
+   slots it there, and `chapter_4.tex:384` carries the same columns beside the
+   formulation-study results table. The manuscript's two appendices are ethics
+   documents and resource persons, and both are commented out of `main.tex`, so an
+   appendix was never a place this table could have gone. What is amended here is
+   *where* the reporting happens, not *what* is reported — the three columns and the
+   superseded verdict are unchanged and are delivered as promised.
 
 **Acknowledged risk, stated before the result was known:** a minimum-common-budget
 rule will tend to favour whichever formulation transmits fewest bytes, and which

@@ -67,7 +67,7 @@ _Avoid_: soft quality function (former manuscript Ch3 wording; swept 2026-07-25,
 
 **Formulation**:
 One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. Code: `formulation` int param in `fedmaq.py`.
-_Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25). _Avoid_: **"additive"** for Formulation 1 — the config spells it *linear* (`formulation1-linear-sum`); both spellings were live, and Ch2 §2.5 carried them in one paragraph (swept 2026-08-08, Ch2 fixed; Ch1/Ch3/Ch4/Ch6 sites remain and are the cross-chapter sweep's). _Avoid_: **"non-adaptive control"** for Formulation 0 — it *is* adaptive at Tier 1, being memory-clamped like every other arm, and only Tier-2-blind; say **resource-only control** (repointed manuscript-wide 2026-08-08).
+_Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25). _Avoid_: **"additive"** for Formulation 1 — the config spells it *linear* (`formulation1-linear-sum`); both spellings were live, and Ch2 §2.5 carried them in one paragraph (swept 2026-08-08, Ch2 fixed; **Ch6 consumed by pass 15's audit**, leaving Ch1/Ch3/Ch4 for the cross-chapter sweep). **Not every hit is a name.** `chapter_4.tex:406` uses "the additive Formulation 1" and "the additive form" contrastively against the multiplicative one inside a mathematical argument about what zeroing a weight does; that is a description of the operator, not a use of the label, and the sweep must re-derive each hit rather than replace on match. _Avoid_: **"non-adaptive control"** for Formulation 0 — it *is* adaptive at Tier 1, being memory-clamped like every other arm, and only Tier-2-blind; say **resource-only control** (repointed manuscript-wide 2026-08-08).
 
 **Formulation constants**:
 The tunable constants inside Formulations 1-4. **The manuscript's Greek symbols are canonical**; the config keys currently differ and are pending a rename:
@@ -94,12 +94,12 @@ _Avoid_: "three coequal dimensions of awareness" (resource, data, state) — res
 ### Ablation Study (Section 4)
 
 **State-only ablation**:
-Ablation Configuration 4 — state (gradient-norm) awareness only drives Tier-2 quantization; server-side distillation is retained (as in configs 2-4). Names WHAT the arm configures.
+Ablation Configuration **3** — state (gradient-norm) awareness only drives Tier-2 quantization; server-side distillation is retained (as in configs 2-4). Names WHAT the arm configures. Both entries here read "Configuration 4" until 2026-08-08 (pass 15), which is the arm that removes *state* awareness and is therefore data-only — the mirror image. `conf/matrix/ablation.yaml` (`config3-no-data`, `config4-no-state`) and `chapter_4.tex:394`/`:402` are unanimous on Configuration 3.
 _Avoid_: state-only-plus-distillation ablation, DynFed-core reference arm
 
 **DynFed-style reference point**:
-The role Ablation Configuration 4 plays in analysis (Ch4 §4, sec:ablation) — reproduces DynFed's core mechanism (gradient-norm-adaptive quantization, memory-capped, server-side multi-teacher distillation), absent DynFed's non-reproducible active teacher-selection. Explicitly framed as a comparison anchor, not a claimed win over DynFed itself (no public DynFed codebase exists to benchmark directly). Names WHY the arm exists.
-_Avoid_: DynFed-core reference arm (not manuscript wording, drop entirely)
+The role Ablation Configuration **3** plays in analysis (Ch4 §4, sec:ablation) — reproduces DynFed's core mechanism (gradient-norm-adaptive quantization, memory-capped, server-side multi-teacher distillation), absent DynFed's non-reproducible active teacher-selection. Explicitly framed as a comparison anchor, not a claimed win over DynFed itself (no public DynFed codebase exists to benchmark directly). Names WHY the arm exists.
+_Avoid_: DynFed-core reference arm, **DynFed-style reference *arm*** (both collapse the what/why split these two entries exist to keep; `chapter_6.tex:40` carried the second and was fixed 2026-08-08. The manuscript's wording is *point* — `chapter_4.tex:402`, `chapter_1.tex:156`.)
 
 ### Communication Comparison (Section 4, `sec:metrics_communication`)
 
