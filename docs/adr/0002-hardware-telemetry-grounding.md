@@ -103,10 +103,12 @@ number in §4 and §5, and the ~8:1 compute-to-communication ratio in *Consequen
 ratio hangs off 20.0 s/s, not off the peak. This amendment repairs a derivation chain, not
 a result.
 
-**Two frozen configs preserve the superseded wording.** `conf/experiment/default.yaml:23`
+**Two experiment configs preserve the superseded wording.** `conf/experiment/default.yaml:23`
 and `conf/experiment/preliminary.yaml:22` annotate `compute_samples_per_sec: 20.0` as
-"~57% of 31.5 GFLOPS peak". Both are frozen behind the `pre-registration` tag and are not
-editable; the divergence is in a comment, never in a value. **This ADR governs.**
+"~57% of 31.5 GFLOPS peak". Neither has been touched since the `pre-registration` tag and
+neither is to be, ADR-0010's freeze governing `conf/` downstream of it. The divergence is
+in a comment and never in a value. **This ADR governs — do not edit those comments to
+chase it.**
 
 ### 3. FL Server Hardware: High-Density Data Center Node (Late 2023)
 
