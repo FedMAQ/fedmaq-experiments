@@ -94,11 +94,22 @@ _Avoid_: "three coequal dimensions of awareness" (resource, data, state) — res
 ### Ensemble Distillation (Section 3.5, Section 4.2)
 
 **Ensemble distillation**:
-The head term for **FedMAQ's own** server-side second aggregation stage — the one the thesis title names. `server-side`, `proxy-based` and `multi-teacher` are licensed *contrastive prefixes*, not drift: each earns its place against a different foil (client-side schemes such as AdaDQ-KD; data-free schemes such as FedGen; single-teacher schemes). Use whichever contrast the sentence is actually drawing, or none. Declared by two headings — `chapter_3.tex:242` *Proxy-Based Ensemble Distillation* and `chapter_4.tex:116` *Server-Side Ensemble Distillation*. Bare "distillation" is fine as short form after a qualified first mention (118 occurrences, all correct).
+The head term for **FedMAQ's own** server-side second aggregation stage — the one the thesis title names. `server-side`, `proxy-based` and `multi-teacher` are licensed *contrastive prefixes*, not drift: each earns its place against a different foil (client-side schemes such as AdaDQ-KD; data-free schemes such as FedGen; single-teacher schemes). Use whichever contrast the sentence is actually drawing, or none. Declared by two headings — `chapter_3.tex:242` *Proxy-Based Ensemble Distillation* and `chapter_4.tex:116` *Server-Side Ensemble Distillation*. Bare "distillation" is fine as short form after a qualified first mention (118 occurrences, all correct). **A licensed prefix may also carry bare "distillation" once the head term is established in context** — `server-side distillation` (7 sites) and `server-side multi-teacher distillation` (2) are **correct as written and are not sweep targets**; the prefix is doing the work and the head is understood. Do not "complete" them.
 _Avoid_: **any form putting "knowledge" on FedMAQ's own mechanism** — server-side knowledge distillation, server-side ensemble knowledge distillation, proxy-based ensemble knowledge distillation. Swept 2026-08-08 (pass 17), 19 sites. The title moved *off* "Knowledge" on 2026-08-08; this entry follows it.
 
 **Knowledge distillation** — reserved, do **not** sweep:
 The general family, correct for others' work and for the client-side negation at `chapter_3.tex:240` ("clients do not perform any local function-space regularization or knowledge distillation" — the claim is about *all* KD, not FedMAQ's variant, and narrowing it would weaken it). Also correct for the baseline *category* (`chapter_1.tex:207`, the Gantt row), for Ch2's literature treatment, and for DynFed's mechanism at `chapter_2.tex:207`. "KD" is defined once at `chapter_2.tex:163` and stays the abbreviation. Likewise **federated distillation** = the FedDistill/FD lineage; **data-free distillation** = others' work.
+
+**What this rule governs.** Manuscript prose, `docs/adr/` written from 2026-08-08 onward, and the FedMAQ entries in `fedmaq-literature/kg/`. **Out of scope, permanently — do not re-open these as findings:**
+
+| Surface | Why |
+| :-- | :-- |
+| `conf/` — e.g. `fedmaq.yaml:35`, `fedmaq_no_kd.yaml:1` | **Frozen behind `pre-registration`.** Read-only regardless of wording. |
+| Code identifiers and their docstrings — `kd_utils.py`, `fedavg_kd.py`, `no_kd`, `config5-no-kd` | The docstrings *explain the identifier*. Renaming the prose while `FedAvgKD` and `kd_utils` stand would make them harder to read, and the identifiers are pinned by frozen configs. |
+| ADR prose written before 2026-08-08 — e.g. `docs/adr/0004-confirmatory-grid-design.md:90` | ADRs record what was decided *then*. Outcomes are appended, never substituted. Not false, just pre-canonical. |
+| `fedmaq-presentations/updates/*` | Already-delivered artifacts, left as delivered. |
+| `fedmaq-literature/markdown/**` and `kg/papers/**` | Extracted text of and notes on **others'** papers. ~490 hits; none are FedMAQ's mechanism. |
+| `fedmaq-journal-paper` keyword list (`paper.tex:76`) | ADR-0016 §2 — surfaces need not converge. Separate artifact, separate title. |
 
 **Both abstracts and the title page are out of this sweep.** `abstract_en.tex:20` and `abstract_fil.tex:7` read "ensemble knowledge distillation"; `abstract_fil.tex` is the author's to write, so changing only the English would desynchronize a translation against a file agents may not touch. With [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-paper/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 already holding that different surfaces need not converge, this is a **user call, not a defect**.
 
