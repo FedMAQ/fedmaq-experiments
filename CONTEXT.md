@@ -3,7 +3,7 @@
 Multi-adaptive quantization and ensemble distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
 
 > **This file is deliberately a glossary**, which the workspace's reference layout
-> ([`../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md`](../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md))
+> ([ADR-0015](docs/adr/0015-workspace-agentic-context-contract.md))
 > forbids for a `CONTEXT.md`. The exemption is explicit there: that repo avoids
 > being a glossary *because* "All shared vocabulary defers to
 > `fedmaq-experiments/CONTEXT.md`." This is the file that rule was written to
@@ -13,19 +13,20 @@ Multi-adaptive quantization and ensemble distillation for memory-constrained fed
 ## Authority map
 
 Six-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
-index its `.claude/rules/` rather than duplicating domain content.
+index its `.agent/rules/` rather than duplicating domain content.
 
 | Repo | Owns | Agent entry |
 | --- | --- | --- |
-| [fedmaq-experiments](./) | Code, Hydra, Flower, WandB, **the domain rules** | `CLAUDE.md` |
-| [fedmaq-literature](../fedmaq-literature/) | PDFs, markdown conversions, OKF knowledge graph | `CLAUDE.md` |
-| [fedmaq-analyses](../fedmaq-analyses/) | Notebooks, thesis figures | `CLAUDE.md` |
-| [fedmaq-manuscript](../fedmaq-manuscript/) | LaTeX thesis (Ch 1–6), **its own writing rules** | `README.md` |
-| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides | `CLAUDE.md` |
-| [fedmaq-journal-paper](../fedmaq-journal-paper/) | IEEE Access submission, **the agentic-context reference layout** ([ADR-0012](../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md)) | `CLAUDE.md` |
+| [fedmaq-experiments](./) | Code, Hydra, Flower, WandB, **the domain rules** | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-literature](../fedmaq-literature/) | PDFs, markdown conversions, OKF knowledge graph | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-analyses](../fedmaq-analyses/) | Notebooks, thesis figures | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-manuscript](../fedmaq-manuscript/) | LaTeX thesis (Ch 1–6), **its own writing rules** | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-journal-paper](../fedmaq-journal-paper/) | IEEE Access submission | `AGENTS.md`, `CLAUDE.md` |
 
 **Cross-repo rule:** non-experiments repos must not duplicate domain content; they
-index `../fedmaq-experiments/.claude/rules/`.
+index `../fedmaq-experiments/.agent/rules/`. The workspace agentic-context
+contract is [ADR-0015](docs/adr/0015-workspace-agentic-context-contract.md).
 
 **Within this repo**, when two sources disagree: `conf/**` beats prose describing
 it; `docs/adr/` beats everything for *why*; the pinned GitHub Issues beat every

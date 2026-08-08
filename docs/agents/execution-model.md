@@ -33,7 +33,7 @@ ask for the relevant matrix's `sweep_status.json`. Do not add status here.
 - **The local Windows rig is for smoke tests only** — `run-minitest`, `--dry_run`,
   pre-dispatch validation, config-composition checks. It is the validated fallback of
   §4.3.4, not where the grid runs. The Ray crash mitigations in
-  `.claude/rules/engineering.md` are scoped to it and apply nowhere else.
+  `.agent/rules/engineering.md` are scoped to it and apply nowhere else.
 
 ---
 

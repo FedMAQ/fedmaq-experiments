@@ -1,6 +1,6 @@
 # ADR-0014 — Agentic context layout: ADRs are the sole decision record
 
-**Status**: Accepted · 2026-08-07
+**Status**: Superseded for workspace-wide layout by [ADR-0015](0015-workspace-agentic-context-contract.md); retained as this repository's historical migration record
 **Supersedes**: `docs/DECISIONS.md` Decisions 14–17, 63, 69 (file deleted)
 **Adopts**: [`../../../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md`](../../../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md)
 
