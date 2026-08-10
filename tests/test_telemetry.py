@@ -58,7 +58,6 @@ def test_undeclared_key_is_appended_once_and_never_duplicates_header(tmp_path, m
     header_after_first_write = _read_csv(tm.csv_path)[0]
     assert "debug/unexpected_key" in header_after_first_write
 
-    # A later round introduces yet another unknown key not present in round 0.
     tm.log(
         round_num=1,
         metrics={

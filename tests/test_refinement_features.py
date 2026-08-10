@@ -34,7 +34,6 @@ def test_soft_voting_logic():
     teacher1 = SimpleCNN(in_channels=1, num_classes=3)
     teacher2 = SimpleCNN(in_channels=1, num_classes=3)
 
-    # Set teacher 1 to be highly confident (one-hot outputs) and teacher 2 to be
     # uniform (low confidence), by modifying biases/weights of the last layer.
     with torch.no_grad():
         teacher1.fc2.bias.fill_(0.0)
@@ -44,7 +43,6 @@ def test_soft_voting_logic():
         teacher2.fc2.bias.fill_(0.0)  # outputs close to uniform
         teacher2.fc2.weight.fill_(0.0)
 
-    # Loader with 1 sample
     images = torch.randn(1, 1, 28, 28)
     labels = torch.randint(0, 3, (1,))
     dataset = torch.utils.data.TensorDataset(images, labels)
@@ -52,8 +50,6 @@ def test_soft_voting_logic():
 
     device = torch.device("cpu")
 
-    # Run server-side KD with soft voting
-    # Test case 1: equal bit widths
     run_server_side_kd(
         student_model=student,
         teachers=[teacher1, teacher2],
@@ -68,7 +64,6 @@ def test_soft_voting_logic():
         precision_weight_scale=1.0,
     )
 
-    # Test case 2: unequal bit widths
     run_server_side_kd(
         student_model=student,
         teachers=[teacher1, teacher2],
@@ -114,18 +109,14 @@ def test_fedmaq_hook_refinement_states():
     alg_cfg = cfg["algorithm"]
     pids = [1, 2]
 
-    # First round - no EMA history, should store raw norms
     smoothed_norms = hook._planner._smooth_grad_norms(pids, [2.0, 4.0], alg_cfg)
     assert smoothed_norms == [2.0, 4.0]
     assert hook._planner._grad_norm_ema == {1: 2.0, 2: 4.0}
 
-    # Second round - should smooth with EMA (beta=0.5):
-    # pid 1: 0.5 * 2.0 + 0.5 * 3.0 = 2.5 ; pid 2: 0.5 * 4.0 + 0.5 * 2.0 = 3.0
     smoothed_norms_2 = hook._planner._smooth_grad_norms(pids, [3.0, 2.0], alg_cfg)
     assert smoothed_norms_2 == [2.5, 3.0]
     assert hook._planner._grad_norm_ema == {1: 2.5, 2: 3.0}
 
-    # Test Student EMA tracking
     model = SimpleCNN(in_channels=1, num_classes=10)
     params = get_model_parameters(model)
     aggregated_params = ndarrays_to_parameters(params)
@@ -142,7 +133,6 @@ def test_fedmaq_hook_refinement_states():
         for ema, new in zip(hook._ema_params, next_params, strict=True)
     ]
 
-    # Check that they blended
     for orig, ema in zip(params, hook._ema_params, strict=True):
         assert np.allclose(ema, orig + 0.1)
 
@@ -188,7 +178,6 @@ def test_client_telemetry_aggregation():
     total_examples = sum(fit_res.num_examples for _, fit_res in results)
     assert total_examples == 30
 
-    # Test weighted average calculation
     weighted_loss = (
         sum(float(fit_res.metrics["train_loss"]) * fit_res.num_examples for _, fit_res in results)
         / total_examples
@@ -201,9 +190,7 @@ def test_client_telemetry_aggregation():
         results
     )
 
-    # 10 * 0.5 + 20 * 0.2 = 5 + 4 = 9 / 30 = 0.3
     assert np.isclose(weighted_loss, 0.3)
-    # 10 * 0.8 + 20 * 0.9 = 8 + 18 = 26 / 30 = 0.8666...
     assert np.isclose(weighted_acc, 26 / 30)
     assert np.isclose(simple_epochs, 5.0)
 
@@ -214,10 +201,8 @@ def test_stacked_loss_regularization():
 
     from fedmaq.core.kd_loss_hook import ClientKDLossHook
 
-    # Create model, input, and targets
     model = SimpleCNN(in_channels=1, num_classes=3)
 
-    # Set model weights to known values so we can verify the L2 distance
     for p in model.parameters():
         if p.requires_grad:
             nn.init.constant_(p, 0.5)
@@ -228,7 +213,6 @@ def test_stacked_loss_regularization():
     hook = ClientKDLossHook(alpha=alpha, temperature=temp, mu=mu)
     hook.on_train_begin(model)
 
-    # Modify model parameters to introduce distance from the global copy
     with torch.no_grad():
         for p in model.parameters():
             if p.requires_grad:
@@ -240,10 +224,8 @@ def test_stacked_loss_regularization():
 
     outputs = model(inputs)
 
-    # Compute loss via hook
     loss = hook.compute_loss(model, outputs, targets, criterion, inputs=inputs)
 
-    # Compute loss terms manually
     ce_loss = criterion(outputs, targets)
 
     with torch.no_grad():
@@ -255,7 +237,6 @@ def test_stacked_loss_regularization():
         torch.nn.functional.kl_div(student_log_soft, teacher_soft, reduction="batchmean") * temp**2
     )
 
-    # L2 distance
     proximal_term = 0.0
     for p, gp in zip(model.parameters(), hook.global_params, strict=True):
         if p.requires_grad:

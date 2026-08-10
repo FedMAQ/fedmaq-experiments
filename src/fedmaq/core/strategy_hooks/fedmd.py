@@ -38,11 +38,9 @@ class FedMDHook(StrategyHook):
         public_epochs: int,
         server_round: int,
     ) -> float:
-        # Digest (public) + revisit (private) every round.
         base = num_public * public_epochs + num_samples * epochs
         if server_round != 1:
             return base
-        # Round 1 additionally runs mandatory public/private pre-training.
         alg_cfg = self._config.get("algorithm", {})
         pub_pretrain = int(alg_cfg.get("public_pretrain_epochs", 10))
         priv_pretrain = int(alg_cfg.get("private_pretrain_epochs", 10))
@@ -67,7 +65,6 @@ class FedMDHook(StrategyHook):
     ) -> tuple[Parameters | None, dict[str, Scalar]] | None:
         if not results:
             return None, {}
-        # Extract predictions from client results and perform simple average
         predictions_list = [parameters_to_ndarrays(fit_res.parameters)[0] for _, fit_res in results]
         avg_predictions = np.mean(predictions_list, axis=0)
         return ndarrays_to_parameters([avg_predictions]), {}

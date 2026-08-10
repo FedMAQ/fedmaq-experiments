@@ -135,7 +135,6 @@ class TelemetryManager:
             self.enabled = False
             return
 
-        # Flatten config dict for wandb configuration logging
         flat_config = self._flatten_dict(self.config)
 
         exp_config = self.config.get("experiment", self.config)
@@ -178,8 +177,6 @@ class TelemetryManager:
         that case (matching the pre-refactor behavior of skipping those keys
         entirely).
         """
-        # Aggregate client-side training metrics (weighted mean, simple mean for
-        # epochs_trained), reported by the client hooks in fit() metrics.
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
         if total_examples > 0:
@@ -209,7 +206,6 @@ class TelemetryManager:
             )
             return 0.0, 0
 
-        # Model download size in bytes (hook may compress it, e.g. FedKD's SVD path).
         if aggregated_parameters is not None:
             ndarrays = parameters_to_ndarrays(aggregated_parameters)
             model_size_bytes = strategy.hook.download_size_bytes(strategy, ndarrays)
@@ -256,10 +252,8 @@ class TelemetryManager:
             round_bytes_downloaded += model_size_bytes
             round_bytes_uploaded += bytes_uploaded
 
-        # Decouple client and server simulated delays
         client_sim_time = max(round_delays) if round_delays else 0.0
 
-        # Server compute time: non-zero for hooks with server-side work (KD).
         server_sim_time = strategy.hook.server_sim_time(strategy, results, aggregated_parameters)
 
         round_time = client_sim_time + server_sim_time
@@ -276,7 +270,6 @@ class TelemetryManager:
         else:
             client_bytes_stats = {}
 
-        # Real wall-clock elapsed since the previous round's aggregate_fit call.
         now = time.perf_counter()
         wall_time = now - self._last_wall_ts
         self._last_wall_ts = now
@@ -309,7 +302,6 @@ class TelemetryManager:
         metrics: dict[str, Any],
     ) -> None:
         """Log key metrics for a communication round using hierarchical namespaces."""
-        # Accumulate communication bytes
         round_bytes = metrics.get("communication/round_bytes", 0)
         self.cumulative_bytes += round_bytes
         cumulative_kb = self.cumulative_bytes / 1024.0
@@ -320,13 +312,11 @@ class TelemetryManager:
         if "communication/cumulative_mb" not in metrics:
             metrics["communication/cumulative_mb"] = cumulative_mb
 
-        # Accumulate physical simulated time
         round_time = metrics.get("system/round_time_sec", 0.0)
         self.cumulative_time += round_time
         if "system/cumulative_time_sec" not in metrics:
             metrics["system/cumulative_time_sec"] = self.cumulative_time
 
-        # Accumulate client and server times
         client_time = metrics.get("system/client_sim_time_sec", 0.0)
         server_time = metrics.get("system/server_sim_time_sec", 0.0)
         self.cumulative_client_time += client_time
@@ -336,13 +326,11 @@ class TelemetryManager:
         if "system/cumulative_server_time_sec" not in metrics:
             metrics["system/cumulative_server_time_sec"] = self.cumulative_server_time
 
-        # Accumulate real wall-clock time (not simulated)
         wall_time = metrics.get("system/wall_time_sec", 0.0)
         self.cumulative_wall_time += wall_time
         if "system/cumulative_wall_time_sec" not in metrics:
             metrics["system/cumulative_wall_time_sec"] = self.cumulative_wall_time
 
-        # Print clean summary to console
         test_acc = metrics.get("test/accuracy", 0.0)
         test_loss = metrics.get("test/loss", 0.0)
         logger.info(
@@ -368,16 +356,12 @@ class TelemetryManager:
                 )
 
     def _write_local_logs(self, metrics: dict[str, Any]) -> None:
-        # 1. Write to JSONL
         try:
             with open(self.jsonl_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(metrics) + "\n")
         except Exception as exc:
             logger.warning(f"Failed to write to local JSONL log: {exc}")
 
-        # 2. Write to CSV with a stable schema captured on first write.
-        #    Extra keys beyond the schema are silently dropped; missing keys
-        #    are written as empty strings to keep columns aligned.
         try:
             if self._csv_fieldnames is None:
                 canonical = _COMMON_CSV_FIELDNAMES + self._hook_metric_keys

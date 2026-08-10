@@ -36,8 +36,6 @@ class _FakeProxy:
 def _make_manager(num_clients: int, node_order, seed: int = 42):
     """Build a manager with proxies registered in the given node-id order."""
     mgr = SeededPartitionClientManager(seed=seed, num_clients=num_clients)
-    # node_order maps registration position -> partition id; the node id (dict key)
-    # is an arbitrary string, mimicking Ray's random node ids.
     for pos, pid in enumerate(node_order):
         node_id = f"node-{pos}-{pid}"
         mgr.clients[node_id] = _FakeProxy(node_id, pid)
@@ -54,7 +52,6 @@ def _sample_rounds(mgr, num_sample: int, rounds: int):
 
 
 def test_sampling_reproducible_across_managers() -> None:
-    # Two managers, same seed, DIFFERENT registration order -> identical draws.
     order_a = list(range(10))
     order_b = list(reversed(range(10)))
     mgr_a = _make_manager(10, order_a)
@@ -67,14 +64,12 @@ def test_sampling_reproducible_across_managers() -> None:
 
 
 def test_sampling_varies_across_rounds() -> None:
-    # Per-round seeding must give round-varying subsets (not the same 3 every round).
     mgr = _make_manager(10, list(range(10)))
     rounds = _sample_rounds(mgr, num_sample=3, rounds=4)
     assert len({tuple(r) for r in rounds}) > 1
 
 
 def test_sample_seed_changes_selection() -> None:
-    # A different base seed yields a different selection for the same round.
     mgr1 = _make_manager(10, list(range(10)), seed=1)
     mgr2 = _make_manager(10, list(range(10)), seed=2)
     mgr1.set_round_seed(1)
@@ -118,8 +113,6 @@ def _no_backoff(monkeypatch):
 
 def test_partition_id_survives_transient_query_failures(_no_backoff) -> None:
     # A SuperNode that blips but recovers must not kill the run: the round trip is
-    # retried and the resolved ID is correct. Regression for the 2026-08-01 sweep,
-    # where a single unguarded attempt lost three runs mid-sweep (Decision 77).
     proxy = _FlakyProxy("node-abc", partition_id=7, fail_times=_PARTITION_QUERY_MAX_ATTEMPTS - 1)
     mgr = SeededPartitionClientManager(seed=42, num_clients=10)
 
@@ -129,8 +122,6 @@ def test_partition_id_survives_transient_query_failures(_no_backoff) -> None:
 
 def test_partition_id_raises_rather_than_guessing_when_node_is_gone(_no_backoff) -> None:
     # Permanent loss must abort. The alternatives -- a hash-based fallback ID, or
-    # dropping the proxy and sampling a short round -- would both silently change
-    # WHICH clients train, which is precisely the property this class provides.
     proxy = _FlakyProxy("node-gone", partition_id=3, fail_times=_PARTITION_QUERY_MAX_ATTEMPTS)
     mgr = SeededPartitionClientManager(seed=42, num_clients=10)
 
@@ -139,12 +130,10 @@ def test_partition_id_raises_rather_than_guessing_when_node_is_gone(_no_backoff)
 
     assert proxy.calls == _PARTITION_QUERY_MAX_ATTEMPTS
     # Nothing may be cached from a failed resolution -- a guessed entry would be
-    # served silently to every later round.
     assert mgr._partition_cache == {}
 
 
 def test_partition_id_cached_after_first_query() -> None:
-    # get_properties should be hit once per node id, then served from cache.
     mgr = _make_manager(4, list(range(4)))
     proxy = next(iter(mgr.clients.values()))
     calls = {"n": 0}

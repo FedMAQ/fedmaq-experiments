@@ -93,7 +93,6 @@ class FedMAQHook(StrategyHook):
         ctx = resolve_run_context(self._config)
         alg_cfg = ctx.alg_cfg
 
-        # Select student/teacher architecture factory (single source of truth).
         alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
         model_fn = get_server_model_factory(alg_name)
 
@@ -119,7 +118,6 @@ class FedMAQHook(StrategyHook):
             teacher_bit_widths=teacher_bit_widths,
         )
 
-        # Apply student EMA if enabled
         if aggregated_parameters is not None:
             aggregated_parameters, self._ema_params = apply_student_ema(
                 aggregated_parameters, self._ema_params, alg_cfg
@@ -133,7 +131,6 @@ class FedMAQHook(StrategyHook):
             for k, v in self._last_round_kd_metrics.items():
                 metrics[f"algorithm/fedmaq/{k}"] = v
 
-        # Add grad norm statistics
         grad_norms = self._current_plan.grad_norms
         if grad_norms:
             metrics["algorithm/fedmaq/avg_grad_norm"] = float(np.mean(grad_norms))
@@ -141,7 +138,6 @@ class FedMAQHook(StrategyHook):
             metrics["algorithm/fedmaq/max_grad_norm"] = float(np.max(grad_norms))
             metrics["algorithm/fedmaq/std_grad_norm"] = float(np.std(grad_norms))
 
-        # Add assigned Q statistics
         client_q = self._current_plan.client_q
         if client_q:
             q_vals = list(client_q.values())

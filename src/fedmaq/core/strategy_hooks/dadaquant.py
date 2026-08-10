@@ -107,7 +107,6 @@ class DAdaQuantHook(StrategyHook):
         q_min = int(self._config.get("algorithm", {}).get("q_min", 1))
         q_max = int(self._config.get("algorithm", {}).get("q_max", 8))
 
-        # 1. Update time-adaptive quantization level q_t
         if server_round == 1:
             self.q_t = q_min
             self.moving_average_history = []
@@ -131,11 +130,9 @@ class DAdaQuantHook(StrategyHook):
                             f"for round {server_round}."
                         )
 
-        # 2. Compute client-adaptive quantization levels q_i
         clients = [c for c, _ in client_instructions]
         client_indices_dict = strategy.client_indices_dict
         if client_indices_dict is None:
-            # No partition map: skip ID resolution entirely and default all sizes.
             sizes = [1] * len(clients)
         else:
             sizes = [
@@ -167,13 +164,11 @@ class DAdaQuantHook(StrategyHook):
         if not results:
             return aggregated_parameters, metrics
 
-        # Cache partition IDs from metrics for future configure_fit calls
         for client_proxy, fit_res in results:
             cid = int(fit_res.metrics.get("partition_id", -1))
             if cid >= 0:
                 strategy.proxy_cid_to_partition_id[str(client_proxy.cid)] = cid
 
-        # Update running exponential moving average loss
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
         if total_examples > 0:
             weighted_loss_sum = sum(

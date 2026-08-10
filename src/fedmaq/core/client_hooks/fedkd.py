@@ -42,20 +42,16 @@ class FedKDFit(ClientFitStrategy):
         model_dir.mkdir(parents=True, exist_ok=True)
         teacher_path = model_dir / f"teacher_{client.cid}.pth"
 
-        # 1. Instantiate teacher model based on dataset
         dataset_name = client.config.get("dataset", {}).get("name", "")
         num_classes = int(client.config.get("dataset", {}).get("num_classes", 10))
         teacher_model = get_kd_teacher_model(dataset_name, num_classes)
         teacher_model.to(client.device)
 
-        # 2. Load teacher weights if file exists, otherwise keep random initialization
         if teacher_path.exists():
             teacher_model.load_state_dict(torch.load(teacher_path, map_location=client.device))
 
-        # 3. Load global student parameters
         set_model_parameters(client.model, parameters)
 
-        # 4. Setup Joint Optimizer
         exp_config = client.config.get("experiment", client.config)
         lr = client._get_decayed_lr(config)
         weight_decay = float(exp_config.get("weight_decay", 0.0))
@@ -70,7 +66,6 @@ class FedKDFit(ClientFitStrategy):
         kl_criterion = nn.KLDivLoss(reduction="batchmean")
         temperature = float(client.config.get("algorithm", {}).get("temperature", 2.0))
 
-        # 5. Local Training: Student-Teacher Mutual Distillation
         client.model.train()
         teacher_model.train()
         total_loss_sum = 0.0
@@ -88,30 +83,24 @@ class FedKDFit(ClientFitStrategy):
                 images, labels = images.to(client.device), labels.to(client.device)
                 optimizer.zero_grad()
 
-                # Forward pass
                 outputs_s = client.model(images)
                 outputs_t = teacher_model(images)
 
-                # Task Loss
                 loss_s_task = ce_criterion(outputs_s, labels)
                 loss_t_task = ce_criterion(outputs_t, labels)
 
-                # Soft predictions for KL divergence
                 outputs_s_log_soft = F.log_softmax(outputs_s / temperature, dim=1)
                 outputs_t_log_soft = F.log_softmax(outputs_t / temperature, dim=1)
                 outputs_s_soft = F.softmax(outputs_s / temperature, dim=1)
                 outputs_t_soft = F.softmax(outputs_t / temperature, dim=1)
 
-                # Mutual Knowledge Distillation Loss (scaled by temperature^2)
                 kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
                 kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
 
-                # Adaptive scaling: divide by sum of task losses
                 denom = loss_s_task + loss_t_task + 1e-6
                 loss_kd_s = kl_t_to_s / denom
                 loss_kd_t = kl_s_to_t / denom
 
-                # Joint optimization loss
                 loss_s = loss_s_task + loss_kd_s
                 loss_t = loss_t_task + loss_kd_t
                 total_loss = loss_s + loss_t
@@ -126,23 +115,18 @@ class FedKDFit(ClientFitStrategy):
                 loss_t_task_sum += loss_t_task.item()
                 batches += 1
 
-                # Accuracies
                 _, pred_s = torch.max(outputs_s.data, 1)
                 _, pred_t = torch.max(outputs_t.data, 1)
                 total_samples += labels.size(0)
                 correct_s += (pred_s == labels).sum().item()
                 correct_t += (pred_t == labels).sum().item()
 
-        # 6. Save updated teacher model parameters
         torch.save(teacher_model.state_dict(), teacher_path)
 
-        # 7. Update compressor hook with dynamic energy if provided in configuration
         if "energy" in config:
             if hasattr(client.compressor_hook, "energy"):
                 client.compressor_hook.energy = float(config["energy"])
 
-        # 8. Extract updated student model parameters and run the shared
-        # delta->compress->reconstruct tail
         updated_params = get_model_parameters(client.model)
         reconstructed_params, byte_size = compress_and_reconstruct(
             parameters, updated_params, client.compressor_hook

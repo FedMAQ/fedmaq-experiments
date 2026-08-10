@@ -1,17 +1,4 @@
-"""Golden characterization tests for the simulated time/bytes model.
-
-Simulated runtime and communication overhead are logged thesis metrics
-(``evaluation-metrics.md``). Phase 3 of the refactor relocated the algorithm-specific
-magic numbers baked into ``PhysicalCostModel`` (FedKD compute penalty ``1.3``; FedMD
-round-1 pretraining ``10`` epochs; server-side KD speed ``2000.0``) behind
-``StrategyHook`` methods / config keys.
-
-These tests pin the exact numeric behavior of the *composed* algorithm -> number
-facts: they drive ``train_sample_count`` / ``compute_scale`` through the real hook
-methods into ``PhysicalCostModel`` and assert the same delays the pre-refactor
-``simulate_client_delay(..., alg_name=...)`` produced. If any golden number shifts,
-that is the drift these tests exist to catch -- do not edit the expected values.
-"""
+"""Golden tests for simulated time and byte accounting."""
 
 import numpy as np
 
@@ -24,7 +11,6 @@ from fedmaq.core.strategy_hooks import (
     PassthroughHook,
 )
 
-# Fixed link/compute so every delay below is a deterministic golden number.
 UPLOAD_BW = np.array([10.0])  # Mbps -> 1.25 MB/s
 DOWNLOAD_BW = np.array([20.0])  # Mbps -> 2.5 MB/s
 COMP_SPEED = np.array([100.0])  # samples/sec
@@ -56,14 +42,12 @@ def test_fedkd_compute_penalty_golden():
     """FedKD scales effective compute speed by the 1.3x dual-model penalty."""
     hook = FedKDHook({"algorithm": {}})
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=1)
-    # 200 samples * 5 epochs = 1000; effective speed = 100 / 1.3 -> 13.0 s.
     assert t_train == 13.0
 
 
 def test_fedavg_no_compute_penalty_golden():
     """Baseline (PassthroughHook, no penalty) train time, as a contrast."""
     _, t_train, _ = _delay(PassthroughHook(), 200, 5, 200, 5, server_round=1)
-    # 1000 samples / 100 samples/sec = 10.0 s.
     assert t_train == 10.0
 
 
@@ -71,7 +55,6 @@ def test_fedmd_round1_pretrain_golden():
     """FedMD round 1 folds in 10+10 pretraining epochs on public+private data."""
     hook = FedMDHook({"algorithm": {}})
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=1)
-    # (200*10 + 200*10 + 200*5 + 200*5) / 100 = 6000 / 100 = 60.0 s.
     assert t_train == 60.0
 
 
@@ -79,7 +62,6 @@ def test_fedmd_round2_no_pretrain_golden():
     """FedMD round >1 drops the one-time pretraining cost."""
     hook = FedMDHook({"algorithm": {}})
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=2)
-    # (200*5 + 200*5) / 100 = 2000 / 100 = 20.0 s.
     assert t_train == 20.0
 
 
@@ -87,7 +69,6 @@ def test_cfd_round1_no_digest_golden():
     """CFD round 1: no downstream labels yet, so no digest-phase compute."""
     hook = CFDHook({"dataset": {"name": "mnist", "num_classes": 4}})
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=1)
-    # 200 samples * 5 epochs / 100 samples/sec = 10.0 s (private-only).
     assert t_train == 10.0
 
 
@@ -97,13 +78,11 @@ def test_cfd_round2_adds_digest_phase_golden():
         {"dataset": {"name": "mnist", "num_classes": 4}, "algorithm": {"distill_epochs": 2}}
     )
     _, t_train, _ = _delay(hook, 200, 5, 200, 5, server_round=2)
-    # (200*5 + 200*2) / 100 = 1400 / 100 = 14.0 s.
     assert t_train == 14.0
 
 
 def test_server_kd_sim_time_golden():
     """Server-side KD delay: proxy_size * kd_epochs * teachers / server_speed."""
-    # 200 public * 1 epoch * 5 teachers / 2000 samples/sec = 0.5 s.
     assert (
         kd_server_sim_time(num_public=200, kd_epochs=1, num_teachers=5, server_compute_speed=2000.0)
         == 0.5

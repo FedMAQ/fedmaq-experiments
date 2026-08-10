@@ -49,7 +49,6 @@ class LogitTracker:
         y = y.detach().cpu()
         batch_labels, batch_counts = y.unique(dim=0, return_counts=True)
         self.label_counts[batch_labels] += batch_counts.float()
-        # Expand label to logit width, scatter-add each sample's logits into its row.
         labels = y.view(y.size(0), 1).expand(-1, logits.size(1))
         batch_sums = torch.zeros((self.num_labels, self.num_labels))
         batch_sums.scatter_add_(0, labels, logits)
@@ -99,7 +98,6 @@ class FedDistillFit(ClientFitStrategy):
         alg_cfg = client.config.get("algorithm", {})
         reg_alpha = float(alg_cfg.get("reg_alpha", 1.0))
 
-        # Global per-class logits broadcast by the server (absent in round 1).
         global_logits: torch.Tensor | None = None
         gl_bytes = config.get("global_logits")
         if isinstance(gl_bytes, bytes) and len(gl_bytes) > 0:
@@ -150,7 +148,6 @@ class FedDistillFit(ClientFitStrategy):
             device=client.device,
         )
 
-        # FEDDISTILL+ shares full (unquantized) weights via FedAvg.
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
         params_bytes = sum(int(p.nbytes) for p in updated_params)

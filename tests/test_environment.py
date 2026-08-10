@@ -1,4 +1,4 @@
-"""Unit and integration tests for the Phase 1 federated learning environment."""
+"""Federated-learning environment tests."""
 
 import flwr as fl
 import numpy as np
@@ -207,7 +207,6 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
     seed = 42
     writer_ids = mock_writer_dataset.writer_ids
 
-    # First run (generates cache)
     pub_idx1, client_dict1 = generate_partition_indices(
         "femnist",
         num_clients,
@@ -233,12 +232,10 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
     total_client_samples = sum(len(v) for v in client_dict1.values())
     assert len(pub_idx1) + total_client_samples < 100
 
-    # No overlap between public pool and any client partition
     pub_set = set(pub_idx1)
     for indices in client_dict1.values():
         assert pub_set.isdisjoint(set(indices)), "Public pool overlaps with client data"
 
-    # Second run (retrieves from cache — writer cache key is distinct from dirichlet)
     pub_idx2, client_dict2 = generate_partition_indices(
         "femnist",
         num_clients,
@@ -257,7 +254,6 @@ def test_public_pool_exact_size_with_remainder(tmp_path, monkeypatch):
     silently dropping num_public_samples % num_classes samples."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
-    # 7 classes, 20 samples each (140 total) — 17 % 7 != 0, exercising the remainder path.
     num_classes = 7
     samples_per_class = 20
     data = torch.randn(num_classes * samples_per_class, 1, 4, 4)
@@ -295,12 +291,10 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     """Test 1-round CPU dry-run simulation of the client/server environment."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
-    # 1. Setup partitioning
     public_indices, client_indices_dict = generate_partition_indices(
         "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
     )
 
-    # 2. Config dict
     cfg_dict = {
         "num_clients": 2,
         "batch_size": 2,
@@ -322,7 +316,6 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         "dataset": {"name": "mnist", "num_classes": 10},
     }
 
-    # 3. Telemetry and components
     telemetry = TelemetryManager(cfg_dict)
 
     def client_fn(context):
@@ -368,14 +361,12 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
 
     server_app = ServerApp(server_fn=server_fn)
 
-    # 4. Run simulation
     run_simulation(
         server_app=server_app,
         client_app=client_app,
         num_supernodes=2,
     )
 
-    # Check that telemetry recorded cumulative bytes and simulated time
     assert telemetry.cumulative_bytes > 0
     assert strategy.simulated_time > 0
 
@@ -384,24 +375,20 @@ def test_dadaquant_compression_hook():
     """Test DAdaQuantCompressionHook stochastic rounding and size estimation."""
     from fedmaq.baselines.quantization import DAdaQuantCompressionHook
 
-    # Test size estimation
     hook = DAdaQuantCompressionHook(q=4)
     deltas = [np.ones((100,), dtype=np.float32)]
     compressed_deltas, byte_size = hook.compress(deltas)
 
-    # 100 elements * 4 bits = 400 bits = 50 bytes + 4 bytes scale = 54 bytes
     assert byte_size == 54
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
-    # Test stochastic rounding unbiased property
     np.random.seed(42)
     hook_unbiased = DAdaQuantCompressionHook(q=1)
     large_deltas = [np.full((10000,), 0.5, dtype=np.float32)]
     decompressed, _ = hook_unbiased.compress(large_deltas)
     mean_val = np.mean(decompressed[0])
 
-    # Assert mean is close to 0.5 (within standard error)
     np.testing.assert_allclose(mean_val, 0.5, atol=0.03)
 
 
@@ -465,7 +452,6 @@ def test_dadaquant_strategy_allocation():
         def reconnect(self, ins, timeout):
             return None
 
-    # Test round 1 client-adaptive configuration
     params = ndarrays_to_parameters([np.zeros((10,))])
     client_manager = fl.server.client_manager.SimpleClientManager()
     client_manager.register(MockClientProxy("0"))
@@ -476,34 +462,25 @@ def test_dadaquant_strategy_allocation():
     )
 
     assert len(instructions) == 2
-    # Verify q is in the config dict
     q_dict = {inst.cid: fit_ins.config["q"] for inst, fit_ins in instructions}
 
-    # Larger client (cid "1") should have larger or equal quantization level than client "0"
     assert q_dict["1"] >= q_dict["0"]
-    # Both should be positive
     assert q_dict["0"] >= 1
     assert q_dict["1"] >= 1
 
-    # Simulate convergence to test time-adaptive q_t doubling
-    # phi is 3, so we check convergence when we have at least phi + 1 (4) rounds of history
-    # and rounds_since_increase >= 3.
     strategy.hook.moving_average_history = [1.0, 1.0, 1.0, 1.0]  # Plateau detected
     strategy.hook.last_quantization_increase_round = 0
     strategy.hook.q_t = 4
 
-    # Run configure_fit for round 5 (checks history up to round 4)
     instructions = strategy.configure_fit(
         server_round=5, parameters=params, client_manager=client_manager
     )
-    # Since a plateau is detected (latest loss 1.0 >= past loss 1.0), q_t should double from 4 to 8
     assert strategy.hook.q_t == 8
     assert strategy.hook.last_quantization_increase_round == 4
 
 
 def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     """Test 2-round simulation of the FedMD baseline implementation."""
-    # Patch CACHE_DIR to temp directory for testing
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
     import shutil
@@ -514,7 +491,6 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         shutil.rmtree(model_dir)
 
     try:
-        # Setup partitioning
         public_indices, client_indices_dict = generate_partition_indices(
             "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
         )
@@ -576,7 +552,6 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
             def evaluate_fn(server_round, parameters, config):
-                # Simple ensemble eval simulation
                 client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
                 assert len(client_paths) <= 2
                 return 0.5, {"accuracy": 0.9}
@@ -601,14 +576,12 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             num_supernodes=2,
         )
 
-        # Verify that client models were saved
         assert model_dir.exists()
         assert len(list(model_dir.glob("client_*.pth"))) == 2
         assert strategy.simulated_time > 0
         assert telemetry.cumulative_bytes > 0
 
     finally:
-        # Clean up models
         if model_dir.exists():
             shutil.rmtree(model_dir)
 
@@ -628,7 +601,6 @@ def test_fedkd_compression_hook():
 
     assert len(reconstructed) == 1
     assert reconstructed[0].shape == (10, 5)
-    # Rank is 1. U is (10,1), Sigma is (1,), V is (1,5). Total floats = 16. Bytes = 64.
     assert byte_size == 64
     np.testing.assert_allclose(reconstructed[0], rank1_matrix, atol=1e-5)
 
@@ -705,7 +677,6 @@ def test_dadaquant_fit_reports_pretrain_loss(mock_dataset):
     model = SimpleCNN(in_channels=1, num_classes=10)
     initial_params = get_model_parameters(model)
 
-    # Expected pre-training loss: CE over the loader on the untrained model.
     reference = SimpleCNN(in_channels=1, num_classes=10)
     set_model_parameters(reference, initial_params)
     reference.eval()
@@ -867,9 +838,6 @@ def test_fedpaq_compression_hook():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
     compressed, byte_size = hook.compress(deltas)
 
-    # Scale = 2.0
-    # Level = (1 << 7) - 1 = 127
-    # element_bits = 3 * 8 = 24 bits = 3 bytes + 4 bytes scale = 7 bytes
     assert byte_size == 7
     assert len(compressed) == 1
     np.testing.assert_allclose(compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32))
@@ -896,7 +864,6 @@ def test_fedpaq_q1_is_sign_quantization():
 
     deltas = [np.array([-3.0, -0.5, 0.0, 0.5, 3.0], dtype=np.float32)]
     compressed, _ = FedPAQCompressionHook(q=1).compress(deltas)
-    # scale = max|d| = 3.0; every nonzero element -> sign(d)*scale, zeros stay 0.
     np.testing.assert_allclose(
         compressed[0], np.array([-3.0, -3.0, 0.0, 3.0, 3.0], dtype=np.float32)
     )
@@ -911,11 +878,9 @@ def test_fedprox_loss_hook():
     hook = FedProxLossHook(mu=0.1)
     hook.on_train_begin(model)
 
-    # Check that global params are saved and detached
     assert len(hook.global_params) == 2
     assert not hook.global_params[0].requires_grad
 
-    # Modify model parameters
     with torch.no_grad():
         list(model.parameters())[0].add_(1.0)
 
@@ -924,7 +889,6 @@ def test_fedprox_loss_hook():
     criterion = nn.CrossEntropyLoss()
 
     loss = hook.compute_loss(model, outputs, targets, criterion)
-    # Proximal term should be non-zero because parameter is modified
     assert loss.item() > 0.0
 
 
@@ -972,7 +936,6 @@ def test_fedmaq_strategy_allocation():
             super().__init__(cid)
 
         def get_properties(self, ins, timeout=None, group_id=None):
-            # Return partition ID matching proxy cid
             from flwr.common import Code, GetPropertiesRes, Status
 
             return GetPropertiesRes(
@@ -992,8 +955,6 @@ def test_fedmaq_strategy_allocation():
         def reconnect(self, ins, timeout):
             return None
 
-    # Test round 1 client-adaptive configuration for FedMAQ
-    # Mock parameters representing global weights
     # Derive the model from the factory rather than naming a class: FedMAQ's
     # server-side grad-norm probe builds its own model through
     # get_server_model_factory and fails loudly on a shape mismatch, so a
@@ -1009,7 +970,6 @@ def test_fedmaq_strategy_allocation():
     client_manager.register(MockClientProxy("0"))
     client_manager.register(MockClientProxy("1"))
 
-    # Mock the client loader data to avoid file reads in test
     import torch
     from torch.utils.data import DataLoader, TensorDataset
 
@@ -1020,12 +980,10 @@ def test_fedmaq_strategy_allocation():
 
     strategy.public_indices = public_indices
 
-    # Patch client memory for controlled testing
     strategy.cost_model.client_memory = np.array(
         [2048.0, 16384.0]
     )  # Client 0: Q_max=1, Client 1: Q_max=8
 
-    # We patch get_client_loader in partitioning module since it is imported inside configure_fit
     original_loader = fedmaq.core.partitioning.get_client_loader
     fedmaq.core.partitioning.get_client_loader = lambda *args, **kwargs: mock_loader
 
@@ -1039,11 +997,7 @@ def test_fedmaq_strategy_allocation():
     assert len(instructions) == 2
     q_dict = {inst.cid: fit_ins.config["q"] for inst, fit_ins in instructions}
 
-    # Check that memory hard cap is enforced
-    # Client 0 memory capacity is 2048 MB, c_unit = 2048.0 -> Q_max = 1
-    # Note that q_min is 2, so client 0 should be capped at min(Q_max, q_hat) -> min(1, q_hat) = 1
     assert q_dict["0"] == 1
-    # Client 1 memory capacity is 16384 MB -> Q_max = 8. It should have a larger q
     assert q_dict["1"] >= 1
 
 
@@ -1059,7 +1013,6 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         shutil.rmtree(persistence_dir)
 
     try:
-        # Setup partitioning
         public_indices, client_indices_dict = generate_partition_indices(
             "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
         )
@@ -1153,7 +1106,6 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             num_supernodes=2,
         )
 
-        # Verify simulation output variables
         assert strategy.simulated_time > 0
         assert telemetry.cumulative_bytes > 0
         assert telemetry.jsonl_path.exists()
@@ -1396,7 +1348,6 @@ def test_compute_fedmaq_q_k_t():
     """Test FedMAQ quantization helper formulas."""
     from fedmaq.core.strategy import compute_fedmaq_q_k_t
 
-    # Test formulation 0: Resource-Only Hard Cap
     q_res = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1408,7 +1359,6 @@ def test_compute_fedmaq_q_k_t():
         q_min=2,
         q_max=8,
     )
-    # formulation 0 sets q_hat = q_max = 8. q_max_capped = floor(16384/2048) = 8. min(8, 8) = 8.
     assert q_res == 8
 
     q_res_capped = compute_fedmaq_q_k_t(
@@ -1422,10 +1372,8 @@ def test_compute_fedmaq_q_k_t():
         q_min=2,
         q_max=8,
     )
-    # q_hat = 8, q_max_capped = 2. min(2, 8) = 2.
     assert q_res_capped == 2
 
-    # Test formulation 1: Linear Sum
     q = compute_fedmaq_q_k_t(
         c_k=4096.0,
         c_unit=2048.0,
@@ -1439,11 +1387,8 @@ def test_compute_fedmaq_q_k_t():
         gamma1=0.5,
         gamma2=0.5,
     )
-    # tilde_g = 0.5, tilde_n = 0.5. term = 0.25 + 0.25 = 0.5. q_hat = 2 + round(6 * 0.5) = 5.
-    # Q_max_capped = floor(4096/2048) = 2. So Q should be min(2, 5) = 2.
     assert q == 2
 
-    # If c_k is large enough:
     q = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1459,7 +1404,6 @@ def test_compute_fedmaq_q_k_t():
     )
     assert q == 5
 
-    # Test formulation 2: Multiplicative
     q_mult = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1473,10 +1417,8 @@ def test_compute_fedmaq_q_k_t():
         gamma1=0.5,
         gamma2=0.5,
     )
-    # term = (0.5**0.5) * (0.5**0.5) = 0.5. q_hat = 2 + round(6 * 0.5) = 5. min(8, 5) = 5.
     assert q_mult == 5
 
-    # Test formulation 3: Gradient-Primary, Data-Modulated
     q_mod = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1489,11 +1431,8 @@ def test_compute_fedmaq_q_k_t():
         q_max=8,
         lambda_val=1.0,
     )
-    # modulator = (1 + 1*0.5)/2 = 0.75. q_hat = 2 + round(6*0.5*0.75) = 2 + round(2.25) = 4.
     assert q_mod == 4
 
-    # Test formulation 4: Threshold-Based Staged Rule
-    # Case A: both thresholds cleared (tilde_g=0.5 >= 0.4, tilde_n=0.5 >= 0.4)
     q_th_a = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1509,7 +1448,6 @@ def test_compute_fedmaq_q_k_t():
     )
     assert q_th_a == 8
 
-    # Case B: one threshold cleared (tilde_g=0.5 >= 0.4, tilde_n=0.5 < 0.6)
     q_th_b = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1523,10 +1461,8 @@ def test_compute_fedmaq_q_k_t():
         tau_g=0.4,
         tau_n=0.6,
     )
-    # q_mid = round(10/2) = 5
     assert q_th_b == 5
 
-    # Case C: neither threshold cleared (tilde_g=0.5 < 0.6, tilde_n=0.5 < 0.6)
     q_th_c = compute_fedmaq_q_k_t(
         c_k=16384.0,
         c_unit=2048.0,
@@ -1580,7 +1516,6 @@ def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
     )
     assert q_capped == 32
 
-    # Every output across formulations/configs must always land in the permissible set.
     for formulation in range(5):
         result = compute_fedmaq_q_k_t(
             c_k=16384.0,
@@ -1628,7 +1563,6 @@ def test_compute_dadaquant_client_q():
     q_t = 4
     q_is = compute_dadaquant_client_q(sizes, q_t)
     assert len(q_is) == 2
-    # Client with larger dataset (index 1) should have greater or equal q_i.
     assert q_is[1] >= q_is[0]
 
 
@@ -1641,11 +1575,9 @@ def test_compute_dadaquant_client_q_clamps_to_range():
     """
     from fedmaq.core.strategy import compute_dadaquant_client_q
 
-    # Extreme skew: one dominant client would otherwise exceed q_max.
     sizes = [1, 10000]
     q_is = compute_dadaquant_client_q(sizes, q_t=4, q_min=2, q_max=8)
     assert all(2 <= q <= 8 for q in q_is), q_is
-    # No upper bound by default (backward-compatible), only the floor of 1.
     q_is_unbounded = compute_dadaquant_client_q(sizes, q_t=4)
     assert all(q >= 1 for q in q_is_unbounded)
 
@@ -1670,15 +1602,10 @@ def test_network_simulator():
         compute_scale=1.0,
     )
 
-    # 1 MB download on 20 Mbps link:
-    # 20 Mbps = 2.5 MB/s. 1 MB / 2.5 MB/s = 0.4s.
     assert abs(t_download - 0.4) < 1e-5
 
-    # 0.5 MB upload on 10 Mbps link:
-    # 10 Mbps = 1.25 MB/s. 0.5 MB / 1.25 MB/s = 0.4s.
     assert abs(t_upload - 0.4) < 1e-5
 
-    # 200 samples * 5 epochs = 1000 samples. 1000 samples / 100 samples/sec = 10s.
     assert abs(t_train - 10.0) < 1e-5
 
 
@@ -1692,9 +1619,6 @@ def test_evaluation_metrics():
     all_labels = np.array([0, 1, 1, 0])
     precision, recall, f1 = compute_precision_recall_f1(all_preds, all_labels, num_classes=2)
 
-    # Class 0: tp=1, fp=1, fn=1. prec=0.5, rec=0.5, f1=0.5.
-    # Class 1: tp=1, fp=1, fn=1. prec=0.5, rec=0.5, f1=0.5.
-    # Macro avg: prec=0.5, rec=0.5, f1=0.5.
     assert abs(precision - 0.5) < 1e-5
     assert abs(recall - 0.5) < 1e-5
     assert abs(f1 - 0.5) < 1e-5
@@ -1715,10 +1639,8 @@ def test_strategy_hook_registry():
     assert isinstance(get_strategy_hook("fedmaq", cfg), FedMAQHook)
     assert isinstance(get_strategy_hook("feddistill", {}), FedDistillHook)
 
-    # Unknown FedAvg-family name falls back to PassthroughHook (client-only algos).
     assert isinstance(get_strategy_hook("fedavg", {}), PassthroughHook)
 
-    # CFD is fully ported: constructs (no longer in _UNPORTED) with sane defaults.
     assert "cfd" not in _UNPORTED
     cfd_hook = get_strategy_hook("cfd", {"dataset": {"name": "mnist", "num_classes": 10}})
     assert isinstance(cfd_hook, CFDHook)
@@ -1781,13 +1703,10 @@ def test_feddistill_hook_aggregation_and_broadcast():
 
     sentinel = ndarrays_to_parameters([np.zeros(2, dtype=np.float32)])
     out_params, _ = hook.aggregate_fit(None, 1, results, [], sentinel, {})
-    # FedAvg-averaged weights are passed through untouched.
     assert out_params is sentinel
-    # Consensus logits = elementwise mean of the client matrices.
     assert np.allclose(hook.global_logits, 2.0)
     assert np.all(np.isfinite(hook.global_logits))
 
-    # configure_fit broadcasts the consensus matrix as bytes.
     fit_ins = FitIns(ndarrays_to_parameters([]), {})
     updated = hook.configure_fit(None, 2, ndarrays_to_parameters([]), None, [(None, fit_ins)])
     gl = updated[0][1].config["global_logits"]
@@ -1826,12 +1745,10 @@ def test_feddistill_two_round_reg_path(mock_dataset):
         config=cfg,
     )
 
-    # Round 1: no global logits -> plain CE, but still emits per-class logits.
     p1, n1, m1 = client.fit(params, {"server_round": 1})
     assert isinstance(m1["client_logits"], bytes)
     assert all(np.all(np.isfinite(p)) for p in p1)
 
-    # Server aggregates -> global logits become available.
     hook = FedDistillHook({"dataset": {"num_classes": 10}})
     fit_res = FitRes(
         status=Status(code=Code.OK, message=""),
@@ -1843,10 +1760,8 @@ def test_feddistill_two_round_reg_path(mock_dataset):
     assert hook.global_logits is not None
     assert np.all(np.isfinite(hook.global_logits))
 
-    # Round 2: broadcasting the global logits must drive the reg path without error.
     p2, _, m2 = client.fit(
         p1, {"server_round": 2, "global_logits": logits_to_bytes(hook.global_logits)}
     )
     assert all(np.all(np.isfinite(p)) for p in p2)
-    # Upload accounting = model weights + the 10x10 float32 logit matrix.
     assert m2["bytes_uploaded"] == sum(int(p.nbytes) for p in p2) + 10 * 10 * 4

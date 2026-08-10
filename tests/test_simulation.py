@@ -1,10 +1,4 @@
-"""Phase 0 safety-net tests: Hydra config composition + in-process run(cfg) smoke.
-
-These guard the orchestration path that the hand-rolled unit tests in
-``test_environment.py`` never exercise: that every ``conf/algorithm/*.yaml`` composes
-into a valid config, and that the decorator-free :func:`fedmaq.simulation.run` entry
-point drives the real ``client_fn``/``server_fn`` wiring end-to-end.
-"""
+"""Config-composition and in-process simulation smoke tests."""
 
 import json
 from pathlib import Path

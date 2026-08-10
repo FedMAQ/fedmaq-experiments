@@ -122,11 +122,6 @@ class StrategyHook(ABC):
         """
         return []
 
-    # ------------------------------------------------------------------ #
-    # Simulated time / communication model contributions.                #
-    # These keep PhysicalCostModel and the telemetry path free of        #
-    # ``if alg_name == ...`` dispatch; each hook supplies its own model.  #
-    # ------------------------------------------------------------------ #
 
     def download_size_bytes(
         self,

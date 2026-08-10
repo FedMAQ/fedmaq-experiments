@@ -41,9 +41,6 @@ def test_state_persists_and_diffing_engages_on_second_call():
     assert state.get("fedmaq_postprocess_residual") is not None
     assert state.get("fedmaq_postprocess_prev_codes") is not None
 
-    # Second call with an identical delta: codes should match round 1's codes,
-    # so the diff against prev_codes collapses to all-zero -> smaller byte count
-    # than a fresh-state hook compressing the same delta from scratch.
     _, bytes_round2 = hook.compress([delta.copy()])
     fresh_hook = FedMAQPostProcessCompressionHook(q=8)
     _, bytes_fresh = fresh_hook.compress([delta.copy()])
@@ -57,12 +54,10 @@ def test_error_feedback_carries_quantization_error_into_next_round():
     hook2 = FedMAQPostProcessCompressionHook(q=2, state=state2)  # levels = 1
     d = np.array([1.0, 0.4], dtype=np.float32)
     out_r1, _ = hook2.compress([d.copy()])
-    # scale = 1.0, levels = 1: codes = round((d/1.0)*1) = [1, 0], dequant = [1.0, 0.0]
     np.testing.assert_allclose(out_r1[0], [1.0, 0.0])
     residual = state2.get("fedmaq_postprocess_residual").to_numpy_ndarrays()[0]
     np.testing.assert_allclose(residual, [0.0, 0.4], atol=1e-6)
 
-    # Round 2: same delta fed again. d_fb = d + residual = [1.0, 0.8].
     out_r2, _ = hook2.compress([d.copy()])
     d_fb2 = np.array([1.0, 0.8])
     scale2 = float(np.max(np.abs(d_fb2)))
@@ -81,9 +76,6 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
     _, bytes_raw = fresh_hook.compress([delta.copy()])
     raw_codes = fresh_state.get("fedmaq_postprocess_prev_codes").to_numpy_ndarrays()[0]
 
-    # Seed a second hook's state with those exact codes as "previous round" and
-    # residual zero, then compress the identical delta again -> codes - prev_codes
-    # must be all zero, which zlib compresses far smaller than the raw payload.
     from flwr.app import ArrayRecord
 
     seeded_state = RecordDict()
@@ -112,8 +104,6 @@ def test_byte_count_realism():
     incompressible = rng.normal(size=size).astype(np.float32)
     _, bytes_incompressible = FedMAQPostProcessCompressionHook(q=bits).compress([incompressible])
     assert bytes_incompressible > 0
-    # zlib overhead on an incompressible int64-code payload shouldn't wildly
-    # inflate beyond the raw payload size.
     assert bytes_incompressible < size * 8 * 2 + 64
 
 

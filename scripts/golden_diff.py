@@ -29,7 +29,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Add project root to sys.path if not present (matches scripts/run_matrix.py)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.common import build_run_command, kill_ray_processes

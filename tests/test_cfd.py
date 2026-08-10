@@ -32,9 +32,6 @@ def _softmax_rows(rng: np.random.Generator, n: int, k: int) -> np.ndarray:
     return (exp / exp.sum(axis=1, keepdims=True)).astype(np.float32)
 
 
-# --------------------------------------------------------------------------- #
-# softlabel_codec: constrained quantizer + delta/zlib codec.                  #
-# --------------------------------------------------------------------------- #
 
 
 def test_constrained_quantize_one_hot_at_b1():
@@ -105,9 +102,6 @@ def test_codes_bytes_round_trip_and_mismatch_raises():
         codes_from_bytes(buf, 5)
 
 
-# --------------------------------------------------------------------------- #
-# CFDHook: server-side dual distillation across two rounds.                   #
-# --------------------------------------------------------------------------- #
 
 
 def _public_loader(n: int = 8, batch_size: int = 4) -> DataLoader:
@@ -187,9 +181,6 @@ def test_cfd_hook_downstream_broadcast_skips_round1():
     assert hook.download_size_bytes(None, []) > 0
 
 
-# --------------------------------------------------------------------------- #
-# CFDFit: client-side fresh init + round-gated distillation.                  #
-# --------------------------------------------------------------------------- #
 
 
 def _make_client(state: RecordDict | None = None) -> GenericClient:
@@ -265,7 +256,5 @@ def test_cfd_client_upstream_delta_state_persists_across_rounds():
     _, _, metrics_r1 = fit.fit(client, [], {"server_round": 1})
     assert state.get("cfd_prev_up_codes") is not None
 
-    # Second call with the model unchanged (freeze via eval-mode weights) should
-    # at minimum not crash and should keep updating the delta reference.
     _, _, metrics_r2 = fit.fit(client, [], {"server_round": 1})
     assert isinstance(metrics_r2["bytes_uploaded"], int)

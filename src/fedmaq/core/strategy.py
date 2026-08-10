@@ -276,21 +276,16 @@ class TelemetryFedAvg(FedAvg):
         # partitions across runs.
         results = sorted(results, key=lambda r: self._partition_sort_key(*r))
 
-        # 1. Check if the hook wants to bypass FedAvg aggregation entirely
         pre_result = self.hook.pre_aggregate_fit(self, server_round, results, failures)
         if pre_result is not None:
             aggregated_parameters, metrics = pre_result
         else:
-            # Standard FedAvg weighted aggregation
             aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
 
-        # 2. Hook post-processing (server KD, loss tracking, etc.)
         aggregated_parameters, metrics = self.hook.aggregate_fit(
             self, server_round, results, failures, aggregated_parameters, metrics
         )
 
-        # 3. Telemetry: client-metric aggregation + simulated delay/byte accounting,
-        # relocated behind TelemetryManager (see telemetry.py:record_fit_round).
         round_time, round_total_bytes = self.telemetry_manager.record_fit_round(
             self, server_round, results, aggregated_parameters
         )
@@ -306,7 +301,6 @@ class TelemetryFedAvg(FedAvg):
     def evaluate(
         self, server_round: int, parameters: Parameters
     ) -> tuple[float, dict[str, Scalar]] | None:
-        # Let the hook decompress parameters if needed (e.g. FedKD SVD)
         parameters = self.hook.pre_evaluate(self, server_round, parameters)
 
         eval_res = super().evaluate(server_round, parameters)
@@ -329,21 +323,15 @@ class TelemetryFedAvg(FedAvg):
                 "system/wall_time_sec": snapshot.wall_time,
             }
 
-            # Per-client communication breakdown (min/mean/max/std) — shows the
-            # adaptive-quantization mechanism (DAdaQuant/FedMAQ) at work, not just
-            # the aggregate total. Empty at round 0, so this is a no-op then.
             log_metrics.update(snapshot.client_bytes_stats)
 
-            # Merge other metrics returned by evaluate_fn (e.g. precision, recall, f1)
             for k, v in metrics.items():
                 if k != "accuracy":
                     log_metrics[f"test/{k}"] = float(v)
 
-            # Merge client-side aggregated metrics
             if snapshot.round_client_metrics:
                 log_metrics.update(snapshot.round_client_metrics)
 
-            # Merge algorithm-specific hook metrics (e.g. DAdaQuant q_t)
             log_metrics.update(self.hook.get_eval_metrics(self, server_round))
 
             self.telemetry_manager.log(

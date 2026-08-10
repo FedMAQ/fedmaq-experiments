@@ -46,10 +46,8 @@ class StandardFit(ClientFitStrategy):
         parameters: list[np.ndarray],
         config: dict[str, Any],
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
-        # Load incoming server weights
         set_model_parameters(client.model, parameters)
 
-        # Update compressor hook with dynamic q if provided in configuration
         if "q" in config:
             if hasattr(client.compressor_hook, "q"):
                 client.compressor_hook.q = int(config["q"])
@@ -58,7 +56,6 @@ class StandardFit(ClientFitStrategy):
         # the incoming global model before any local update.
         pretrain_loss = self._pretrain_local_loss(client)
 
-        # Retrieve round configurations (with defaults from config)
         exp_config = client.config.get("experiment", client.config)
         lr = client._get_decayed_lr(config)
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
@@ -67,7 +64,6 @@ class StandardFit(ClientFitStrategy):
             exp_config.get("momentum", client.config.get("algorithm", {}).get("momentum", 0.9))
         )
 
-        # Setup training
         client.model.train()
         optimizer = torch.optim.SGD(
             client.model.parameters(),
@@ -117,7 +113,6 @@ class StandardFit(ClientFitStrategy):
             on_after_backward=on_after_backward if instrument_fedprox else None,
         )
 
-        # Extract updated parameters and run the shared delta->compress->reconstruct tail
         updated_params = get_model_parameters(client.model)
         reconstructed_params, byte_size = compress_and_reconstruct(
             parameters, updated_params, client.compressor_hook
