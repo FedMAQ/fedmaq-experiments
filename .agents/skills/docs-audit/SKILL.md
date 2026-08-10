@@ -1,19 +1,20 @@
 ---
 name: docs-audit
 description: >-
-  Full sweep of the tracked context surface (AGENTS.md, CONTEXT.md,
-  .Codex/rules/, docs/adr/, docs/agents/, docs/experiments/, docs/audits/)
+  Full sweep of the tracked context surface (AGENTS.md, CLAUDE.md, CONTEXT.md,
+  .agent/rules/, .agents/skills/, docs/adr/, docs/agents/, docs/experiments/, docs/audits/)
   for staleness, duplicated facts, dangling references, and drift from the
-  layout in ADR-0014. Auto-fixes mechanical issues, flags judgment calls.
+  layout in ADR-0015. Auto-fixes mechanical issues, flags judgment calls.
   Use when asked to audit the docs system, or after a batch of doc edits.
 ---
 
 # Docs Audit
 
 Conventions enforced: `CONTEXT.md` § Working conventions, and
-[ADR-0014](../../../docs/adr/0014-agentic-context-layout.md) for the layout.
+[ADR-0015](../../../docs/adr/0015-workspace-agentic-context-contract.md) for the layout.
 
-1. **Inventory.** `AGENTS.md`, `CONTEXT.md`, `.Codex/rules/*.md`, `docs/**/*.md`.
+1. **Inventory.** `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `.agent/rules/*.md`,
+   `.agents/skills/**/SKILL.md`, `docs/**/*.md`.
    A tracked `HANDOFF.md` — or any committed next-session file — is itself a finding.
    Flag it; do not audit its contents.
 
@@ -23,7 +24,7 @@ Conventions enforced: `CONTEXT.md` § Working conventions, and
    - **Run counts are the known-recurring case.** No tracked file may carry one.
      Totals belong in the pinned dispatch Issue; per-stage arithmetic is pinned by
      `tests/test_simulation.py`, not by prose. Any run count in `docs/` or
-     `.Codex/` is a finding, even if currently correct.
+   `.agent/` is a finding, even if currently correct.
 
 3. **Dangling references.** Relative links resolving to real files; `ADR-NNNN`
    citations resolving to a file in `docs/adr/`; skill names in prose resolving to a
@@ -34,10 +35,10 @@ Conventions enforced: `CONTEXT.md` § Working conventions, and
 4. **No archives.** An `archive/` subdirectory anywhere under `docs/` is a finding.
    Superseded material is deleted; git history is the record.
 
-5. **Layout drift.** Compare against ADR-0014's structure and the reference layout it
-   adopts. Flag: always-loaded rules growing past a screen or two; reference material
-   in `.Codex/rules/` that belongs in `docs/agents/`; a second registry appearing
-   anywhere; live state accumulating in a tracked file.
+5. **Layout drift.** Compare against ADR-0015. Flag: always-loaded rules growing past
+   a screen or two; reference material in `.agent/rules/` that belongs in
+   `docs/agents/`; shared skills outside `.agents/skills/`; a second registry; live
+   state accumulating in a tracked file.
 
 6. **Superseded-but-live content.** A doc describing a mechanism, pick or count that a
    later ADR overturned, without saying so. The soft-voting and MobileNetV2GN-smoke
