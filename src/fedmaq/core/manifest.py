@@ -27,6 +27,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "run_manifest.json"
+_GENERATED_ARTIFACT_ROOTS = ("outputs", "scripts/analysis_output")
 
 
 def config_sha256(cfg_dict: dict[str, Any]) -> str:
@@ -37,6 +38,32 @@ def config_sha256(cfg_dict: dict[str, Any]) -> str:
     """
     canonical = json.dumps(cfg_dict, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _is_generated_artifact(path: str) -> bool:
+    return any(path == root or path.startswith(f"{root}/") for root in _GENERATED_ARTIFACT_ROOTS)
+
+
+def _has_source_tree_changes(status: str) -> bool:
+    """Whether porcelain-v1 ``-z`` status contains a non-generated change."""
+    records = status.split("\0")
+    index = 0
+    while index < len(records):
+        record = records[index]
+        if not record:
+            index += 1
+            continue
+
+        code, path = record[:2], record[3:]
+        paths = [path]
+        if "R" in code or "C" in code:
+            index += 1
+            paths.append(records[index])
+
+        if not all(_is_generated_artifact(candidate) for candidate in paths):
+            return True
+        index += 1
+    return False
 
 
 def _git_provenance(repo_root: Path) -> dict[str, Any]:
@@ -61,12 +88,12 @@ def _git_provenance(repo_root: Path) -> dict[str, Any]:
         except Exception:
             return None
 
-    status = _git("status", "--porcelain")
+    status = _git("status", "--porcelain=v1", "-z")
     return {
         "commit": _git("rev-parse", "HEAD"),
         "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
         "tag": _git("describe", "--tags", "--exact-match") or None,
-        "dirty": None if status is None else bool(status),
+        "dirty": None if status is None else _has_source_tree_changes(status),
     }
 
 

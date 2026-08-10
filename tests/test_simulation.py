@@ -590,6 +590,34 @@ def test_run_manifest_hashes_the_resolved_config(tmp_path):
     assert "commit" in manifest["git"] and "dirty" in manifest["git"]
 
 
+def test_manifest_ignores_generated_artifacts_but_not_source_changes(monkeypatch, tmp_path):
+    """Formal result files must not make later grid tasks look unreproducible."""
+    import fedmaq.core.manifest as manifest_module
+
+    class CompletedProcess:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def provenance_for(status):
+        def fake_run(command, **_kwargs):
+            if command[1] == "status":
+                return CompletedProcess(status)
+            if command[1:] == ["rev-parse", "HEAD"]:
+                return CompletedProcess("commit")
+            if command[1:] == ["rev-parse", "--abbrev-ref", "HEAD"]:
+                return CompletedProcess("main")
+            if command[1:] == ["describe", "--tags", "--exact-match"]:
+                return CompletedProcess("pre-registration")
+            raise AssertionError(f"unexpected git command: {command}")
+
+        monkeypatch.setattr(manifest_module.subprocess, "run", fake_run)
+        return manifest_module._git_provenance(tmp_path)
+
+    generated_only = "?? outputs/\0?? scripts/analysis_output/\0"
+    assert provenance_for(generated_only)["dirty"] is False
+    assert provenance_for(generated_only + " M src/fedmaq/simulation.py\0")["dirty"] is True
+
+
 def test_final_global_model_is_written_only_on_the_last_round(tmp_path):
     """§5.2.1's t-SNE plots are built from the trained global model after the grid.
 
