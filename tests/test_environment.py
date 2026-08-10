@@ -664,6 +664,47 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
     assert teacher_file.exists()
 
 
+def test_fedkd_runtime_persistence_isolated_from_shared_cache(mock_dataset, tmp_path, monkeypatch):
+    """A prior run's teacher must not cross the run boundary."""
+    monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
+
+    from fedmaq.baselines.compression import FedKDCompressionHook
+    from fedmaq.core.models import TinyCNN, get_kd_teacher_model
+
+    shared_dir = tmp_path / "shared_models"
+    run_dir = tmp_path / "current_run_models"
+    shared_dir.mkdir()
+    torch.save(get_kd_teacher_model("mnist", 10).state_dict(), shared_dir / "teacher_0.pth")
+
+    cfg_dict = {
+        "device": "cpu",
+        "experiment": {
+            "persistence_dir": str(shared_dir),
+            "local_epochs": 1,
+            "learning_rate": 0.01,
+            "weight_decay": 0.0,
+        },
+        "_persistence_dir": str(run_dir),
+        "algorithm": {"name": "fedkd", "temperature": 2.0},
+        "dataset": {"name": "mnist", "num_classes": 11},
+    }
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=2)
+    model = TinyCNN(in_channels=1, num_classes=11)
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=FedKDCompressionHook(energy=0.5),
+        config=cfg_dict,
+    )
+
+    client.fit(get_model_parameters(model), {"energy": 0.5})
+
+    assert (run_dir / "teacher_0.pth").exists()
+
+
 def test_dadaquant_fit_reports_pretrain_loss(mock_dataset):
     """DAdaQuant's local_loss must be the CE loss on the incoming model BEFORE training.
 

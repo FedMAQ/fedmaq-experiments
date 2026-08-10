@@ -35,9 +35,9 @@ class FedKDFit(ClientFitStrategy):
         parameters: list[np.ndarray],
         config: dict[str, Any],
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
-        persistence_dir = client.config.get("experiment", {}).get(
-            "persistence_dir", ".data_partitions/fedkd_models"
-        )
+        persistence_dir = client.config.get("_persistence_dir") or client.config.get(
+            "experiment", {}
+        ).get("persistence_dir", ".data_partitions/fedkd_models")
         model_dir = Path(persistence_dir)
         model_dir.mkdir(parents=True, exist_ok=True)
         teacher_path = model_dir / f"teacher_{client.cid}.pth"

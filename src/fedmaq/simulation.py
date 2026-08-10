@@ -3,6 +3,7 @@
 import logging
 import os
 import random
+import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import flwr as fl
@@ -187,6 +188,14 @@ def run(cfg: DictConfig) -> TelemetryManager:
 
     write_run_manifest(cfg_dict, telemetry.log_dir)
 
+    client_config = cfg_dict
+    persistence_scope: tempfile.TemporaryDirectory[str] | None = None
+    if alg_name == "fedkd":
+        state_root = Path(".data_partitions/fedkd_runs")
+        state_root.mkdir(parents=True, exist_ok=True)
+        persistence_scope = tempfile.TemporaryDirectory(prefix="run-", dir=state_root)
+        client_config = {**cfg_dict, "_persistence_dir": persistence_scope.name}
+
     def client_fn(context: fl.app.Context) -> fl.client.Client:
         partition_id = context.node_config["partition-id"]
 
@@ -222,7 +231,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
             model=model,
             loss_hook=loss_hook,
             compressor_hook=compressor_hook,
-            config=cfg_dict,
+            config=client_config,
             public_loader=public_loader,
             state=context.state,
         ).to_client()
@@ -320,13 +329,16 @@ def run(cfg: DictConfig) -> TelemetryManager:
         backend_config["init_args"] = init_args
 
     logger.info("Starting Flower Simulation...")
-    run_simulation(
-        server_app=server_app,
-        client_app=client_app,
-        num_supernodes=cfg.experiment.num_clients,
-        backend_config=backend_config,
-    )
-
-    telemetry.finish()
+    try:
+        run_simulation(
+            server_app=server_app,
+            client_app=client_app,
+            num_supernodes=cfg.experiment.num_clients,
+            backend_config=backend_config,
+        )
+    finally:
+        telemetry.finish()
+        if persistence_scope is not None:
+            persistence_scope.cleanup()
 
     return telemetry
