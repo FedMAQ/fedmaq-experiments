@@ -35,10 +35,6 @@ except Exception:
 if TYPE_CHECKING:
     from fedmaq.core.strategy import TelemetryFedAvg
 
-# Metric keys every algorithm may emit, independent of which hook is active.
-# Algorithm-specific keys (e.g. ``algorithm/fedmaq/avg_q``) are supplied by the
-# active hook's ``metric_keys()`` and composed in below — see
-# ``register_hook_metric_keys`` and ``_write_local_logs``.
 _COMMON_CSV_FIELDNAMES: list[str] = [
     "round",
     "test/loss",
@@ -97,26 +93,20 @@ class TelemetryManager:
         self.run_name = exp_config.get("telemetry", {}).get("run_name", None)
         self.run = None
 
-        # Communication and time accumulators
         self.cumulative_bytes: int = 0
         self.cumulative_time: float = 0.0
         self.cumulative_client_time: float = 0.0
         self.cumulative_server_time: float = 0.0
         self.cumulative_wall_time: float = 0.0
 
-        # Per-round fit snapshot, read back by the strategy's evaluate(). See
-        # ``record_fit_round`` (called from ``aggregate_fit``) and
-        # ``snapshot_for_round``.
         self._last_snapshot = RoundSnapshot()
 
-        # Real (not simulated) wall-clock timer, measured across aggregate_fit calls.
         self._last_wall_ts = time.perf_counter()
 
         # Algorithm-specific CSV keys declared by the active hook (see
         # ``register_hook_metric_keys``), composed into the stable schema below.
         self._hook_metric_keys: list[str] = []
 
-        # Local tracking setup in Hydra's output directory, falling back to current dir
         if _HYDRA_AVAILABLE:
             try:
                 self.log_dir = Path(HydraConfig.get().runtime.output_dir)

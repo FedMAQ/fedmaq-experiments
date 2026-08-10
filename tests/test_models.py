@@ -1,12 +1,4 @@
-"""Regression tests for the model factory and MobileNetV2GN width scaling.
-
-Pins two invariants touched by the FedKD student switch (path B):
-  * the full-model (width_mult=1.0) parameter count is unchanged, so every
-    baseline that trains the full MobileNetV2GN is unaffected;
-  * the CIFAR KD student is a genuinely smaller, still-depthwise-separable
-    width-0.5 MobileNetV2GN (not the old SimpleCNN), and GroupNorm stays valid
-    at the reduced width.
-"""
+"""Regression tests for model factories and MobileNetV2GN scaling."""
 
 from __future__ import annotations
 
@@ -27,8 +19,6 @@ def _nparams(model: torch.nn.Module) -> int:
 
 
 def test_full_model_param_count_unchanged() -> None:
-    # The channel-rounding change must be a no-op at width_mult=1.0; these are
-    # the counts every baseline trains on.
     assert _nparams(MobileNetV2GN(in_channels=3, num_classes=10)) == 2_236_682
     assert _nparams(MobileNetV2GN(in_channels=3, num_classes=100)) == 2_351_972
 
@@ -36,28 +26,20 @@ def test_full_model_param_count_unchanged() -> None:
 def test_cifar_kd_student_is_smaller_mobilenetv2gn() -> None:
     student = get_kd_student_model("cifar10", 10)
     full = get_model("cifar10", 10)
-    assert isinstance(student, MobileNetV2GN)  # same depthwise-separable family
+    assert isinstance(student, MobileNetV2GN)
     ratio = _nparams(student) / _nparams(full)
-    assert 0.2 < ratio < 0.4  # genuinely smaller (~0.26x), not ~1.0x like SimpleCNN
+    assert 0.2 < ratio < 0.4
 
 
 def test_width_half_student_forward_pass_and_groupnorm_valid() -> None:
-    # Instantiation would raise if any GroupNorm channel count were indivisible;
-    # exercise a forward pass to confirm the reduced-width graph runs.
     student = get_kd_student_model("cifar10", 10)
     out = student(torch.randn(2, 3, 32, 32))
     assert out.shape == (2, 10)
 
 
 def test_fedkd_holds_the_only_compact_student() -> None:
-    # FedMAQ-Lite was the one other algorithm mapping to a non-standard student,
-    # and it is gone (DECISIONS #4). FedKD's width-0.5 switch (DECISIONS #22)
-    # must not reach FedMAQ: the server's grad-norm probe and its distillation
-    # student both resolve through get_server_model_factory, so a leak here
-    # would silently change what the ablation's arms are measuring.
     assert isinstance(get_client_model("fedkd", "cifar10", 10), MobileNetV2GN)
     assert isinstance(get_client_model("fedmaq", "cifar10", 10), MobileNetV2GN)
     server_factory = get_server_model_factory("fedmaq")
     assert isinstance(server_factory("cifar10", 10), MobileNetV2GN)
-    # FEMNIST keeps SimpleCNN as its full model, unrelated to any KD student.
     assert isinstance(get_client_model("fedmaq", "femnist", 62), SimpleCNN)

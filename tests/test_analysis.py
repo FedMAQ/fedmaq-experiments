@@ -72,9 +72,6 @@ def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs, group=None, al
     to the study group and everything else to the grid.
     """
     group = group or (FORMULATION_STUDY_GROUP if algorithm == "fedmaq" else GRID_GROUP)
-    # The group belongs in the path for the same reason it belongs in the record:
-    # the study and the grid run the same algorithm at the same formulation, skew
-    # and seed, and are separated by nothing else.
     job_dir = tmp_path / f"{group}_{algorithm}_{formulation}_{seed}_{alpha}"
     job_dir.mkdir()
     csv_path = job_dir / "experiment_log.csv"
@@ -92,18 +89,14 @@ def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs, group=None, al
 
 
 def test_compare_to_baselines_computes_paired_per_seed_accuracy_delta(tmp_path):
-    # FedAvg reference: final acc 0.80 across all 3 seeds -> floor = 0.9*0.80 = 0.72
     fedavg_runs = [
         _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [10, 20, 30]) for s in (1, 2, 3)
     ]
-    # The grid's frozen FedMAQ rows (formulation 2): final acc 0.85/0.83/0.81 per
-    # seed. Grid group, because the headline table is a grid-internal contrast.
     fedmaq_runs = [
         _write_run(tmp_path, "fedmaq", 2, 1, [0.6, 0.75, 0.85], [5, 10, 15], group=GRID_GROUP),
         _write_run(tmp_path, "fedmaq", 2, 2, [0.6, 0.74, 0.83], [5, 10, 15], group=GRID_GROUP),
         _write_run(tmp_path, "fedmaq", 2, 3, [0.6, 0.73, 0.81], [5, 10, 15], group=GRID_GROUP),
     ]
-    # Baseline FedPAQ: final acc 0.75/0.78/0.70 per seed
     fedpaq_runs = [
         _write_run(tmp_path, "fedpaq", None, 1, [0.5, 0.65, 0.75], [8, 16, 24]),
         _write_run(tmp_path, "fedpaq", None, 2, [0.5, 0.65, 0.78], [8, 16, 24]),
@@ -117,7 +110,6 @@ def test_compare_to_baselines_computes_paired_per_seed_accuracy_delta(tmp_path):
     key = "cifar10_alpha_0.5_vs_fedpaq"
     assert key in result
     entry = result[key]
-    # deltas per seed: 0.85-0.75=0.10, 0.83-0.78=0.05, 0.81-0.70=0.11
     assert entry["mean_delta"] == pytest.approx((0.10 + 0.05 + 0.11) / 3, abs=1e-6)
     assert entry["min_delta"] == pytest.approx(0.05, abs=1e-6)
     assert entry["max_delta"] == pytest.approx(0.11, abs=1e-6)
@@ -125,11 +117,9 @@ def test_compare_to_baselines_computes_paired_per_seed_accuracy_delta(tmp_path):
 
 
 def test_compare_to_baselines_reports_rounds_to_target_per_side(tmp_path):
-    # floor = 0.9*0.80 = 0.72
     fedavg_runs = [
         _write_run(tmp_path, "fedavg", None, s, [0.5, 0.7, 0.80], [10, 20, 30]) for s in (1, 2, 3)
     ]
-    # FedMAQ crosses 0.72 at round 3 (0.85); FedPAQ never crosses (caps at 0.70)
     fedmaq_runs = [
         _write_run(tmp_path, "fedmaq", 0, s, [0.6, 0.70, 0.85], [5, 10, 15], group=GRID_GROUP)
         for s in (1, 2, 3)

@@ -1,10 +1,4 @@
-"""Decorator-free Flower simulation core.
-
-Houses the full experiment-runner logic so it is importable as
-``from fedmaq.simulation import run`` and testable in-process. ``scripts/run.py``
-is a thin ``@hydra.main`` wrapper around :func:`run`; tests build ``cfg`` via
-Hydra's ``compose`` API and call :func:`run` directly.
-"""
+"""Flower simulation core."""
 
 import logging
 import os
@@ -43,9 +37,7 @@ from fedmaq.core.telemetry import TelemetryManager
 
 logger = logging.getLogger("fedmaq")
 
-# Linux caps Unix domain socket paths near 108 bytes, and Ray builds its plasma-store
-# socket beneath the session temp dir as roughly
-# ``<root>/session_<19 chars>/sockets/plasma_store``.
+# Ray appends its plasma-store socket path beneath the temp directory.
 RAY_SOCKET_PATH_BUDGET = 107
 RAY_SESSION_SUFFIX_BUDGET = 60
 
@@ -99,9 +91,6 @@ def build_ray_init_args(cfg: DictConfig) -> dict[str, ConfigRecordValues]:
                 "its session directory beneath it and requires an absolute root."
             )
         if len(resolved) + RAY_SESSION_SUFFIX_BUDGET > RAY_SOCKET_PATH_BUDGET:
-            # A long root does not fail at init. It fails later, when the plasma
-            # store cannot bind its socket, so warn while the cause is still
-            # attributable.
             logger.warning(
                 f"ray.temp_dir '{resolved}' is {len(resolved)} characters. Ray appends "
                 f"about {RAY_SESSION_SUFFIX_BUDGET} more to reach its plasma-store "
@@ -161,13 +150,9 @@ def run(cfg: DictConfig) -> TelemetryManager:
     Returns the :class:`TelemetryManager` so callers/tests can inspect
     ``cumulative_bytes`` and the emitted JSONL/CSV logs after the run.
     """
-    # Set seed. strict_determinism (default true) makes non-deterministic ops
-    # raise instead of silently degrading reproducibility; flip off only to
-    # diagnose an op that lacks a deterministic kernel.
     strict_determinism = bool(OmegaConf.select(cfg, "experiment.strict_determinism", default=True))
     set_seed(cfg.seed, strict=strict_determinism)
 
-    # Check GPU availability and warn if not detected
     if not torch.cuda.is_available():
         logger.warning(
             "\n"
@@ -181,7 +166,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
     else:
         logger.info(f"GPU (CUDA) detected. Using device: {torch.cuda.get_device_name(0)}")
 
-    # Convert Hydra config to standard Python dict
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     logger.info(f"Running simulation with config:\n{OmegaConf.to_yaml(cfg)}")
 
@@ -189,7 +173,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
     dataset_name: str = cfg.dataset.name
     num_classes: int = int(cfg.dataset.num_classes)
 
-    # 1. Generate partitioning (server reserve is always active)
     public_indices, client_indices_dict = generate_partition_indices(
         dataset_name=dataset_name,
         num_clients=cfg.experiment.num_clients,
@@ -199,25 +182,14 @@ def run(cfg: DictConfig) -> TelemetryManager:
         partition=OmegaConf.select(cfg, "heterogeneity.partition", default="dirichlet"),
     )
 
-    # 2. Setup Telemetry
     telemetry = TelemetryManager(cfg_dict)
     telemetry.init_wandb()
 
-    # Provenance: hash the resolved config into a manifest beside the telemetry
-    # logs (manuscript §4.3.1). Written after the log dir is settled so both land
-    # together, and before any training work so a crashed run still leaves a
-    # record of what it was attempting.
     write_run_manifest(cfg_dict, telemetry.log_dir)
 
-    # 3. Define client app components
     def client_fn(context: fl.app.Context) -> fl.client.Client:
         partition_id = context.node_config["partition-id"]
 
-        # Re-pin torch determinism inside the Ray worker process (it does not
-        # inherit the driver's flags) so cuDNN training is reproducible. This
-        # intentionally does NOT reseed global random/numpy — that would clobber
-        # Flower's server-side client sampling. The per-client seed also drives
-        # the loader generator below for a reproducible shuffle order.
         client_seed = int(cfg.seed) + int(partition_id)
         configure_torch_determinism(client_seed, strict=strict_determinism)
 
@@ -246,7 +218,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
         return GenericClient(
             cid=str(partition_id),
             trainloader=train_loader,
-            testloader=train_loader,  # Client local eval uses own partition data
+            testloader=train_loader,
             model=model,
             loss_hook=loss_hook,
             compressor_hook=compressor_hook,
@@ -257,12 +229,10 @@ def run(cfg: DictConfig) -> TelemetryManager:
 
     client_app = ClientApp(client_fn=client_fn)
 
-    # 4. Define server app components
     def server_fn(context: fl.app.Context) -> ServerAppComponents:
         initial_model = get_client_model(alg_name, dataset_name, num_classes)
         initial_parameters = ndarrays_to_parameters(get_model_parameters(initial_model))
 
-        # Server-side test loader (uses full held-out test split, not public reserve)
         _, test_loader = get_server_loaders(
             dataset_name, public_indices, batch_size=cfg.experiment.batch_size
         )
@@ -282,7 +252,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
                 model_dir = Path(persistence_dir)
                 client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
                 if not client_paths:
-                    # Fallback to random global model if no client models are saved yet
                     eval_model = get_client_model(alg_name, dataset_name, num_classes)
                     return evaluate_global_model(
                         eval_model,
@@ -298,12 +267,8 @@ def run(cfg: DictConfig) -> TelemetryManager:
                     device=device,
                 )
 
-            # Default FL path: reconstruct a fresh model each round to avoid
-            # mutable-closure issues in async simulation scenarios.
             eval_model = get_client_model(alg_name, dataset_name, num_classes)
             set_model_parameters(eval_model, parameters)
-            # §5.2.1's t-SNE plots are built from this model after the grid
-            # finishes, so the last round's weights have to outlive the process.
             write_final_global_model(
                 eval_model,
                 telemetry.log_dir,
@@ -323,7 +288,7 @@ def run(cfg: DictConfig) -> TelemetryManager:
             client_indices_dict=client_indices_dict,
             public_indices=public_indices,
             fraction_fit=cfg.experiment.client_fraction,
-            fraction_evaluate=0.0,  # Disable client-side evaluation overhead
+            fraction_evaluate=0.0,
             min_fit_clients=max(
                 1, int(cfg.experiment.num_clients * cfg.experiment.client_fraction)
             ),
@@ -332,9 +297,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
             initial_parameters=initial_parameters,
         )
 
-        # Deterministic, partition-keyed sampling so *which* clients train each
-        # round is reproducible across runs (Flower's default SimpleClientManager
-        # draws from process-global random over timing-ordered node IDs).
         client_manager = SeededPartitionClientManager(
             seed=int(cfg.seed), num_clients=int(cfg.experiment.num_clients)
         )
@@ -346,11 +308,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
 
     server_app = ServerApp(server_fn=server_fn)
 
-    # 5. Run FL simulation
-    # Typed as Flower's own BackendConfig shape (dict[str, dict[str,
-    # ConfigRecordValues]]) so the two sub-dicts stay assignable to it. dict is
-    # invariant in its value type, so a narrower annotation such as
-    # dict[str, dict[str, float]] does not type-check against run_simulation.
     backend_config: dict[str, dict[str, ConfigRecordValues]] = {
         "client_resources": {
             "num_cpus": 1,
@@ -370,7 +327,6 @@ def run(cfg: DictConfig) -> TelemetryManager:
         backend_config=backend_config,
     )
 
-    # Finish telemetry
     telemetry.finish()
 
     return telemetry

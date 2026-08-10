@@ -18,8 +18,6 @@ from torch.utils.data import TensorDataset
 
 CONF_DIR = str((Path(__file__).parent.parent / "conf").resolve())
 
-# Every selectable algorithm config (including the FedDistill/CFD stubs, whose YAML
-# must still compose even though their hooks are not yet implemented).
 ALGORITHM_CONFIGS = [
     "fedavg",
     "fedprox",
@@ -72,41 +70,13 @@ def _frozen_refinements():
     return {flag for flag in REFINEMENTS if full[flag]}
 
 
-# Manuscript §4.3.7 defines the ablation as a leave-one-out design: each arm is
-# full FedMAQ with exactly one thing removed. That property is what makes an
-# arm's delta against Configuration 7 attributable to the component it drops.
-# It lives entirely in YAML, so nothing else in the suite can catch a config edit
-# that quietly reintroduces a second difference — which is the defect that made
-# the pre-2026-07-25 arms unattributable. Each entry is the complete set of keys
-# an arm may differ from ``fedmaq.yaml`` in.
-#
-# Two entries are computed from the freeze rather than written down. A literal
-# list would have to be hand-edited in lockstep with fedmaq.yaml at exactly the
-# moment the freeze lands, and a test that needs editing to keep passing after a
-# config change is not a guard against that change. Deriving them means the
-# freeze can write any surviving set -- including the empty one -- and these
-# tests still describe the arms correctly.
 def _ablation_arm_diffs():
     frozen = _frozen_refinements()
     return {
-        # Configuration 2: Tier-1 memory ceiling lifted.
         "fedmaq_no_resource": {"resource_aware"},
-        # Configuration 3: Formulation 2's data term removed at gamma2 = 0
-        # (n~^0 = 1). One key, because the arm stays on the winner's formulation.
         "fedmaq_no_data": {"gamma2"},
-        # Configuration 4: Formulation 2's gradient term removed at gamma1 = 0.
-        # Decision 84 retired the fallback-arm exception: this arm carried
-        # {formulation, gamma1, gamma2} only while the freeze was Formulation 3,
-        # which cannot express state-awareness removal at any parameter setting.
-        # Under the multiplicative freeze it is nested like every other arm and
-        # anchors to Configuration 7, not to the study's Formulation 1 runs.
         "fedmaq_no_state": {"gamma1"},
-        # Configuration 5: KD removed. soft_voting goes with it as INAPPLICABLE
-        # (it weights teacher logits, and this arm distills nothing) -- but it
-        # only registers as a *difference* if the freeze turned it on.
         "fedmaq_no_kd": {"kd_epochs"} | ({"soft_voting"} & frozen),
-        # Configuration 8: the frozen refinement layer removed. Removing the
-        # layer is removing exactly what was frozen, no more and no less.
         "fedmaq_no_refinements": set(frozen),
     }
 
@@ -147,7 +117,6 @@ def test_ablation_arms_share_one_refinement_layer():
     on may deviate, and only in the arms that remove that signal.
     """
     full = _algorithm_cfg("fedmaq")
-    # Arms that remove an awareness signal must carry the layer untouched.
     for arm in ("fedmaq_no_resource", "fedmaq_no_data", "fedmaq_no_state"):
         arm_cfg = _algorithm_cfg(arm)
         for flag in REFINEMENTS:

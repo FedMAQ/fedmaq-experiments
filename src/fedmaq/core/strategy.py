@@ -137,7 +137,6 @@ class PhysicalCostModel:
         client's compute speed. Both are supplied by the algorithm's strategy hook
         so this method carries no per-algorithm branching.
         """
-        # Speed in bytes per second (from Mbps)
         upload_speed = (self.client_upload_bw[cid] * 10**6) / 8.0
         download_speed = (self.client_download_bw[cid] * 10**6) / 8.0
         comp_speed = self.client_comp_speed[cid] * compute_scale

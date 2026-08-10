@@ -33,14 +33,11 @@ from fedmaq.core.telemetry import TelemetryManager
 @pytest.fixture
 def mock_dataset(monkeypatch):
     """Fixture to mock torchvision dataset download and loading."""
-    # Create 100 samples of 1-channel 28x28 images (MNIST-like)
     mock_data = torch.randn(100, 1, 28, 28)
     mock_labels = torch.randint(0, 10, (100,))
     mock_ds = TensorDataset(mock_data, mock_labels)
-    # Add targets attribute for target extraction helper
     mock_ds.targets = mock_labels
 
-    # Patch load_dataset to return the mock dataset
     monkeypatch.setattr("fedmaq.core.partitioning.load_dataset", lambda name, train=True: mock_ds)
     return mock_ds
 
@@ -72,21 +69,17 @@ def test_model_factory_and_parameters():
     cifar_model = get_model("cifar10", num_classes=10)
     assert isinstance(cifar_model, MobileNetV2GN)
 
-    # ResNet18GN is still available via explicit model_name override
     resnet_model = get_model("cifar10", num_classes=10, model_name="resnet18gn")
     assert isinstance(resnet_model, ResNet18GN)
 
-    # Test parameter helpers
     params = get_model_parameters(model)
     assert isinstance(params, list)
     assert len(params) > 0
     assert isinstance(params[0], np.ndarray)
 
-    # Modify parameters and load back
     new_params = [p * 2.0 for p in params]
     set_model_parameters(model, new_params)
 
-    # Verify modification
     re_extracted = get_model_parameters(model)
     for p_new, p_re in zip(new_params, re_extracted, strict=True):
         np.testing.assert_allclose(p_new, p_re, rtol=1e-5)
@@ -103,12 +96,9 @@ def test_set_model_parameters_raises_on_mismatch():
     simple = get_model("mnist", num_classes=10)  # SimpleCNN
     simple_params = get_model_parameters(simple)
 
-    # Count mismatch: drop a tensor.
     with pytest.raises(ValueError, match="count mismatch"):
         set_model_parameters(simple, simple_params[:-1])
 
-    # Shape mismatch at matching count: TinyCNN has the same tensor count as
-    # SimpleCNN for 1-channel inputs but different conv widths (16 vs 32).
     tiny_params = get_model_parameters(TinyCNN(in_channels=1, num_classes=10))
     assert len(tiny_params) == len(simple_params)
     with pytest.raises(ValueError, match="shape mismatch"):
@@ -120,20 +110,16 @@ def test_mobilenetv2gn_architecture():
     model = MobileNetV2GN(in_channels=3, num_classes=10)
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    # ~2.3M params — sanity check it's in the right ballpark (not ResNet18GN's ~11M)
     assert 2_000_000 < total_params < 3_000_000, f"Unexpected param count: {total_params}"
 
-    # Forward pass with CIFAR-10 shaped input
     x = torch.randn(2, 3, 32, 32)
     y = model(x)
     assert y.shape == (2, 10)
 
-    # CIFAR-100 variant
     model_100 = MobileNetV2GN(in_channels=3, num_classes=100)
     y_100 = model_100(x)
     assert y_100.shape == (2, 100)
 
-    # get/set parameter round-trip
     params = get_model_parameters(model)
     model2 = MobileNetV2GN(in_channels=3, num_classes=10)
     set_model_parameters(model2, params)
@@ -141,14 +127,12 @@ def test_mobilenetv2gn_architecture():
     for p1, p2 in zip(params, params2, strict=True):
         np.testing.assert_allclose(p1, p2, rtol=1e-5)
 
-    # Invalid model_name raises
     with pytest.raises(ValueError, match="Unknown CIFAR model"):
         get_model("cifar10", num_classes=10, model_name="nonexistent")
 
 
 def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatch):
     """Test Dirichlet partitioning with public reserve and local caching."""
-    # Patch CACHE_DIR to temp directory for testing
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
     num_clients = 3
@@ -156,7 +140,6 @@ def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatc
     num_public = 10
     seed = 42
 
-    # First run (generates cache)
     pub_idx1, client_dict1 = generate_partition_indices(
         "mnist", num_clients, alpha, num_public, seed
     )
@@ -166,12 +149,10 @@ def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatc
     total_client_samples = sum(len(indices) for indices in client_dict1.values())
     assert len(pub_idx1) + total_client_samples == 100
 
-    # Second run (retrieves from cache)
     pub_idx2, client_dict2 = generate_partition_indices(
         "mnist", num_clients, alpha, num_public, seed
     )
 
-    # Verify determinism and cache retrieval
     assert pub_idx1 == pub_idx2
     for k in client_dict1.keys():
         assert client_dict1[k] == client_dict2[k]

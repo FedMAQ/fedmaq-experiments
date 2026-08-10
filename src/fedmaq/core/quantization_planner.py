@@ -1,9 +1,4 @@
-"""Owns FedMAQ's "how q is chosen" concept: probe -> EMA-smooth -> normalize -> assign.
-
-Consolidates state that was previously scattered across ``FedMAQHook`` fields
-(``_grad_norm_model``, ``_grad_norm_ema``, ``_round_client_q``, ``_last_grad_norms``,
-``_last_assigned_q``) into one planner with one output value, :class:`QuantPlan`.
-"""
+"""FedMAQ quantization planning."""
 
 from __future__ import annotations
 
@@ -24,24 +19,12 @@ from fedmaq.core.partitioning import get_client_loader
 
 logger = logging.getLogger(__name__)
 
-# Permissible bit-width set per manuscript §3.3.3: Q = {1,...,8, 16, 32}.
-# 16/32-bit tiers are effectively "escape" precision levels for well-resourced
-# clients; reachability depends on c_unit and configured memory range (see
-# conf/algorithm/fedmaq.yaml).
 DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
 
-# A single stochastic gradient-norm probe: model + a client's (images, labels)
-# batch in, per-client scalar norm out. The real adapter runs one forward+backward
-# pass; tests inject a synthetic probe to drive plan_round without a dataset.
 GradNormProbe = Callable[[nn.Module, torch.Tensor, torch.Tensor], float]
 
-# Which Tier-2 constants each formulation actually consumes (see
-# compute_fedmaq_q_k_t). A constant listed here is read with no default, so a
-# renamed or misspelled key raises instead of falling back to a plausible value
-# and burning a grid run on the wrong formula. Constants absent from a
-# formulation's tuple are inert for that run and keep their defaults.
 FORMULATION_CONSTANTS: dict[int, tuple[str, ...]] = {
-    0: (),  # Resource-only hard cap: no Tier-2 signal, no constants.
+    0: (),
     1: ("gamma1", "gamma2"),
     2: ("gamma1", "gamma2"),
     3: ("lambda_val",),
@@ -101,10 +84,6 @@ class _QuantParams:
             tau_g=constant("tau_g", 0.5),
             tau_n=constant("tau_n", 0.5),
             bit_widths=tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)),
-            # Removal flag for the manuscript §4.3.7 leave-one-out arm that drops
-            # Tier-1 resource awareness. Absent means "nothing removed", so the
-            # default restores full FedMAQ behaviour rather than silently
-            # disabling a component the way a False default would.
             resource_aware=bool(alg_cfg.get("resource_aware", True)),
         )
 
@@ -157,34 +136,24 @@ def compute_fedmaq_q_k_t(
     reproducible baselines occupy. Capacity is a simulated scalar consumed only
     here, so lifting the cap costs no real memory.
     """
-    # Normalized signals
     tilde_g = g_k / g_max if g_max > 0.0 else 0.0
     tilde_n = n_k / n_max if n_max > 0.0 else 0.0
 
-    # Tier 1 hard cap: Q_max = floor(c_k / c_unit), kept raw (unsnapped) so it can
-    # be combined with the raw Tier-2 target below before a single floor-into-Q.
     q_k_max_raw = max(1.0, np.floor(c_k / c_unit))
 
-    # Tier 2 soft quality target based on the formulation
     q_hat: float
     if formulation == 0:
-        # Alternative 0: Resource-Only hard cap — no soft quality signal.
-        # The soft target is always q_max; only Tier-1 constrains the final value.
         q_hat = q_max
     elif formulation == 1:
-        # Alternative 1: Linear Sum
         term = gamma1 * tilde_g + gamma2 * tilde_n
         q_hat = q_min + np.round((q_max - q_min) * term)
     elif formulation == 2:
-        # Alternative 2: Multiplicative
         term = (tilde_g**gamma1) * (tilde_n**gamma2)
         q_hat = q_min + np.round((q_max - q_min) * term)
     elif formulation == 3:
-        # Alternative 3: Gradient-Primary, Data-Modulated
         modulator = (1.0 + lambda_val * tilde_n) / (1.0 + lambda_val)
         q_hat = q_min + np.round((q_max - q_min) * tilde_g * modulator)
     elif formulation == 4:
-        # Alternative 4: Threshold-Based Staged Rule
         q_mid = int(np.round((q_max + q_min) / 2.0))
         if tilde_g >= tau_g and tilde_n >= tau_n:
             q_hat = q_max
@@ -193,17 +162,9 @@ def compute_fedmaq_q_k_t(
         else:
             q_hat = q_min
     else:
-        # No silent fallback: an unrecognized formulation used to resolve to q_min,
-        # which is a valid-looking assignment produced by no formulation at all.
         raise ValueError(f"formulation={formulation} is not one of {sorted(FORMULATION_CONSTANTS)}")
 
-    # Clamp intermediate result to the configured [q_min, q_max] soft-target range.
     q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
-    # Combine raw Tier-1 cap and raw Tier-2 target via min(), then floor into the
-    # permissible set Q exactly once: q_k^(t) = max{q in Q | q <= min(Q_k^max, q_hat_k^(t))}.
-    # Memory-limited clients may receive fewer bits than q_min — intentional, the
-    # physical bound wins over the soft quality target. With resource awareness
-    # removed there is no Tier-1 term to take the min against, so q_hat stands alone.
     combined = q_hat if not resource_aware else min(q_k_max_raw, q_hat)
     return _snap_floor(combined, bit_widths)
 
@@ -298,10 +259,6 @@ class QuantizationPlanner:
             n_k = partition_dataset_size(client_indices_dict, pid)
             dataset_sizes.append(n_k)
 
-            # seed=None falls back to the global torch RNG for the shuffle, whose
-            # state drifts differently under concurrent vs. serial client execution
-            # (client_gpus). A deterministic per-client-per-round seed removes that
-            # dependency while still varying the sampled batch across rounds.
             loader = get_client_loader(
                 dataset_name=ctx.dataset_name,
                 client_id=pid,
@@ -315,8 +272,6 @@ class QuantizationPlanner:
                 images, labels = images.to(ctx.device), labels.to(ctx.device)
                 norm = self._probe(temp_model, images, labels)
             except ValueError:
-                # F6: a shape/count mismatch (raised by set_model_parameters) is a
-                # config/architecture bug, not a transient batch fault — fail loud.
                 raise
             except Exception as exc:
                 logger.warning(

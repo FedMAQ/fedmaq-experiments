@@ -24,7 +24,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to sys.path if not present
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from omegaconf import OmegaConf
@@ -57,7 +56,6 @@ def resolve_matrix_path(matrix_arg: str) -> Path:
     if path.exists() and path.is_file():
         return path
 
-    # Try appending .yaml or looking in conf/matrix/
     if not matrix_arg.endswith(".yaml"):
         matrix_arg += ".yaml"
 
