@@ -2,7 +2,7 @@
 name: docs-audit
 description: >-
   Full sweep of the tracked context surface (AGENTS.md, CLAUDE.md, CONTEXT.md,
-  .agent/rules/, .agents/skills/, docs/adr/, docs/agents/, docs/experiments/, docs/audits/)
+  .agents/rules/, .agents/skills/, docs/adr/, docs/agents/, docs/experiments/, docs/audits/)
   for staleness, duplicated facts, dangling references, and drift from the
   layout in ADR-0015. Auto-fixes mechanical issues, flags judgment calls.
   Use when asked to audit the docs system, or after a batch of doc edits.
@@ -13,7 +13,7 @@ description: >-
 Conventions enforced: `CONTEXT.md` § Working conventions, and
 [ADR-0015](../../../docs/adr/0015-workspace-agentic-context-contract.md) for the layout.
 
-1. **Inventory.** `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `.agent/rules/*.md`,
+1. **Inventory.** `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `.agents/rules/*.md`,
    `.agents/skills/**/SKILL.md`, `docs/**/*.md`.
    A tracked `HANDOFF.md` — or any committed next-session file — is itself a finding.
    Flag it; do not audit its contents.
@@ -24,7 +24,7 @@ Conventions enforced: `CONTEXT.md` § Working conventions, and
    - **Run counts are the known-recurring case.** No tracked file may carry one.
      Totals belong in the pinned dispatch Issue; per-stage arithmetic is pinned by
      `tests/test_simulation.py`, not by prose. Any run count in `docs/` or
-   `.agent/` is a finding, even if currently correct.
+   A legacy singular agent directory is a finding, even if currently correct.
 
 3. **Dangling references.** Relative links resolving to real files; `ADR-NNNN`
    citations resolving to a file in `docs/adr/`; skill names in prose resolving to a
@@ -36,7 +36,7 @@ Conventions enforced: `CONTEXT.md` § Working conventions, and
    Superseded material is deleted; git history is the record.
 
 5. **Layout drift.** Compare against ADR-0015. Flag: always-loaded rules growing past
-   a screen or two; reference material in `.agent/rules/` that belongs in
+   a screen or two; reference material in `.agents/rules/` that belongs in
    `docs/agents/`; shared skills outside `.agents/skills/`; a second registry; live
    state accumulating in a tracked file.
 

@@ -1,10 +1,10 @@
 # FedMAQ Experiments
 
 - Read `CONTEXT.md` before naming shared domain concepts or resolving cross-repository authority.
-@.agent/rules/experiment-design.md
-@.agent/rules/engineering.md
-@.agent/rules/comment-hygiene.md
-@.agent/rules/agentic-context.md
+@.agents/rules/experiment-design.md
+@.agents/rules/engineering.md
+@.agents/rules/comment-hygiene.md
+@.agents/rules/agentic-context.md
 - Agents do not run experiments; emit paste-ready JupyterHub commands and await user-supplied results.
 - Do not edit configurations frozen downstream of the `pre-registration` tag.
 - Read `docs/adr/` for durable decisions and `docs/agents/` for task-specific reference.

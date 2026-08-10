@@ -22,7 +22,7 @@ Every repository uses this layout:
 AGENTS.md                 canonical shared instruction index
 CLAUDE.md                 imports AGENTS.md
 CONTEXT.md                hub glossary or spoke orientation
-.agent/rules/             stable, tool-neutral rules
+.agents/rules/            stable, tool-neutral rules
 docs/agents/              consult-on-demand references
 docs/adr/                 durable decisions
 .claude/, .Codex/         tool-native extensions only
@@ -42,7 +42,7 @@ history is the historical record. Tracked handoffs, changelogs, and manual
 status queues are prohibited. Durable artifact inventories may remain only
 when they describe committed artifacts rather than a work queue.
 
-Shared rules are relocated directly to `.agent/rules/`; no symlinks, copied
+Shared rules are relocated directly to `.agents/rules/`; no symlinks, copied
 compatibility files, or transitional aliases are retained. Claude Code skills
 and settings, and Codex-only configuration, remain native to their tools.
 

@@ -9,7 +9,7 @@ conf/                 # Hydra config groups
 src/fedmaq/
   core/               # shared Flower simulation & telemetry utilities
   baselines/          # SOTA baseline implementations
-.agent/rules/         # stable tool-neutral domain rules
+.agents/rules/        # stable tool-neutral domain rules
 docs/adr/             # every decision, one file per decision
 docs/agents/          # consult-on-demand reference (execution model, issue tracker)
 ```

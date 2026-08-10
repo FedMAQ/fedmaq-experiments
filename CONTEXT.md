@@ -13,7 +13,7 @@ Multi-adaptive quantization and ensemble distillation for memory-constrained fed
 ## Authority map
 
 Six-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
-index its `.agent/rules/` rather than duplicating domain content.
+index its `.agents/rules/` rather than duplicating domain content.
 
 | Repo | Owns | Agent entry |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ index its `.agent/rules/` rather than duplicating domain content.
 | [fedmaq-journal-paper](../fedmaq-journal-paper/) | IEEE Access submission | `AGENTS.md`, `CLAUDE.md` |
 
 **Cross-repo rule:** non-experiments repos must not duplicate domain content; they
-index `../fedmaq-experiments/.agent/rules/`. The workspace agentic-context
+index `../fedmaq-experiments/.agents/rules/`. The workspace agentic-context
 contract is [ADR-0015](docs/adr/0015-workspace-agentic-context-contract.md).
 
 **Within this repo**, when two sources disagree: `conf/**` beats prose describing
