@@ -1,8 +1,6 @@
 {
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": false
-  },
   "worktree": {
     "bgIsolation": "none"
-  }
+  },
+  "enabledPlugins": {}
 }
