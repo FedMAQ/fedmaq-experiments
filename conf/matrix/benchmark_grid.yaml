@@ -26,7 +26,7 @@
 # Same group, same overrides, same directories -- six of these 42 runs, not six
 # more. They are the only confirmatory runs preceding the §4.3.1 tag, admissible
 # because FedAvg carries none of the three artifacts that tag locks. Decision 71
-# and docs/RUNBOOK.md Stage 1c.
+# and docs/agents/execution-model.md Stage 1c.
 phase: formal
 experiment_group: benchmark_grid
 dataset: cifar10
