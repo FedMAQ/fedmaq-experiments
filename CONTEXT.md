@@ -157,10 +157,16 @@ accuracy. **Demoted 2026-08-06 from primary criterion to descriptor**, reported 
 the two above, never as the verdict. The target accuracy floor it rests on
 (0.9 x FedAvg-at-equal-rounds) is **superseded**; cite it as such.
 _Avoid_: **bits-to-target-accuracy**, **bits-to-accuracy**, **cumulative-MB-to-target**
-— all three are live in the manuscript as non-canonical spellings of this one quantity.
-A 2026-08-07 keyword sweep on `bytes-to-target` alone returned Ch2 clean; the chapter
-was carrying the demoted quantity as primary under the `bits-` spelling. **Sweep the
-whole variant set or the sweep proves nothing.**
+— three non-canonical spellings of this one quantity. **All three are clear as of
+2026-08-18**: swept across `fedmaq-manuscript` and the pinned pre-v6 worktree
+`manuscript-2026-08`, zero occurrences in either, with canonical `bytes-to-target`
+present and correct in Ch1, Ch4 and Ch5 (`fedmaq-manuscript#12`, reproduced
+independently under `#19`). The list stays because it is the rename target if a variant
+reappears, not because a variant is outstanding.
+
+Keep the lesson that produced it. A 2026-08-07 keyword sweep on `bytes-to-target` alone
+returned Ch2 clean while the chapter was carrying the demoted quantity as primary under
+the `bits-` spelling. **Sweep the whole variant set or the sweep proves nothing.**
 
 **Rounds-to-target**:
 A **different** quantity — the rounds term of the bytes-to-target product, not a
