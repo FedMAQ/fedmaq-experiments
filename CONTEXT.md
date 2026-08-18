@@ -147,12 +147,13 @@ Where a scalar head-to-head is required: top-1 accuracy at $B = \min$ over the a
 compared of each arm's final cumulative MB. The budget is read off the data, chosen by
 nobody — which is what keeps it free of the tunable parameter the $k$-consecutive rule
 was rejected for.
+
+**"Iso-byte" is also ADR-0016's own wording for the v2 study's budget, which is a
+different quantity.** Read the paired per-seed byte budget entry below before taking any
+passage that says "iso-byte" to mean this term.
 _Avoid_: iso-byte budget, matched-byte budget, equal-expenditure budget (all appear in
 pass notes as informal shorthand; none is the canonical term). Note that the $R = 100$
 round budget equalizes **training** expenditure, not bytes — do not conflate the two.
-**"Iso-byte" is also ADR-0016's own wording for the v2 study's budget, which is a
-different quantity** — see **Paired per-seed byte budget** below before reading a
-passage that says "iso-byte" as meaning this term.
 
 **Bytes-to-target**:
 Cumulative megabytes transmitted per client to reach a per-configuration target
@@ -202,11 +203,14 @@ _Avoid_: **the winning repair** before a freeze artifact records one
 The v2 scalar head-to-head. For a paired comparison and seed $s$, the minimum of the two
 same-seed terminal cumulative-byte budgets, defined independently per pair; both curves are
 scored there by linear interpolation within each curve's own observed inclusive range, never
-extrapolated. **v2-only.** Prose that sets a number from this against a number from v1's
-scorer asserts a comparison ADR-0016 forbids, and nothing in the build will catch it.
-_Avoid_: **iso-byte budget** (ADR-0016's internal wording; non-canonical in prose);
-**minimum common cumulative-MB budget** (v1's, a *different* quantity — one budget across
-arms read discretely off the data, not a per-pair per-seed interpolated one)
+extrapolated. **v2-only.**
+
+**Not the minimum common cumulative-MB budget above.** That term is canonical and correct in its
+own place; this is the confusable sibling, and the two measure different things — one budget
+across the arms compared, read discretely off the data, against a per-pair per-seed budget read
+by interpolation. Prose that sets a number from one against a number from the other asserts a
+comparison ADR-0016 forbids, and nothing in the build will catch it.
+_Avoid_: **iso-byte budget** (ADR-0016's internal wording; non-canonical in prose)
 
 **Study 1 / Study 2**:
 Planning labels only, used in `fedmaq-manuscript`'s chapter-skeleton ADR (its ADR-0005, not
