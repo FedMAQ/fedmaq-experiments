@@ -150,6 +150,9 @@ was rejected for.
 _Avoid_: iso-byte budget, matched-byte budget, equal-expenditure budget (all appear in
 pass notes as informal shorthand; none is the canonical term). Note that the $R = 100$
 round budget equalizes **training** expenditure, not bytes — do not conflate the two.
+**"Iso-byte" is also ADR-0016's own wording for the v2 study's budget, which is a
+different quantity** — see **Paired per-seed byte budget** below before reading a
+passage that says "iso-byte" as meaning this term.
 
 **Bytes-to-target**:
 Cumulative megabytes transmitted per client to reach a per-configuration target
@@ -175,9 +178,53 @@ total bytes. Pair it with per-round payload or do not cite it.
 _Avoid_: **rounds-to-converge** (former Ch3 §3.3.2 wording, fixed 2026-08-07;
 `chapter_4.tex:280` is canonical)
 
+### Server-KD Repair Study (Section 5.5–5.7)
+
+The v2 arc's terms. The protocol itself is
+[ADR-0016](docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md); this names only what
+things are called. **No run, qualifier or dispatch counts here** — per the authority map
+those live in Issues and are stale in a tracked file by construction.
+
+**FedMAQ-v2**:
+The separately versioned exploratory study that changes only server-side KD, every non-KD
+factor locked to v1. Not a successor: v1's artifacts, configs and protocol are preserved
+untouched.
+_Avoid_: FedMAQ 2.0, FedMAQ-next, **the v2 fix** (presupposes the outcome)
+
+**Server-KD repair**:
+One of the five candidate families, never combined within a pass. `no_kd` is the mandatory
+anchor and is **itself a repair** — removing the mechanism is the trivial one, not the
+absence of a treatment. This is what keeps a no-advance outcome a finding rather than an
+empty result.
+_Avoid_: **the winning repair** before a freeze artifact records one
+
+**Paired per-seed byte budget** ($B^*_s$):
+The v2 scalar head-to-head. For a paired comparison and seed $s$, the minimum of the two
+same-seed terminal cumulative-byte budgets, defined independently per pair; both curves are
+scored there by linear interpolation within each curve's own observed inclusive range, never
+extrapolated. **v2-only.** Prose that sets a number from this against a number from v1's
+scorer asserts a comparison ADR-0016 forbids, and nothing in the build will catch it.
+_Avoid_: **iso-byte budget** (ADR-0016's internal wording; non-canonical in prose);
+**minimum common cumulative-MB budget** (v1's, a *different* quantity — one budget across
+arms read discretely off the data, not a per-pair per-seed interpolated one)
+
+**Study 1 / Study 2**:
+Planning labels only, used in `fedmaq-manuscript`'s chapter-skeleton ADR (its ADR-0005, not
+this repo's, which is the baseline stack) and the wayfinder tickets. They do **not** enter
+manuscript prose: Study 1 already contains something called the formulation study, so
+"Study 1" on the page invites a reader to hunt for a boundary the chapter never draws. In
+prose use the existing part-names for v1 and **the FedMAQ-v2 server-KD repair study** for v2.
+
+**FedDistill vs. the v2 literature's "FedKD"**:
+This project's baseline table names **Jeong et al. as FedDistill**. Part of the v2 candidate
+literature (Qi et al. 2025) calls that same work **FedKD** — which collides with this
+project's **FedKD baseline (Wu et al., 2022)** and again with the v2 candidate **FedKT (Mao
+et al., 2025)**. Three distinct works, overlapping names. Cite by author and year whenever
+the surrounding text is drawn from the v2 literature.
+
 ## Open items
 
-**Last updated**: 2026-08-07.
+**Last updated**: 2026-08-19.
 
 The Ch1-Ch6 prose fixes logged here through 2026-07-25 were applied directly to
 `fedmaq-manuscript` (main) and none remain. That is not a standing claim that the
