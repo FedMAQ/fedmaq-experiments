@@ -177,3 +177,64 @@ def build_run_command(
     if overrides:
         cmd.extend(overrides)
     return cmd
+
+
+def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
+    """Expand one ``conf/matrix/*.yaml`` into the concrete runs it dispatches.
+
+    Takes a plain container, not a ``DictConfig``: callers hold their own resolved
+    config and the expansion must not depend on OmegaConf's lazy interpolation.
+
+    ``seeds`` is per-run overridable, and that is load-bearing rather than
+    cosmetic. The exploration factorial's unrefined reference cell defines the
+    sigma every keep-or-drop call is judged against (ADR-0008), and a sigma
+    estimated from three seeds carries roughly +/-50% of itself, so that one cell
+    runs five. A plain ``heterogeneities x seeds x runs`` product therefore
+    overcounts every matrix that deepens a cell and undercounts none of them --
+    it silently disagrees with what was dispatched.
+
+    Expansion order is the dispatch order (``het``, then seed, then run), because
+    ``scripts/run_matrix.py`` resumes on position and reordering the sweep would
+    change which runs a ``--start_at`` skips.
+
+    Scope-agnostic by contract: it expands whatever matrix it is handed, including
+    ``ci_test`` and the smoke matrices. Any decision about which matrices are
+    reportable belongs to the caller, so that narrowing one caller cannot narrow
+    ``tests/test_simulation.py``'s guard over *every* file in ``conf/matrix/``.
+    """
+    seeds = [int(s) for s in matrix.get("seeds", [0])]
+    runs_spec = matrix.get("runs", []) or []
+
+    def seeds_for(run_item: dict) -> list[int]:
+        return [int(s) for s in run_item.get("seeds", seeds)]
+
+    # Matrix-level seeds first, so a matrix declaring no per-run seeds expands in
+    # exactly the order it did before per-run seeds existed.
+    all_seeds = list(seeds)
+    for run_item in runs_spec:
+        for s in seeds_for(run_item):
+            if s not in all_seeds:
+                all_seeds.append(s)
+
+    tasks: list[dict] = []
+    for het in matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]):
+        for seed in all_seeds:
+            for run_item in runs_spec:
+                if seed not in seeds_for(run_item):
+                    continue
+                alg = run_item.get("alg")
+                tasks.append(
+                    {
+                        "phase": matrix.get("phase", "smoke"),
+                        "dataset": matrix.get("dataset", "cifar10"),
+                        "model": matrix.get("model", "mobilenetv2"),
+                        "experiment_group": matrix.get("experiment_group", matrix_name),
+                        "algorithm_config": alg,
+                        "variant": run_item.get("variant", ""),
+                        "heterogeneity": het,
+                        "seed": seed,
+                        "label": run_item.get("label", alg),
+                        "overrides": list(run_item.get("overrides", []) or []),
+                    }
+                )
+    return tasks

@@ -278,37 +278,31 @@ def test_no_matrix_dispatches_two_runs_into_one_output_directory():
     the next matrix to sweep an override on one algorithm has no reason to know
     this rule exists.
     """
-    from scripts.common import get_canonical_output_dir
+    from scripts.common import expand_matrix, get_canonical_output_dir
 
     for path in sorted((Path(CONF_DIR).parent / "conf" / "matrix").glob("*.yaml")):
-        matrix = _matrix(path.stem)
-        runs = matrix.get("runs", [])
-        matrix_seeds = [int(s) for s in matrix.get("seeds", [0])]
-
         seen: dict[str, str] = {}
-        for het in matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]):
-            for run in runs:
-                label = str(run.get("label", run.get("alg")))
-                for seed in [int(s) for s in run.get("seeds", matrix_seeds)]:
-                    out = str(
-                        get_canonical_output_dir(
-                            phase=matrix.get("phase", "smoke"),
-                            dataset=matrix.get("dataset", "cifar10"),
-                            model=matrix.get("model", "mobilenetv2"),
-                            exp_group=matrix.get("experiment_group", path.stem),
-                            algorithm=run.get("alg"),
-                            heterogeneity=het,
-                            seed=seed,
-                            variant=run.get("variant", ""),
-                        )
-                    )
-                    assert out not in seen, (
-                        f"conf/matrix/{path.name}: runs {seen[out]!r} and {label!r} "
-                        f"both dispatch into {out}. Give each a distinct `variant:` "
-                        "-- otherwise only the last one to finish survives, and the "
-                        "sweep reports success either way."
-                    )
-                    seen[out] = label
+        for spec in expand_matrix(_matrix(path.stem), path.stem):
+            label = str(spec["label"])
+            out = str(
+                get_canonical_output_dir(
+                    phase=spec["phase"],
+                    dataset=spec["dataset"],
+                    model=spec["model"],
+                    exp_group=spec["experiment_group"],
+                    algorithm=spec["algorithm_config"],
+                    heterogeneity=spec["heterogeneity"],
+                    seed=spec["seed"],
+                    variant=spec["variant"],
+                )
+            )
+            assert out not in seen, (
+                f"conf/matrix/{path.name}: runs {seen[out]!r} and {label!r} "
+                f"both dispatch into {out}. Give each a distinct `variant:` "
+                "-- otherwise only the last one to finish survives, and the "
+                "sweep reports success either way."
+            )
+            seen[out] = label
 
 
 def test_primary_grid_files_dispatch_all_105_runs():

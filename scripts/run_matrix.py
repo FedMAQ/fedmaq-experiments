@@ -31,6 +31,7 @@ from omegaconf import OmegaConf
 from scripts.common import (
     SWEEP_STATUS_FILENAME,
     build_run_command,
+    expand_matrix,
     get_canonical_output_dir,
     get_sweep_group_dir,
     is_run_complete,
@@ -177,9 +178,10 @@ def main() -> None:
     total_rounds = int(cfg.get("total_rounds", 50))
     client_gpus = float(cfg.get("client_gpus", 1.0))
     experiment = cfg.get("experiment", None)
-    seeds = [int(s) for s in cfg.get("seeds", [0])]
-    heterogeneities = list(cfg.get("heterogeneities", ["dirichlet_alpha_0.1"]))
-    runs_spec = cfg.get("runs", [])
+    matrix = OmegaConf.to_container(cfg, resolve=True)
+    seeds = [int(s) for s in matrix.get("seeds", [0])]
+    heterogeneities = list(matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]))
+    runs_spec = matrix.get("runs", []) or []
 
     if args.only_labels:
         available = [str(r.get("label", r.get("alg"))) for r in runs_spec]
@@ -193,6 +195,7 @@ def main() -> None:
                 f"available labels: {available}"
             )
         runs_spec = [r for r in runs_spec if str(r.get("label", r.get("alg"))) in args.only_labels]
+        matrix["runs"] = runs_spec
 
     # A run may declare its own ``seeds:``, overriding the matrix-level list. This
     # exists so a single cell can be measured at more seeds than the rest of its
@@ -203,65 +206,46 @@ def main() -> None:
     def seeds_for(run_item) -> list[int]:
         return [int(s) for s in run_item.get("seeds", seeds)]
 
-    # Union across the matrix, matrix-level seeds first, so a matrix that declares
-    # no per-run seeds expands in exactly the order it did before this existed.
-    all_seeds = list(seeds)
-    for run_item in runs_spec:
-        for s in seeds_for(run_item):
-            if s not in all_seeds:
-                all_seeds.append(s)
-
-    # Expand all permutations into concrete run tasks
     tasks = []
-    for het in heterogeneities:
-        for seed in all_seeds:
-            for run_item in runs_spec:
-                if seed not in seeds_for(run_item):
-                    continue
-                alg = run_item.get("alg")
-                label = run_item.get("label", alg)
-                # Sweep-wide host overrides first, so a matrix file's own per-run
-                # override wins any collision. Several of those are load-bearing
-                # (``algorithm.post_process`` fixes which regime a run is comparable
-                # in), and a hand-typed flag must not be able to silently displace one.
-                overrides = list(args.overrides) + list(run_item.get("overrides", []))
-                # Set this whenever two runs in one matrix share an ``alg`` but
-                # differ by override, or they collide on the output directory.
-                variant = run_item.get("variant", "")
+    for spec in expand_matrix(matrix, matrix_path.stem):
+        output_dir = get_canonical_output_dir(
+            phase=spec["phase"],
+            dataset=spec["dataset"],
+            model=spec["model"],
+            exp_group=spec["experiment_group"],
+            algorithm=spec["algorithm_config"],
+            heterogeneity=spec["heterogeneity"],
+            seed=spec["seed"],
+            variant=spec["variant"],
+        )
+        # Sweep-wide host overrides first, so a matrix file's own per-run override
+        # wins any collision. Several of those are load-bearing
+        # (``algorithm.post_process`` fixes which regime a run is comparable in),
+        # and a hand-typed flag must not be able to silently displace one.
+        overrides = list(args.overrides) + spec["overrides"]
 
-                output_dir = get_canonical_output_dir(
-                    phase=phase,
-                    dataset=dataset,
-                    model=model,
-                    exp_group=exp_group,
-                    algorithm=alg,
-                    heterogeneity=het,
-                    seed=seed,
-                    variant=variant,
-                )
+        cmd = build_run_command(
+            dataset=spec["dataset"],
+            heterogeneity=spec["heterogeneity"],
+            algorithm=spec["algorithm_config"],
+            total_rounds=total_rounds,
+            seed=spec["seed"],
+            client_gpus=client_gpus,
+            target_dir=output_dir,
+            overrides=overrides,
+            experiment=experiment,
+        )
 
-                cmd = build_run_command(
-                    dataset=dataset,
-                    heterogeneity=het,
-                    algorithm=alg,
-                    total_rounds=total_rounds,
-                    seed=seed,
-                    client_gpus=client_gpus,
-                    target_dir=output_dir,
-                    overrides=overrides,
-                    experiment=experiment,
-                )
-
-                tasks.append(
-                    {
-                        "label": f"{label}-{het}-seed{seed}",
-                        "alg": alg,
-                        "het": het,
-                        "seed": seed,
-                        "output_dir": output_dir,
-                        "cmd": cmd,
-                    }
-                )
+        tasks.append(
+            {
+                "label": f"{spec['label']}-{spec['heterogeneity']}-seed{spec['seed']}",
+                "alg": spec["algorithm_config"],
+                "het": spec["heterogeneity"],
+                "seed": spec["seed"],
+                "output_dir": output_dir,
+                "cmd": cmd,
+            }
+        )
 
     print("=" * 70)
     print(f"FedMAQ Matrix Sweep: {exp_group.upper()}")
