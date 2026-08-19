@@ -12,6 +12,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedmaq_no_data": {
@@ -20,6 +23,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedmaq_no_state": {
@@ -28,6 +34,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedmaq_no_kd": {
@@ -36,6 +45,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedavg_kd": {
@@ -44,6 +56,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedmaq": {
@@ -52,6 +67,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },
@@ -106,6 +124,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedpaq": {
@@ -114,6 +135,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "dadaquant": {
@@ -122,6 +146,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "feddistill": {
@@ -130,6 +157,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedkd": {
@@ -138,6 +168,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },
@@ -213,6 +246,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedprox": {
@@ -221,6 +257,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedpaq": {
@@ -229,6 +268,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "dadaquant": {
@@ -237,6 +279,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "feddistill": {
@@ -245,6 +290,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedkd": {
@@ -253,6 +301,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         },
         "fedmaq": {
@@ -261,6 +312,9 @@
           ],
           "post_process": [
             true
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },
@@ -384,6 +438,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },
@@ -432,6 +489,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            50
           ]
         }
       },
@@ -454,6 +514,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            50
           ]
         }
       },
@@ -498,6 +561,9 @@
           ],
           "post_process": [
             false
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },
@@ -524,6 +590,9 @@
           ],
           "post_process": [
             true
+          ],
+          "total_rounds": [
+            100
           ]
         }
       },

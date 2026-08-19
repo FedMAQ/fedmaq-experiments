@@ -118,9 +118,14 @@ def expected_identities(matrix_names: tuple[str, ...] = REPORTABLE_MATRICES) -> 
                 # granularity that lets identity_key omit both fields: the key
                 # already carries the group and the algorithm config.
                 regime = group["regimes"].setdefault(
-                    spec["algorithm_config"], {"phases": [], "post_process": []}
+                    spec["algorithm_config"],
+                    {"phases": [], "post_process": [], "total_rounds": []},
                 )
-                for field, value in (("phases", spec["phase"]), ("post_process", post_process)):
+                for field, value in (
+                    ("phases", spec["phase"]),
+                    ("post_process", post_process),
+                    ("total_rounds", spec["total_rounds"]),
+                ):
                     if value not in regime[field]:
                         regime[field].append(value)
                 group["runs"].append(

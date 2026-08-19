@@ -229,6 +229,11 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
                         "dataset": matrix.get("dataset", "cifar10"),
                         "model": matrix.get("model", "mobilenetv2"),
                         "experiment_group": matrix.get("experiment_group", matrix_name),
+                        # A per-matrix property, not a per-phase one: `explore`
+                        # covers both the 50-round factorial passes and the
+                        # 100-round formulation study, so nothing downstream may
+                        # infer the round budget from the phase.
+                        "total_rounds": int(matrix.get("total_rounds", 50)),
                         "algorithm_config": alg,
                         "variant": run_item.get("variant", ""),
                         "heterogeneity": het,

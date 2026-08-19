@@ -214,7 +214,7 @@ def test_expected_runs_snapshot_is_current():
     )
 
 
-def test_each_reportable_arm_carries_one_phase_and_one_post_process_regime():
+def test_each_reportable_arm_carries_one_regime():
     """``identity_key`` omits ``phase`` and ``post_process``, which ADR-0009 also
     lists as identity fields. That is admissible only while both are functions of
     ``(experiment_group, algorithm_config)`` -- two fields the key does carry --
@@ -226,6 +226,12 @@ def test_each_reportable_arm_carries_one_phase_and_one_post_process_regime():
     dispatched one arm into two regimes under one group would make the omitted
     fields load-bearing again, and the certificate would start pairing two real
     runs onto one identity.
+
+    ``total_rounds`` is asserted here for a different reason: the closure
+    certificate scores each group against the budget the manifest declares, so a
+    group spanning two budgets would leave half of it certified against the wrong
+    one. It is a per-matrix property and not a per-phase one -- ``explore`` covers
+    both the 50-round factorial passes and the 100-round formulation study.
     """
     manifest = json.loads(
         (Path(__file__).parent.parent / "docs" / "freeze" / "expected_runs.json").read_text(
@@ -236,13 +242,24 @@ def test_each_reportable_arm_carries_one_phase_and_one_post_process_regime():
         f"{group}/{arm}": regime
         for group, body in manifest["groups"].items()
         for arm, regime in body["regimes"].items()
-        if len(regime["phases"]) != 1 or len(regime["post_process"]) != 1
+        if any(len(regime[field]) != 1 for field in ("phases", "post_process", "total_rounds"))
     }
     assert not offenders, (
-        f"{offenders} dispatch one arm under one group into more than one phase or "
-        "post-processing regime. scripts/common.identity_key leaves both fields out "
-        "of the run key on the grounds that this cannot happen; restore them there, "
-        "or split the group."
+        f"{offenders} dispatch one arm under one group into more than one phase, "
+        "post-processing regime or round budget. scripts/common.identity_key leaves "
+        "the first two out of the run key on the grounds that this cannot happen, and "
+        "closure_certificate scores a group against the third; restore them there, or "
+        "split the group."
+    )
+
+    budgets = {
+        group: {n for regime in body["regimes"].values() for n in regime["total_rounds"]}
+        for group, body in manifest["groups"].items()
+    }
+    assert budgets["pass2_factorial"] == {50} and budgets["formulation_study"] == {100}, (
+        "Both groups carry phase 'explore' and they disagree on the round budget, "
+        "which is why the certificate reads it per group instead of assuming 100. "
+        f"Got {budgets}."
     )
 
 

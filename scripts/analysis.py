@@ -819,11 +819,34 @@ def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict
     }
 
 
+def _declared_round(name: str, body: dict) -> int:
+    """The round budget the matrices declare for one group.
+
+    Read from the manifest, never assumed and never inferred from ``phase``:
+    ``explore`` covers both the 50-round factorial passes and the 100-round
+    formulation study, so a hardcoded 100 marks every ``pass2_*`` run incomplete
+    and makes ``all_closed`` unreachable on a fully dispatched grid -- a gate that
+    cannot report success is not a gate.
+
+    Raises rather than guessing. A group spanning two round budgets is a manifest
+    defect that ``test_each_reportable_arm_carries_one_regime`` fails on, and
+    certifying half of it against the wrong budget would be the quieter error.
+    """
+    declared = {n for regime in body.get("regimes", {}).values() for n in regime["total_rounds"]}
+    if len(declared) != 1:
+        raise ValueError(
+            f"experiment group {name!r} declares round budgets {sorted(declared)}; "
+            "the closure certificate needs exactly one. Regenerate "
+            "docs/freeze/expected_runs.json, or split the group."
+        )
+    return declared.pop()
+
+
 def closure_certificate(
     runs: list[RunRecord],
     manifest_groups: dict[str, dict],
     groups: list[str] | None = None,
-    expected_round: int = 100,
+    expected_round: int | None = None,
 ) -> dict:
     """Whether every run the design promises is present, once, and finished.
 
@@ -839,6 +862,13 @@ def closure_certificate(
     primary grid, the formulation study, the ablation and the uniform-memory
     control, and a certificate that green-lights the grid alone would pass while
     three of the four studies it reports were short.
+
+    Each group is scored against its *own* round budget, read from the manifest by
+    :func:`_declared_round`. ``expected_round`` overrides that and is not the
+    source of truth: the exploration factorial passes run 50 rounds and the
+    formulation study 100 under the same ``phase``, so one hardcoded budget marks
+    30 fully-dispatched runs incomplete and puts ``all_closed`` permanently out of
+    reach.
 
     **Observation is scoped by group membership, never by a global set
     difference.** ``discover_runs`` also globs ``multirun/`` and
@@ -859,14 +889,17 @@ def closure_certificate(
     names = sorted(manifest_groups) if groups is None else list(groups)
     certified: dict[str, dict] = {}
     for name in names:
-        expected = set(manifest_groups[name]["runs"])
+        body = manifest_groups[name]
+        group_round = expected_round or _declared_round(name, body)
+        expected = set(body["runs"])
         members = [r for r in runs if r.experiment_group == name]
         observed = Counter(run_identity(r) for r in members)
-        completeness = round_completeness(members, expected_round=expected_round)
+        completeness = round_completeness(members, expected_round=group_round)
         missing = sorted(expected - set(observed))
         unexpected = sorted(set(observed) - expected)
         duplicate = {key: count for key, count in sorted(observed.items()) if count > 1}
         certified[name] = {
+            "expected_round": group_round,
             "expected": len(expected),
             "observed": len(members),
             "missing": missing,
@@ -877,9 +910,8 @@ def closure_certificate(
             "closed": not (missing or unexpected or duplicate) and completeness["all_complete"],
         }
     return {
-        "expected_round": expected_round,
         "groups": certified,
-        "all_closed": all(body["closed"] for body in certified.values()),
+        "all_closed": all(group["closed"] for group in certified.values()),
     }
 
 

@@ -1363,6 +1363,44 @@ def test_closure_certificate_flags_the_42_of_105_shortfall(tmp_path):
     assert certificate["all_closed"] is False
 
 
+def test_closure_certificate_closes_a_complete_fifty_round_group(tmp_path):
+    """``pass2_factorial`` runs 50 rounds, and it must be able to close.
+
+    ``phase: explore`` covers both this group and the 100-round formulation
+    study, so a certificate that scored every group at R=100 would mark all 26 of
+    these runs incomplete on a fully dispatched sweep and put ``all_closed``
+    permanently out of reach. A gate that cannot report success is not a gate,
+    and it fails in the direction nobody investigates -- the same shape as the
+    ungrouped-run case one test below.
+    """
+    manifest = _expected_runs_manifest()
+    runs = []
+    for identity in manifest["pass2_factorial"]["runs"]:
+        _, group, algorithm, variant, alpha, formulation, seed = identity.split("|")
+        runs.append(
+            _write_run(
+                tmp_path,
+                algorithm,
+                None if formulation == "fnone" else int(formulation[1:]),
+                int(seed[1:]),
+                [0.5] * 50,
+                list(range(1, 51)),
+                group=group,
+                alpha=float(alpha[1:]),
+                variant=variant,
+            )
+        )
+
+    certificate = closure_certificate(runs, manifest, groups=["pass2_factorial"])
+    factorial = certificate["groups"]["pass2_factorial"]
+
+    assert len(runs) == 26
+    assert factorial["expected_round"] == 50
+    assert factorial["missing"] == [] and factorial["unexpected"] == []
+    assert factorial["closed"] is True
+    assert certificate["all_closed"] is True
+
+
 def test_closure_certificate_ignores_runs_belonging_to_no_group(tmp_path):
     """A bare scripts/run.py invocation lands outside the canonical 7-part path,
     so ``phase_and_group_of`` gives it no group and ``discover_runs`` still finds
