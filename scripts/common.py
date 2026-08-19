@@ -177,3 +177,123 @@ def build_run_command(
     if overrides:
         cmd.extend(overrides)
     return cmd
+
+
+def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
+    """Expand one ``conf/matrix/*.yaml`` into the concrete runs it dispatches.
+
+    Takes a plain container, not a ``DictConfig``: callers hold their own resolved
+    config and the expansion must not depend on OmegaConf's lazy interpolation.
+
+    ``seeds`` is per-run overridable, and that is load-bearing rather than
+    cosmetic. The exploration factorial's unrefined reference cell defines the
+    sigma every keep-or-drop call is judged against (ADR-0008), and a sigma
+    estimated from three seeds carries roughly +/-50% of itself, so that one cell
+    runs five. A plain ``heterogeneities x seeds x runs`` product therefore
+    overcounts every matrix that deepens a cell and undercounts none of them --
+    it silently disagrees with what was dispatched.
+
+    Expansion order is the dispatch order (``het``, then seed, then run), because
+    ``scripts/run_matrix.py`` resumes on position and reordering the sweep would
+    change which runs a ``--start_at`` skips.
+
+    Scope-agnostic by contract: it expands whatever matrix it is handed, including
+    ``ci_test`` and the smoke matrices. Any decision about which matrices are
+    reportable belongs to the caller, so that narrowing one caller cannot narrow
+    ``tests/test_simulation.py``'s guard over *every* file in ``conf/matrix/``.
+    """
+    seeds = [int(s) for s in matrix.get("seeds", [0])]
+    runs_spec = matrix.get("runs", []) or []
+
+    def seeds_for(run_item: dict) -> list[int]:
+        return [int(s) for s in run_item.get("seeds", seeds)]
+
+    # Matrix-level seeds first, so a matrix declaring no per-run seeds expands in
+    # exactly the order it did before per-run seeds existed.
+    all_seeds = list(seeds)
+    for run_item in runs_spec:
+        for s in seeds_for(run_item):
+            if s not in all_seeds:
+                all_seeds.append(s)
+
+    tasks: list[dict] = []
+    for het in matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]):
+        for seed in all_seeds:
+            for run_item in runs_spec:
+                if seed not in seeds_for(run_item):
+                    continue
+                alg = run_item.get("alg")
+                tasks.append(
+                    {
+                        "phase": matrix.get("phase", "smoke"),
+                        "dataset": matrix.get("dataset", "cifar10"),
+                        "model": matrix.get("model", "mobilenetv2"),
+                        "experiment_group": matrix.get("experiment_group", matrix_name),
+                        # A per-matrix property, not a per-phase one: `explore`
+                        # covers both the 50-round factorial passes and the
+                        # 100-round formulation study, so nothing downstream may
+                        # infer the round budget from the phase.
+                        "total_rounds": int(matrix.get("total_rounds", 50)),
+                        "algorithm_config": alg,
+                        "variant": run_item.get("variant", ""),
+                        "heterogeneity": het,
+                        "seed": seed,
+                        "label": run_item.get("label", alg),
+                        "overrides": list(run_item.get("overrides", []) or []),
+                    }
+                )
+    return tasks
+
+
+# ``experiment_group`` is None for any run outside the canonical output layout --
+# a bare scripts/run.py invocation, or a legacy pre-matrix tree. Such a run belongs
+# to no experiment group and is certified against none, so it needs a rendering
+# that cannot collide with a real group name.
+NO_GROUP = "<none>"
+
+
+def identity_key(
+    dataset: str,
+    experiment_group: str | None,
+    algorithm_config: str,
+    variant: str,
+    alpha: float,
+    formulation: int | None,
+    seed: int,
+) -> str:
+    """The canonical identity of one run, serialized in exactly one place.
+
+    ADR-0009 is the authority on what identifies a run, and each field here closes
+    a collision that has actually occurred or is reachable from tracked config:
+
+    ``dataset``            the three ``benchmark_grid*`` files share one group and
+                           differ in nothing else the analysis reads, so a key
+                           without it folds 105 primary-grid runs onto 42.
+    ``experiment_group``   ``uniform_memory_control`` runs ``fedmaq`` at the grid's
+                           own dataset, skews and seeds; only the group separates
+                           them.
+    ``algorithm_config``   every §4.3.7 ablation arm declares ``name: fedmaq``.
+    ``variant``            Stage 1b sweeps one override per baseline, so those cells
+                           differ in *nothing* else a RunRecord carries. Without it
+                           baseline_tuning's 15 cells fold onto 5 and
+                           pass2_factorial's 8 arms onto 1.
+
+    ``phase`` and ``post_process`` are the two remaining ADR-0009 identity fields
+    and are deliberately absent: across every reportable matrix each is a function
+    of ``experiment_group``, so keying on them adds no discrimination. That is a
+    checked property, not an assumption -- see
+    ``test_each_reportable_group_carries_one_phase_and_one_post_process_regime``.
+
+    **The serialization is a contract, not a convenience.** One side of the closure
+    certificate builds these from RunRecords and the other from
+    ``conf/matrix/*.yaml`` via Hydra, and a formatting disagreement on any field
+    yields *paired* missing-and-unexpected entries rather than an error -- a
+    certificate that reads as a total mismatch while every unit test still passes.
+    So ``alpha`` is coerced through ``float`` on both sides (``1`` and ``1.0`` must
+    not be two runs), ``formulation`` renders its absence as a word rather than as
+    an empty field, and both sides call this function rather than formatting their
+    own.
+    """
+    group = experiment_group if experiment_group else NO_GROUP
+    form = "none" if formulation is None else str(int(formulation))
+    return f"{dataset}|{group}|{algorithm_config}|{variant}|a{float(alpha)!r}|f{form}|s{int(seed)}"

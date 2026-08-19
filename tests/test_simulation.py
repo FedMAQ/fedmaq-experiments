@@ -190,6 +190,79 @@ def test_frozen_config_snapshot_is_current():
     )
 
 
+def test_expected_runs_snapshot_is_current():
+    """docs/freeze/expected_runs.json must match what conf/matrix/*.yaml promises.
+
+    It is the expected side of the closure certificate, so a stale snapshot does
+    not merely go out of date -- it silently redefines what "complete" means. A
+    matrix that gains a seed and a manifest that does not is a grid the
+    certificate certifies as closed while it is short.
+    """
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_expected_runs.py", "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\n"
+        "Run `uv run python scripts/dump_expected_runs.py` and commit the result."
+    )
+
+
+def test_each_reportable_arm_carries_one_regime():
+    """``identity_key`` omits ``phase`` and ``post_process``, which ADR-0009 also
+    lists as identity fields. That is admissible only while both are functions of
+    ``(experiment_group, algorithm_config)`` -- two fields the key does carry --
+    and this is what makes that a checked property rather than an assumption.
+
+    Not at group granularity: the primary grid runs FedMAQ with the §4.3
+    post-processing pipeline and its six baselines without it, so ``benchmark_grid``
+    spans both regimes and only the arm resolves them. A future matrix that
+    dispatched one arm into two regimes under one group would make the omitted
+    fields load-bearing again, and the certificate would start pairing two real
+    runs onto one identity.
+
+    ``total_rounds`` is asserted here for a different reason: the closure
+    certificate scores each group against the budget the manifest declares, so a
+    group spanning two budgets would leave half of it certified against the wrong
+    one. It is a per-matrix property and not a per-phase one -- ``explore`` covers
+    both the 50-round factorial passes and the 100-round formulation study.
+    """
+    manifest = json.loads(
+        (Path(__file__).parent.parent / "docs" / "freeze" / "expected_runs.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    offenders = {
+        f"{group}/{arm}": regime
+        for group, body in manifest["groups"].items()
+        for arm, regime in body["regimes"].items()
+        if any(len(regime[field]) != 1 for field in ("phases", "post_process", "total_rounds"))
+    }
+    assert not offenders, (
+        f"{offenders} dispatch one arm under one group into more than one phase, "
+        "post-processing regime or round budget. scripts/common.identity_key leaves "
+        "the first two out of the run key on the grounds that this cannot happen, and "
+        "closure_certificate scores a group against the third; restore them there, or "
+        "split the group."
+    )
+
+    budgets = {
+        group: {n for regime in body["regimes"].values() for n in regime["total_rounds"]}
+        for group, body in manifest["groups"].items()
+    }
+    assert budgets["pass2_factorial"] == {50} and budgets["formulation_study"] == {100}, (
+        "Both groups carry phase 'explore' and they disagree on the round budget, "
+        "which is why the certificate reads it per group instead of assuming 100. "
+        f"Got {budgets}."
+    )
+
+
 def test_configuration_8_can_express_any_freeze():
     """fedmaq_no_refinements must hold every mechanism off, not merely the ones
     that happen to be frozen today. Its job is to be the layer's absence, so a
@@ -278,37 +351,31 @@ def test_no_matrix_dispatches_two_runs_into_one_output_directory():
     the next matrix to sweep an override on one algorithm has no reason to know
     this rule exists.
     """
-    from scripts.common import get_canonical_output_dir
+    from scripts.common import expand_matrix, get_canonical_output_dir
 
     for path in sorted((Path(CONF_DIR).parent / "conf" / "matrix").glob("*.yaml")):
-        matrix = _matrix(path.stem)
-        runs = matrix.get("runs", [])
-        matrix_seeds = [int(s) for s in matrix.get("seeds", [0])]
-
         seen: dict[str, str] = {}
-        for het in matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]):
-            for run in runs:
-                label = str(run.get("label", run.get("alg")))
-                for seed in [int(s) for s in run.get("seeds", matrix_seeds)]:
-                    out = str(
-                        get_canonical_output_dir(
-                            phase=matrix.get("phase", "smoke"),
-                            dataset=matrix.get("dataset", "cifar10"),
-                            model=matrix.get("model", "mobilenetv2"),
-                            exp_group=matrix.get("experiment_group", path.stem),
-                            algorithm=run.get("alg"),
-                            heterogeneity=het,
-                            seed=seed,
-                            variant=run.get("variant", ""),
-                        )
-                    )
-                    assert out not in seen, (
-                        f"conf/matrix/{path.name}: runs {seen[out]!r} and {label!r} "
-                        f"both dispatch into {out}. Give each a distinct `variant:` "
-                        "-- otherwise only the last one to finish survives, and the "
-                        "sweep reports success either way."
-                    )
-                    seen[out] = label
+        for spec in expand_matrix(_matrix(path.stem), path.stem):
+            label = str(spec["label"])
+            out = str(
+                get_canonical_output_dir(
+                    phase=spec["phase"],
+                    dataset=spec["dataset"],
+                    model=spec["model"],
+                    exp_group=spec["experiment_group"],
+                    algorithm=spec["algorithm_config"],
+                    heterogeneity=spec["heterogeneity"],
+                    seed=spec["seed"],
+                    variant=spec["variant"],
+                )
+            )
+            assert out not in seen, (
+                f"conf/matrix/{path.name}: runs {seen[out]!r} and {label!r} "
+                f"both dispatch into {out}. Give each a distinct `variant:` "
+                "-- otherwise only the last one to finish survives, and the "
+                "sweep reports success either way."
+            )
+            seen[out] = label
 
 
 def test_primary_grid_files_dispatch_all_105_runs():
