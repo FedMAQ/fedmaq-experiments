@@ -1401,6 +1401,13 @@ def test_closure_certificate_closes_a_complete_fifty_round_group(tmp_path):
     assert certificate["all_closed"] is True
 
 
+def test_closure_certificate_names_a_group_the_manifest_does_not_hold():
+    """A mistyped or renamed group must say so. Certifying against an absent
+    expected set is the one outcome worse than raising: it reports zero missing."""
+    with pytest.raises(ValueError, match="no expected-run manifest entry"):
+        closure_certificate([], _expected_runs_manifest(), groups=["benchmark-grid"])
+
+
 def test_closure_certificate_ignores_runs_belonging_to_no_group(tmp_path):
     """A bare scripts/run.py invocation lands outside the canonical 7-part path,
     so ``phase_and_group_of`` gives it no group and ``discover_runs`` still finds

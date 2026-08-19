@@ -887,10 +887,20 @@ def closure_certificate(
     36 while the study reports seven arms. That is correct, not a hole.
     """
     names = sorted(manifest_groups) if groups is None else list(groups)
+    unknown = [name for name in names if name not in manifest_groups]
+    if unknown:
+        raise ValueError(
+            f"no expected-run manifest entry for {unknown}; the manifest holds "
+            f"{sorted(manifest_groups)}. Regenerate docs/freeze/expected_runs.json, or "
+            "check the name against the experiment_group its matrix declares."
+        )
+
     certified: dict[str, dict] = {}
     for name in names:
         body = manifest_groups[name]
-        group_round = expected_round or _declared_round(name, body)
+        # Not ``expected_round or ...``: the override is documented as an override,
+        # and 0 is a value it must be able to carry rather than fall through on.
+        group_round = expected_round if expected_round is not None else _declared_round(name, body)
         expected = set(body["runs"])
         members = [r for r in runs if r.experiment_group == name]
         observed = Counter(run_identity(r) for r in members)
