@@ -30,12 +30,18 @@ import argparse
 import json
 import math
 import statistics
+import sys
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 from omegaconf import OmegaConf
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts.common import identity_key
 
 
 @dataclass
@@ -735,6 +741,19 @@ def sustained_crossing(
     return None, None
 
 
+def run_identity(r: RunRecord) -> str:
+    """This run's ADR-0009 identity. Contract and rationale: ``common.identity_key``."""
+    return identity_key(
+        dataset=r.dataset,
+        experiment_group=r.experiment_group,
+        algorithm_config=r.algorithm_config,
+        variant=r.variant,
+        alpha=r.alpha,
+        formulation=r.formulation,
+        seed=r.seed,
+    )
+
+
 def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict:
     """Per-run check that ``expected_round`` was actually logged.
 
@@ -744,35 +763,123 @@ def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict
     apples-to-oranges one without raising anything. Given this repo's aborted
     dispatch history (Decisions 77, 78) that failure mode is not hypothetical,
     so the amended report states it rather than assuming it away.
+
+    Keyed on :func:`run_identity`, never on ``job_dir.name``: the canonical
+    output dir does not encode formulation, so all five formulations at one
+    (alpha, seed) share a directory name and a name-keyed dict silently collapses
+    30 study runs onto 3 entries -- reporting ``all_complete`` for whichever arm
+    happened to be written last. An audit that quietly drops 90% of its input is
+    worse than no audit, because it reads as a pass.
+
+    Runs are accumulated per identity *before* being reduced to one entry each.
+    A dict assigned in a loop cannot report a collision it has already
+    overwritten, so ``duplicate_runs`` is unobservable on any shape that writes
+    straight to ``report[key]`` -- which is the same defect one level up from the
+    one this function exists to catch.
     """
-    report: dict[str, dict] = {}
+    discovered: dict[str, list[dict]] = {}
     for r in runs:
         df = load_round_metrics(r.csv_path)
-        max_round = int(df["round"].max())
-        # Keyed on the fields that identify a run, NOT on ``job_dir.name``: the
-        # canonical output dir does not encode formulation, so all five
-        # formulations at one (alpha, seed) share a directory name and a
-        # name-keyed dict silently collapses 30 study runs onto 3 entries --
-        # reporting ``all_complete`` for whichever arm happened to be written
-        # last. An audit that quietly drops 90% of its input is worse than no
-        # audit, because it reads as a pass.
-        key = f"{r.algorithm_config}_a{r.alpha}_f{r.formulation}_s{r.seed}"
-        report[key] = {
-            "job_dir": str(r.job_dir),
-            "algorithm_config": r.algorithm_config,
-            "formulation": r.formulation,
-            "alpha": r.alpha,
-            "seed": r.seed,
-            "max_round": max_round,
-            "has_expected_round": bool((df["round"] == expected_round).any()),
-            "final_cumulative_mb": float(df["communication/cumulative_mb"].iloc[-1]),
-        }
+        discovered.setdefault(run_identity(r), []).append(
+            {
+                "job_dir": str(r.job_dir),
+                "dataset": r.dataset,
+                "experiment_group": r.experiment_group,
+                "algorithm_config": r.algorithm_config,
+                "variant": r.variant,
+                "formulation": r.formulation,
+                "alpha": r.alpha,
+                "seed": r.seed,
+                "max_round": int(df["round"].max()),
+                "has_expected_round": bool((df["round"] == expected_round).any()),
+                "final_cumulative_mb": float(df["communication/cumulative_mb"].iloc[-1]),
+            }
+        )
+
+    report: dict[str, dict] = {}
+    for key, records in discovered.items():
+        entry = dict(records[0])
+        # An identity carrying more than one run is complete only if every one of
+        # them is. Reading the first would make the verdict depend on directory
+        # iteration order, which is the property this keying exists to remove.
+        entry["has_expected_round"] = all(rec["has_expected_round"] for rec in records)
+        report[key] = entry
+
     incomplete = [k for k, v in report.items() if not v["has_expected_round"]]
     return {
         "expected_round": expected_round,
         "runs": report,
         "incomplete_runs": incomplete,
+        "duplicate_runs": {
+            key: [rec["job_dir"] for rec in records]
+            for key, records in discovered.items()
+            if len(records) > 1
+        },
         "all_complete": not incomplete,
+    }
+
+
+def closure_certificate(
+    runs: list[RunRecord],
+    manifest_groups: dict[str, dict],
+    groups: list[str] | None = None,
+    expected_round: int = 100,
+) -> dict:
+    """Whether every run the design promises is present, once, and finished.
+
+    A key count is not a certificate. "105 distinct keys" proves only that 105
+    keys exist, and the failure this exists to catch produced a set that was
+    internally consistent and 60% short. So the observed identities are diffed
+    against ``docs/freeze/expected_runs.json``, which is derived from
+    ``conf/matrix/*.yaml`` rather than asserted, and the three ways the diff can
+    fail -- missing, unexpected, duplicate -- are reported separately because
+    they have different causes and different repairs.
+
+    ``all_closed`` is an AND across every requested group. Study 1 cites the
+    primary grid, the formulation study, the ablation and the uniform-memory
+    control, and a certificate that green-lights the grid alone would pass while
+    three of the four studies it reports were short.
+
+    **Observation is scoped by group membership, never by a global set
+    difference.** ``discover_runs`` also globs ``multirun/`` and
+    ``phase_and_group_of`` returns no group for anything outside the canonical
+    7-part path, so a bare ``scripts/run.py`` invocation or a legacy pre-matrix
+    tree is discoverable with ``experiment_group`` unset. Differencing globally
+    would file every one of those as ``unexpected`` and leave the certificate
+    permanently red on any checkout that has ever run a smoke test. A run outside
+    the canonical layout belongs to no group and is certified against none: that
+    is out of scope for this check, not a defect in it.
+
+    Ablation Configuration 1 is certified under ``benchmark_grid``, not
+    ``ablation``. ``conf/matrix/ablation.yaml`` dispatches Configurations 2-7 and
+    inherits uncompressed FedAvg from the grid, keeping the grid's
+    ``experiment_group`` (ADR-0009, Stage 1c), so the ablation's expected set is
+    36 while the study reports seven arms. That is correct, not a hole.
+    """
+    names = sorted(manifest_groups) if groups is None else list(groups)
+    certified: dict[str, dict] = {}
+    for name in names:
+        expected = set(manifest_groups[name]["runs"])
+        members = [r for r in runs if r.experiment_group == name]
+        observed = Counter(run_identity(r) for r in members)
+        completeness = round_completeness(members, expected_round=expected_round)
+        missing = sorted(expected - set(observed))
+        unexpected = sorted(set(observed) - expected)
+        duplicate = {key: count for key, count in sorted(observed.items()) if count > 1}
+        certified[name] = {
+            "expected": len(expected),
+            "observed": len(members),
+            "missing": missing,
+            "unexpected": unexpected,
+            "duplicate": duplicate,
+            "incomplete_runs": completeness["incomplete_runs"],
+            "all_complete": completeness["all_complete"],
+            "closed": not (missing or unexpected or duplicate) and completeness["all_complete"],
+        }
+    return {
+        "expected_round": expected_round,
+        "groups": certified,
+        "all_closed": all(body["closed"] for body in certified.values()),
     }
 
 
@@ -1762,6 +1869,20 @@ def main() -> None:
         default=Path("scripts/analysis_output/round_completeness.json"),
     )
     parser.add_argument(
+        "--expected-runs",
+        type=Path,
+        default=Path("docs/freeze/expected_runs.json"),
+        help="Expected-run manifest, derived from conf/matrix/*.yaml by "
+        "scripts/dump_expected_runs.py.",
+    )
+    parser.add_argument(
+        "--closure-output",
+        type=Path,
+        default=Path("scripts/analysis_output/closure_certificate.json"),
+        help="Per-group missing/unexpected/duplicate diff against the expected-run "
+        "manifest. Answers whether the right runs are present, which no key count can.",
+    )
+    parser.add_argument(
         "--freeze-output",
         type=Path,
         default=Path("scripts/analysis_output/frozen_formulation.json"),
@@ -1818,6 +1939,33 @@ def main() -> None:
             "accuracy_at_round falls back to the last logged row, so any R=100 "
             "comparison across these arms is not like-for-like. Inspect before "
             "reading the verdict below."
+        )
+
+    if args.expected_runs.is_file():
+        with open(args.expected_runs, encoding="utf-8") as f:
+            manifest_groups = json.load(f)["groups"]
+        certificate = closure_certificate(runs, manifest_groups)
+        with open(args.closure_output, "w", encoding="utf-8") as f:
+            json.dump(certificate, f, indent=2)
+        print(f"Wrote closure certificate to {args.closure_output}")
+        for name, body in certificate["groups"].items():
+            state = "closed" if body["closed"] else "OPEN"
+            print(
+                f"  {name}: {state} -- observed {body['observed']} of "
+                f"{body['expected']} expected, {len(body['missing'])} missing, "
+                f"{len(body['unexpected'])} unexpected, {len(body['duplicate'])} duplicated"
+            )
+        if not certificate["all_closed"]:
+            print(
+                "  WARNING: at least one group is not closed. Every group Study 1 cites "
+                "must close before its tables are reportable -- a group that is short "
+                "still produces a plausible table, which is how a 105-run grid was "
+                "audited as 42 and read as a pass."
+            )
+    else:
+        print(
+            f"Skipped the closure certificate: {args.expected_runs} not found. "
+            "Generate it with `uv run python scripts/dump_expected_runs.py`."
         )
 
     iso_byte_result = select_winner_iso_byte(runs)

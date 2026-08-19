@@ -1,5 +1,6 @@
 """Unit tests for scripts/analysis.py: baseline-comparison deltas and tie-break rule."""
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from analysis import (
     accuracy_at_round,
     baseline_tuning_margin,
     build_ablation_table,
+    closure_certificate,
     compare_to_baselines,
     compare_to_baselines_iso_byte,
     discover_runs,
@@ -31,6 +33,7 @@ from analysis import (
     resolve_frozen_formulation,
     round_at_budget,
     round_completeness,
+    run_identity,
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
@@ -61,7 +64,18 @@ def test_accuracy_at_round_falls_back_to_last_row_when_round_missing():
     assert accuracy_at_round(df, 100) == pytest.approx(0.5)
 
 
-def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs, group=None, alpha=0.5):
+def _write_run(
+    tmp_path,
+    algorithm,
+    formulation,
+    seed,
+    accs,
+    mbs,
+    group=None,
+    alpha=0.5,
+    dataset="cifar10",
+    variant="",
+):
     """Write a fake job dir with an experiment_log.csv; return a RunRecord
     pointing at it (dataset/alpha fixed to keep fixtures small).
 
@@ -72,19 +86,20 @@ def _write_run(tmp_path, algorithm, formulation, seed, accs, mbs, group=None, al
     to the study group and everything else to the grid.
     """
     group = group or (FORMULATION_STUDY_GROUP if algorithm == "fedmaq" else GRID_GROUP)
-    job_dir = tmp_path / f"{group}_{algorithm}_{formulation}_{seed}_{alpha}"
+    job_dir = tmp_path / f"{dataset}_{group}_{algorithm}_{variant}_{formulation}_{seed}_{alpha}"
     job_dir.mkdir()
     csv_path = job_dir / "experiment_log.csv"
     _df(list(range(1, len(accs) + 1)), accs, mbs).to_csv(csv_path, index=False)
     return RunRecord(
         job_dir=job_dir,
-        dataset="cifar10",
+        dataset=dataset,
         alpha=alpha,
         algorithm=algorithm,
         formulation=formulation,
         seed=seed,
         csv_path=csv_path,
         experiment_group=group,
+        variant=variant,
     )
 
 
@@ -1148,17 +1163,218 @@ def test_round_completeness_keeps_one_entry_per_run_not_per_directory_name(tmp_p
 
 
 def test_round_completeness_flags_a_run_that_died_before_the_budget(tmp_path):
+    """The round check itself, and the identity the report is keyed by.
+
+    Keys are :func:`run_identity`, so a run is looked up by what identifies it
+    under ADR-0009 rather than by a string this test happens to know how to
+    spell. The literal below is asserted once, here, so that a silent change to
+    the serialization -- which would desynchronize the closure certificate from
+    the expected-run manifest without failing anything else -- has somewhere to
+    fail loudly.
+    """
     full = _write_run(tmp_path, "fedmaq", 3, 1, [0.5] * 100, list(range(1, 101)))
     short = _write_run(tmp_path, "fedmaq", 3, 2, [0.5] * 84, list(range(1, 85)))
 
     report = round_completeness([full, short], expected_round=100)
 
-    full_key = "fedmaq_a0.5_f3_s1"
-    short_key = "fedmaq_a0.5_f3_s2"
+    assert run_identity(full) == "cifar10|formulation_study|fedmaq||a0.5|f3|s1"
     assert report["all_complete"] is False
-    assert report["incomplete_runs"] == [short_key]
-    assert report["runs"][full_key]["max_round"] == 100
-    assert report["runs"][short_key]["max_round"] == 84
+    assert report["incomplete_runs"] == [run_identity(short)]
+    assert report["runs"][run_identity(full)]["max_round"] == 100
+    assert report["runs"][run_identity(short)]["max_round"] == 84
+    assert report["duplicate_runs"] == {}
+
+
+def _without_variant(r):
+    """The run key proposed before ``variant`` was restored to it.
+
+    ADR-0009's identity table names ``variant`` as the field that separates cells
+    differing only by an override. The three tests below each build a population
+    that is a single point under this projection and several runs under
+    :func:`run_identity`, so they fail loudly if the field is ever dropped again
+    rather than silently auditing a fraction of their input.
+    """
+    return (r.dataset, r.experiment_group, r.algorithm_config, r.alpha, r.formulation, r.seed)
+
+
+def test_run_identity_separates_baseline_tuning_variants(tmp_path):
+    """Stage 1b sweeps one knob per baseline at a single skew and seed set, so its
+    cells differ in nothing a RunRecord records except ``variant`` -- FedProx at
+    mu 1.0, 0.1 and 0.01 are one point under every other field. Fifteen cells fold
+    onto five without it, and the fold reads as a pass."""
+    runs = [
+        _write_run(
+            tmp_path,
+            "fedprox",
+            None,
+            0,
+            [0.5] * 100,
+            list(range(1, 101)),
+            group=BASELINE_TUNING_GROUP,
+            alpha=0.3,
+            variant=variant,
+        )
+        for variant in ("mu1p0", "mu0p1", "mu0p01")
+    ]
+
+    report = round_completeness(runs, expected_round=100)
+
+    assert len({_without_variant(r) for r in runs}) == 1
+    assert len(report["runs"]) == 3
+    assert report["duplicate_runs"] == {}
+
+
+def test_run_identity_separates_the_three_dataset_grid(tmp_path):
+    """§4.5's 105 primary-grid runs live in three matrix files sharing one
+    ``experiment_group``, so the dataset is the only thing between CIFAR-10's
+    FedMAQ row and CIFAR-100's. This is the collision the restored bundle hit:
+    42 entries reported ``all_complete`` for a 105-run grid."""
+    runs = [
+        _write_run(
+            tmp_path,
+            "fedmaq",
+            2,
+            0,
+            [0.5] * 100,
+            list(range(1, 101)),
+            group=GRID_GROUP,
+            alpha=1.0,
+            dataset=dataset,
+        )
+        for dataset in ("cifar10", "cifar100", "femnist")
+    ]
+
+    report = round_completeness(runs, expected_round=100)
+
+    assert len(report["runs"]) == 3
+    assert len({(r.experiment_group, r.algorithm_config, r.alpha, r.seed) for r in runs}) == 1
+
+
+def test_run_identity_separates_the_grid_from_the_uniform_memory_control(tmp_path):
+    """The control arm runs FedMAQ at the grid's own dataset, skews and seeds --
+    Decision 75 keeps KD identically configured on both sides so the contrast
+    prices the memory ceiling alone. Only ``experiment_group`` tells them apart,
+    and pooling them would score the control's rows as the grid's."""
+    runs = [
+        _write_run(
+            tmp_path,
+            "fedmaq",
+            2,
+            0,
+            [0.5] * 100,
+            list(range(1, 101)),
+            group=group,
+            alpha=0.1,
+        )
+        for group in (GRID_GROUP, "uniform_memory_control")
+    ]
+
+    report = round_completeness(runs, expected_round=100)
+
+    assert len(report["runs"]) == 2
+    assert len({(r.dataset, r.algorithm_config, r.alpha, r.formulation, r.seed) for r in runs}) == 1
+
+
+def test_round_completeness_reports_duplicate_run_identities(tmp_path):
+    """Two directories resolving to one identity must be named, not silently
+    reduced. ``report[key] = ...`` in a loop cannot report a collision it has
+    already overwritten, so this is unobservable on any shape that does not
+    accumulate before it reduces -- the same defect one level up from the one the
+    identity keying closes."""
+    first = _write_run(tmp_path, "fedmaq", 3, 0, [0.5] * 100, list(range(1, 101)))
+    second = _write_run(tmp_path, "fedmaq", 3, 42, [0.5] * 100, list(range(1, 101)))
+    # Two distinct output directories carrying one run identity, which is what a
+    # re-dispatch under a changed directory convention actually leaves behind.
+    second.seed = 0
+
+    report = round_completeness([first, second], expected_round=100)
+
+    assert len(report["runs"]) == 1
+    assert report["duplicate_runs"] == {
+        run_identity(first): [str(first.job_dir), str(second.job_dir)]
+    }
+
+
+def _expected_runs_manifest():
+    with open(REPO_ROOT / "docs" / "freeze" / "expected_runs.json", encoding="utf-8") as f:
+        return json.load(f)["groups"]
+
+
+def test_expected_runs_manifest_holds_105_primary_grid_identities():
+    """The ticket's headline arithmetic, proved from tracked config and nothing
+    else: no telemetry, no extraction, no fixtures. 42 CIFAR-10 + 42 CIFAR-100 +
+    21 FEMNIST, and every one of them a distinct identity."""
+    grid = _expected_runs_manifest()["benchmark_grid"]
+
+    assert grid["count"] == 105
+    assert len(set(grid["runs"])) == 105
+    assert sum(1 for r in grid["runs"] if r.startswith("femnist|")) == 21
+
+
+def test_closure_certificate_flags_the_42_of_105_shortfall(tmp_path):
+    """The restored bundle's failure, reproduced against the tracked manifest.
+
+    Dispatching only ``benchmark_grid.yaml`` delivers CIFAR-10's 42 runs of the
+    105 the grid promises. Every one of them logged round 100, so the old audit
+    had nothing to report and said so; the shortfall is invisible to any check
+    that only asks whether the runs it found are finished.
+
+    The expected side comes from the committed manifest rather than a list
+    written here, which is what makes this a test of the serialization contract
+    as well as of the diff: the identities are built from RunRecords and the
+    manifest's from Hydra composition over conf/matrix/*.yaml, and a formatting
+    disagreement on any field would show up as 105 missing and 42 unexpected
+    instead of the clean 63.
+    """
+    runs = [
+        _write_run(
+            tmp_path,
+            algorithm,
+            2 if algorithm == "fedmaq" else None,
+            seed,
+            [0.5] * 100,
+            list(range(1, 101)),
+            group=GRID_GROUP,
+            alpha=alpha,
+        )
+        for algorithm in (
+            "fedavg",
+            "fedprox",
+            "fedpaq",
+            "dadaquant",
+            "feddistill",
+            "fedkd",
+            "fedmaq",
+        )
+        for alpha in (0.1, 1.0)
+        for seed in (0, 42, 123)
+    ]
+    assert len(runs) == 42
+
+    certificate = closure_certificate(runs, _expected_runs_manifest(), groups=["benchmark_grid"])
+    grid = certificate["groups"]["benchmark_grid"]
+
+    assert grid["all_complete"] is True, "every run present did finish -- that is the trap"
+    assert grid["observed"] == 42
+    assert grid["expected"] == 105
+    assert grid["unexpected"] == [], "a serialization mismatch would surface here first"
+    assert len(grid["missing"]) == 63
+    assert grid["closed"] is False
+    assert certificate["all_closed"] is False
+
+
+def test_closure_certificate_ignores_runs_belonging_to_no_group(tmp_path):
+    """A bare scripts/run.py invocation lands outside the canonical 7-part path,
+    so ``phase_and_group_of`` gives it no group and ``discover_runs`` still finds
+    it. Differencing globally would file it as ``unexpected`` and leave the
+    certificate red on any checkout that has ever run a smoke test."""
+    stray = _write_run(tmp_path, "fedmaq", 2, 0, [0.5] * 100, list(range(1, 101)))
+    stray.experiment_group = None
+
+    certificate = closure_certificate([stray], _expected_runs_manifest(), groups=["ablation"])
+
+    assert certificate["groups"]["ablation"]["unexpected"] == []
+    assert certificate["groups"]["ablation"]["observed"] == 0
 
 
 def _pathology_cell(tmp_path):
@@ -1412,7 +1628,7 @@ def test_ablation_iso_byte_refuses_a_budget_read_off_a_half_finished_arm(tmp_pat
     table = build_ablation_table(runs)
 
     assert table["iso_byte"]["all_complete"] is False
-    assert table["iso_byte"]["incomplete_runs"] == ["fedmaq_no_resource_a0.1_f3_s0"]
+    assert table["iso_byte"]["incomplete_runs"] == [run_identity(truncated)]
     assert not table["parity"]["attributable"]
     assert any("never logged round 100" in v for v in table["parity"]["violations"])
 

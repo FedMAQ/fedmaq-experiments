@@ -238,3 +238,57 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
                     }
                 )
     return tasks
+
+
+# ``experiment_group`` is None for any run outside the canonical output layout --
+# a bare scripts/run.py invocation, or a legacy pre-matrix tree. Such a run belongs
+# to no experiment group and is certified against none, so it needs a rendering
+# that cannot collide with a real group name.
+NO_GROUP = "<none>"
+
+
+def identity_key(
+    dataset: str,
+    experiment_group: str | None,
+    algorithm_config: str,
+    variant: str,
+    alpha: float,
+    formulation: int | None,
+    seed: int,
+) -> str:
+    """The canonical identity of one run, serialized in exactly one place.
+
+    ADR-0009 is the authority on what identifies a run, and each field here closes
+    a collision that has actually occurred or is reachable from tracked config:
+
+    ``dataset``            the three ``benchmark_grid*`` files share one group and
+                           differ in nothing else the analysis reads, so a key
+                           without it folds 105 primary-grid runs onto 42.
+    ``experiment_group``   ``uniform_memory_control`` runs ``fedmaq`` at the grid's
+                           own dataset, skews and seeds; only the group separates
+                           them.
+    ``algorithm_config``   every §4.3.7 ablation arm declares ``name: fedmaq``.
+    ``variant``            Stage 1b sweeps one override per baseline, so those cells
+                           differ in *nothing* else a RunRecord carries. Without it
+                           baseline_tuning's 15 cells fold onto 5 and
+                           pass2_factorial's 8 arms onto 1.
+
+    ``phase`` and ``post_process`` are the two remaining ADR-0009 identity fields
+    and are deliberately absent: across every reportable matrix each is a function
+    of ``experiment_group``, so keying on them adds no discrimination. That is a
+    checked property, not an assumption -- see
+    ``test_each_reportable_group_carries_one_phase_and_one_post_process_regime``.
+
+    **The serialization is a contract, not a convenience.** One side of the closure
+    certificate builds these from RunRecords and the other from
+    ``conf/matrix/*.yaml`` via Hydra, and a formatting disagreement on any field
+    yields *paired* missing-and-unexpected entries rather than an error -- a
+    certificate that reads as a total mismatch while every unit test still passes.
+    So ``alpha`` is coerced through ``float`` on both sides (``1`` and ``1.0`` must
+    not be two runs), ``formulation`` renders its absence as a word rather than as
+    an empty field, and both sides call this function rather than formatting their
+    own.
+    """
+    group = experiment_group if experiment_group else NO_GROUP
+    form = "none" if formulation is None else str(int(formulation))
+    return f"{dataset}|{group}|{algorithm_config}|{variant}|a{float(alpha)!r}|f{form}|s{int(seed)}"

@@ -190,6 +190,62 @@ def test_frozen_config_snapshot_is_current():
     )
 
 
+def test_expected_runs_snapshot_is_current():
+    """docs/freeze/expected_runs.json must match what conf/matrix/*.yaml promises.
+
+    It is the expected side of the closure certificate, so a stale snapshot does
+    not merely go out of date -- it silently redefines what "complete" means. A
+    matrix that gains a seed and a manifest that does not is a grid the
+    certificate certifies as closed while it is short.
+    """
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_expected_runs.py", "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\n"
+        "Run `uv run python scripts/dump_expected_runs.py` and commit the result."
+    )
+
+
+def test_each_reportable_arm_carries_one_phase_and_one_post_process_regime():
+    """``identity_key`` omits ``phase`` and ``post_process``, which ADR-0009 also
+    lists as identity fields. That is admissible only while both are functions of
+    ``(experiment_group, algorithm_config)`` -- two fields the key does carry --
+    and this is what makes that a checked property rather than an assumption.
+
+    Not at group granularity: the primary grid runs FedMAQ with the §4.3
+    post-processing pipeline and its six baselines without it, so ``benchmark_grid``
+    spans both regimes and only the arm resolves them. A future matrix that
+    dispatched one arm into two regimes under one group would make the omitted
+    fields load-bearing again, and the certificate would start pairing two real
+    runs onto one identity.
+    """
+    manifest = json.loads(
+        (Path(__file__).parent.parent / "docs" / "freeze" / "expected_runs.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    offenders = {
+        f"{group}/{arm}": regime
+        for group, body in manifest["groups"].items()
+        for arm, regime in body["regimes"].items()
+        if len(regime["phases"]) != 1 or len(regime["post_process"]) != 1
+    }
+    assert not offenders, (
+        f"{offenders} dispatch one arm under one group into more than one phase or "
+        "post-processing regime. scripts/common.identity_key leaves both fields out "
+        "of the run key on the grounds that this cannot happen; restore them there, "
+        "or split the group."
+    )
+
+
 def test_configuration_8_can_express_any_freeze():
     """fedmaq_no_refinements must hold every mechanism off, not merely the ones
     that happen to be frozen today. Its job is to be the layer's absence, so a
