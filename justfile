@@ -1,0 +1,24 @@
+set windows-shell := ["pwsh", "-NoProfile", "-Command"]
+
+# Default recipe: run full test, lint, and type checks
+default: check
+
+# Run all standard verification checks
+check: lint test
+
+# Run pytest test suite
+test *args="":
+    uv run python -m pytest {{args}}
+
+# Run linter
+lint:
+    uv run ruff check .
+
+# Fix formatting and auto-fixable lint violations
+fix:
+    uv run ruff format .
+    -uv run ruff check --fix .
+
+# Run static type checking
+typecheck:
+    uv run python -m mypy
