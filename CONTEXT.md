@@ -199,6 +199,17 @@ absence of a treatment. This is what keeps a no-advance outcome a finding rather
 empty result.
 _Avoid_: **the winning repair** before a freeze artifact records one
 
+**Candidate repair family**:
+The five are **this thesis's own exploration design**, not five families drawn from the
+literature — `no_kd` is one of them and no paper proposes it. Exactly one,
+**quality-weighted server ensemble distillation**, has corroborated prior art;
+`fedmaq-manuscript` §2.4 (*Ensemble Teacher Weighting*) is that survey's only home, and
+prose needing the weighting literature cites through that subsection rather than reaching
+for sources of its own. Which of the other four were surveyed, and why they carry no
+citation, lives in `fedmaq-literature/docs/audits/fedmaq-v2-server-kd-repair-candidates.md`
+and is not restated here.
+_Avoid_: **the five repair families in the literature** (four of them are not)
+
 **Paired per-seed byte budget** ($B^*_s$):
 The v2 scalar head-to-head. For a paired comparison and seed $s$, the minimum of the two
 same-seed terminal cumulative-byte budgets, defined independently per pair; both curves are
