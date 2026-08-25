@@ -22,7 +22,7 @@ index its `.agents/rules/` rather than duplicating domain content.
 | [fedmaq-analyses](../fedmaq-analyses/) | Notebooks, thesis figures | `AGENTS.md`, `CLAUDE.md` |
 | [fedmaq-manuscript](../fedmaq-manuscript/) | LaTeX thesis (Ch 1–6), **its own writing rules** | `AGENTS.md`, `CLAUDE.md` |
 | [fedmaq-presentations](../fedmaq-presentations/) | Beamer slides | `AGENTS.md`, `CLAUDE.md` |
-| [fedmaq-journal-paper](../fedmaq-journal-paper/) | IEEE Access submission | `AGENTS.md`, `CLAUDE.md` |
+| [fedmaq-journal-article](../fedmaq-journal-article/) | IEEE Access submission | `AGENTS.md`, `CLAUDE.md` |
 
 **Cross-repo rule:** non-experiments repos must not duplicate domain content; they
 index `../fedmaq-experiments/.agents/rules/`. The workspace agentic-context
@@ -110,9 +110,9 @@ The general family, correct for others' work and for the client-side negation at
 | ADR prose written before 2026-08-08 — e.g. `docs/adr/0004-confirmatory-grid-design.md:90` | ADRs record what was decided *then*. Outcomes are appended, never substituted. Not false, just pre-canonical. |
 | `fedmaq-presentations/updates/*` | Already-delivered artifacts, left as delivered. |
 | `fedmaq-literature/markdown/**` and `kg/papers/**` | Extracted text of and notes on **others'** papers. ~490 hits; none are FedMAQ's mechanism. |
-| `fedmaq-journal-paper` keyword list (`paper.tex:76`) | ADR-0016 §2 — surfaces need not converge. Separate artifact, separate title. |
+| `fedmaq-journal-article` keyword list (`paper.tex:76`) | ADR-0016 §2 — surfaces need not converge. Separate artifact, separate title. |
 
-**The abstract is resolved; the title page stays as the author set it.** `abstract_en.tex:20` read "ensemble knowledge distillation" and was left alone at first, because `abstract_fil.tex` mirrored the phrase and is the author's to write — changing only the English would have desynchronized a translation agents may not touch. **The author removed the Filipino abstract from the draft on 2026-08-08**, which dissolved the constraint, and the English now reads "ensemble distillation". `abstract_fil.tex` still exists and is still the author's; it is simply no longer built (`main.tex:9`, commented). `title_page.tex:12` is the author's own wording and is not swept — [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-paper/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 holds that surfaces need not converge anyway.
+**The abstract is resolved; the title page stays as the author set it.** `abstract_en.tex:20` read "ensemble knowledge distillation" and was left alone at first, because `abstract_fil.tex` mirrored the phrase and is the author's to write — changing only the English would have desynchronized a translation agents may not touch. **The author removed the Filipino abstract from the draft on 2026-08-08**, which dissolved the constraint, and the English now reads "ensemble distillation". `abstract_fil.tex` still exists and is still the author's; it is simply no longer built (`main.tex:9`, commented). `title_page.tex:12` is the author's own wording and is not swept — [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-article/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 holds that surfaces need not converge anyway.
 
 ### Ablation Study (Section 4)
 

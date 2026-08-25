@@ -2,7 +2,7 @@
 
 **Status**: Superseded for workspace-wide layout by [ADR-0015](0015-workspace-agentic-context-contract.md); retained as this repository's historical migration record
 **Supersedes**: `docs/DECISIONS.md` Decisions 14–17, 63, 69 (file deleted)
-**Adopts**: [`../../../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md`](../../../fedmaq-journal-paper/docs/adr/0012-agentic-context-layout.md)
+**Adopts**: [`../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md`](../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md)
 
 ## Context
 
@@ -21,7 +21,7 @@ workspace's reference layout, and the growth was structural rather than incident
   living apart from the rules that govern baselines.
 - **Two `archive/` subtrees** — 3343 lines nothing cited for a verdict.
 
-The workspace already had a designed answer. `fedmaq-journal-paper`'s ADR-0012 is the
+The workspace already had a designed answer. `fedmaq-journal-article`'s ADR-0012 is the
 reference structure and states that the siblings are pending migration to it. **This
 is that migration, for this repo.**
 
@@ -45,7 +45,7 @@ A future reader should not assume ADR-0012's default governs here.
 **2. `CONTEXT.md` remains a glossary. This is deliberate, and ADR-0012 agrees.**
 
 ADR-0012 says a `CONTEXT.md` is "NOT a glossary" — but its own reasoning names the
-exception: the journal-paper's copy avoids being one *because* "All shared vocabulary
+exception: the journal-article's copy avoids being one *because* "All shared vocabulary
 defers to `fedmaq-experiments/CONTEXT.md`." **This is the file that rule was written
 to protect.** It is the canonical vocabulary for the code/manuscript boundary and
 resolves real naming drift between them. Do not "fix" it toward pointer-only. It

@@ -51,7 +51,7 @@ hard-to-reverse exception.
 
 ## Consequences
 
-- This supersedes the journal-paper ADR-0012's claim to be the workspace
+- This supersedes the journal-article ADR-0012's claim to be the workspace
   reference; that ADR remains the historical source for its repository-local
   design.
 - A repository may assume sibling checkouts exist for cross-repository work.
