@@ -25,8 +25,10 @@ CONTEXT.md                hub glossary or spoke orientation
 .agents/rules/            stable, tool-neutral rules
 docs/agents/              consult-on-demand references
 docs/adr/                 durable decisions
-.claude/, .Codex/         tool-native extensions only
+.claude/, .codex/         tool-native extensions only
 ```
+
+**Correction, 2026-08-25**: `.codex/` (lowercase — the line above originally read `.Codex/`) is Codex CLI's real per-project config directory, but it cannot bootstrap its own trust: Codex's config loader disables the project layer (`.codex/config.toml`) until the directory is already trusted, and trust itself is granted per-machine in `$CODEX_HOME/config.toml`'s `[projects."<path>"]` table — outside any repo's version control. No repository in this workspace currently needs a `.codex/` directory; Codex already reads `AGENTS.md` natively, which is the actual source of the "Codex needs a native `AGENTS.md`" line above. This line remains reserved for the day a repo needs project-scoped MCP servers or hooks post-trust, not as a trust mechanism.
 
 `AGENTS.md` is lean and load-bearing. It points to `CONTEXT.md`, imports only
 always-active rules, and directs task-specific reading. `CLAUDE.md` imports it

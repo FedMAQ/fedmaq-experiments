@@ -83,7 +83,7 @@ Values agree on both sides ($\omega_1 = \omega_2 = 0.5$, $\kappa = 1.0$, $\tau_g
 
 Decided 2026-07-25 by collision-checking every candidate symbol against all 40 `fedmaq-literature/kg/papers/*.md` nodes. $\gamma$ was ruled out: it appears 29 times in the corpus, including as FedProx's inexactness parameter $\gamma_k^t$, and FedProx is one of this thesis's own baselines. $\lambda$ was ruled out at 18 occurrences (AdaDQ-KD's KD loss weight, AdaGQ's step sizes), which is also why the config key carries the awkward `_val` suffix. $\kappa$ has zero corpus occurrences; $\omega$ has two, neither in a compared method. **Do not "fix" the manuscript toward the config keys** — that reintroduces the FedProx collision.
 
-Pending work: rename `gamma1`/`gamma2` → `omega1`/`omega2` and `lambda_val` → `kappa` across `conf/algorithm/fedmaq*.yaml` (6 files), `src/fedmaq/core/quantization_planner.py`, and `tests/test_environment.py`, gated on a `scripts/golden_diff.py` run. Leave `docs/**/archive/` audits as historical records. Deferred from the 2026-07-25 Ch3 pass to keep that session manuscript-scoped; note that archived `multirun/` configs carry the old keys and would silently fall back to `.get()` defaults if replayed after the rename.
+Pending rename tracked in [Issue #20](https://github.com/FedMAQ/fedmaq-experiments/issues/20), not here — this is pending work, and pending work lives in Issues per the authority map above.
 
 **Bit-width**:
 A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32\}$ — never an arbitrary continuous integer.
@@ -205,9 +205,10 @@ literature — `no_kd` is one of them and no paper proposes it. Exactly one,
 **quality-weighted server ensemble distillation**, has corroborated prior art;
 `fedmaq-manuscript` §2.4 (*Ensemble Teacher Weighting*) is that survey's only home, and
 prose needing the weighting literature cites through that subsection rather than reaching
-for sources of its own. Which of the other four were surveyed, and why they carry no
-citation, lives in `fedmaq-literature/docs/audits/fedmaq-v2-server-kd-repair-candidates.md`
-and is not restated here.
+for sources of its own. The two corroborated candidates are documented as OKF nodes in
+`fedmaq-literature/fedmaq-wiki/papers/` (`wang-2023-dafkd.md`, `jang-2025-fedgo.md`,
+indexed in that repo's `docs/agents/paper-catalog.md`); the exploration that ruled out the
+other four is closed history — `fedmaq-literature`#6 and PR #9.
 _Avoid_: **the five repair families in the literature** (four of them are not)
 
 **Paired per-seed byte budget** ($B^*_s$):
@@ -236,13 +237,3 @@ literature (Qi et al. 2025) calls that same work **FedKD** — which collides wi
 project's **FedKD baseline (Wu et al., 2022)** and again with the v2 candidate **FedKT (Mao
 et al., 2025)**. Three distinct works, overlapping names. Cite by author and year whenever
 the surrounding text is drawn from the v2 literature.
-
-## Open items
-
-**Last updated**: 2026-08-19.
-
-The Ch1-Ch6 prose fixes logged here through 2026-07-25 were applied directly to
-`fedmaq-manuscript` (main) and none remain. That is not a standing claim that the
-manuscript is in sync: the sync passes of 2026-08-01 through 2026-08-07 each found
-further drift, and the pinned **Manuscript sync log** Issue is the live record. Only the
-`gamma`/`lambda_val` → `omega`/`kappa` rename above is tracked here, still deferred.
