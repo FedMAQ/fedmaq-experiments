@@ -9,6 +9,6 @@
 - Do not edit configurations frozen downstream of the `pre-registration` tag.
 - Read `docs/adr/` for durable decisions and `docs/agents/` for task-specific reference.
 - GitHub Issues are the sole live-state record; do not create tracked handoffs, changelogs, or status files.
-- Standard PR workflow: `git push -u origin HEAD && gh pr create --fill` and `gh pr merge --squash --delete-branch` (do not open draft PRs).
+- Direct-to-`main`, no PRs (ADR-0017). Commit clean before pushing; run `just check` first.
 - Run `just check` before staging or committing changes.
 - Treat generated freeze snapshots as read-only.
