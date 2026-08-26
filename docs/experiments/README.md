@@ -37,7 +37,7 @@ re-confirmed; CFD's collapse was structural and dropped it from the stack. Both 
 
 ## Running a sweep
 
-- **Declarative matrices only**: `uv run python scripts/run_matrix.py --matrix <name>`.
+- **Declarative matrices only**: `./.venv/Scripts/python.exe scripts/run_matrix.py --matrix <name>`.
   Never Hydra `--multirun`.
 - **Process-isolated**: the runner calls `kill_ray_processes()` between runs to
   eliminate CUDA VRAM leaks and Ray worker accumulation.

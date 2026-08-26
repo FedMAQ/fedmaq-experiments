@@ -94,9 +94,9 @@ reported runs.
 5. **Freeze the refinement layer.** Write the surviving set into
    `conf/algorithm/fedmaq.yaml` — **and only there.** The ablation arms inherit that
    file via their Hydra defaults list and restate only their own removal, so one edit
-   reaches all of them. Then `uv run python scripts/dump_frozen_configs.py` to refresh
-   `docs/freeze/resolved_configs.yaml`, and run
-   `uv run python -m pytest tests/test_simulation.py`.
+   reaches all of them. Then `./.venv/Scripts/python.exe scripts/dump_frozen_configs.py`
+   to refresh `docs/freeze/resolved_configs.yaml`, and run
+   `./.venv/Scripts/python.exe -m pytest tests/test_simulation.py`.
    **Do not tag here.** §4.3.1 locks and tags three things together — mechanism set,
    selected formulation, baseline hyperparameter table — and two of them do not exist
    until step 9. The single tag is step 10.
@@ -205,7 +205,7 @@ where the count is pinned.**
 
 - **Declarative matrix runner mandate.** Hydra `--multirun` causes CUDA VRAM leaks and
   lands runs in a date-keyed tree with no `experiment_group`. Always launch sweeps
-  with `uv run python scripts/run_matrix.py --matrix <name>`. Every confirmatory run
+  with `./.venv/Scripts/python.exe scripts/run_matrix.py --matrix <name>`. Every confirmatory run
   has a matrix file; if you find yourself hand-typing a `--multirun` for one, the file
   is missing and should be written instead.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
