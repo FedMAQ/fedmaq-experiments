@@ -14,7 +14,7 @@ Quick, repeatable sanity sweep — not a citable benchmark result. Uses `experim
 local-only telemetry.
 
 1. Do **NOT** use Hydra's `--multirun` CLI flag directly due to PyTorch/Ray process memory leaks causing CUDA Out-of-Memory (OOM) errors.
-2. Run the process-isolated smoke test sweep instead: `uv run python scripts/run_smoke_test.py`. This executes 10 rounds for each of the 9 algorithms on CIFAR-10 with alpha=1.0.
+2. Run the process-isolated smoke test sweep instead: `./.venv/Scripts/python.exe scripts/run_smoke_test.py`. This executes 10 rounds for each of the 9 algorithms on CIFAR-10 with alpha=1.0.
 3. Inspect per-run `experiment_log.jsonl`/`.csv` under `multirun/<date>/<time>/<job_num>/` for accuracy, loss, and communication-overhead trends.
-4. For a faster single-run check of one algorithm/alpha, you can run a single job directly (without `--multirun`): `uv run python scripts/run.py experiment=preliminary dataset=cifar10 heterogeneity=dirichlet_alpha_1.0 algorithm=fedmaq seed=0`.
+4. For a faster single-run check of one algorithm/alpha, you can run a single job directly (without `--multirun`): `./.venv/Scripts/python.exe scripts/run.py experiment=preliminary dataset=cifar10 heterogeneity=dirichlet_alpha_1.0 algorithm=fedmaq seed=0`.
 5. Re-run anytime after implementation changes to re-check trend direction.
