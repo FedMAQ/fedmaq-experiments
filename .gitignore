@@ -230,6 +230,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Claude Code worktree scratch
+/.claude/worktrees/
+
 # Grid results: track the analysis inputs, drop the bulk
 #
 # scripts/common.get_canonical_output_dir writes every run under outputs/, and
