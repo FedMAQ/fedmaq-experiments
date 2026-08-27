@@ -324,6 +324,9 @@ class TelemetryFedAvg(FedAvg):
                 "system/wall_time_sec": snapshot.wall_time,
             }
 
+            if snapshot.round_secondary_bytes is not None:
+                log_metrics["communication/round_secondary_bytes"] = snapshot.round_secondary_bytes
+
             log_metrics.update(snapshot.client_bytes_stats)
 
             for k, v in metrics.items():

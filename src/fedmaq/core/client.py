@@ -94,6 +94,12 @@ class CompressionHook:
     last_payload_bytes: int = 0
     last_payloads: list[bytes] = []
 
+    #: Secondary, as-published byte total (#26) for a hook whose source paper
+    #: mandates its own transport coder -- currently only
+    #: ``DAdaQuantCompressionHook``. ``None`` means "not applicable", distinct
+    #: from a measured 0; every other hook leaves this at the class default.
+    last_secondary_bytes: int | None = None
+
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Pass ``deltas`` through unchanged; measure their transmitted size.
 

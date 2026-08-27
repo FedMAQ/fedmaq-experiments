@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import numpy as np
 
+from fedmaq.baselines.dadaquant_coder import dadaquant_pack
 from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
@@ -65,6 +66,7 @@ def _quantize_deltas(
     deltas: list[np.ndarray],
     scale_fn: Callable[[np.ndarray], float],
     quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
+    on_codes: Callable[[np.ndarray, float], None] | None = None,
 ) -> tuple[list[np.ndarray], int, int, list[bytes]]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
@@ -75,6 +77,13 @@ def _quantize_deltas(
     than hardcoded here. All-zero tensors (scale 0) skip quantization but still
     route their (all-zero) codes through the same measured transport, so no
     per-arm byte arithmetic survives outside it.
+
+    ``on_codes``, if given, is called with each non-empty tensor's
+    ``(codes, scale)`` right after they're determined -- both branches above,
+    matching the primary axis's coverage exactly. This is the extension point
+    for a hook-specific *secondary* byte axis (#26: DAdaQuant's as-published
+    coder) without folding that axis into this shared, arm-agnostic skeleton
+    or duplicating its loop.
 
     Returns ``(quantized_deltas, measured_bytes, payload_bytes, payloads)``.
     ``payload_bytes`` is the pre-encoding payload size (codes + scale, before
@@ -100,6 +109,9 @@ def _quantize_deltas(
         else:
             codes = np.zeros_like(d, dtype=np.int64)
             quantized_deltas.append(d)
+
+        if on_codes is not None:
+            on_codes(codes, scale)
 
         payload = _serialize_codes(codes, scale)
         total_bytes += measure_bytes(payload)
@@ -241,11 +253,25 @@ class DAdaQuantCompressionHook(CompressionHook):
         tuple[list[np.ndarray], int]
             Quantized deltas and the measured size in bytes. The pre-encoding
             payload size is stashed on ``self.last_payload_bytes`` and the
-            payloads themselves on ``self.last_payloads``.
+            payloads themselves on ``self.last_payloads``. ``self.last_secondary_bytes``
+            gets DAdaQuant's own as-published total (0-RLE + Elias omega, #26)
+            -- a second, parallel measurement alongside the primary one, not a
+            substitute for it.
         """
+        secondary_total = 0
+
+        def _accumulate_secondary(codes: np.ndarray, scale: float) -> None:
+            nonlocal secondary_total
+            # +4: the float32 scale travels alongside the coded payload as raw
+            # bytes, same convention as every other baseline's analytic
+            # formula (see ``_serialize_codes``) -- DAdaQuant's paper codes
+            # quantization levels, not a single per-tensor normalization float.
+            secondary_total += len(dadaquant_pack(codes)) + 4
+
         quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
-            deltas, self._scale, self._quantize_elem
+            deltas, self._scale, self._quantize_elem, on_codes=_accumulate_secondary
         )
         self.last_payload_bytes = payload_bytes
         self.last_payloads = payloads
+        self.last_secondary_bytes = secondary_total
         return quantized_deltas, total_bytes

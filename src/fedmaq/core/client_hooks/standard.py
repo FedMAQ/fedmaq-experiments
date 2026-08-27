@@ -40,6 +40,14 @@ class StandardFit(ClientFitStrategy):
         """Value reported as ``local_loss``. Default: 0.0 (unused by the strategy)."""
         return 0.0
 
+    def _extra_fit_metrics(self, client: GenericClient) -> dict[str, Any]:
+        """Additional per-round ``fit_metrics`` beyond the shared fields below.
+
+        Default: none. Overridden by :class:`DAdaQuantFit` to report the
+        secondary byte axis (#26) when the compressor hook measured one.
+        """
+        return {}
+
     def fit(
         self,
         client: GenericClient,
@@ -146,6 +154,7 @@ class StandardFit(ClientFitStrategy):
         }
         if "q" in config:
             fit_metrics["q"] = int(config["q"])
+        fit_metrics.update(self._extra_fit_metrics(client))
         attach_payloads_if_enabled(client, fit_metrics, client.compressor_hook.last_payloads)
 
         if instrument_fedprox:
@@ -193,6 +202,12 @@ class DAdaQuantFit(StandardFit):
 
     def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
         return float(pretrain_loss) if pretrain_loss is not None else 0.0
+
+    def _extra_fit_metrics(self, client: GenericClient) -> dict[str, Any]:
+        secondary = client.compressor_hook.last_secondary_bytes
+        if secondary is None:
+            return {}
+        return {"secondary_bytes_uploaded": secondary}
 
 
 class FedMAQFit(StandardFit):

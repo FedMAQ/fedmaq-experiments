@@ -45,6 +45,7 @@ _COMMON_CSV_FIELDNAMES: list[str] = [
     "test/f1",
     "communication/round_bytes",
     "communication/round_payload_bytes",
+    "communication/round_secondary_bytes",
     "communication/cumulative_bytes",
     "communication/cumulative_mb",
     "system/round_time_sec",
@@ -77,6 +78,10 @@ class RoundSnapshot:
 
     round_bytes: int = 0
     round_payload_bytes: int = 0
+    #: DAdaQuant's as-published secondary total (#26), summed across clients
+    #: that reported one. ``None`` when no client in the round reported it
+    #: (every arm except DAdaQuant) -- distinct from a measured 0.
+    round_secondary_bytes: int | None = None
     round_time: float = 0.0
     client_time: float = 0.0
     server_time: float = 0.0
@@ -183,6 +188,13 @@ class TelemetryManager:
         that case (matching the pre-refactor behavior of skipping those keys
         entirely).
 
+        Also snapshots ``round_secondary_bytes`` (#26) — the summed
+        as-published byte total for arms whose source paper specifies its own
+        transport coder (currently DAdaQuant only, via
+        ``secondary_bytes_uploaded``). ``None`` when no client in the round
+        reported one, so it's distinguishable from a measured 0 and stays
+        absent from every other arm's rows.
+
         Also snapshots ``round_payload_bytes`` — the summed pre-encoding
         payload size each hook stashes on ``compressor_hook.last_payload_bytes``
         (see ``fedmaq.baselines.transport``). Because ``measure_bytes`` is
@@ -206,6 +218,7 @@ class TelemetryManager:
                         "partition_id",
                         "bytes_uploaded",
                         "payload_bytes",
+                        "secondary_bytes_uploaded",
                     ):
                         numeric_keys.add(k)
 
@@ -236,6 +249,8 @@ class TelemetryManager:
         round_bytes_uploaded = 0
         round_bytes_downloaded = 0
         round_payload_bytes = 0
+        round_secondary_bytes = 0
+        has_secondary_bytes = False
         client_bytes_uploaded: list[int] = []
         round_payloads: dict[int, list[bytes]] = {}
 
@@ -256,6 +271,11 @@ class TelemetryManager:
             # separate pre-encoding payload (cfd/fedmd — dropped baselines
             # with their own accounting, out of #25's scope).
             round_payload_bytes += int(fit_res.metrics.get("payload_bytes", bytes_uploaded))
+
+            secondary_bytes = fit_res.metrics.get("secondary_bytes_uploaded")
+            if secondary_bytes is not None:
+                round_secondary_bytes += int(secondary_bytes)
+                has_secondary_bytes = True
 
             payloads_framed = fit_res.metrics.get("payloads_framed")
             if isinstance(payloads_framed, bytes) and payloads_framed:
@@ -313,6 +333,7 @@ class TelemetryManager:
         self._last_snapshot = RoundSnapshot(
             round_bytes=round_total_bytes,
             round_payload_bytes=round_payload_bytes,
+            round_secondary_bytes=round_secondary_bytes if has_secondary_bytes else None,
             round_time=round_time,
             client_time=client_sim_time,
             server_time=server_sim_time,

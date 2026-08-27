@@ -209,6 +209,33 @@ Off by default: a multi-MB blob per client per round is a real cost over Flower'
 simulated Ray channel.
 _Avoid_: payload logging (ambiguous with ordinary telemetry, which is always on)
 
+### Secondary Byte Axis (`fedmaq-experiments`#26)
+
+A second, parallel measurement alongside the seam above, kept per the
+2026-08-27 `wayfinder` keep-or-drop decision. [ADR-0020](docs/adr/0020-secondary-byte-axis.md)
+
+**As-published coder**:
+An arm's transport encoding measured the way its own source paper specifies,
+rather than under the primary axis's held-constant zlib. Currently only
+DAdaQuant, whose paper mandates 0-run-length encoding plus Elias omega coding
+— the only baseline in the stack the 2026-08-26 audit found with a
+paper-specified transport stage (X1). Logged as `secondary_bytes_uploaded`
+per client, aggregated as `communication/round_secondary_bytes`; absent
+(not zero) on every other arm's rows.
+_Avoid_: secondary encoder (names the mechanism, not the measurement it
+produces — the two prior terms already claimed by the primary seam's own
+vocabulary above)
+
+**0-RLE + Elias omega**:
+DAdaQuant's coder: runs of zero-valued quantization codes collapsed to a
+run-length, each non-zero code's magnitude coded with Elias omega (a
+universal code for positive integers with no fixed maximum, so it adapts as
+`q_t` escalates). Implemented in `dadaquant_coder.py`, exercised only by
+`DAdaQuantCompressionHook`. Round-trip tested directly — this is a coder,
+not a heuristic estimate.
+_Avoid_: entropy coding (the paper's broader category; this term names the
+specific scheme actually implemented)
+
 ### Quantizer Unbiasedness (`fedmaq-experiments`#24)
 
 The rounding/normalization operator applied once a bit-width is chosen — downstream of
