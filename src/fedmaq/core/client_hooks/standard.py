@@ -57,13 +57,14 @@ class StandardFit(ClientFitStrategy):
             # rebuilds client_fn fresh every message, so a construction-time-only
             # seed replays the identical stochastic-rounding draw sequence every
             # round for a given client, breaking cross-round independence (#24).
-            # `server_round` is read directly (no default) because strategy.py
-            # injects it unconditionally -- a silent fallback here would quietly
-            # restore the exact bug this reseed fixes. Combined via the same
+            # `seed` and `server_round` are both read directly (no default): a
+            # silent fallback for either would quietly reseed the compression
+            # stream out of step with the rest of the run under a fixed seed
+            # (ADR-0006), the exact bug this reseed fixes. Combined via the same
             # (seed, partition_id, round) shape as quantization_planner.py:268's
             # dataloader seed, but as a tuple rather than summed into one int, so
             # it draws from a stream independent of that (and the training) RNG.
-            seed = int(client.config.get("seed", 42))
+            seed = int(client.config["seed"])
             partition_id = int(client.cid)
             server_round = int(config["server_round"])
             client.compressor_hook.rng = np.random.default_rng((seed, partition_id, server_round))

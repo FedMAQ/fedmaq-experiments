@@ -122,6 +122,7 @@ def _make_client(alg_cfg: dict, compressor_hook, log_payloads: bool) -> GenericC
     model = SimpleCNN(in_channels=1, num_classes=10)
     loader = _mnist_loader()
     cfg = {
+        "seed": 42,
         "experiment": {
             "local_epochs": 1,
             "learning_rate": 0.01,
