@@ -1281,9 +1281,9 @@ def test_formulation_constants_fail_loud_when_the_formulation_consumes_them():
 def test_every_shipped_fedmaq_config_satisfies_the_fail_loud_contract():
     """The guard above is only worth having if no shipped config trips it.
 
-    Each fedmaq variant is checked against every formulation the study sweeps,
-    not just its own declared one, because conf/matrix/formulation_study.yaml
-    dispatches all five by overriding `algorithm.formulation` on this same file.
+    Each frozen v1 variant is checked against every formulation its historical
+    study swept, not just its own declared one. The re-cut power-mean matrix has
+    a separate config without the retired F1/F2 exponents and is checked below.
 
     Composed through Hydra rather than read as raw YAML: the §4.3.7 ablation arms
     inherit `fedmaq` via their defaults list and carry only their own removal, so
@@ -1304,8 +1304,128 @@ def test_every_shipped_fedmaq_config_satisfies_the_fail_loud_contract():
         with initialize_config_dir(config_dir=str(conf_root), version_base="1.3"):
             composed = compose(config_name="config", overrides=[f"algorithm={name}"])
         alg_cfg = OmegaConf.to_container(composed.algorithm, resolve=True)
-        for formulation in FORMULATION_CONSTANTS:
+        for formulation in (f for f in FORMULATION_CONSTANTS if isinstance(f, int)):
             _QuantParams.from_cfg({**alg_cfg, "formulation": formulation})
+
+
+def test_power_mean_config_and_design_matrix_are_a_clean_recut_boundary():
+    """The re-cut path must not inherit v1's F1/F2 exponents or frozen matrix."""
+    from pathlib import Path
+
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    from fedmaq.core.quantization_planner import _QuantParams
+    from scripts.common import identity_key
+
+    conf_root = Path(__file__).resolve().parents[1] / "conf"
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(conf_root / "matrix" / "power_mean_design.yaml"), resolve=True
+    )
+    assert matrix["phase"] == "explore"
+    assert len(matrix["runs"]) == 14
+    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 84
+
+    power_mean_ps = {
+        override.partition("=")[2]
+        for run in matrix["runs"]
+        for override in run.get("overrides", [])
+        if override.startswith("algorithm.p=")
+    }
+    assert power_mean_ps == {"1", "0.5", "0", "-0.5", "-1", "-2", "min"}
+
+    for run in matrix["runs"]:
+        with initialize_config_dir(config_dir=str(conf_root), version_base="1.3"):
+            composed = compose(
+                config_name="config",
+                overrides=["algorithm=power_mean", *run.get("overrides", [])],
+            )
+        alg_cfg = OmegaConf.to_container(composed.algorithm, resolve=True)
+        assert alg_cfg["post_process"] is False
+        assert "gamma1" not in alg_cfg and "gamma2" not in alg_cfg
+        _QuantParams.from_cfg(alg_cfg)
+
+    assert (
+        identity_key(
+            dataset="cifar10",
+            experiment_group="power_mean_design",
+            algorithm_config="power_mean",
+            variant="p0",
+            alpha=0.1,
+            formulation="power_mean",
+            seed=0,
+        )
+        == "cifar10|power_mean_design|power_mean|p0|a0.1|fpower_mean|s0"
+    )
+
+
+def test_power_mean_exact_limits_and_active_zero_semantics():
+    """The named limits and ablations are evaluated exactly, never approximated."""
+    from fedmaq.core.quantization_planner import (
+        MINIMUM_POWER_MEAN,
+        POWER_MEAN_FORMULATION,
+        compute_fedmaq_q_k_t_details,
+    )
+
+    common = dict(
+        c_k=1_000_000.0,
+        c_unit=1.0,
+        g_k=0.2,
+        g_max=1.0,
+        n_k=80,
+        n_max=100,
+        formulation=POWER_MEAN_FORMULATION,
+        q_min=0,
+        q_max=100,
+        bit_widths=tuple(range(101)),
+        omega=0.25,
+    )
+    assert compute_fedmaq_q_k_t_details(p=1, **common).q_hat == 65.0
+    assert compute_fedmaq_q_k_t_details(p=0, **common).q_hat == 57.0
+    assert compute_fedmaq_q_k_t_details(p=-1, **common).q_hat == 46.0
+    assert compute_fedmaq_q_k_t_details(p=MINIMUM_POWER_MEAN, **common).q_hat == 20.0
+
+    zero_signal = {**common, "g_k": 0.0, "omega": 0.5}
+    for p in (0, -1, MINIMUM_POWER_MEAN):
+        assert compute_fedmaq_q_k_t_details(p=p, **zero_signal).q_hat == 0.0
+
+    for p in (0, -1, MINIMUM_POWER_MEAN):
+        assert compute_fedmaq_q_k_t_details(p=p, **{**zero_signal, "omega": 0.0}).q_hat == 80.0
+
+
+def test_power_mean_rejects_invalid_degree_and_weight_before_planning():
+    from fedmaq.core.quantization_planner import (
+        POWER_MEAN_FORMULATION,
+        _QuantParams,
+        compute_fedmaq_q_k_t_details,
+    )
+
+    cfg = {
+        "q_min": 1,
+        "q_max": 16,
+        "c_unit": 512.0,
+        "formulation": POWER_MEAN_FORMULATION,
+    }
+    with pytest.raises(KeyError, match="p"):
+        _QuantParams.from_cfg(cfg)
+    with pytest.raises(KeyError, match="omega"):
+        _QuantParams.from_cfg({**cfg, "p": 0})
+
+    common = dict(
+        c_k=8192.0,
+        c_unit=512.0,
+        g_k=0.5,
+        g_max=1.0,
+        n_k=100,
+        n_max=200,
+        formulation=POWER_MEAN_FORMULATION,
+        q_min=1,
+        q_max=16,
+    )
+    with pytest.raises(ValueError, match="algorithm.p"):
+        compute_fedmaq_q_k_t_details(p=float("inf"), **common)
+    with pytest.raises(ValueError, match="algorithm.omega"):
+        compute_fedmaq_q_k_t_details(omega=1.1, **common)
 
 
 def test_ablation_leave_one_out_arms():

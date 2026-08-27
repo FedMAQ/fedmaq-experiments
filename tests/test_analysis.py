@@ -16,6 +16,7 @@ from analysis import (
     EXPLORATION_GROUP,
     FORMULATION_STUDY_GROUP,
     GRID_GROUP,
+    POWER_MEAN_DESIGN_GROUP,
     RunRecord,
     accuracy_at_budget,
     accuracy_at_round,
@@ -30,16 +31,20 @@ from analysis import (
     first_crossing,
     frozen_refinement_layer,
     iso_byte_scores,
+    power_mean_stage_one,
     resolve_frozen_formulation,
+    resolve_power_mean_degree,
     round_at_budget,
     round_completeness,
     run_identity,
+    select_power_mean_degree_iso_byte,
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
     variant_of,
 )
 from common import get_canonical_output_dir
+from dump_expected_runs import POWER_MEAN_RECUT_MATRICES, expected_identities
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -1462,6 +1467,67 @@ def test_iso_byte_selection_prefers_the_better_model_at_equal_spend(tmp_path):
     assert result["budget_mb"] == pytest.approx(15.0)
     assert result["formulations"][1]["mean_accuracy_at_budget"] == pytest.approx(0.74)
     assert result["formulations"][3]["mean_accuracy_at_budget"] == pytest.approx(0.68)
+
+
+def test_power_mean_degree_selection_keeps_the_p_ladder_distinct(tmp_path):
+    runs = []
+    winners = {0.1: "p-1", 1.0: "p0"}
+    stage = power_mean_stage_one()
+    for alpha, winning_variant in winners.items():
+        for variant in stage.degrees_by_variant:
+            final_accuracy = 0.9 if variant == winning_variant else 0.7
+            for seed in stage.seeds:
+                run = _write_run(
+                    tmp_path,
+                    "fedmaq",
+                    "power_mean",
+                    seed,
+                    [0.4, 0.6, final_accuracy],
+                    [5.0, 10.0, 15.0],
+                    group=POWER_MEAN_DESIGN_GROUP,
+                    alpha=alpha,
+                    variant=variant,
+                )
+                run.algorithm_config = stage.algorithm_config
+                runs.append(run)
+
+    selection = select_power_mean_degree_iso_byte(runs)
+    assert selection["cifar10_alpha_0.1"]["winner"] == "p-1"
+    assert selection["cifar10_alpha_1.0"]["winner"] == "p0"
+    assert set(selection["cifar10_alpha_0.1"]["groups"]) == set(stage.degrees_by_variant)
+
+    resolution = resolve_power_mean_degree(selection)
+    assert resolution["selected_p"] == -1.0
+    assert resolution["omega"] == 0.5
+    assert resolution["rule"] == "severe-skew tie-break"
+
+
+def test_power_mean_degree_selection_rejects_an_incomplete_stage(tmp_path):
+    stage = power_mean_stage_one()
+    run = _write_run(
+        tmp_path,
+        "fedmaq",
+        "power_mean",
+        0,
+        [0.4, 0.6, 0.8],
+        [5.0, 10.0, 15.0],
+        group=POWER_MEAN_DESIGN_GROUP,
+        alpha=0.1,
+        variant="p1",
+    )
+    run.algorithm_config = stage.algorithm_config
+
+    with pytest.raises(ValueError, match="incomplete"):
+        select_power_mean_degree_iso_byte([run])
+
+
+def test_power_mean_recut_expected_set_has_all_84_stage_one_identities():
+    groups = expected_identities(POWER_MEAN_RECUT_MATRICES)
+
+    design = groups[POWER_MEAN_DESIGN_GROUP]
+    assert design["count"] == 84
+    assert len(set(design["runs"])) == 84
+    assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 42
 
 
 def test_iso_byte_budget_is_the_minimum_final_spend_across_arms(tmp_path):

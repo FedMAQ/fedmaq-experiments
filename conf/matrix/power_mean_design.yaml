@@ -1,0 +1,93 @@
+# Stage 1 of the re-cut formulation design. The selected-p omega follow-up is
+# deliberately created only after this matrix establishes the selected p.
+phase: explore
+experiment_group: power_mean_design
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: power_mean
+    label: resource-only-control
+    variant: resource-only
+    overrides:
+      - algorithm.formulation=0
+  - alg: power_mean
+    label: power-mean-p1
+    variant: p1
+    overrides:
+      - algorithm.p=1
+  - alg: power_mean
+    label: power-mean-p0.5
+    variant: p0.5
+    overrides:
+      - algorithm.p=0.5
+  - alg: power_mean
+    label: power-mean-p0-geometric
+    variant: p0
+    overrides:
+      - algorithm.p=0
+  - alg: power_mean
+    label: power-mean-p-0.5
+    variant: p-0.5
+    overrides:
+      - algorithm.p=-0.5
+  - alg: power_mean
+    label: power-mean-p-1-harmonic
+    variant: p-1
+    overrides:
+      - algorithm.p=-1
+  - alg: power_mean
+    label: power-mean-p-2
+    variant: p-2
+    overrides:
+      - algorithm.p=-2
+  - alg: power_mean
+    label: power-mean-minimum
+    variant: p-min
+    overrides:
+      - algorithm.p=min
+  - alg: power_mean
+    label: gradient-primary-kappa-0.5
+    variant: f3-kappa-0.5
+    overrides:
+      - algorithm.formulation=3
+      - algorithm.lambda_val=0.5
+  - alg: power_mean
+    label: gradient-primary-kappa-1.0
+    variant: f3-kappa-1.0
+    overrides:
+      - algorithm.formulation=3
+      - algorithm.lambda_val=1.0
+  - alg: power_mean
+    label: gradient-primary-kappa-2.0
+    variant: f3-kappa-2.0
+    overrides:
+      - algorithm.formulation=3
+      - algorithm.lambda_val=2.0
+  - alg: power_mean
+    label: threshold-tied-0.3
+    variant: f4-threshold-0.3
+    overrides:
+      - algorithm.formulation=4
+      - algorithm.tau_g=0.3
+      - algorithm.tau_n=0.3
+  - alg: power_mean
+    label: threshold-tied-0.5
+    variant: f4-threshold-0.5
+    overrides:
+      - algorithm.formulation=4
+      - algorithm.tau_g=0.5
+      - algorithm.tau_n=0.5
+  - alg: power_mean
+    label: threshold-tied-0.7
+    variant: f4-threshold-0.7
+    overrides:
+      - algorithm.formulation=4
+      - algorithm.tau_g=0.7
+      - algorithm.tau_n=0.7

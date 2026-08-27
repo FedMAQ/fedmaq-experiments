@@ -40,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONF_DIR = REPO_ROOT / "conf"
 MATRIX_DIR = CONF_DIR / "matrix"
 SNAPSHOT_PATH = REPO_ROOT / "docs" / "freeze" / "expected_runs.json"
+POWER_MEAN_SNAPSHOT_PATH = REPO_ROOT / "docs" / "recut" / "power_mean_expected_runs.json"
 
 # The matrices whose runs the manuscript reports, and therefore the only ones the
 # closure certificate can hold anything to.
@@ -66,6 +67,8 @@ REPORTABLE_MATRICES = (
     "uniform_memory_control",
 )
 
+POWER_MEAN_RECUT_MATRICES = ("power_mean_design",)
+
 
 def _load_matrix(name: str) -> dict:
     return OmegaConf.to_container(OmegaConf.load(MATRIX_DIR / f"{name}.yaml"), resolve=True)
@@ -74,7 +77,7 @@ def _load_matrix(name: str) -> dict:
 def expected_identities(matrix_names: tuple[str, ...] = REPORTABLE_MATRICES) -> dict[str, dict]:
     """Every run identity the named matrices promise, grouped by experiment group."""
     groups: dict[str, dict] = {}
-    cache: dict[tuple, tuple[float, int | None, bool]] = {}
+    cache: dict[tuple, tuple[float, int | str | None, bool]] = {}
 
     with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
 
@@ -146,11 +149,11 @@ def expected_identities(matrix_names: tuple[str, ...] = REPORTABLE_MATRICES) -> 
     return groups
 
 
-def _render(groups: dict[str, dict]) -> str:
+def _render(groups: dict[str, dict], command: str) -> str:
     document = {
         "note": (
             "GENERATED FILE -- do not edit by hand. Regenerate with "
-            "`uv run python scripts/dump_expected_runs.py`. Derived from "
+            f"`{command}`. Derived from "
             "conf/matrix/*.yaml; scripts/analysis.py reads it as the expected "
             "side of the closure certificate."
         ),
@@ -166,29 +169,38 @@ def main() -> int:
         action="store_true",
         help="exit non-zero if the committed snapshot differs from the matrices",
     )
+    parser.add_argument(
+        "--power-mean-recut",
+        action="store_true",
+        help="write or check the separate expected set for the power-mean re-cut",
+    )
     args = parser.parse_args()
 
-    groups = expected_identities()
-    rendered = _render(groups)
+    matrix_names = POWER_MEAN_RECUT_MATRICES if args.power_mean_recut else REPORTABLE_MATRICES
+    snapshot_path = POWER_MEAN_SNAPSHOT_PATH if args.power_mean_recut else SNAPSHOT_PATH
+    command = "uv run python scripts/dump_expected_runs.py --power-mean-recut"
+    if not args.power_mean_recut:
+        command = "uv run python scripts/dump_expected_runs.py"
+    groups = expected_identities(matrix_names)
+    rendered = _render(groups, command)
 
     if args.check:
-        if not SNAPSHOT_PATH.is_file():
-            print(f"missing snapshot: {SNAPSHOT_PATH.relative_to(REPO_ROOT)}", file=sys.stderr)
+        if not snapshot_path.is_file():
+            print(f"missing snapshot: {snapshot_path.relative_to(REPO_ROOT)}", file=sys.stderr)
             return 1
-        if SNAPSHOT_PATH.read_text(encoding="utf-8") != rendered:
+        if snapshot_path.read_text(encoding="utf-8") != rendered:
             print(
-                f"{SNAPSHOT_PATH.relative_to(REPO_ROOT)} is stale; regenerate with "
-                "`uv run python scripts/dump_expected_runs.py`",
+                f"{snapshot_path.relative_to(REPO_ROOT)} is stale; regenerate with `{command}`",
                 file=sys.stderr,
             )
             return 1
-        print(f"{SNAPSHOT_PATH.relative_to(REPO_ROOT)} is current")
+        print(f"{snapshot_path.relative_to(REPO_ROOT)} is current")
         return 0
 
-    SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT_PATH.write_text(rendered, encoding="utf-8")
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_path.write_text(rendered, encoding="utf-8")
     counts = ", ".join(f"{name} {body['count']}" for name, body in sorted(groups.items()))
-    print(f"wrote {SNAPSHOT_PATH.relative_to(REPO_ROOT)} ({counts})")
+    print(f"wrote {snapshot_path.relative_to(REPO_ROOT)} ({counts})")
     return 0
 
 

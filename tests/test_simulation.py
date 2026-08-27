@@ -214,6 +214,25 @@ def test_expected_runs_snapshot_is_current():
     )
 
 
+def test_power_mean_recut_expected_runs_snapshot_is_current():
+    """The re-cut's separate expected set must not silently redefine v1 closure."""
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_expected_runs.py", "--power-mean-recut", "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\n"
+        "Run `uv run python scripts/dump_expected_runs.py --power-mean-recut` "
+        "and commit the result."
+    )
+
+
 def test_each_reportable_arm_carries_one_regime():
     """``identity_key`` omits ``phase`` and ``post_process``, which ADR-0009 also
     lists as identity fields. That is admissible only while both are functions of

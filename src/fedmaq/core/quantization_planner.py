@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -23,13 +24,21 @@ DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
 
 GradNormProbe = Callable[[nn.Module, torch.Tensor, torch.Tensor], float]
 
-FORMULATION_CONSTANTS: dict[int, tuple[str, ...]] = {
+Formulation = int | str
+PowerMeanDegree = float | str
+
+POWER_MEAN_FORMULATION = "power_mean"
+MINIMUM_POWER_MEAN = "min"
+
+FORMULATION_CONSTANTS: dict[Formulation, tuple[str, ...]] = {
     0: (),
     1: ("gamma1", "gamma2"),
     2: ("gamma1", "gamma2"),
     3: ("lambda_val",),
     4: ("tau_g", "tau_n"),
+    POWER_MEAN_FORMULATION: ("p", "omega"),
 }
+SUPPORTED_FORMULATIONS = tuple(FORMULATION_CONSTANTS)
 
 
 @dataclass(frozen=True)
@@ -49,22 +58,29 @@ class _QuantParams:
     q_min: int
     q_max: int
     c_unit: float
-    formulation: int
+    formulation: Formulation
     gamma1: float
     gamma2: float
     lambda_val: float
     tau_g: float
     tau_n: float
+    p: PowerMeanDegree
+    omega: float
     bit_widths: tuple[int, ...]
     resource_aware: bool
 
     @classmethod
     def from_cfg(cls, alg_cfg: dict[str, Any]) -> _QuantParams:
-        formulation = int(alg_cfg["formulation"])
+        raw_formulation = alg_cfg["formulation"]
+        formulation: Formulation
+        if raw_formulation == POWER_MEAN_FORMULATION:
+            formulation = POWER_MEAN_FORMULATION
+        else:
+            formulation = int(raw_formulation)
         if formulation not in FORMULATION_CONSTANTS:
             raise ValueError(
                 f"algorithm.formulation={formulation} is not one of "
-                f"{sorted(FORMULATION_CONSTANTS)}; refusing to plan a round."
+                f"{SUPPORTED_FORMULATIONS}; refusing to plan a round."
             )
         required = FORMULATION_CONSTANTS[formulation]
 
@@ -83,6 +99,12 @@ class _QuantParams:
             lambda_val=constant("lambda_val", 1.0),
             tau_g=constant("tau_g", 0.5),
             tau_n=constant("tau_n", 0.5),
+            p=_parse_power_mean_degree(
+                alg_cfg["p"] if "p" in required else alg_cfg.get("p", 0.0)
+            ),
+            omega=_parse_power_mean_weight(
+                alg_cfg["omega"] if "omega" in required else alg_cfg.get("omega", 0.5)
+            ),
             bit_widths=tuple(int(b) for b in alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)),
             resource_aware=bool(alg_cfg.get("resource_aware", True)),
         )
@@ -119,6 +141,49 @@ def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
     return max(eligible) if eligible else min(bit_widths)
 
 
+def _parse_power_mean_degree(value: Any) -> PowerMeanDegree:
+    """Return an exact supported power-mean degree or fail before planning."""
+    if value == MINIMUM_POWER_MEAN:
+        return MINIMUM_POWER_MEAN
+    try:
+        degree = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"algorithm.p={value!r} must be finite or {MINIMUM_POWER_MEAN!r}") from exc
+    if not math.isfinite(degree):
+        raise ValueError(f"algorithm.p={value!r} must be finite or {MINIMUM_POWER_MEAN!r}")
+    return degree
+
+
+def _parse_power_mean_weight(value: Any) -> float:
+    """Return a valid state-signal weight for the power-mean family."""
+    try:
+        weight = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"algorithm.omega={value!r} must lie in [0, 1]") from exc
+    if not math.isfinite(weight) or not 0.0 <= weight <= 1.0:
+        raise ValueError(f"algorithm.omega={value!r} must lie in [0, 1]")
+    return weight
+
+
+def _weighted_power_mean(
+    tilde_g: float, tilde_n: float, p: PowerMeanDegree, omega: float
+) -> float:
+    """Evaluate the chosen power-mean degree with exact named limits."""
+    if omega == 0.0:
+        return tilde_n
+    if omega == 1.0:
+        return tilde_g
+    if p == MINIMUM_POWER_MEAN:
+        return min(tilde_g, tilde_n)
+
+    assert isinstance(p, float)
+    if p == 0.0:
+        return (tilde_g**omega) * (tilde_n ** (1.0 - omega))
+    if p < 0.0 and (tilde_g == 0.0 or tilde_n == 0.0):
+        return 0.0
+    return (omega * tilde_g**p + (1.0 - omega) * tilde_n**p) ** (1.0 / p)
+
+
 def compute_fedmaq_q_k_t_details(
     c_k: float,
     c_unit: float,
@@ -126,7 +191,7 @@ def compute_fedmaq_q_k_t_details(
     g_max: float,
     n_k: int,
     n_max: int,
-    formulation: int,
+    formulation: Formulation,
     q_min: int,
     q_max: int,
     gamma1: float = 0.5,
@@ -134,6 +199,8 @@ def compute_fedmaq_q_k_t_details(
     lambda_val: float = 1.0,
     tau_g: float = 0.5,
     tau_n: float = 0.5,
+    p: PowerMeanDegree = 0.0,
+    omega: float = 0.5,
     bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
     resource_aware: bool = True,
 ) -> QuantizationDecision:
@@ -173,8 +240,16 @@ def compute_fedmaq_q_k_t_details(
             q_hat = q_mid
         else:
             q_hat = q_min
+    elif formulation == POWER_MEAN_FORMULATION:
+        term = _weighted_power_mean(
+            tilde_g,
+            tilde_n,
+            _parse_power_mean_degree(p),
+            _parse_power_mean_weight(omega),
+        )
+        q_hat = q_min + np.round((q_max - q_min) * term)
     else:
-        raise ValueError(f"formulation={formulation} is not one of {sorted(FORMULATION_CONSTANTS)}")
+        raise ValueError(f"formulation={formulation} is not one of {SUPPORTED_FORMULATIONS}")
 
     q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
     combined = q_hat if not resource_aware else min(q_k_max_raw, q_hat)
@@ -192,7 +267,7 @@ def compute_fedmaq_q_k_t(
     g_max: float,
     n_k: int,
     n_max: int,
-    formulation: int,
+    formulation: Formulation,
     q_min: int,
     q_max: int,
     gamma1: float = 0.5,
@@ -200,6 +275,8 @@ def compute_fedmaq_q_k_t(
     lambda_val: float = 1.0,
     tau_g: float = 0.5,
     tau_n: float = 0.5,
+    p: PowerMeanDegree = 0.0,
+    omega: float = 0.5,
     bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
     resource_aware: bool = True,
 ) -> int:
@@ -219,6 +296,8 @@ def compute_fedmaq_q_k_t(
         lambda_val=lambda_val,
         tau_g=tau_g,
         tau_n=tau_n,
+        p=p,
+        omega=omega,
         bit_widths=bit_widths,
         resource_aware=resource_aware,
     ).q
@@ -404,6 +483,8 @@ class QuantizationPlanner:
                 lambda_val=qp.lambda_val,
                 tau_g=qp.tau_g,
                 tau_n=qp.tau_n,
+                p=qp.p,
+                omega=qp.omega,
                 bit_widths=qp.bit_widths,
                 resource_aware=qp.resource_aware,
             )

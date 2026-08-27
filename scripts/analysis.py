@@ -34,9 +34,11 @@ import sys
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import pandas as pd
+from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -50,7 +52,7 @@ class RunRecord:
     dataset: str
     alpha: float
     algorithm: str
-    formulation: int | None
+    formulation: int | str | None
     seed: int
     csv_path: Path
     # Refinement-flag state, needed to identify the unrefined reference cell that
@@ -221,6 +223,63 @@ ABLATION_GROUP = "ablation"
 # savings of a pipeline the study exists to withhold. See Decision 71.
 FORMULATION_STUDY_GROUP = "formulation_study"
 GRID_GROUP = "benchmark_grid"
+POWER_MEAN_DESIGN_GROUP = "power_mean_design"
+
+
+@dataclass(frozen=True)
+class PowerMeanStageOne:
+    """The selectable p settings and shared seeds declared by the re-cut matrix."""
+
+    experiment_group: str
+    algorithm_config: str
+    degrees_by_variant: dict[str, float | str]
+    omega: float
+    seeds: frozenset[int]
+
+
+@cache
+def power_mean_stage_one() -> PowerMeanStageOne:
+    """Compose the Stage-1 matrix so selection shares its configuration source."""
+    conf_dir = Path(__file__).resolve().parents[1] / "conf"
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(conf_dir / "matrix" / f"{POWER_MEAN_DESIGN_GROUP}.yaml"), resolve=True
+    )
+    degrees_by_variant: dict[str, float | str] = {}
+    omegas: set[float] = set()
+    seed_sets: list[frozenset[int]] = []
+    algorithm_configs: set[str] = set()
+    with initialize_config_dir(config_dir=str(conf_dir), version_base="1.3"):
+        for run in matrix["runs"]:
+            algorithm_config = str(run["alg"])
+            composed = compose(
+                config_name="config",
+                overrides=[f"algorithm={algorithm_config}", *run.get("overrides", [])],
+            )
+            if composed.algorithm.formulation != "power_mean":
+                continue
+            p = composed.algorithm.p
+            degrees_by_variant[str(run["variant"])] = p if p == "min" else float(p)
+            omegas.add(float(composed.algorithm.omega))
+            seed_sets.append(frozenset(int(seed) for seed in run.get("seeds", matrix["seeds"])))
+            algorithm_configs.add(algorithm_config)
+
+    if (
+        not degrees_by_variant
+        or len(algorithm_configs) != 1
+        or len(omegas) != 1
+        or len(set(seed_sets)) != 1
+    ):
+        raise ValueError(
+            f"{POWER_MEAN_DESIGN_GROUP} must declare one power-mean config, "
+            "at least one degree, one shared omega, and one shared seed set"
+        )
+    return PowerMeanStageOne(
+        experiment_group=str(matrix["experiment_group"]),
+        algorithm_config=algorithm_configs.pop(),
+        degrees_by_variant=degrees_by_variant,
+        omega=omegas.pop(),
+        seeds=seed_sets[0],
+    )
 
 
 def confirmatory_runs(runs: list[RunRecord]) -> list[RunRecord]:
@@ -837,7 +896,7 @@ def _declared_round(name: str, body: dict) -> int:
         raise ValueError(
             f"experiment group {name!r} declares round budgets {sorted(declared)}; "
             "the closure certificate needs exactly one. Regenerate "
-            "docs/freeze/expected_runs.json, or split the group."
+            "the supplied expected-run manifest, or split the group."
         )
     return declared.pop()
 
@@ -853,10 +912,10 @@ def closure_certificate(
     A key count is not a certificate. "105 distinct keys" proves only that 105
     keys exist, and the failure this exists to catch produced a set that was
     internally consistent and 60% short. So the observed identities are diffed
-    against ``docs/freeze/expected_runs.json``, which is derived from
-    ``conf/matrix/*.yaml`` rather than asserted, and the three ways the diff can
-    fail -- missing, unexpected, duplicate -- are reported separately because
-    they have different causes and different repairs.
+    against the supplied expected-run manifest, derived from ``conf/matrix/*.yaml``
+    rather than asserted. The three ways the diff can fail -- missing, unexpected,
+    duplicate -- are reported separately because they have different causes and
+    different repairs.
 
     ``all_closed`` is an AND across every requested group. Study 1 cites the
     primary grid, the formulation study, the ablation and the uniform-memory
@@ -891,8 +950,8 @@ def closure_certificate(
     if unknown:
         raise ValueError(
             f"no expected-run manifest entry for {unknown}; the manifest holds "
-            f"{sorted(manifest_groups)}. Regenerate docs/freeze/expected_runs.json, or "
-            "check the name against the experiment_group its matrix declares."
+            f"{sorted(manifest_groups)}. Regenerate the supplied expected-run manifest, "
+            "or check the name against the experiment_group its matrix declares."
         )
 
     certified: dict[str, dict] = {}
@@ -1103,6 +1162,77 @@ def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dic
         cell["formulations"] = detail
 
     return result
+
+
+def select_power_mean_degree_iso_byte(runs: list[RunRecord]) -> dict:
+    """Select the Stage-1 compensation degree at the minimum common MB budget.
+
+    The first re-cut stage selects only among the seven power-mean degrees. F0,
+    F3 and F4 are structural comparators in the same matrix, but cannot stand in
+    for a compensation degree or collapse the p ladder under ``power_mean``.
+    """
+    stage = power_mean_stage_one()
+    candidates = [
+        r
+        for r in runs
+        if r.experiment_group == stage.experiment_group
+        and r.algorithm_config == stage.algorithm_config
+        and r.formulation == "power_mean"
+        and r.variant in stage.degrees_by_variant
+    ]
+    for dataset, alpha in sorted({(r.dataset, r.alpha) for r in candidates}):
+        by_variant = {
+            variant: [
+                r
+                for r in candidates
+                if r.dataset == dataset and r.alpha == alpha and r.variant == variant
+            ]
+            for variant in stage.degrees_by_variant
+        }
+        missing = [variant for variant, members in by_variant.items() if not members]
+        bad_seeds = {
+            variant: [r.seed for r in members]
+            for variant, members in by_variant.items()
+            if len(members) != len(stage.seeds) or {r.seed for r in members} != stage.seeds
+        }
+        if missing or bad_seeds:
+            raise ValueError(
+                f"power-mean Stage 1 is incomplete for {dataset} alpha={alpha}: "
+                f"missing variants={missing}, invalid seeds={bad_seeds}"
+            )
+    return iso_byte_scores(candidates, lambda r: r.variant)
+
+
+def resolve_power_mean_degree(winner_result: dict, dataset: str = "cifar10") -> dict:
+    """Resolve Stage 1's two skew verdicts to the selected p at its shared omega."""
+    entries = {
+        entry["alpha"]: entry for entry in winner_result.values() if entry["dataset"] == dataset
+    }
+    required = {0.1, 1.0}
+    missing = required - set(entries)
+    if missing:
+        raise ValueError(
+            f"power-mean degree selection needs both skews for {dataset!r}; "
+            f"missing alpha {sorted(missing)}"
+        )
+
+    stage = power_mean_stage_one()
+    severe = entries[0.1]["winner"]
+    moderate = entries[1.0]["winner"]
+    if severe not in stage.degrees_by_variant or moderate not in stage.degrees_by_variant:
+        raise ValueError(
+            f"power-mean degree selection has invalid winners: severe={severe!r}, "
+            f"moderate={moderate!r}"
+        )
+    selected_variant = severe
+    return {
+        "dataset": dataset,
+        "selected_p": stage.degrees_by_variant[selected_variant],
+        "omega": stage.omega,
+        "alpha_0.1_winner": severe,
+        "alpha_1.0_winner": moderate,
+        "rule": "agreement" if severe == moderate else "severe-skew tie-break",
+    }
 
 
 def select_winner(runs: list[RunRecord]) -> dict:

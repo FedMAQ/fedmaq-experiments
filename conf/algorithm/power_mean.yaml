@@ -1,0 +1,9 @@
+# New re-cut candidate. It intentionally does not inherit frozen v1's F1/F2
+# exponents, so gamma1/gamma2 cannot leak into a power-mean run.
+defaults:
+  - _power_mean_base
+  - _self_
+
+formulation: power_mean
+p: 0
+omega: 0.5

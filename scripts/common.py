@@ -258,7 +258,7 @@ def identity_key(
     algorithm_config: str,
     variant: str,
     alpha: float,
-    formulation: int | None,
+    formulation: int | str | None,
     seed: int,
 ) -> str:
     """The canonical identity of one run, serialized in exactly one place.
@@ -295,5 +295,5 @@ def identity_key(
     own.
     """
     group = experiment_group if experiment_group else NO_GROUP
-    form = "none" if formulation is None else str(int(formulation))
+    form = "none" if formulation is None else str(formulation)
     return f"{dataset}|{group}|{algorithm_config}|{variant}|a{float(alpha)!r}|f{form}|s{int(seed)}"
