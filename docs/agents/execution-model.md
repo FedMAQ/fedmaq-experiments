@@ -94,9 +94,9 @@ reported runs.
 5. **Freeze the refinement layer.** Write the surviving set into
    `conf/algorithm/fedmaq.yaml` — **and only there.** The ablation arms inherit that
    file via their Hydra defaults list and restate only their own removal, so one edit
-   reaches all of them. Then `./.venv/Scripts/python.exe scripts/dump_frozen_configs.py`
+   reaches all of them. Then `./.venv/bin/python scripts/dump_frozen_configs.py`
    to refresh `docs/freeze/resolved_configs.yaml`, and run
-   `./.venv/Scripts/python.exe -m pytest tests/test_simulation.py`.
+   `./.venv/bin/python -m pytest tests/test_simulation.py`.
    **Do not tag here.** §4.3.1 locks and tags three things together — mechanism set,
    selected formulation, baseline hyperparameter table — and two of them do not exist
    until step 9. The single tag is step 10.
@@ -209,7 +209,7 @@ where the count is pinned.**
 
 - **Declarative matrix runner mandate.** Hydra `--multirun` causes CUDA VRAM leaks and
   lands runs in a date-keyed tree with no `experiment_group`. Always launch sweeps
-  with `./.venv/Scripts/python.exe scripts/run_matrix.py --matrix <name>`. Every confirmatory run
+  with `./.venv/bin/python scripts/run_matrix.py --matrix <name>`. Every confirmatory run
   has a matrix file; if you find yourself hand-typing a `--multirun` for one, the file
   is missing and should be written instead.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
@@ -224,11 +224,11 @@ where the count is pinned.**
 - **Use `--shard I/N` for multi-host dispatch.** Sharding is a round-robin partition
   of the fully expanded canonical matrix list, independent of host, completion state,
   and wall clock. Every host must use the same matrix and `N`, with a distinct `I`:
-  `./.venv/Scripts/python.exe scripts/run_matrix.py --matrix benchmark_grid --shard 2/4`.
+  `./.venv/bin/python scripts/run_matrix.py --matrix benchmark_grid --shard 2/4`.
   The dry run prints canonical indices and the shard's status file is
   `sweep_status.shard-I-of-N.json`, so hosts do not race on one JSON file.
 - **Merge shard status only after collection.** From the shared sweep-group directory,
-  run `./.venv/Scripts/python.exe scripts/merge_sweep_status.py --group-dir <group-dir>`.
+  run `./.venv/bin/python scripts/merge_sweep_status.py --group-dir <group-dir>`.
   The merger refuses missing or overlapping canonical indices before writing the
   aggregate `sweep_status.json`. Each run manifest records its producing host and
   shard; these are provenance fields, not substitutes for the modeled execution
