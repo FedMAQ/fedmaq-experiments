@@ -179,6 +179,36 @@ total bytes. Pair it with per-round payload or do not cite it.
 _Avoid_: **rounds-to-converge** (former Ch3 §3.3.2 wording, fixed 2026-08-07;
 `chapter_4.tex:280` is canonical)
 
+### Byte-Accounting Seam (`fedmaq-experiments`#25)
+
+The measurement layer the terms above are read off of. One canonical function
+replaced four independent per-arm implementations. [ADR-0018](docs/adr/0018-byte-accounting-seam.md)
+
+**Payload bytes**:
+The pre-encoding size a hook hands to compression each round — codes plus scale,
+before the content-sensitive step below. Logged per-hook as `payload_bytes`,
+aggregated as `communication/round_payload_bytes`. Reproducible from config alone,
+unlike measured bytes.
+_Avoid_: transmitted bytes, wire bytes (both actually name measured bytes, below)
+
+**Measured bytes**:
+The single accounting primitive — `measure_bytes(payload: bytes) -> int` in
+`transport.py` — every arm routes through for the transmitted, post-encoding size.
+Content-sensitive (zlib for the compressed arms), which is why it feeds the
+cumulative-MB terms above but cannot itself be recomputed offline from a logged
+count alone.
+_Avoid_: measured seam (the commit-message name for the refactor that produced
+this function, not the quantity the function returns)
+
+**Raw-payload capture**:
+Opt-in per-round retention of a hook's actual payload bytes, not just their
+measured length, gated by `experiment.telemetry.log_payloads` (default off).
+Exists because measured bytes can't be re-scored against a hypothetical encoder
+from a count alone — full offline reproducibility needs the payloads themselves.
+Off by default: a multi-MB blob per client per round is a real cost over Flower's
+simulated Ray channel.
+_Avoid_: payload logging (ambiguous with ordinary telemetry, which is always on)
+
 ### Server-KD Repair Study (Section 5.5–5.7)
 
 The v2 arc's terms. The protocol itself is
