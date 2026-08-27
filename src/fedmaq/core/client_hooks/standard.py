@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.base import ClientFitStrategy, attach_payloads_if_enabled
 from fedmaq.core.client_hooks.training_skeleton import (
     StepResult,
     compress_and_reconstruct,
@@ -129,6 +129,7 @@ class StandardFit(ClientFitStrategy):
         }
         if "q" in config:
             fit_metrics["q"] = int(config["q"])
+        attach_payloads_if_enabled(client, fit_metrics, client.compressor_hook.last_payloads)
 
         if instrument_fedprox:
             gn_affine_norm = 0.0

@@ -74,3 +74,25 @@ def standard_evaluate(
     accuracy = correct / total if total > 0 else 0.0
 
     return float(loss), total, {"accuracy": float(accuracy)}
+
+
+def attach_payloads_if_enabled(
+    client: GenericClient, fit_metrics: dict[str, Any], payloads: list[bytes]
+) -> None:
+    """Frame and attach this fit's pre-encoding payloads to ``fit_metrics``.
+
+    Gated on ``experiment.telemetry.log_payloads`` (default off): a multi-MB
+    blob per client per round is a real cost over Flower's simulated Ray
+    object-store channel, so no run pays it unless it wants AC 2's full
+    reproducible-offline capability (see
+    ``fedmaq.baselines.transport.pack_payloads`` and
+    ``TelemetryManager.record_fit_round``). When off, ``fit_metrics`` is left
+    untouched — no key, no behavior change.
+    """
+    exp_config = client.config.get("experiment", client.config)
+    if not exp_config.get("telemetry", {}).get("log_payloads", False):
+        return
+
+    from fedmaq.baselines.transport import pack_payloads
+
+    fit_metrics["payloads_framed"] = pack_payloads(payloads)

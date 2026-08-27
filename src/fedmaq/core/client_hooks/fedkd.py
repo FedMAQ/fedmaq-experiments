@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.base import ClientFitStrategy, attach_payloads_if_enabled
 from fedmaq.core.client_hooks.training_skeleton import compress_and_reconstruct
 from fedmaq.core.models import (
     get_kd_teacher_model,
@@ -140,21 +140,24 @@ class FedKDFit(ClientFitStrategy):
         avg_task_loss_student = loss_s_task_sum / batches if batches > 0 else 0.0
         avg_task_loss_teacher = loss_t_task_sum / batches if batches > 0 else 0.0
 
+        fit_metrics = {
+            "bytes_uploaded": byte_size,
+            "payload_bytes": client.compressor_hook.last_payload_bytes,
+            "partition_id": int(client.cid),
+            "local_loss": avg_total_loss,
+            "train_loss": avg_total_loss,
+            "train_acc": avg_train_acc,
+            "epochs_trained": epochs,
+            "kd_loss_student": avg_kd_loss_student,
+            "kd_loss_teacher": avg_kd_loss_teacher,
+            "task_loss_student": avg_task_loss_student,
+            "task_loss_teacher": avg_task_loss_teacher,
+            "teacher_acc": avg_teacher_acc,
+        }
+        attach_payloads_if_enabled(client, fit_metrics, client.compressor_hook.last_payloads)
+
         return (
             reconstructed_params,
             len(client.trainloader.dataset),
-            {
-                "bytes_uploaded": byte_size,
-                "payload_bytes": client.compressor_hook.last_payload_bytes,
-                "partition_id": int(client.cid),
-                "local_loss": avg_total_loss,
-                "train_loss": avg_total_loss,
-                "train_acc": avg_train_acc,
-                "epochs_trained": epochs,
-                "kd_loss_student": avg_kd_loss_student,
-                "kd_loss_teacher": avg_kd_loss_teacher,
-                "task_loss_student": avg_task_loss_student,
-                "task_loss_teacher": avg_task_loss_teacher,
-                "teacher_acc": avg_teacher_acc,
-            },
+            fit_metrics,
         )

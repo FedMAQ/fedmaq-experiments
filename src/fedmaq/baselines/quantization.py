@@ -50,7 +50,7 @@ def _serialize_codes(codes: np.ndarray, scale: float) -> bytes:
 def _quantize_deltas(
     deltas: list[np.ndarray],
     quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
-) -> tuple[list[np.ndarray], int, int]:
+) -> tuple[list[np.ndarray], int, int, list[bytes]]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
     Iterates ``deltas``, skipping empty tensors (free: nothing is transmitted)
@@ -59,14 +59,17 @@ def _quantize_deltas(
     quantization but still route their (all-zero) codes through the same
     measured transport, so no per-arm byte arithmetic survives outside it.
 
-    Returns ``(quantized_deltas, measured_bytes, payload_bytes)`` — the last
-    is the pre-encoding payload size (codes + scale, before ``measure_bytes``),
-    logged so a future encoder change can be re-scored offline without
-    re-running training (see ``TelemetryManager.record_fit_round``).
+    Returns ``(quantized_deltas, measured_bytes, payload_bytes, payloads)``.
+    ``payload_bytes`` is the pre-encoding payload size (codes + scale, before
+    ``measure_bytes``); ``payloads`` is the same data as the actual per-tensor
+    byte strings, one per ``measure_bytes`` call above, so a future encoder
+    change can be re-scored against the exact original payloads offline,
+    not just their summed length (see ``TelemetryManager.record_fit_round``).
     """
     quantized_deltas: list[np.ndarray] = []
     total_bytes = 0
     total_payload_bytes = 0
+    payloads: list[bytes] = []
 
     for d in deltas:
         if d.size == 0:
@@ -84,8 +87,9 @@ def _quantize_deltas(
         payload = _serialize_codes(codes, scale)
         total_bytes += measure_bytes(payload)
         total_payload_bytes += len(payload)
+        payloads.append(payload)
 
-    return quantized_deltas, total_bytes, total_payload_bytes
+    return quantized_deltas, total_bytes, total_payload_bytes, payloads
 
 
 class FedPAQCompressionHook(CompressionHook):
@@ -136,12 +140,14 @@ class FedPAQCompressionHook(CompressionHook):
         -------
         tuple[list[np.ndarray], int]
             Quantized deltas and the measured size in bytes. The pre-encoding
-            payload size is stashed on ``self.last_payload_bytes``.
+            payload size is stashed on ``self.last_payload_bytes`` and the
+            payloads themselves on ``self.last_payloads``.
         """
-        quantized_deltas, total_bytes, payload_bytes = _quantize_deltas(
+        quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
             deltas, self._quantize_elem
         )
         self.last_payload_bytes = payload_bytes
+        self.last_payloads = payloads
         return quantized_deltas, total_bytes
 
 
@@ -195,10 +201,12 @@ class DAdaQuantCompressionHook(CompressionHook):
         -------
         tuple[list[np.ndarray], int]
             Quantized deltas and the measured size in bytes. The pre-encoding
-            payload size is stashed on ``self.last_payload_bytes``.
+            payload size is stashed on ``self.last_payload_bytes`` and the
+            payloads themselves on ``self.last_payloads``.
         """
-        quantized_deltas, total_bytes, payload_bytes = _quantize_deltas(
+        quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
             deltas, self._quantize_elem
         )
         self.last_payload_bytes = payload_bytes
+        self.last_payloads = payloads
         return quantized_deltas, total_bytes

@@ -77,9 +77,22 @@ class CompressionHook:
     without re-running training (see ``TelemetryManager.record_fit_round``).
     Every concrete hook sets it; it defaults to 0 here for a hook that hasn't
     compressed anything yet.
+
+    ``last_payloads`` is the same round's payloads as an actual list of byte
+    strings, one per ``measure_bytes`` call the hook made (one per tensor for
+    the quantized/SVD hooks, one per non-empty tensor here). A summed length
+    alone cannot be re-scored against a different encoder — compression is
+    content-sensitive, not just size-sensitive — so full AC 2 reproducibility
+    needs the payloads themselves, with call boundaries preserved (summing a
+    new encoder over the list differs from running it once over a
+    concatenation). Every concrete hook sets it; kept unconditionally since
+    building the list costs nothing beyond what ``last_payload_bytes`` already
+    computes — callers decide whether to carry it further (see
+    ``fedmaq.baselines.transport.pack_payloads``).
     """
 
     last_payload_bytes: int = 0
+    last_payloads: list[bytes] = []
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Pass ``deltas`` through unchanged; measure their transmitted size.
@@ -96,6 +109,7 @@ class CompressionHook:
 
         payloads = [d.astype(np.float32).tobytes() for d in deltas if d.size]
         self.last_payload_bytes = sum(len(p) for p in payloads)
+        self.last_payloads = payloads
         byte_size = sum(measure_bytes(p) for p in payloads)
         return deltas, byte_size
 

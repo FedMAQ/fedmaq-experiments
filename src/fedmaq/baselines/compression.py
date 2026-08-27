@@ -128,6 +128,7 @@ class FedKDCompressionHook(CompressionHook):
         reconstructed_deltas = []
         total_bytes = 0
         total_payload_bytes = 0
+        payloads: list[bytes] = []
 
         for d in deltas:
             if d.size == 0:
@@ -139,6 +140,7 @@ class FedKDCompressionHook(CompressionHook):
             payload = svd_payload(compressed)
             total_bytes += measure_bytes(payload)
             total_payload_bytes += len(payload)
+            payloads.append(payload)
 
             if len(compressed) == 3:
                 # Reconstruct/decompress locally to return in reconstructed_params
@@ -149,4 +151,5 @@ class FedKDCompressionHook(CompressionHook):
                 reconstructed_deltas.append(d)
 
         self.last_payload_bytes = total_payload_bytes
+        self.last_payloads = payloads
         return reconstructed_deltas, total_bytes

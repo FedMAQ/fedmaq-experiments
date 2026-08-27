@@ -18,7 +18,10 @@ Encoder choice: zlib at its default settings, inherited from the FedMAQ
 post-processing path this seam generalizes (no stated reason to change it).
 """
 
+import struct
 import zlib
+
+_LENGTH_PREFIX = struct.Struct("<Q")
 
 
 def measure_bytes(payload: bytes) -> int:
@@ -29,3 +32,28 @@ def measure_bytes(payload: bytes) -> int:
     add anything on top of the compressed result.
     """
     return len(zlib.compress(payload))
+
+
+def pack_payloads(payloads: list[bytes]) -> bytes:
+    """Frame a list of pre-encoding payloads into one length-prefixed blob.
+
+    Every :func:`measure_bytes` call site measures one payload per tensor/leg
+    and sums the results — ``measure_bytes`` is not additive over concatenation,
+    so a single concatenated blob cannot be re-scored against a different
+    encoder and reproduce the original per-payload sum (#25 AC 2). Framing
+    preserves each call's boundary so :func:`unpack_payloads` can hand every
+    payload back individually.
+    """
+    return b"".join(_LENGTH_PREFIX.pack(len(p)) + p for p in payloads)
+
+
+def unpack_payloads(buf: bytes) -> list[bytes]:
+    """Inverse of :func:`pack_payloads`."""
+    payloads = []
+    offset = 0
+    while offset < len(buf):
+        (length,) = _LENGTH_PREFIX.unpack_from(buf, offset)
+        offset += _LENGTH_PREFIX.size
+        payloads.append(buf[offset : offset + length])
+        offset += length
+    return payloads

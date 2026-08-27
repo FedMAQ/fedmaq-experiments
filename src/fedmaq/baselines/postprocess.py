@@ -79,6 +79,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         new_codes: list[np.ndarray] = []
         total_bytes = 0
         total_payload_bytes = 0
+        payloads: list[bytes] = []
 
         for i, d in enumerate(deltas):
             if d.size == 0:
@@ -103,6 +104,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 zero_payload = _serialize_codes(zero_codes, scale)
                 total_bytes += measure_bytes(zero_payload)
                 total_payload_bytes += len(zero_payload)
+                payloads.append(zero_payload)
                 continue
 
             if self.q <= 1:
@@ -140,9 +142,11 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
             payload = _serialize_codes(diffed, scale)
             total_bytes += measure_bytes(payload)
             total_payload_bytes += len(payload)
+            payloads.append(payload)
 
         self._state[_RESIDUAL_KEY] = ArrayRecord(numpy_ndarrays=new_residuals)
         self._state[_PREV_CODES_KEY] = ArrayRecord(numpy_ndarrays=new_codes)
 
         self.last_payload_bytes = total_payload_bytes
+        self.last_payloads = payloads
         return out_deltas, total_bytes

@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fedmaq.core.client_hooks.base import ClientFitStrategy
+from fedmaq.core.client_hooks.base import ClientFitStrategy, attach_payloads_if_enabled
 from fedmaq.core.client_hooks.training_skeleton import StepResult, run_epochs
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 
@@ -167,19 +167,27 @@ class FedDistillFit(ClientFitStrategy):
         avg_distill_loss = result.extra_avgs["distill_loss"]
         avg_train_acc = result.accuracy if result.accuracy is not None else 0.0
 
+        fit_metrics = {
+            "bytes_uploaded": weight_bytes + logit_measured_bytes,
+            "payload_bytes": payload_bytes,
+            "partition_id": int(client.cid),
+            "local_loss": avg_total_loss,
+            "train_loss": avg_total_loss,
+            "train_acc": avg_train_acc,
+            "epochs_trained": epochs,
+            "task_loss": avg_task_loss,
+            "distill_loss": avg_distill_loss,
+            "client_logits": logit_bytes,
+        }
+        # Weight-leg payloads plus the logit-leg payload, in the same order as
+        # the measure_bytes calls above (compressor_hook.compress, then the
+        # logit-side measure_bytes) so replay preserves call boundaries.
+        attach_payloads_if_enabled(
+            client, fit_metrics, [*client.compressor_hook.last_payloads, logit_bytes]
+        )
+
         return (
             updated_params,
             len(client.trainloader.dataset),
-            {
-                "bytes_uploaded": weight_bytes + logit_measured_bytes,
-                "payload_bytes": payload_bytes,
-                "partition_id": int(client.cid),
-                "local_loss": avg_total_loss,
-                "train_loss": avg_total_loss,
-                "train_acc": avg_train_acc,
-                "epochs_trained": epochs,
-                "task_loss": avg_task_loss,
-                "distill_loss": avg_distill_loss,
-                "client_logits": logit_bytes,
-            },
+            fit_metrics,
         )

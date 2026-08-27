@@ -4,6 +4,7 @@ import csv
 import json
 import logging
 import os
+import pickle
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -119,6 +120,9 @@ class TelemetryManager:
 
         self.jsonl_path = self.log_dir / "experiment_log.jsonl"
         self.csv_path = self.log_dir / "experiment_log.csv"
+        # Only created if a client ever attaches "payloads_framed" (opt-in via
+        # experiment.telemetry.log_payloads; see record_fit_round).
+        self.payloads_dir = self.log_dir / "payloads"
 
         # Stable CSV field schema — captured on first write, held constant thereafter.
         # Rows with missing keys are written as empty strings; extra keys are silently
@@ -181,11 +185,16 @@ class TelemetryManager:
 
         Also snapshots ``round_payload_bytes`` — the summed pre-encoding
         payload size each hook stashes on ``compressor_hook.last_payload_bytes``
-        (see ``fedmaq.baselines.transport``). zlib is not linear, so this does
-        not make ``round_bytes`` bit-exactly recomputable from a different
-        encoder offline; logging both totals means a *future accounting
-        change* can be evaluated against already-logged rounds without
-        re-running training, which is what #25's AC 2 actually needs.
+        (see ``fedmaq.baselines.transport``). Because ``measure_bytes`` is
+        content-sensitive (zlib is not linear in payload length), this scalar
+        alone cannot be re-scored against a different encoder — only its
+        *own* total is reproducible, not a hypothetical alternative's. Full
+        AC 2 reproducibility needs the actual payloads: when a client attaches
+        ``"payloads_framed"`` (opt-in via ``experiment.telemetry.log_payloads``,
+        see ``fedmaq.core.client_hooks.base.attach_payloads_if_enabled``), this
+        method decodes and persists them to ``self.payloads_dir`` so a future
+        encoder can be replayed against the exact original payloads, call
+        boundaries preserved, without re-running training.
         """
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
@@ -228,6 +237,7 @@ class TelemetryManager:
         round_bytes_downloaded = 0
         round_payload_bytes = 0
         client_bytes_uploaded: list[int] = []
+        round_payloads: dict[int, list[bytes]] = {}
 
         exp_config = strategy.config.get("experiment", strategy.config)
         epochs = exp_config.get("local_epochs", 5)
@@ -246,6 +256,13 @@ class TelemetryManager:
             # separate pre-encoding payload (cfd/fedmd — dropped baselines
             # with their own accounting, out of #25's scope).
             round_payload_bytes += int(fit_res.metrics.get("payload_bytes", bytes_uploaded))
+
+            payloads_framed = fit_res.metrics.get("payloads_framed")
+            if isinstance(payloads_framed, bytes) and payloads_framed:
+                from fedmaq.baselines.transport import unpack_payloads
+
+                round_payloads[cid] = unpack_payloads(payloads_framed)
+
             num_samples = fit_res.num_examples
             train_sample_count = strategy.hook.local_train_sample_count(
                 num_samples=num_samples,
@@ -267,6 +284,9 @@ class TelemetryManager:
             round_delays.append(client_total_time)
             round_bytes_downloaded += model_size_bytes
             round_bytes_uploaded += bytes_uploaded
+
+        if round_payloads:
+            self._write_round_payloads(server_round, round_payloads)
 
         client_sim_time = max(round_delays) if round_delays else 0.0
 
@@ -402,6 +422,25 @@ class TelemetryManager:
                 writer.writerow(metrics)
         except Exception as exc:
             logger.warning(f"Failed to write to local CSV log: {exc}")
+
+    def _write_round_payloads(
+        self, server_round: int, round_payloads: dict[int, list[bytes]]
+    ) -> None:
+        """Persist this round's pre-encoding payloads, keyed by partition id.
+
+        One file per round (rather than one growing file for the whole run)
+        so a crash mid-run loses at most the in-progress round, matching the
+        CSV/JSONL durability pattern. Opt-in only (see
+        ``fedmaq.core.client_hooks.base.attach_payloads_if_enabled``) — this
+        is never called for a run that never attaches ``"payloads_framed"``.
+        """
+        try:
+            self.payloads_dir.mkdir(parents=True, exist_ok=True)
+            path = self.payloads_dir / f"round_{server_round:04d}.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(round_payloads, f)
+        except Exception as exc:
+            logger.warning(f"Failed to write round {server_round} payloads: {exc}")
 
     def finish(self) -> None:
         """Close the WandB run.
