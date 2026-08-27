@@ -2,6 +2,7 @@
 
 **Status**: Accepted · 2026-08-01, amended 2026-08-06, frozen 2026-08-06
 **Supersedes**: `docs/DECISIONS.md` Decisions 64–66, 82–85 (file deleted; see ADR-0014)
+**Superseded in part by**: [ADR-0021](0021-power-mean-formulation-family.md) (decided 2026-08-27, [#34](https://github.com/FedMAQ/fedmaq-experiments/issues/34)) — the **five-candidate set** this decision selects over was replaced by one swept power-mean family plus two structurally separate rules, so the *subject* of the verdict below no longer exists in that form. The criterion itself, its iso-byte amendment, and the frozen v1 verdict all stand as the record of the superseded bundle, and the body below is unedited. **Formulation 2 is not assumed to survive re-selection.**
 
 ## Context
 
