@@ -209,6 +209,41 @@ Off by default: a multi-MB blob per client per round is a real cost over Flower'
 simulated Ray channel.
 _Avoid_: payload logging (ambiguous with ordinary telemetry, which is always on)
 
+### Quantizer Unbiasedness (`fedmaq-experiments`#24)
+
+The rounding/normalization operator applied once a bit-width is chosen — downstream of
+Precision Scaling above, which only picks the bit-width. One shared implementation
+replaced FedPAQ's biased deterministic rounding and DAdaQuant's independent inline
+copy of the correct stochastic one. [ADR-0019](docs/adr/0019-quantizer-unbiasedness-and-the-l-infinity-exception.md)
+
+**Stochastic rounding**:
+Unbiased dithered rounding (`floor(x)` w.p. `1-frac(x)`, else `ceil(x)`; `E[result] = x`
+for any input) — `_stochastic_round` in `quantization.py`, shared by FedPAQ, plain
+FedMAQ, `FedMAQPostProcessCompressionHook`'s `q>1` path, and DAdaQuant. Replaces
+`np.round`, which is deterministic and biased.
+_Avoid_: rounding (ambiguous with the deterministic `q≤1` sign-quantization branch,
+which is unaffected and stays exact)
+
+**l2 scale / l∞ scale**:
+The two normalization divisors a quantizer's `_scale(d)` can return: `‖d‖₂`
+(l2, `np.linalg.norm`) or `max|d|` (l∞). FedPAQ/FedMAQ's `q>1` path uses l2, matching
+`chapter_3.tex:84`'s `Q_s(v_j) = ‖v‖₂·sgn(v_j)·ξ_j`; their `q≤1` sign branch and
+DAdaQuant throughout stay l∞ — both unconditional per-path choices, not inherited
+defaults. `FedMAQPostProcessCompressionHook` (error feedback) is the one `q>1`
+exception that also keeps l∞: l2 diverges unboundedly there (ADR-0019).
+_Avoid_: "the l2 switch" alone without naming which path — it does not apply
+uniformly across every quantizer in this codebase.
+
+**Compression RNG**:
+The `np.random.Generator` a hook's stochastic rounding draws from, reseeded every
+federated round (`StandardFit.fit()`) from `(seed, partition_id, server_round)` —
+deliberately independent of the training RNG and of
+`quantization_planner.py`'s dataloader-seeding stream. No hook falls back to an
+unseeded default; reaching a stochastic branch with `rng=None` raises.
+_Avoid_: assuming a compressor_hook's `rng` set at `client_fn` construction time is
+what compress() actually draws from — Flower rebuilds `client_fn` fresh every round,
+so only the per-round reseed matters.
+
 ### Server-KD Repair Study (Section 5.5–5.7)
 
 The v2 arc's terms. The protocol itself is
