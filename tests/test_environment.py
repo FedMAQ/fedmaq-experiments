@@ -379,7 +379,9 @@ def test_dadaquant_compression_hook():
     deltas = [np.ones((100,), dtype=np.float32)]
     compressed_deltas, byte_size = hook.compress(deltas)
 
-    assert byte_size == 54
+    # Constant codes (uniform input) are highly compressible; pinned regression
+    # value from measure_bytes (#25), not the old analytic ceil(bits*size/8)+4.
+    assert byte_size == 23
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
@@ -601,7 +603,9 @@ def test_fedkd_compression_hook():
 
     assert len(reconstructed) == 1
     assert reconstructed[0].shape == (10, 5)
-    assert byte_size == 64
+    # Pinned regression value from measure_bytes (#25): zlib on the float32
+    # U/Sigma/V factors, not the old raw (U.size+Sigma.size+V.size)*4 formula.
+    assert byte_size == 71
     np.testing.assert_allclose(reconstructed[0], rank1_matrix, atol=1e-5)
 
 
@@ -879,7 +883,9 @@ def test_fedpaq_compression_hook():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
     compressed, byte_size = hook.compress(deltas)
 
-    assert byte_size == 7
+    # Pinned regression value from measure_bytes (#25): zlib on int64 codes +
+    # a folded-in float32 scale, not the old analytic ceil(bits*size/8)+4.
+    assert byte_size == 18
     assert len(compressed) == 1
     np.testing.assert_allclose(compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32))
 
@@ -1805,4 +1811,12 @@ def test_feddistill_two_round_reg_path(mock_dataset):
         p1, {"server_round": 2, "global_logits": logits_to_bytes(hook.global_logits)}
     )
     assert all(np.all(np.isfinite(p)) for p in p2)
-    assert m2["bytes_uploaded"] == sum(int(p.nbytes) for p in p2) + 10 * 10 * 4
+
+    # FedDistill routes weights through the shared compressor_hook (identity by
+    # default) and its logit side-channel through the shared measure_bytes,
+    # rather than a bespoke nbytes sum (#25).
+    from fedmaq.baselines.transport import measure_bytes
+
+    _, expected_weight_bytes = CompressionHook().compress(p2)
+    expected_logit_bytes = measure_bytes(m2["client_logits"])
+    assert m2["bytes_uploaded"] == expected_weight_bytes + expected_logit_bytes

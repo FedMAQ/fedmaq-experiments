@@ -69,12 +69,34 @@ class FedProxLossHook(LossHook):
 
 
 class CompressionHook:
-    """Base class for compressing client model updates (deltas)."""
+    """Base class for compressing client model updates (deltas).
+
+    ``last_payload_bytes`` is the pre-encoding payload size from the most
+    recent ``compress()`` call — logged alongside the post-encoding
+    ``bytes_uploaded`` so a future encoder change can be re-scored offline
+    without re-running training (see ``TelemetryManager.record_fit_round``).
+    Every concrete hook sets it; it defaults to 0 here for a hook that hasn't
+    compressed anything yet.
+    """
+
+    last_payload_bytes: int = 0
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
-        """Compress deltas and return (compressed_deltas, byte_size)."""
-        # Default: Identity (uncompressed Float32 weights -> 4 bytes per element)
-        byte_size = sum(d.nbytes for d in deltas)
+        """Pass ``deltas`` through unchanged; measure their transmitted size.
+
+        Default: identity (uncompressed float32 weights), routed through the
+        same held-constant transport every other arm uses (see
+        ``fedmaq.baselines.transport.measure_bytes``) rather than raw
+        ``nbytes`` — so this "uncompressed control" is charged for the same
+        encoder every compressed arm pays for.
+        """
+        # Deferred: fedmaq.baselines imports this module (CompressionHook), so
+        # a top-level import here would cycle.
+        from fedmaq.baselines.transport import measure_bytes
+
+        payloads = [d.astype(np.float32).tobytes() for d in deltas if d.size]
+        self.last_payload_bytes = sum(len(p) for p in payloads)
+        byte_size = sum(measure_bytes(p) for p in payloads)
         return deltas, byte_size
 
 

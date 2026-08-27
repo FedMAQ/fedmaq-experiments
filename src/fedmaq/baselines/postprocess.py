@@ -10,12 +10,12 @@ FEMNIST benchmarking grid, not the Ablation Study — gated per-algorithm-yaml v
 from __future__ import annotations
 
 import logging
-import zlib
 
 import numpy as np
 from flwr.app import ArrayRecord, RecordDict
 
-from fedmaq.baselines.quantization import _codes_to_float, _normalize_and_round
+from fedmaq.baselines.quantization import _codes_to_float, _normalize_and_round, _serialize_codes
+from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         new_residuals: list[np.ndarray] = []
         new_codes: list[np.ndarray] = []
         total_bytes = 0
+        total_payload_bytes = 0
 
         for i, d in enumerate(deltas):
             if d.size == 0:
@@ -95,10 +96,13 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
 
             scale = float(np.max(np.abs(d_fb)))
             if scale == 0.0:
+                zero_codes = np.zeros_like(d_fb, dtype=np.int64)
                 out_deltas.append(d_fb.astype(np.float32))
                 new_residuals.append(np.zeros_like(d_fb, dtype=np.float32))
-                new_codes.append(np.zeros_like(d_fb, dtype=np.int64))
-                total_bytes += 4  # scale = 0.0, matches _quantize_deltas convention
+                new_codes.append(zero_codes)
+                zero_payload = _serialize_codes(zero_codes, scale)
+                total_bytes += measure_bytes(zero_payload)
+                total_payload_bytes += len(zero_payload)
                 continue
 
             if self.q <= 1:
@@ -133,11 +137,12 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                     self._logged_shape_mismatch = True
                 diffed = codes
 
-            payload = diffed.tobytes()
-            compressed = zlib.compress(payload)
-            total_bytes += len(compressed) + 4  # +4: float32 scale (see _quantize_deltas)
+            payload = _serialize_codes(diffed, scale)
+            total_bytes += measure_bytes(payload)
+            total_payload_bytes += len(payload)
 
         self._state[_RESIDUAL_KEY] = ArrayRecord(numpy_ndarrays=new_residuals)
         self._state[_PREV_CODES_KEY] = ArrayRecord(numpy_ndarrays=new_codes)
 
+        self.last_payload_bytes = total_payload_bytes
         return out_deltas, total_bytes

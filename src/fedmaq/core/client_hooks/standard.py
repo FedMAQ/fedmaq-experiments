@@ -120,6 +120,7 @@ class StandardFit(ClientFitStrategy):
 
         fit_metrics = {
             "bytes_uploaded": byte_size,
+            "payload_bytes": client.compressor_hook.last_payload_bytes,
             "partition_id": int(client.cid),
             "local_loss": self._reported_local_loss(pretrain_loss, result.last_loss),
             "train_loss": result.avg_loss,

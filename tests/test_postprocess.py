@@ -1,31 +1,30 @@
 """Unit tests for FedMAQ's post-processing pipeline (error-feedback + diff-coding + zlib)."""
 
-import math
-import zlib
-
 import numpy as np
 from flwr.app import RecordDict
 
 from fedmaq.baselines import FedMAQPostProcessCompressionHook, get_compressor_hook
-from fedmaq.baselines.quantization import FedPAQCompressionHook
+from fedmaq.baselines.quantization import FedPAQCompressionHook, _serialize_codes
+from fedmaq.baselines.transport import measure_bytes
 
 
 def test_round1_matches_plain_fedpaq_output():
     """Fresh state (round 1): error-feedback residual and diff-coding are both
-    no-ops, so the returned float arrays must match plain FedPAQ bit-for-bit.
-
-    (Byte counts differ by design — the new hook reports real zlib bytes, plain
-    FedPAQ reports the synthetic ceil(bits*size/8)+4 formula — so only the
-    dequantized array list is compared, not the tuple's int.)
+    no-ops, so the returned float arrays *and* measured byte counts must match
+    plain FedPAQ exactly — both hooks now serialize the same codes plus scale
+    through the same ``measure_bytes`` transport (#25).
     """
     rng = np.random.default_rng(0)
     deltas = [rng.normal(size=(4, 4)).astype(np.float32), rng.normal(size=(8,)).astype(np.float32)]
 
-    plain_out, _ = FedPAQCompressionHook(q=8).compress([d.copy() for d in deltas])
-    post_out, _ = FedMAQPostProcessCompressionHook(q=8).compress([d.copy() for d in deltas])
+    plain_out, plain_bytes = FedPAQCompressionHook(q=8).compress([d.copy() for d in deltas])
+    post_out, post_bytes = FedMAQPostProcessCompressionHook(q=8).compress(
+        [d.copy() for d in deltas]
+    )
 
     for p, o in zip(plain_out, post_out, strict=True):
         np.testing.assert_allclose(p, o)
+    assert plain_bytes == post_bytes
 
 
 def test_state_persists_and_diffing_engages_on_second_call():
@@ -83,27 +82,28 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
     seeded_hook = FedMAQPostProcessCompressionHook(q=8, state=seeded_state)
     _, bytes_diffed = seeded_hook.compress([delta.copy()])
 
-    all_zero_payload = np.zeros_like(raw_codes).tobytes()
-    assert bytes_diffed == len(zlib.compress(all_zero_payload)) + 4
+    scale = float(np.max(np.abs(delta)))
+    all_zero_codes = np.zeros_like(raw_codes)
+    assert bytes_diffed == measure_bytes(_serialize_codes(all_zero_codes, scale))
     assert bytes_diffed < bytes_raw
 
 
 def test_byte_count_realism():
-    """Compressible input -> byte count strictly below the naive ceil(bits*size/8)+4
-    formula. Incompressible (random) input -> byte count still finite and bounded."""
+    """Mostly-zero codes (highly compressible) must measure strictly smaller than
+    codes from incompressible (random) input of the same size, and both must be
+    finite and bounded."""
     size = 256
     bits = 8
 
     compressible = np.zeros(size, dtype=np.float32)
     compressible[0] = 1.0  # mostly-zero -> highly compressible codes
     _, bytes_compressible = FedMAQPostProcessCompressionHook(q=bits).compress([compressible])
-    naive_formula = int(math.ceil(bits * size / 8.0)) + 4
-    assert bytes_compressible < naive_formula
 
     rng = np.random.default_rng(2)
     incompressible = rng.normal(size=size).astype(np.float32)
     _, bytes_incompressible = FedMAQPostProcessCompressionHook(q=bits).compress([incompressible])
-    assert bytes_incompressible > 0
+
+    assert 0 < bytes_compressible < bytes_incompressible
     assert bytes_incompressible < size * 8 * 2 + 64
 
 
@@ -137,7 +137,10 @@ def test_empty_and_all_zero_tensor_pass_through():
 
     assert out[0].shape == (0,)
     np.testing.assert_allclose(out[1], zero)
-    assert nbytes == 4  # only the all-zero tensor contributes (empty is free)
+    # Only the all-zero tensor contributes (empty is free); its codes+scale
+    # payload is still routed through measure_bytes, not a flat constant (#25).
+    expected = measure_bytes(_serialize_codes(np.zeros(5, dtype=np.int64), 0.0))
+    assert nbytes == expected
 
 
 def test_output_contract_matches_input_shape_dtype():

@@ -317,6 +317,7 @@ class TelemetryFedAvg(FedAvg):
                 "test/loss": loss,
                 "test/accuracy": acc,
                 "communication/round_bytes": snapshot.round_bytes,
+                "communication/round_payload_bytes": snapshot.round_payload_bytes,
                 "system/round_time_sec": snapshot.round_time,
                 "system/client_sim_time_sec": snapshot.client_time,
                 "system/server_sim_time_sec": snapshot.server_time,

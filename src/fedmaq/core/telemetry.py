@@ -43,6 +43,7 @@ _COMMON_CSV_FIELDNAMES: list[str] = [
     "test/recall",
     "test/f1",
     "communication/round_bytes",
+    "communication/round_payload_bytes",
     "communication/cumulative_bytes",
     "communication/cumulative_mb",
     "system/round_time_sec",
@@ -74,6 +75,7 @@ class RoundSnapshot:
     """
 
     round_bytes: int = 0
+    round_payload_bytes: int = 0
     round_time: float = 0.0
     client_time: float = 0.0
     server_time: float = 0.0
@@ -176,6 +178,14 @@ class TelemetryManager:
         caller should not set ``round_time``/``round_bytes`` on ``metrics`` in
         that case (matching the pre-refactor behavior of skipping those keys
         entirely).
+
+        Also snapshots ``round_payload_bytes`` — the summed pre-encoding
+        payload size each hook stashes on ``compressor_hook.last_payload_bytes``
+        (see ``fedmaq.baselines.transport``). zlib is not linear, so this does
+        not make ``round_bytes`` bit-exactly recomputable from a different
+        encoder offline; logging both totals means a *future accounting
+        change* can be evaluated against already-logged rounds without
+        re-running training, which is what #25's AC 2 actually needs.
         """
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
@@ -186,6 +196,7 @@ class TelemetryManager:
                     if isinstance(v, (int, float)) and k not in (
                         "partition_id",
                         "bytes_uploaded",
+                        "payload_bytes",
                     ):
                         numeric_keys.add(k)
 
@@ -215,6 +226,7 @@ class TelemetryManager:
         round_delays = []
         round_bytes_uploaded = 0
         round_bytes_downloaded = 0
+        round_payload_bytes = 0
         client_bytes_uploaded: list[int] = []
 
         exp_config = strategy.config.get("experiment", strategy.config)
@@ -230,6 +242,10 @@ class TelemetryManager:
 
             bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
             client_bytes_uploaded.append(bytes_uploaded)
+            # Falls back to bytes_uploaded for hooks that don't report a
+            # separate pre-encoding payload (cfd/fedmd — dropped baselines
+            # with their own accounting, out of #25's scope).
+            round_payload_bytes += int(fit_res.metrics.get("payload_bytes", bytes_uploaded))
             num_samples = fit_res.num_examples
             train_sample_count = strategy.hook.local_train_sample_count(
                 num_samples=num_samples,
@@ -276,6 +292,7 @@ class TelemetryManager:
 
         self._last_snapshot = RoundSnapshot(
             round_bytes=round_total_bytes,
+            round_payload_bytes=round_payload_bytes,
             round_time=round_time,
             client_time=client_sim_time,
             server_time=server_sim_time,

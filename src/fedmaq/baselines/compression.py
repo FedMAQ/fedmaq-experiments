@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
 # Explicit Union type for compress_tensor return value.
@@ -70,18 +71,30 @@ def decompress_tensor(compressed: CompressedTensor, orig_shape: tuple[int, ...])
     return reconstructed_2d.reshape(orig_shape)
 
 
-def svd_compressed_nbytes(compressed: CompressedTensor, fallback_nbytes: int) -> int:
-    """Transmitted byte size of an SVD-compressed tensor.
-
-    A 3-tuple ``(U, Sigma, V)`` costs ``(U.size + Sigma.size + V.size) * 4`` bytes
-    (float32 factors); a pass-through 1-tuple costs ``fallback_nbytes`` (the raw
-    tensor). Shared by the FedKD upload accounting (:class:`FedKDCompressionHook`)
-    and the server-side download-size telemetry.
-    """
+def _svd_payload(compressed: CompressedTensor) -> bytes:
+    """Serialize an (SVD-compressed or pass-through) tensor into one payload."""
     if len(compressed) == 3:
         u, sigma, v = compressed
-        return (u.size + sigma.size + v.size) * 4
-    return fallback_nbytes
+        return (
+            u.astype(np.float32).tobytes()
+            + sigma.astype(np.float32).tobytes()
+            + v.astype(np.float32).tobytes()
+        )
+    (tensor,) = compressed
+    return tensor.astype(np.float32).tobytes()
+
+
+def svd_compressed_nbytes(compressed: CompressedTensor) -> int:
+    """Transmitted byte size of an (SVD-compressed or pass-through) tensor.
+
+    A 3-tuple ``(U, Sigma, V)`` serializes its float32 factors; a pass-through
+    1-tuple serializes the raw tensor. Either way the payload is routed through
+    the same held-constant transport as every other arm (see
+    ``fedmaq.baselines.transport.measure_bytes``), not counted as raw element
+    bytes. Shared by the FedKD upload accounting (:class:`FedKDCompressionHook`)
+    and the server-side download-size telemetry.
+    """
+    return measure_bytes(_svd_payload(compressed))
 
 
 class FedKDCompressionHook(CompressionHook):
@@ -112,10 +125,12 @@ class FedKDCompressionHook(CompressionHook):
         Returns
         -------
         tuple[list[np.ndarray], int]
-            Reconstructed deltas and the estimated size in bytes.
+            Reconstructed deltas and the measured size in bytes. The
+            pre-encoding payload size is stashed on ``self.last_payload_bytes``.
         """
         reconstructed_deltas = []
         total_bytes = 0
+        total_payload_bytes = 0
 
         for d in deltas:
             if d.size == 0:
@@ -124,7 +139,9 @@ class FedKDCompressionHook(CompressionHook):
 
             orig_shape = d.shape
             compressed = compress_tensor(d, self.energy, self.min_rank_frac)
-            total_bytes += svd_compressed_nbytes(compressed, d.nbytes)
+            payload = _svd_payload(compressed)
+            total_bytes += measure_bytes(payload)
+            total_payload_bytes += len(payload)
 
             if len(compressed) == 3:
                 # Reconstruct/decompress locally to return in reconstructed_params
@@ -134,4 +151,5 @@ class FedKDCompressionHook(CompressionHook):
                 # Uncompressed pass-through
                 reconstructed_deltas.append(d)
 
+        self.last_payload_bytes = total_payload_bytes
         return reconstructed_deltas, total_bytes

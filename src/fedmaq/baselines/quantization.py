@@ -1,10 +1,10 @@
 """Quantization-based baseline compression hooks (FedPAQ, DAdaQuant)."""
 
-import math
 from collections.abc import Callable
 
 import numpy as np
 
+from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
 
@@ -19,20 +19,54 @@ def _codes_to_float(codes: np.ndarray, scale: float, levels: int) -> np.ndarray:
     return (codes / levels) * scale
 
 
+def _serialize_codes(codes: np.ndarray, scale: float) -> bytes:
+    """Pack integer codes plus their float32 scale into one transmittable payload.
+
+    The scale travels *inside* the payload handed to ``measure_bytes`` rather
+    than as a separate additive convention (see ``transport.py``).
+
+    Codes are stored at a fixed int64 width regardless of the quantizer's
+    nominal bit-width — a deliberate deferral (#25). Narrowing to the nominal
+    width (e.g. int8 for q<=8) would itself lower every quantized arm's total,
+    confounding *this* seam's accounting change with a wire-format change; the
+    fixed width instead means the same "wasted precision" is charged uniformly
+    to every quantized arm, so a comparison between them still isolates the
+    encoder's real entropy-coding effect.
+
+    Consequence, verified empirically, not merely assumed: at low bit-widths
+    (few, highly-skewed code values) zlib recovers well below the int64 padding
+    and measured bytes drop sharply below the old analytic formula. At high
+    bit-widths approaching the tensor's real information content (FedPAQ's
+    configured q=8 among them) zlib cannot fully reclaim the 8x padding, and
+    measured bytes can come out *above* the old formula instead. Both are
+    legitimate outcomes of the same held-constant transport — the seam's job is
+    uniform accounting, not a guaranteed drop — but which one shows up for a
+    given arm/config is data-dependent and must be checked per #25 AC 3, not
+    assumed from this docstring or from synthetic test data.
+    """
+    return codes.astype(np.int64).tobytes() + np.float32(scale).tobytes()
+
+
 def _quantize_deltas(
     deltas: list[np.ndarray],
-    quantize_elem: Callable[[np.ndarray, float], np.ndarray],
-    bits_per_element: int,
-) -> tuple[list[np.ndarray], int]:
+    quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
+) -> tuple[list[np.ndarray], int, int]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
-    Iterates ``deltas``, skipping empty tensors and all-zero tensors (scale 0)
-    as pass-throughs, and otherwise applies ``quantize_elem(d, scale)`` where
-    ``scale = max|d|``. Byte size is ``ceil(size * bits_per_element / 8) + 4``
-    per non-trivial tensor (the trailing 4 bytes carry the float32 scale).
+    Iterates ``deltas``, skipping empty tensors (free: nothing is transmitted)
+    and otherwise applies ``quantize_elem(d, scale)`` where ``scale = max|d|``,
+    which returns ``(dequantized, codes)``. All-zero tensors (scale 0) skip
+    quantization but still route their (all-zero) codes through the same
+    measured transport, so no per-arm byte arithmetic survives outside it.
+
+    Returns ``(quantized_deltas, measured_bytes, payload_bytes)`` — the last
+    is the pre-encoding payload size (codes + scale, before ``measure_bytes``),
+    logged so a future encoder change can be re-scored offline without
+    re-running training (see ``TelemetryManager.record_fit_round``).
     """
     quantized_deltas: list[np.ndarray] = []
     total_bytes = 0
+    total_payload_bytes = 0
 
     for d in deltas:
         if d.size == 0:
@@ -41,14 +75,17 @@ def _quantize_deltas(
 
         scale = float(np.max(np.abs(d)))
         if scale > 0.0:
-            quantized_deltas.append(quantize_elem(d, scale).astype(np.float32))
-            element_bits = d.size * bits_per_element
-            total_bytes += int(math.ceil(element_bits / 8.0)) + 4
+            dequantized, codes = quantize_elem(d, scale)
+            quantized_deltas.append(dequantized.astype(np.float32))
         else:
+            codes = np.zeros_like(d, dtype=np.int64)
             quantized_deltas.append(d)
-            total_bytes += 4  # scale = 0.0
 
-    return quantized_deltas, total_bytes
+        payload = _serialize_codes(codes, scale)
+        total_bytes += measure_bytes(payload)
+        total_payload_bytes += len(payload)
+
+    return quantized_deltas, total_bytes, total_payload_bytes
 
 
 class FedPAQCompressionHook(CompressionHook):
@@ -76,15 +113,16 @@ class FedPAQCompressionHook(CompressionHook):
         """
         return max(1, (1 << (self.q - 1)) - 1)
 
-    def _quantize_elem(self, d: np.ndarray, scale: float) -> np.ndarray:
+    def _quantize_elem(self, d: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
         if self.q <= 1:
             # 1-bit sign quantization: each element -> sign(d)*scale, i.e. values
             # in {-scale, +scale} (exact zeros stay 0). Avoids the 0/0 NaN that a
             # 0-positive-level uniform quantizer would give.
-            return np.sign(d) * scale
+            codes = np.sign(d).astype(np.int64)
+            return codes.astype(np.float32) * scale, codes
         # Normalize to [-1, 1], map to [-levels, levels], round, map back.
         codes = _normalize_and_round(d, scale, self.levels)
-        return _codes_to_float(codes, scale, self.levels)
+        return _codes_to_float(codes, scale, self.levels), codes.astype(np.int64)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using symmetric uniform quantization.
@@ -97,9 +135,14 @@ class FedPAQCompressionHook(CompressionHook):
         Returns
         -------
         tuple[list[np.ndarray], int]
-            Quantized deltas and the estimated size in bytes.
+            Quantized deltas and the measured size in bytes. The pre-encoding
+            payload size is stashed on ``self.last_payload_bytes``.
         """
-        return _quantize_deltas(deltas, self._quantize_elem, self.q)
+        quantized_deltas, total_bytes, payload_bytes = _quantize_deltas(
+            deltas, self._quantize_elem
+        )
+        self.last_payload_bytes = payload_bytes
+        return quantized_deltas, total_bytes
 
 
 class DAdaQuantCompressionHook(CompressionHook):
@@ -108,9 +151,8 @@ class DAdaQuantCompressionHook(CompressionHook):
     .. note::
         The attribute ``q`` represents the number of quantization *levels per sign*
         (symmetric around zero), NOT a bit-width. The total number of discrete levels
-        is ``2*q + 1`` (integers in [-q, q]).  Byte-size is estimated as
-        ``ceil(log2(2*q + 1))`` bits per element, which differs from FedPAQ where
-        ``q`` is a true bit-width.
+        is ``2*q + 1`` (integers in [-q, q]), which differs from FedPAQ where ``q``
+        is a true bit-width.
 
         This attribute is written at runtime by :class:`~fedmaq.core.client.GenericClient`
         via ``compressor_hook.q = int(config["q"])`` when the server sends an updated
@@ -132,14 +174,14 @@ class DAdaQuantCompressionHook(CompressionHook):
         self.q = q
         self.rng = rng if rng is not None else np.random.default_rng()
 
-    def _quantize_elem(self, d: np.ndarray, scale: float) -> np.ndarray:
+    def _quantize_elem(self, d: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
         # Normalize to [-1, 1], scale to [-q, q], stochastic-round, map back.
         scaled = (d / scale) * self.q
         floor_val = np.floor(scaled)
         prob = scaled - floor_val
         rand_val = self.rng.random(scaled.shape)
-        quantized = np.where(rand_val < prob, floor_val + 1, floor_val)
-        return (quantized / self.q) * scale
+        codes = np.where(rand_val < prob, floor_val + 1, floor_val)
+        return (codes / self.q) * scale, codes.astype(np.int64)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
         """Compress deltas using stochastic uniform quantization with ``self.q`` bins per sign.
@@ -152,8 +194,11 @@ class DAdaQuantCompressionHook(CompressionHook):
         Returns
         -------
         tuple[list[np.ndarray], int]
-            Quantized deltas and the estimated size in bytes.
+            Quantized deltas and the measured size in bytes. The pre-encoding
+            payload size is stashed on ``self.last_payload_bytes``.
         """
-        # Bits needed to represent 2q+1 levels (e.g. q=8 -> log2(17) ~ 4.09 -> 5 bits)
-        bits_per_element = math.ceil(math.log2(max(2, 2 * self.q + 1)))
-        return _quantize_deltas(deltas, self._quantize_elem, bits_per_element)
+        quantized_deltas, total_bytes, payload_bytes = _quantize_deltas(
+            deltas, self._quantize_elem
+        )
+        self.last_payload_bytes = payload_bytes
+        return quantized_deltas, total_bytes

@@ -71,7 +71,7 @@ class FedKDHook(StrategyHook):
                 continue
             delta = arr - ref
             compressed = compress_tensor(delta, self._current_energy, self._min_rank_frac)
-            model_size_bytes += svd_compressed_nbytes(compressed, arr.nbytes)
+            model_size_bytes += svd_compressed_nbytes(compressed)
         return model_size_bytes
 
     def compute_speed_scale(self) -> float:

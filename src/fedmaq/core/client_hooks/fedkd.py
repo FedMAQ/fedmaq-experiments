@@ -145,6 +145,7 @@ class FedKDFit(ClientFitStrategy):
             len(client.trainloader.dataset),
             {
                 "bytes_uploaded": byte_size,
+                "payload_bytes": client.compressor_hook.last_payload_bytes,
                 "partition_id": int(client.cid),
                 "local_loss": avg_total_loss,
                 "train_loss": avg_total_loss,

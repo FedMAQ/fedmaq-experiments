@@ -148,9 +148,19 @@ class FedDistillFit(ClientFitStrategy):
             device=client.device,
         )
 
+        # Deferred: fedmaq.baselines imports fedmaq.core.client, which imports
+        # this module's package — a top-level import here would cycle.
+        from fedmaq.baselines.transport import measure_bytes
+
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
-        params_bytes = sum(int(p.nbytes) for p in updated_params)
+        # FedDistill shares full FedAvg weights (no delta encoding), so the
+        # weight payload is billed through the same compressor_hook every other
+        # arm uses (identity by default) rather than a bespoke nbytes sum here —
+        # this hook previously bypassed compressor_hook entirely (#25).
+        _, weight_bytes = client.compressor_hook.compress(updated_params)
+        logit_measured_bytes = measure_bytes(logit_bytes)
+        payload_bytes = client.compressor_hook.last_payload_bytes + len(logit_bytes)
 
         avg_total_loss = result.avg_loss
         avg_task_loss = result.extra_avgs["task_loss"]
@@ -161,7 +171,8 @@ class FedDistillFit(ClientFitStrategy):
             updated_params,
             len(client.trainloader.dataset),
             {
-                "bytes_uploaded": params_bytes + len(logit_bytes),
+                "bytes_uploaded": weight_bytes + logit_measured_bytes,
+                "payload_bytes": payload_bytes,
                 "partition_id": int(client.cid),
                 "local_loss": avg_total_loss,
                 "train_loss": avg_total_loss,
