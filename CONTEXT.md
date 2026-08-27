@@ -96,6 +96,31 @@ A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32
 FedMAQ's two-tier precision scaling design. Tier 1 is the hard feasibility constraint from client memory ($Q_k^{max}$), computed as a separate `min()` clamp in code, never blended into the soft quality signal. Tier 2 is the soft quality optimization (signal, target, formulation) layered on top and floored by Tier 1's cap.
 _Avoid_: "three coequal dimensions of awareness" (resource, data, state) — resource (Tier 1) is structurally a hard clamp, not a third soft signal alongside data/state (Tier 2's two signals). The Ch4 rewording this entry once asked for has landed: `chapter_4.tex:106` now organizes the execution loop around that asymmetry "rather than around three symmetric awareness dimensions", and the phrase appears nowhere in the manuscript.
 
+### Tier 1 Memory Ceiling Telemetry (`fedmaq-experiments`#28)
+
+Per-round evidence that the Tier 1 clamp binds rather than sitting inert.
+Implemented in `e547b50`; plotted by `scripts/memory_ceiling.py`.
+
+**Tier 1 ceiling** ($Q_k^{max}$):
+The per-client bit-width cap `max(1, floor(c_k / c_unit))` derived from the
+client's modelled memory budget, exposed without changing the assigned `q`.
+Logged as `algorithm/fedmaq/{avg,min,max,std}_q_k_max`.
+_Avoid_: memory ceiling (bare — ambiguous with host VRAM, below)
+
+**Tier 1 binding fraction**:
+The fraction of sampled clients where `q_k_max < q_hat` — i.e. where Tier 1, not
+Tier 2, is the active constraint. This is what separates "the clamp is binding on
+most clients" from "the clamp is inert and Tier 2 is doing all the work"; without
+it a realized `avg_q` is unreadable. Logged as
+`algorithm/fedmaq/tier1_binding_fraction`.
+
+**Host resource consumption is not this and was explicitly declined.** VRAM/RAM on
+the JupyterHub box is a property of the simulator and its co-tenants, not of the
+federated setting being modelled, and a reader cannot infer device feasibility
+from it. When the adviser's "resource and memory consumption per algo per round"
+is cited, it resolves to modelled client memory, never host memory (#28, #21 Out
+of scope).
+
 ### Ensemble Distillation (Section 3.5, Section 4.2)
 
 **Ensemble distillation**:
