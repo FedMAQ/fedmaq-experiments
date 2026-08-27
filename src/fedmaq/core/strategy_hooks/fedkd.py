@@ -19,8 +19,9 @@ from flwr.server.client_proxy import ClientProxy
 from fedmaq.baselines.compression import (
     compress_tensor,
     decompress_tensor,
-    svd_compressed_nbytes,
+    svd_payload,
 )
+from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -63,15 +64,26 @@ class FedKDHook(StrategyHook):
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
     ) -> int:
-        """SVD-compressed download size at the current round's energy level."""
+        """SVD-compressed download size at the current round's energy level.
+
+        Also stashes the summed pre-encoding payload size on
+        ``self._last_download_payload_bytes``, mirroring the upload-side
+        ``last_payload_bytes`` seam (:class:`FedKDCompressionHook.compress`),
+        so a future download-side encoder change can be re-scored against
+        already-logged rounds without re-running training.
+        """
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         model_size_bytes = 0
+        payload_bytes = 0
         for arr, ref in zip(ndarrays, reference, strict=True):
             if arr.size == 0:
                 continue
             delta = arr - ref
             compressed = compress_tensor(delta, self._current_energy, self._min_rank_frac)
-            model_size_bytes += svd_compressed_nbytes(compressed)
+            payload = svd_payload(compressed)
+            model_size_bytes += measure_bytes(payload)
+            payload_bytes += len(payload)
+        self._last_download_payload_bytes = payload_bytes
         return model_size_bytes
 
     def compute_speed_scale(self) -> float:
@@ -183,7 +195,13 @@ class FedKDHook(StrategyHook):
         if hasattr(self, "_last_mean_rank_retained"):
             metrics["algorithm/fedkd/mean_rank_retained"] = self._last_mean_rank_retained
         metrics["algorithm/fedkd/energy"] = self._current_energy
+        if hasattr(self, "_last_download_payload_bytes"):
+            metrics["algorithm/fedkd/download_payload_bytes"] = self._last_download_payload_bytes
         return metrics
 
     def metric_keys(self) -> list[str]:
-        return ["algorithm/fedkd/mean_rank_retained", "algorithm/fedkd/energy"]
+        return [
+            "algorithm/fedkd/mean_rank_retained",
+            "algorithm/fedkd/energy",
+            "algorithm/fedkd/download_payload_bytes",
+        ]

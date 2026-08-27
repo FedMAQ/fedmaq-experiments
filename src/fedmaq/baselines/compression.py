@@ -71,8 +71,18 @@ def decompress_tensor(compressed: CompressedTensor, orig_shape: tuple[int, ...])
     return reconstructed_2d.reshape(orig_shape)
 
 
-def _svd_payload(compressed: CompressedTensor) -> bytes:
-    """Serialize an (SVD-compressed or pass-through) tensor into one payload."""
+def svd_payload(compressed: CompressedTensor) -> bytes:
+    """Serialize an (SVD-compressed or pass-through) tensor into one payload.
+
+    A 3-tuple ``(U, Sigma, V)`` serializes its float32 factors; a pass-through
+    1-tuple serializes the raw tensor. This is the pre-encoding payload for
+    both the FedKD upload accounting (:class:`FedKDCompressionHook`) and the
+    server-side download-size telemetry (``FedKDHook.download_size_bytes``).
+    Callers route it through the same held-constant transport as every other
+    arm (see ``fedmaq.baselines.transport.measure_bytes``) for the transmitted
+    size, not counted as raw element bytes, and keep the raw length itself as
+    the payload companion.
+    """
     if len(compressed) == 3:
         u, sigma, v = compressed
         return (
@@ -82,19 +92,6 @@ def _svd_payload(compressed: CompressedTensor) -> bytes:
         )
     (tensor,) = compressed
     return tensor.astype(np.float32).tobytes()
-
-
-def svd_compressed_nbytes(compressed: CompressedTensor) -> int:
-    """Transmitted byte size of an (SVD-compressed or pass-through) tensor.
-
-    A 3-tuple ``(U, Sigma, V)`` serializes its float32 factors; a pass-through
-    1-tuple serializes the raw tensor. Either way the payload is routed through
-    the same held-constant transport as every other arm (see
-    ``fedmaq.baselines.transport.measure_bytes``), not counted as raw element
-    bytes. Shared by the FedKD upload accounting (:class:`FedKDCompressionHook`)
-    and the server-side download-size telemetry.
-    """
-    return measure_bytes(_svd_payload(compressed))
 
 
 class FedKDCompressionHook(CompressionHook):
@@ -139,7 +136,7 @@ class FedKDCompressionHook(CompressionHook):
 
             orig_shape = d.shape
             compressed = compress_tensor(d, self.energy, self.min_rank_frac)
-            payload = _svd_payload(compressed)
+            payload = svd_payload(compressed)
             total_bytes += measure_bytes(payload)
             total_payload_bytes += len(payload)
 
