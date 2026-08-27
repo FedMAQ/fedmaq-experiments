@@ -580,6 +580,8 @@ def exploration_noise_margin(
 # one a challenger has to beat by more than the margin to displace. Sourced from
 # conf/matrix/baseline_tuning.yaml, which is authoritative.
 BASELINE_TUNING_GROUP = "baseline_tuning"
+BASELINE_TUNING_WIDE_GROUP = "baseline_tuning_wide"
+
 BASELINE_REFERENCE_VARIANTS = {
     "fedprox": "mu1p0",
     "fedpaq": "q8",
@@ -587,6 +589,26 @@ BASELINE_REFERENCE_VARIANTS = {
     "feddistill": "a1p0",
     "fedkd": "t0p95",
 }
+BASELINE_TUNING_WIDE_REFERENCE_VARIANTS = {
+    **BASELINE_REFERENCE_VARIANTS,
+    "fedmaq": "qmax16",
+}
+
+
+def baseline_tuning_specs(experiment_group: str) -> dict:
+    """Read widened-stage reporting metadata from its dispatch matrix."""
+    if experiment_group != BASELINE_TUNING_WIDE_GROUP:
+        return {}
+    path = Path(__file__).resolve().parent.parent / "conf" / "matrix" / "baseline_tuning_wide.yaml"
+    return OmegaConf.to_container(OmegaConf.load(path), resolve=True).get("tuning", {})
+
+
+def _curve_seeds(curves: dict[int, list[dict]], variant: str) -> list[int]:
+    return sorted(
+        seed
+        for seed, points in curves.items()
+        if any(point["variant"] == variant for point in points)
+    )
 
 
 def baseline_tuning_margin(
@@ -612,7 +634,15 @@ def baseline_tuning_margin(
     ``mu`` and FedDistill's ``reg_alpha`` -- were not reproducible from the
     repository that the pre-registration tag freezes.
     """
-    refs = BASELINE_REFERENCE_VARIANTS if reference_variants is None else reference_variants
+    if reference_variants is None:
+        refs = (
+            BASELINE_TUNING_WIDE_REFERENCE_VARIANTS
+            if experiment_group == BASELINE_TUNING_WIDE_GROUP
+            else BASELINE_REFERENCE_VARIANTS
+        )
+    else:
+        refs = reference_variants
+    specs = baseline_tuning_specs(experiment_group)
     scoped = [
         r
         for r in runs
@@ -634,13 +664,92 @@ def baseline_tuning_margin(
     for algorithm, ref_variant in sorted(refs.items()):
         members = [r for r in scoped if r.algorithm == algorithm]
         cells: dict[str, list[float]] = {}
+        curves: dict[int, list[dict]] = {}
         for r in members:
             df = load_round_metrics(r.csv_path)
-            cells.setdefault(r.variant, []).append(accuracy_at_round(df, 100))
+            accuracy = accuracy_at_round(df, 100)
+            cells.setdefault(r.variant, []).append(accuracy)
+            curves.setdefault(r.seed, []).append(
+                {
+                    "variant": r.variant,
+                    "value": specs.get(algorithm, {}).get("values", {}).get(r.variant),
+                    "accuracy_r100": accuracy,
+                }
+            )
+
+        spec = specs.get(algorithm, {})
+        values_by_variant = spec.get("values", {})
+        expected_variants = list(values_by_variant)
+        variants = expected_variants + sorted(set(cells) - set(expected_variants))
+        paper_variant = spec.get("paper_default_variant")
+        adopted_variant = spec.get("adopted_variant")
+
+        table = []
+        for variant in variants:
+            values = cells.get(variant, [])
+            table.append(
+                {
+                    "variant": variant,
+                    "value": values_by_variant.get(variant),
+                    "mean": statistics.fmean(values) if values else None,
+                    "sigma": statistics.stdev(values) if len(values) >= 2 else None,
+                    "n": len(values),
+                    "seeds": _curve_seeds(curves, variant),
+                    "is_reference": variant == ref_variant,
+                    "is_paper_default": variant == paper_variant,
+                    "is_adopted": variant == adopted_variant,
+                }
+            )
+
+        metadata = {
+            "knob": spec.get("knob"),
+            "paper_default_variant": paper_variant,
+            "paper_default_value": values_by_variant.get(paper_variant),
+            "paper_default_note": spec.get("paper_default_note"),
+            "shipped_adopted_variant": adopted_variant,
+            "adopted_value": values_by_variant.get(adopted_variant),
+            "expected_variants": expected_variants,
+            "missing_variants": [variant for variant in expected_variants if variant not in cells],
+            "table": table,
+            "curves": [
+                {
+                    "seed": seed,
+                    "points": sorted(
+                        points,
+                        key=lambda point: (
+                            point["value"] is None,
+                            point["value"] if point["value"] is not None else 0,
+                        ),
+                    ),
+                }
+                for seed, points in sorted(curves.items())
+            ],
+        }
+
+        if expected_variants:
+            expected_counts = {
+                variant: (5 if variant == ref_variant else 3) for variant in expected_variants
+            }
+            invalid_counts = {
+                variant: len(cells.get(variant, []))
+                for variant, expected_count in expected_counts.items()
+                if len(cells.get(variant, [])) != expected_count
+            }
+            if invalid_counts:
+                baselines[algorithm] = {
+                    **metadata,
+                    "reference_variant": ref_variant,
+                    "error": (
+                        "incomplete widened tuning cells; expected reference n=5 and "
+                        f"challenger n=3, got {invalid_counts}. No verdict is issued."
+                    ),
+                }
+                continue
 
         ref_accs = cells.get(ref_variant, [])
         if len(ref_accs) < 3:
             baselines[algorithm] = {
+                **metadata,
                 "reference_variant": ref_variant,
                 "error": (
                     f"reference cell '{ref_variant}' has {len(ref_accs)} run(s); "
@@ -663,6 +772,7 @@ def baseline_tuning_margin(
             challengers[variant] = {
                 "mean": mean,
                 "n": len(cells[variant]),
+                "seeds": _curve_seeds(curves, variant),
                 "delta": delta,
                 "clears_margin": delta > margin,
             }
@@ -670,6 +780,7 @@ def baseline_tuning_margin(
         clearing = [v for v, c in challengers.items() if c["clears_margin"]]
         adopted = max(clearing, key=lambda v: challengers[v]["delta"]) if clearing else None
         baselines[algorithm] = {
+            **metadata,
             "reference_variant": ref_variant,
             "reference": {"mean": ref_mean, "sigma": sigma, "n": len(ref_accs)},
             "margin": margin,
@@ -687,6 +798,48 @@ def baseline_tuning_margin(
         "baselines": baselines,
         "other_skews_present": contaminated,
     }
+
+
+def write_baseline_tuning_plots(report: dict, output_dir: Path) -> list[Path]:
+    """Write one same-axes, per-seed HP-versus-accuracy plot per algorithm."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for algorithm, cell in sorted(report["baselines"].items()):
+        points_by_seed = cell.get("curves", [])
+        if not points_by_seed:
+            continue
+        figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
+        for seed_curve in points_by_seed:
+            points = [point for point in seed_curve["points"] if point["value"] is not None]
+            if points:
+                axis.plot(
+                    [point["value"] for point in points],
+                    [point["accuracy_r100"] for point in points],
+                    marker="o",
+                    label=f"seed {seed_curve['seed']}",
+                )
+        for marker_key, style, label in (
+            ("paper_default_value", ":", "paper default"),
+            ("adopted_value", "--", "adopted"),
+        ):
+            value = cell.get(marker_key)
+            if value is not None:
+                axis.axvline(value, linestyle=style, color="black", alpha=0.65, label=label)
+        axis.set_title(f"{algorithm}: accuracy at R=100 versus {cell.get('knob', 'HP')}")
+        axis.set_xlabel(cell.get("knob", "hyperparameter"))
+        axis.set_ylabel("top-1 accuracy")
+        axis.grid(alpha=0.25)
+        axis.legend()
+        path = output_dir / f"{algorithm}_{cell.get('knob', 'hyperparameter')}.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        written.append(path)
+    return written
 
 
 def load_round_metrics(csv_path: Path) -> pd.DataFrame:
@@ -2079,6 +2232,17 @@ def main() -> None:
         help="Stage 1b keep-or-drop verdicts -- the provenance for the two "
         "Table 4.1 constants Decision 81 moved.",
     )
+    parser.add_argument(
+        "--baseline-tuning-plot-dir",
+        type=Path,
+        default=Path("scripts/analysis_output/baseline_tuning_plots"),
+        help="Directory for per-algorithm, per-seed HP-versus-accuracy curves.",
+    )
+    parser.add_argument(
+        "--baseline-tuning-group",
+        default=BASELINE_TUNING_WIDE_GROUP,
+        help="Experiment group to use for the baseline tuning evidence report.",
+    )
     args = parser.parse_args()
 
     runs = discover_runs(args.experiments_root)
@@ -2232,10 +2396,12 @@ def main() -> None:
 
     # Stage 1b (§4.3.2, Decision 81). Table 4.1's provenance: the tag freezes that
     # table, so it has to be reproducible from committed code.
-    baseline_tuning = baseline_tuning_margin(runs)
+    baseline_tuning = baseline_tuning_margin(runs, experiment_group=args.baseline_tuning_group)
     with open(args.baseline_tuning_output, "w", encoding="utf-8") as f:
         json.dump(baseline_tuning, f, indent=2)
     print(f"Wrote baseline matched-tuning verdicts to {args.baseline_tuning_output}")
+    plot_paths = write_baseline_tuning_plots(baseline_tuning, args.baseline_tuning_plot_dir)
+    print(f"Wrote {len(plot_paths)} baseline HP curves to {args.baseline_tuning_plot_dir}")
     for algorithm, cell in sorted(baseline_tuning["baselines"].items()):
         if "error" in cell:
             print(f"  {algorithm}: {cell['error']}")

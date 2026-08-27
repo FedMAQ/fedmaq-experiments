@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from analysis import (
     BASELINE_TUNING_GROUP,
+    BASELINE_TUNING_WIDE_GROUP,
     EXPLORATION_GROUP,
     FORMULATION_STUDY_GROUP,
     GRID_GROUP,
@@ -42,6 +43,7 @@ from analysis import (
     select_winner_iso_byte,
     sustained_crossing,
     variant_of,
+    write_baseline_tuning_plots,
 )
 from common import get_canonical_output_dir
 from dump_expected_runs import POWER_MEAN_RECUT_MATRICES, expected_identities
@@ -1747,7 +1749,9 @@ def test_ablation_iso_byte_refuses_a_budget_read_off_a_half_finished_arm(tmp_pat
 # --- Stage 1b: baseline matched-tuning margin (§4.3.2, Decision 81) ---
 
 
-def _tuning_run(tmp_path, algorithm, variant, seed, final_acc, alpha=0.3):
+def _tuning_run(
+    tmp_path, algorithm, variant, seed, final_acc, alpha=0.3, group=BASELINE_TUNING_GROUP
+):
     """One Stage 1b run. The cells of a baseline's sweep differ in nothing the
     record holds *except* ``variant`` -- same algorithm, config name, group and
     skew -- which is why the field exists."""
@@ -1763,15 +1767,15 @@ def _tuning_run(tmp_path, algorithm, variant, seed, final_acc, alpha=0.3):
         formulation=None,
         seed=seed,
         csv_path=csv_path,
-        experiment_group=BASELINE_TUNING_GROUP,
+        experiment_group=group,
         phase="explore",
         variant=variant,
     )
 
 
-def _cell(tmp_path, algorithm, variant, accs):
+def _cell(tmp_path, algorithm, variant, accs, group=BASELINE_TUNING_GROUP):
     return [
-        _tuning_run(tmp_path, algorithm, variant, seed, acc)
+        _tuning_run(tmp_path, algorithm, variant, seed, acc, group=group)
         for seed, acc in zip(range(len(accs)), accs, strict=True)
     ]
 
@@ -1867,6 +1871,70 @@ def test_baseline_tuning_margin_flags_a_contaminating_skew(tmp_path):
 
     assert result["other_skews_present"] == [0.1]
     assert result["baselines"]["fedprox"]["reference"]["n"] == 5
+
+
+def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
+    runs = []
+    for variant, value in (
+        ("qmax4", 0.51),
+        ("qmax6", 0.52),
+        ("qmax8", 0.53),
+        ("qmax16", 0.54),
+        ("qmax32", 0.55),
+    ):
+        seeds = (0, 42, 123, 7, 21) if variant == "qmax16" else (0, 42, 123)
+        runs.extend(
+            _tuning_run(
+                tmp_path,
+                "fedmaq",
+                variant,
+                seed,
+                value + seed / 100000,
+                group=BASELINE_TUNING_WIDE_GROUP,
+            )
+            for seed in seeds
+        )
+
+    report = baseline_tuning_margin(runs, experiment_group=BASELINE_TUNING_WIDE_GROUP)
+    cell = report["baselines"]["fedmaq"]
+
+    assert cell["knob"] == "q_max"
+    assert cell["paper_default_variant"] == "qmax16"
+    assert "no source-paper default" in cell["paper_default_note"]
+    assert cell["shipped_adopted_variant"] == "qmax16"
+    assert cell["adopted_variant"] == "qmax32"
+    assert [entry["value"] for entry in cell["table"]] == [4, 6, 8, 16, 32]
+    assert sum(entry["is_adopted"] for entry in cell["table"]) == 1
+    assert len(cell["curves"]) == 5
+
+    paths = write_baseline_tuning_plots(report, tmp_path / "plots")
+    assert paths == [tmp_path / "plots" / "fedmaq_q_max.png"]
+    assert paths[0].is_file()
+
+
+def test_wide_baseline_tuning_report_withholds_partial_verdict(tmp_path):
+    runs = _cell(
+        tmp_path,
+        "fedmaq",
+        "qmax16",
+        [0.54] * 5,
+        group=BASELINE_TUNING_WIDE_GROUP,
+    )
+    runs += _cell(
+        tmp_path,
+        "fedmaq",
+        "qmax4",
+        [0.60] * 3,
+        group=BASELINE_TUNING_WIDE_GROUP,
+    )
+
+    cell = baseline_tuning_margin(runs, experiment_group=BASELINE_TUNING_WIDE_GROUP)["baselines"][
+        "fedmaq"
+    ]
+
+    assert "error" in cell
+    assert "adopted_variant" not in cell
+    assert cell["missing_variants"] == ["qmax6", "qmax8", "qmax32"]
 
 
 def test_variant_of_round_trips_the_canonical_output_path(tmp_path):

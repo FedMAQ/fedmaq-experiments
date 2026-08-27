@@ -41,6 +41,9 @@ CONF_DIR = REPO_ROOT / "conf"
 MATRIX_DIR = CONF_DIR / "matrix"
 SNAPSHOT_PATH = REPO_ROOT / "docs" / "freeze" / "expected_runs.json"
 POWER_MEAN_SNAPSHOT_PATH = REPO_ROOT / "docs" / "recut" / "power_mean_expected_runs.json"
+BASELINE_TUNING_WIDE_SNAPSHOT_PATH = (
+    REPO_ROOT / "docs" / "recut" / "baseline_tuning_wide_expected_runs.json"
+)
 
 # The matrices whose runs the manuscript reports, and therefore the only ones the
 # closure certificate can hold anything to.
@@ -68,6 +71,7 @@ REPORTABLE_MATRICES = (
 )
 
 POWER_MEAN_RECUT_MATRICES = ("power_mean_design",)
+BASELINE_TUNING_WIDE_MATRICES = ("baseline_tuning_wide",)
 
 
 def _load_matrix(name: str) -> dict:
@@ -174,12 +178,26 @@ def main() -> int:
         action="store_true",
         help="write or check the separate expected set for the power-mean re-cut",
     )
+    parser.add_argument(
+        "--baseline-tuning-wide",
+        action="store_true",
+        help="write or check the separate expected set for the widened tuning stage",
+    )
     args = parser.parse_args()
 
-    matrix_names = POWER_MEAN_RECUT_MATRICES if args.power_mean_recut else REPORTABLE_MATRICES
-    snapshot_path = POWER_MEAN_SNAPSHOT_PATH if args.power_mean_recut else SNAPSHOT_PATH
-    command = "uv run python scripts/dump_expected_runs.py --power-mean-recut"
-    if not args.power_mean_recut:
+    if args.power_mean_recut and args.baseline_tuning_wide:
+        parser.error("the two separate expected-set modes are mutually exclusive")
+    if args.power_mean_recut:
+        matrix_names = POWER_MEAN_RECUT_MATRICES
+        snapshot_path = POWER_MEAN_SNAPSHOT_PATH
+        command = "uv run python scripts/dump_expected_runs.py --power-mean-recut"
+    elif args.baseline_tuning_wide:
+        matrix_names = BASELINE_TUNING_WIDE_MATRICES
+        snapshot_path = BASELINE_TUNING_WIDE_SNAPSHOT_PATH
+        command = "uv run python scripts/dump_expected_runs.py --baseline-tuning-wide"
+    else:
+        matrix_names = REPORTABLE_MATRICES
+        snapshot_path = SNAPSHOT_PATH
         command = "uv run python scripts/dump_expected_runs.py"
     groups = expected_identities(matrix_names)
     rendered = _render(groups, command)

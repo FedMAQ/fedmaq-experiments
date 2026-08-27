@@ -114,10 +114,14 @@ Independent of everything above — no baseline shares configuration with FedMAQ
 it may run concurrently with Stage 1. Held-out α = 0.3, uncounted among the reported
 runs, and its verdict enters the same tag at step 10.
 
-6. `--matrix baseline_tuning`. R=100: each of five baselines gets a five-seed
-   reference cell at its shipped Table 4.1 value plus two three-seed challengers. Use
+6. `--matrix baseline_tuning_wide`. R=100: each of the six algorithms with a tunable
+   knob gets a five-seed reference cell plus four three-seed challengers. FedAvg
+   remains absent because it is the uncompressed control. Issue #27 is the live
+   source for the stage's run count.
+   FedMAQ is tuned on `q_max ∈ {4, 6, 8, 16, 32}` with `c_unit=512` fixed. Use
    `--run_timeout_seconds 4200`. Then `scripts/analysis.py:baseline_tuning_margin`,
-   same √2σ rule as the factorial.
+   same √2σ rule as the factorial, and retain the generated per-algorithm tables
+   and HP-versus-accuracy curves as the manuscript-facing evidence path.
    **Not `exploration_noise_margin`** — that one filters `algorithm == "fedmaq"` and
    reports a completed Stage 1b as no runs at all.
    **Write any challenger that clears into `conf/algorithm/<baseline>.yaml` and into

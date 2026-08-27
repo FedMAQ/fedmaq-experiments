@@ -233,6 +233,25 @@ def test_power_mean_recut_expected_runs_snapshot_is_current():
     )
 
 
+def test_baseline_tuning_wide_expected_runs_snapshot_is_current():
+    """The widened tuning stage has its own expected set, outside v1 closure."""
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_expected_runs.py", "--baseline-tuning-wide", "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\n"
+        "Run `uv run python scripts/dump_expected_runs.py --baseline-tuning-wide` "
+        "and commit the result."
+    )
+
+
 def test_each_reportable_arm_carries_one_regime():
     """``identity_key`` omits ``phase`` and ``post_process``, which ADR-0009 also
     lists as identity fields. That is admissible only while both are functions of
@@ -600,6 +619,57 @@ def test_baseline_tuning_gives_every_baseline_the_same_budget_as_fedmaq():
         "count is pinned -- docs/agents/execution-model.md states the shape, not "
         "the number, so it cannot drift out of agreement with the matrix."
     )
+
+
+def test_wide_baseline_tuning_adds_fedmaq_and_four_challengers():
+    matrix = _matrix("baseline_tuning_wide")
+    assert matrix["experiment_group"] == "baseline_tuning_wide"
+    assert matrix["phase"] == "explore"
+    assert matrix["heterogeneities"] == ["dirichlet_alpha_0.3"]
+    assert matrix["total_rounds"] == 100
+
+    by_alg: dict[str, list] = {}
+    for run in matrix["runs"]:
+        by_alg.setdefault(run["alg"], []).append(run)
+
+    assert set(by_alg) == {
+        "fedprox",
+        "fedpaq",
+        "dadaquant",
+        "feddistill",
+        "fedkd",
+        "fedmaq",
+    }
+    assert all(len(runs) == 5 for runs in by_alg.values())
+    assert (
+        sum(len(run.get("seeds") or matrix["seeds"]) for runs in by_alg.values() for run in runs)
+        == 102
+    )
+
+    for algorithm, runs in by_alg.items():
+        references = [run for run in runs if run["label"].endswith("-ref")]
+        assert len(references) == 1
+        assert len(references[0]["seeds"]) == 5
+        assert all(
+            len(run.get("seeds") or matrix["seeds"]) == 3 for run in runs if run not in references
+        )
+        post_process = _post_process_overrides({"runs": runs})
+        if algorithm == "fedmaq":
+            assert len(post_process) == 5
+            assert {
+                "algorithm.q_max=4",
+                "algorithm.q_max=6",
+                "algorithm.q_max=8",
+                "algorithm.q_max=16",
+                "algorithm.q_max=32",
+            } <= {
+                override
+                for run in runs
+                for override in run["overrides"]
+                if override.startswith("algorithm.q_max=")
+            }
+        else:
+            assert not post_process
 
 
 @pytest.mark.parametrize(
