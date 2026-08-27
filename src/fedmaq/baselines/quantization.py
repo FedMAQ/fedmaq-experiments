@@ -8,10 +8,24 @@ from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
 
-def _normalize_and_round(d: np.ndarray, scale: float, levels: int) -> np.ndarray:
-    """Normalize ``d`` by ``scale`` and round to integer-valued codes in [-levels, levels]."""
-    normalized = d / scale
-    return np.round(normalized * levels)
+def _stochastic_round(scaled: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Unbiased stochastic (dithered) rounding: floor(x) w.p. 1-frac(x), else ceil(x).
+
+    ``E[result] = scaled`` for any input, unlike ``np.round`` which is
+    deterministic and biased (#24). Lifted from DAdaQuant's original inline
+    implementation into shared code so FedPAQ and FedMAQ's quantizer share it.
+    """
+    floor_val = np.floor(scaled)
+    prob = scaled - floor_val
+    rand_val = rng.random(scaled.shape)
+    return np.where(rand_val < prob, floor_val + 1, floor_val)
+
+
+def _require_rng(rng: np.random.Generator | None, hook_name: str) -> np.random.Generator:
+    """Raise loudly instead of silently defaulting to an unseeded generator (#24)."""
+    if rng is None:
+        raise ValueError(f"{hook_name} requires a seeded rng for stochastic rounding (got None).")
+    return rng
 
 
 def _codes_to_float(codes: np.ndarray, scale: float, levels: int) -> np.ndarray:
@@ -49,15 +63,18 @@ def _serialize_codes(codes: np.ndarray, scale: float) -> bytes:
 
 def _quantize_deltas(
     deltas: list[np.ndarray],
+    scale_fn: Callable[[np.ndarray], float],
     quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
 ) -> tuple[list[np.ndarray], int, int, list[bytes]]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
     Iterates ``deltas``, skipping empty tensors (free: nothing is transmitted)
-    and otherwise applies ``quantize_elem(d, scale)`` where ``scale = max|d|``,
-    which returns ``(dequantized, codes)``. All-zero tensors (scale 0) skip
-    quantization but still route their (all-zero) codes through the same
-    measured transport, so no per-arm byte arithmetic survives outside it.
+    and otherwise computing ``scale = scale_fn(d)`` before applying
+    ``quantize_elem(d, scale)``, which returns ``(dequantized, codes)``.
+    ``scale_fn`` is a per-call-site choice (l2 vs l∞ normalization, #24) rather
+    than hardcoded here. All-zero tensors (scale 0) skip quantization but still
+    route their (all-zero) codes through the same measured transport, so no
+    per-arm byte arithmetic survives outside it.
 
     Returns ``(quantized_deltas, measured_bytes, payload_bytes, payloads)``.
     ``payload_bytes`` is the pre-encoding payload size (codes + scale, before
@@ -76,7 +93,7 @@ def _quantize_deltas(
             quantized_deltas.append(d)
             continue
 
-        scale = float(np.max(np.abs(d)))
+        scale = scale_fn(d)
         if scale > 0.0:
             dequantized, codes = quantize_elem(d, scale)
             quantized_deltas.append(dequantized.astype(np.float32))
@@ -93,9 +110,16 @@ def _quantize_deltas(
 
 
 class FedPAQCompressionHook(CompressionHook):
-    """Uniform symmetric quantization hook implementing FedPAQ."""
+    """Uniform symmetric quantization hook implementing FedPAQ.
 
-    def __init__(self, q: int = 8) -> None:
+    Unbiased stochastic rounding, l2-normalized (#24, matching
+    ``chapter_3.tex``'s ``Q_s(v_j) = ‖v‖₂ · sgn(v_j) · ξ_j(v,s)``) for the
+    ``q>1`` path. The ``q<=1`` sign-quantization path has no rounding step to
+    make unbiased and keeps l∞ (``max|d|``) unconditionally: l2 would inflate
+    every coordinate by ``~√d`` there, not damp it (see ``_scale``).
+    """
+
+    def __init__(self, q: int = 8, rng: np.random.Generator | None = None) -> None:
         """Initialize the compression hook with quantization bit-width.
 
         Parameters
@@ -104,8 +128,12 @@ class FedPAQCompressionHook(CompressionHook):
             Number of quantization *bits* (default: 8).
             Each element is represented with ``q`` bits, giving
             ``2^(q-1) - 1`` positive quantization levels.
+        rng : np.random.Generator | None
+            Seeded NumPy generator for the ``q>1`` stochastic-rounding path.
+            Required whenever that path is reached; ``q<=1`` never consumes it.
         """
         self.q = q
+        self.rng = rng
 
     @property
     def levels(self) -> int:
@@ -117,6 +145,11 @@ class FedPAQCompressionHook(CompressionHook):
         """
         return max(1, (1 << (self.q - 1)) - 1)
 
+    def _scale(self, d: np.ndarray) -> float:
+        if self.q <= 1:
+            return float(np.max(np.abs(d)))
+        return float(np.linalg.norm(d))
+
     def _quantize_elem(self, d: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
         if self.q <= 1:
             # 1-bit sign quantization: each element -> sign(d)*scale, i.e. values
@@ -124,8 +157,10 @@ class FedPAQCompressionHook(CompressionHook):
             # 0-positive-level uniform quantizer would give.
             codes = np.sign(d).astype(np.int64)
             return codes.astype(np.float32) * scale, codes
-        # Normalize to [-1, 1], map to [-levels, levels], round, map back.
-        codes = _normalize_and_round(d, scale, self.levels)
+        rng = _require_rng(self.rng, "FedPAQCompressionHook")
+        # Normalize to [-1, 1], map to [-levels, levels], stochastic-round, map back.
+        scaled = (d / scale) * self.levels
+        codes = _stochastic_round(scaled, rng)
         return _codes_to_float(codes, scale, self.levels), codes.astype(np.int64)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
@@ -144,7 +179,7 @@ class FedPAQCompressionHook(CompressionHook):
             payloads themselves on ``self.last_payloads``.
         """
         quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
-            deltas, self._quantize_elem
+            deltas, self._scale, self._quantize_elem
         )
         self.last_payload_bytes = payload_bytes
         self.last_payloads = payloads
@@ -174,19 +209,23 @@ class DAdaQuantCompressionHook(CompressionHook):
             Number of quantization *levels per sign* (default: 8).
             The quantizer maps values to integers in [-q, q] (2q+1 total levels).
         rng : np.random.Generator | None
-            Seeded NumPy random generator for reproducible stochastic rounding.
-            If None, a default (unseeded) generator is used.
+            Seeded NumPy generator for reproducible stochastic rounding.
+            Required at compress()-time; no unseeded fallback (#24) -- an arm
+            that omits it fails loudly instead of silently defaulting.
         """
         self.q = q
-        self.rng = rng if rng is not None else np.random.default_rng()
+        self.rng = rng
+
+    def _scale(self, d: np.ndarray) -> float:
+        # Kept explicit at this call site rather than inherited from FedPAQ's
+        # scale switch (#24): out of scope for DAdaQuant's own normalization.
+        return float(np.max(np.abs(d)))
 
     def _quantize_elem(self, d: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
+        rng = _require_rng(self.rng, "DAdaQuantCompressionHook")
         # Normalize to [-1, 1], scale to [-q, q], stochastic-round, map back.
         scaled = (d / scale) * self.q
-        floor_val = np.floor(scaled)
-        prob = scaled - floor_val
-        rand_val = self.rng.random(scaled.shape)
-        codes = np.where(rand_val < prob, floor_val + 1, floor_val)
+        codes = _stochastic_round(scaled, rng)
         return (codes / self.q) * scale, codes.astype(np.int64)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
@@ -205,7 +244,7 @@ class DAdaQuantCompressionHook(CompressionHook):
             payloads themselves on ``self.last_payloads``.
         """
         quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
-            deltas, self._quantize_elem
+            deltas, self._scale, self._quantize_elem
         )
         self.last_payload_bytes = payload_bytes
         self.last_payloads = payloads

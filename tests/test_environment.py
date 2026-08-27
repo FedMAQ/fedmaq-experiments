@@ -375,23 +375,34 @@ def test_dadaquant_compression_hook():
     """Test DAdaQuantCompressionHook stochastic rounding and size estimation."""
     from fedmaq.baselines.quantization import DAdaQuantCompressionHook
 
-    hook = DAdaQuantCompressionHook(q=4)
+    hook = DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0))
     deltas = [np.ones((100,), dtype=np.float32)]
     compressed_deltas, byte_size = hook.compress(deltas)
 
     # Constant codes (uniform input) are highly compressible; pinned regression
     # value from measure_bytes (#25), not the old analytic ceil(bits*size/8)+4.
+    # Unaffected by #24's rounding refactor: scaled = (1/1)*4 = 4 exactly, so
+    # the stochastic draw's round-up probability is 0 and the result is the
+    # same deterministic code as before, just via the shared rounding helper.
     assert byte_size == 23
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
-    np.random.seed(42)
-    hook_unbiased = DAdaQuantCompressionHook(q=1)
+    hook_unbiased = DAdaQuantCompressionHook(q=1, rng=np.random.default_rng(42))
     large_deltas = [np.full((10000,), 0.5, dtype=np.float32)]
     decompressed, _ = hook_unbiased.compress(large_deltas)
     mean_val = np.mean(decompressed[0])
 
     np.testing.assert_allclose(mean_val, 0.5, atol=0.03)
+
+
+def test_dadaquant_requires_rng_for_stochastic_rounding():
+    """No unseeded fallback (#24): a rng-less DAdaQuant hook fails loudly."""
+    from fedmaq.baselines.quantization import DAdaQuantCompressionHook
+
+    hook = DAdaQuantCompressionHook(q=4)
+    with pytest.raises(ValueError, match="seeded rng"):
+        hook.compress([np.ones((4,), dtype=np.float32)])
 
 
 def test_dadaquant_strategy_allocation():
@@ -876,18 +887,24 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
 
 
 def test_fedpaq_compression_hook():
-    """Test FedPAQCompressionHook uniform symmetric quantization."""
+    """Test FedPAQCompressionHook uniform symmetric quantization.
+
+    Scale is l2 (``‖d‖₂``), not l∞, and rounding is unbiased-stochastic, not
+    ``np.round`` (#24) -- so, unlike the old deterministic l∞ operator, exact
+    reconstruction of extremal values is no longer guaranteed. Pinned to a
+    seeded rng for reproducibility.
+    """
     from fedmaq.baselines.quantization import FedPAQCompressionHook
 
-    hook = FedPAQCompressionHook(q=8)
+    hook = FedPAQCompressionHook(q=8, rng=np.random.default_rng(0))
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
     compressed, byte_size = hook.compress(deltas)
 
-    # Pinned regression value from measure_bytes (#25): zlib on int64 codes +
-    # a folded-in float32 scale, not the old analytic ceil(bits*size/8)+4.
-    assert byte_size == 18
+    assert byte_size == 21
     assert len(compressed) == 1
-    np.testing.assert_allclose(compressed[0], np.array([-2.0, 0.0, 2.0], dtype=np.float32))
+    np.testing.assert_allclose(
+        compressed[0], np.array([-2.0043972, 0.0, 2.0043972], dtype=np.float32)
+    )
 
 
 def test_fedpaq_no_nan_for_all_permissible_bit_widths():
@@ -901,7 +918,7 @@ def test_fedpaq_no_nan_for_all_permissible_bit_widths():
     rng = np.random.default_rng(0)
     deltas = [rng.standard_normal((4, 3)).astype(np.float32)]
     for q in (1, 2, 3, 4, 5, 6, 7, 8, 16, 32):
-        compressed, _ = FedPAQCompressionHook(q=q).compress(deltas)
+        compressed, _ = FedPAQCompressionHook(q=q, rng=np.random.default_rng(1)).compress(deltas)
         assert np.all(np.isfinite(compressed[0])), f"NaN/Inf produced at q={q}"
 
 
@@ -915,6 +932,59 @@ def test_fedpaq_q1_is_sign_quantization():
         compressed[0], np.array([-3.0, -3.0, 0.0, 3.0, 3.0], dtype=np.float32)
     )
     assert set(np.unique(compressed[0]).tolist()) <= {-3.0, 0.0, 3.0}
+
+
+def test_fedpaq_requires_rng_for_stochastic_rounding():
+    """No unseeded fallback (#24): a rng-less FedPAQ hook fails loudly at q>1."""
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    hook = FedPAQCompressionHook(q=8)
+    with pytest.raises(ValueError, match="seeded rng"):
+        hook.compress([np.array([-2.0, 0.0, 2.0], dtype=np.float32)])
+
+
+def test_fedpaq_stochastic_rounding_is_unbiased():
+    """E[Q(x)] = x, verified statistically at a realistic tensor size (#24 AC).
+
+    Per-coordinate signal under l2 scale is O(1/sqrt(d)); undersized synthetic
+    arrays hide bias. Averaging many independent draws at d=2048 isolates it.
+    Checked via the mean estimate's overall l2 relative error, not a per-element
+    tolerance: at FedMAQ's coarser q values the l2-scale quantization step is
+    itself large relative to any one coordinate, so per-element convergence is
+    slow even though the *average* estimator is unbiased and converges quickly.
+    """
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    rng = np.random.default_rng(7)
+    delta = rng.standard_normal(2048).astype(np.float32)
+    n_draws = 200
+
+    accum = np.zeros_like(delta, dtype=np.float64)
+    for i in range(n_draws):
+        hook = FedPAQCompressionHook(q=8, rng=np.random.default_rng(1000 + i))
+        dequantized, _ = hook.compress([delta.copy()])
+        accum += dequantized[0]
+    mean_estimate = accum / n_draws
+
+    rel_err = np.linalg.norm(mean_estimate - delta) / np.linalg.norm(delta)
+    assert rel_err < 0.05
+
+
+def test_fedpaq_same_seed_twice_is_bit_identical():
+    """Determinism under a fixed seed (ADR-0006 surrogate): two independently
+    constructed hooks seeded alike must produce bit-identical output."""
+    from fedmaq.baselines.quantization import FedPAQCompressionHook
+
+    deltas = [np.linspace(-1, 1, 500).astype(np.float32)]
+    out_a, bytes_a = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
+        [d.copy() for d in deltas]
+    )
+    out_b, bytes_b = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
+        [d.copy() for d in deltas]
+    )
+
+    np.testing.assert_array_equal(out_a[0], out_b[0])
+    assert bytes_a == bytes_b
 
 
 def test_fedprox_loss_hook():

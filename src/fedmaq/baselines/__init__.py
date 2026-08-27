@@ -38,9 +38,11 @@ __all__ = [
 
 # Algorithm name -> compressor hook constructor, each taking
 # (alg_cfg, rng, state) where alg_cfg is cfg.algorithm as a plain dict, rng is
-# a seeded NumPy generator (stochastic rounding reproducibility for
-# DAdaQuant/FedMAQ) or None for a default unseeded generator, and state is the
-# per-client persistent RecordDict (only used by FedMAQ's post-processing hook).
+# a seeded NumPy generator for stochastic rounding (FedPAQ/DAdaQuant/FedMAQ) --
+# required by the time compress() reaches its stochastic-rounding branch, with
+# no unseeded fallback (#24); StandardFit.fit() reseeds it every round from
+# (seed, partition_id, server_round) -- and state is the per-client persistent
+# RecordDict (only used by FedMAQ's post-processing hook).
 _COMPRESSOR_HOOKS: dict[
     str,
     Callable[
@@ -48,7 +50,9 @@ _COMPRESSOR_HOOKS: dict[
         CompressionHook,
     ],
 ] = {
-    "fedpaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(q=int(alg_cfg.get("q", 8))),
+    "fedpaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
+        q=int(alg_cfg.get("q", 8)), rng=rng
+    ),
     "dadaquant": lambda alg_cfg, rng, state: DAdaQuantCompressionHook(
         q=int(alg_cfg.get("q_min", 1)),
         rng=rng,
@@ -58,7 +62,9 @@ _COMPRESSOR_HOOKS: dict[
     # bit-width-faithful symmetric quantizer.
     # Dispatch below overrides this with FedMAQPostProcessCompressionHook when
     # ``alg_cfg["post_process"]`` is true (primary benchmarking grid only).
-    "fedmaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(q=int(alg_cfg.get("q_min", 2))),
+    "fedmaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
+        q=int(alg_cfg.get("q_min", 2)), rng=rng
+    ),
     "fedkd": lambda alg_cfg, rng, state: FedKDCompressionHook(
         energy=float(alg_cfg.get("tmin", 0.5)),
         min_rank_frac=float(alg_cfg.get("min_rank_frac", 0.0)),
@@ -82,7 +88,10 @@ def get_compressor_hook(
         Algorithm sub-config dict (``cfg.algorithm`` as a plain dict).
     rng:
         Seeded NumPy generator for stochastic rounding reproducibility
-        (DAdaQuant / FedMAQ).  If None a default unseeded generator is used.
+        (FedPAQ / DAdaQuant / FedMAQ). Required by the time the returned
+        hook's ``compress()`` reaches a stochastic-rounding branch; passing
+        None defers that requirement to whoever reseeds the hook (see
+        ``StandardFit.fit()``), not to a silent unseeded default.
     state:
         Per-client persistent :class:`flwr.app.RecordDict` (``Context.state``).
         Only consumed when dispatching to :class:`FedMAQPostProcessCompressionHook`
@@ -96,7 +105,9 @@ def get_compressor_hook(
         (fedavg, fedprox, fedmd, fedavg_kd, feddistill: uncompressed float32).
     """
     if alg_name == "fedmaq" and alg_cfg.get("post_process"):
-        return FedMAQPostProcessCompressionHook(q=int(alg_cfg.get("q_min", 2)), state=state)
+        return FedMAQPostProcessCompressionHook(
+            q=int(alg_cfg.get("q_min", 2)), state=state, rng=rng
+        )
     hook_ctor = _COMPRESSOR_HOOKS.get(alg_name)
     if hook_ctor is None:
         return CompressionHook()

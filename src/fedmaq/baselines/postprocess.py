@@ -14,7 +14,12 @@ import logging
 import numpy as np
 from flwr.app import ArrayRecord, RecordDict
 
-from fedmaq.baselines.quantization import _codes_to_float, _normalize_and_round, _serialize_codes
+from fedmaq.baselines.quantization import (
+    _codes_to_float,
+    _require_rng,
+    _serialize_codes,
+    _stochastic_round,
+)
 from fedmaq.baselines.transport import measure_bytes
 from fedmaq.core.client import CompressionHook
 
@@ -33,7 +38,12 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
     rounds (``Context.state``).
     """
 
-    def __init__(self, q: int = 8, state: RecordDict | None = None) -> None:
+    def __init__(
+        self,
+        q: int = 8,
+        state: RecordDict | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> None:
         """Initialize the hook.
 
         Parameters
@@ -43,10 +53,14 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         state : flwr.app.RecordDict | None
             Per-client persistent state. If None, a fresh (per-call-scoped,
             non-persisted) RecordDict is used.
+        rng : np.random.Generator | None
+            Seeded NumPy generator for the ``q>1`` stochastic-rounding path.
+            Required whenever that path is reached; ``q<=1`` never consumes it.
         """
         self.q = q
         self._state = state if state is not None else RecordDict()
         self._logged_shape_mismatch = False
+        self.rng = rng
 
     @property
     def levels(self) -> int:
@@ -95,6 +109,16 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
             )
             d_fb = d + residual
 
+            # Deliberately l∞ (max|d_fb|), NOT the l2 switch FedPAQ/FedMAQ's
+            # memoryless quantizer takes (#24): under error feedback, l2 scale
+            # grows with tensor dimension while the per-coordinate quantization
+            # step (‖d_fb‖₂/levels) stays fixed at a small `levels`, breaking the
+            # contraction property error feedback needs -- verified empirically
+            # (residual/delta ratio diverges >1e6x over 40 rounds on a
+            # 2M-parameter tensor at FedMAQ's actual q range). l∞ keeps this
+            # path's quantization step bounded by the tensor's own peak
+            # magnitude regardless of dimension, so it stays stable. Extending
+            # l2 here needs its own ticket with a redesigned feedback scheme.
             scale = float(np.max(np.abs(d_fb)))
             if scale == 0.0:
                 zero_codes = np.zeros_like(d_fb, dtype=np.int64)
@@ -111,7 +135,9 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 codes = np.sign(d_fb).astype(np.int64)
                 dequantized = (codes.astype(np.float32)) * scale
             else:
-                codes_f = _normalize_and_round(d_fb, scale, self.levels)
+                rng = _require_rng(self.rng, "FedMAQPostProcessCompressionHook")
+                scaled = (d_fb / scale) * self.levels
+                codes_f = _stochastic_round(scaled, rng)
                 codes = codes_f.astype(np.int64)
                 dequantized = _codes_to_float(codes_f, scale, self.levels).astype(np.float32)
 

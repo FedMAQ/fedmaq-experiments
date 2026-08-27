@@ -46,17 +46,23 @@ def test_identity_hook_last_payloads_reproduce_byte_size():
 
 def test_fedpaq_last_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
-    _assert_payloads_reproduce_byte_size(FedPAQCompressionHook(q=8), deltas)
+    _assert_payloads_reproduce_byte_size(
+        FedPAQCompressionHook(q=8, rng=np.random.default_rng(0)), deltas
+    )
 
 
 def test_dadaquant_last_payloads_reproduce_byte_size():
     deltas = [np.ones((100,), dtype=np.float32)]
-    _assert_payloads_reproduce_byte_size(DAdaQuantCompressionHook(q=4), deltas)
+    _assert_payloads_reproduce_byte_size(
+        DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0)), deltas
+    )
 
 
 def test_fedmaq_postprocess_last_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32), np.zeros((3,), dtype=np.float32)]
-    _assert_payloads_reproduce_byte_size(FedMAQPostProcessCompressionHook(q=8), deltas)
+    _assert_payloads_reproduce_byte_size(
+        FedMAQPostProcessCompressionHook(q=8, rng=np.random.default_rng(0)), deltas
+    )
 
 
 def test_fedkd_upload_last_payloads_reproduce_byte_size():

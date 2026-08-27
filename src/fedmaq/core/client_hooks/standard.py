@@ -52,6 +52,22 @@ class StandardFit(ClientFitStrategy):
             if hasattr(client.compressor_hook, "q"):
                 client.compressor_hook.q = int(config["q"])
 
+        if hasattr(client.compressor_hook, "rng"):
+            # Reseed per round, not just at client_fn construction time: Flower
+            # rebuilds client_fn fresh every message, so a construction-time-only
+            # seed replays the identical stochastic-rounding draw sequence every
+            # round for a given client, breaking cross-round independence (#24).
+            # `server_round` is read directly (no default) because strategy.py
+            # injects it unconditionally -- a silent fallback here would quietly
+            # restore the exact bug this reseed fixes. Combined via the same
+            # (seed, partition_id, round) shape as quantization_planner.py:268's
+            # dataloader seed, but as a tuple rather than summed into one int, so
+            # it draws from a stream independent of that (and the training) RNG.
+            seed = int(client.config.get("seed", 42))
+            partition_id = int(client.cid)
+            server_round = int(config["server_round"])
+            client.compressor_hook.rng = np.random.default_rng((seed, partition_id, server_round))
+
         # Optional pre-training loss (e.g. DAdaQuant plateau signal), measured on
         # the incoming global model before any local update.
         pretrain_loss = self._pretrain_local_loss(client)
