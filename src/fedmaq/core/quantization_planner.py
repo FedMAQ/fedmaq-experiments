@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -99,6 +99,18 @@ class QuantPlan:
 
     client_q: dict[str, int]
     grad_norms: list[float]
+    client_q_max: dict[str, float] = field(default_factory=dict)
+    client_q_hat: dict[str, float] = field(default_factory=dict)
+    tier1_enabled: bool = True
+
+
+@dataclass(frozen=True)
+class QuantizationDecision:
+    """Auditable result of one client's Tier-1/Tier-2 precision decision."""
+
+    q_k_max: float
+    q_hat: float
+    q: int
 
 
 def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
@@ -107,7 +119,7 @@ def _snap_floor(value: float, bit_widths: tuple[int, ...]) -> int:
     return max(eligible) if eligible else min(bit_widths)
 
 
-def compute_fedmaq_q_k_t(
+def compute_fedmaq_q_k_t_details(
     c_k: float,
     c_unit: float,
     g_k: float,
@@ -124,7 +136,7 @@ def compute_fedmaq_q_k_t(
     tau_n: float = 0.5,
     bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
     resource_aware: bool = True,
-) -> int:
+) -> QuantizationDecision:
     """Compute client-specific quantization bit-width for FedMAQ.
 
     The final result is always a member of ``bit_widths`` (manuscript §3.3.3's
@@ -166,7 +178,50 @@ def compute_fedmaq_q_k_t(
 
     q_hat = max(float(q_min), min(float(q_max), float(q_hat)))
     combined = q_hat if not resource_aware else min(q_k_max_raw, q_hat)
-    return _snap_floor(combined, bit_widths)
+    return QuantizationDecision(
+        q_k_max=float(q_k_max_raw),
+        q_hat=float(q_hat),
+        q=_snap_floor(combined, bit_widths),
+    )
+
+
+def compute_fedmaq_q_k_t(
+    c_k: float,
+    c_unit: float,
+    g_k: float,
+    g_max: float,
+    n_k: int,
+    n_max: int,
+    formulation: int,
+    q_min: int,
+    q_max: int,
+    gamma1: float = 0.5,
+    gamma2: float = 0.5,
+    lambda_val: float = 1.0,
+    tau_g: float = 0.5,
+    tau_n: float = 0.5,
+    bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS,
+    resource_aware: bool = True,
+) -> int:
+    """Compute only the final bit-width, preserving the original planner seam."""
+    return compute_fedmaq_q_k_t_details(
+        c_k=c_k,
+        c_unit=c_unit,
+        g_k=g_k,
+        g_max=g_max,
+        n_k=n_k,
+        n_max=n_max,
+        formulation=formulation,
+        q_min=q_min,
+        q_max=q_max,
+        gamma1=gamma1,
+        gamma2=gamma2,
+        lambda_val=lambda_val,
+        tau_g=tau_g,
+        tau_n=tau_n,
+        bit_widths=bit_widths,
+        resource_aware=resource_aware,
+    ).q
 
 
 def _default_probe(model: nn.Module, images: torch.Tensor, labels: torch.Tensor) -> float:
@@ -222,10 +277,16 @@ class QuantizationPlanner:
         )
         grad_norms = self._smooth_grad_norms(client_pids, grad_norms, qp_cfg)
 
-        client_q = self._assign_quantization(
+        client_q, client_q_max, client_q_hat = self._assign_quantization(
             client_cids, client_pids, grad_norms, dataset_sizes, client_memory, qp
         )
-        return QuantPlan(client_q=client_q, grad_norms=grad_norms)
+        return QuantPlan(
+            client_q=client_q,
+            grad_norms=grad_norms,
+            client_q_max=client_q_max,
+            client_q_hat=client_q_hat,
+            tier1_enabled=qp.resource_aware,
+        )
 
     def _ensure_grad_norm_model(self, parameters: Parameters, ctx: RunContext) -> nn.Module:
         """Lazily build + cache the grad-norm probe model, then load ``parameters``."""
@@ -316,17 +377,19 @@ class QuantizationPlanner:
         dataset_sizes: list[int],
         client_memory: dict[int, float] | list[float],
         qp: _QuantParams,
-    ) -> dict[str, int]:
+    ) -> tuple[dict[str, int], dict[str, float], dict[str, float]]:
         """Normalize the signals and compute each client's bit-width ``q``."""
         g_max = max(grad_norms) if grad_norms else 1e-8
         n_max = max(dataset_sizes) if dataset_sizes else 1
 
         client_q: dict[str, int] = {}
+        client_q_max: dict[str, float] = {}
+        client_q_hat: dict[str, float] = {}
         for cid, pid, g_k, n_k in zip(
             client_cids, client_pids, grad_norms, dataset_sizes, strict=True
         ):
             c_k = float(client_memory[pid])
-            q_k_t = compute_fedmaq_q_k_t(
+            decision = compute_fedmaq_q_k_t_details(
                 c_k=c_k,
                 c_unit=qp.c_unit,
                 g_k=g_k,
@@ -344,14 +407,16 @@ class QuantizationPlanner:
                 bit_widths=qp.bit_widths,
                 resource_aware=qp.resource_aware,
             )
-            client_q[cid] = q_k_t
+            client_q[cid] = decision.q
+            client_q_max[cid] = decision.q_k_max
+            client_q_hat[cid] = decision.q_hat
             logger.info(
                 f"FedMAQ - Client {cid} (partition {pid}): "
                 f"c_k={c_k:.1f}MB, g_k={g_k:.4f} (tilde_g={g_k / g_max:.4f}), "
                 f"n_k={n_k} (tilde_n={n_k / n_max:.4f}) -> "
-                f"Final assigned q: {q_k_t}"
+                f"Final assigned q: {decision.q}"
             )
-        return client_q
+        return client_q, client_q_max, client_q_hat
 
 
 def inject_client_q(

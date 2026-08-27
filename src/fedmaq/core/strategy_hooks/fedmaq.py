@@ -146,6 +146,22 @@ class FedMAQHook(StrategyHook):
             metrics["algorithm/fedmaq/max_q"] = float(np.max(q_vals))
             metrics["algorithm/fedmaq/std_q"] = float(np.std(q_vals))
 
+        if self._current_plan.tier1_enabled and self._current_plan.client_q_max:
+            q_k_max_vals = list(self._current_plan.client_q_max.values())
+            metrics["algorithm/fedmaq/avg_q_k_max"] = float(np.mean(q_k_max_vals))
+            metrics["algorithm/fedmaq/min_q_k_max"] = float(np.min(q_k_max_vals))
+            metrics["algorithm/fedmaq/max_q_k_max"] = float(np.max(q_k_max_vals))
+            metrics["algorithm/fedmaq/std_q_k_max"] = float(np.std(q_k_max_vals))
+            q_hat_by_cid = self._current_plan.client_q_hat
+            if q_hat_by_cid:
+                binding = [
+                    q_k_max < q_hat_by_cid[cid]
+                    for cid, q_k_max in self._current_plan.client_q_max.items()
+                    if cid in q_hat_by_cid
+                ]
+                if binding:
+                    metrics["algorithm/fedmaq/tier1_binding_fraction"] = float(np.mean(binding))
+
         return metrics
 
     def metric_keys(self) -> list[str]:
@@ -159,6 +175,11 @@ class FedMAQHook(StrategyHook):
             "algorithm/fedmaq/min_q",
             "algorithm/fedmaq/max_q",
             "algorithm/fedmaq/std_q",
+            "algorithm/fedmaq/avg_q_k_max",
+            "algorithm/fedmaq/min_q_k_max",
+            "algorithm/fedmaq/max_q_k_max",
+            "algorithm/fedmaq/std_q_k_max",
+            "algorithm/fedmaq/tier1_binding_fraction",
         ]
 
     def server_sim_time(
