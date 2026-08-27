@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import platform
+import socket
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -150,14 +151,34 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
         },
         "git": _git_provenance(repo_root),
         "environment": {
+            "host": socket.gethostname(),
             "python": platform.python_version(),
             "platform": platform.platform(),
             "torch": torch_version,
             "cuda": cuda_version,
             "gpu": gpu,
         },
+        "dispatch": _dispatch_provenance(),
+        "source_root": None,
         "config": cfg_dict,
     }
+
+
+def _dispatch_provenance() -> dict[str, Any] | None:
+    """Read optional matrix-dispatch provenance supplied by ``run_matrix.py``."""
+    index = os.environ.get("FEDMAQ_SWEEP_SHARD_INDEX")
+    count = os.environ.get("FEDMAQ_SWEEP_SHARD_COUNT")
+    if index is None and count is None:
+        return None
+    try:
+        shard = {"index": int(index), "count": int(count)}
+    except (TypeError, ValueError):
+        # Keep the run manifest useful even if a manually supplied environment is
+        # malformed; the host remains authoritative in ``environment.host``.
+        return {"shard": None}
+    if not 1 <= shard["index"] <= shard["count"]:
+        return {"shard": None}
+    return {"shard": shard}
 
 
 def write_run_manifest(cfg_dict: dict[str, Any], log_dir: Path) -> Path | None:
@@ -170,6 +191,7 @@ def write_run_manifest(cfg_dict: dict[str, Any], log_dir: Path) -> Path | None:
     try:
         manifest = build_manifest(cfg_dict)
         log_dir.mkdir(parents=True, exist_ok=True)
+        manifest["source_root"] = log_dir.resolve().as_posix()
         path = log_dir / MANIFEST_FILENAME
         path.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
 

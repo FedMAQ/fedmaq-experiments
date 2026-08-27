@@ -221,7 +221,19 @@ where the count is pinned.**
   repaired by one re-invocation with no index arithmetic. `--start_at N` still exists
   for deliberately resuming at a point (1-indexed, into that matrix's own task list —
   re-read the dry run before using it). Both are previewable with `--dry_run`.
-- **Every sweep writes `sweep_status.json`** to its experiment-group directory,
+- **Use `--shard I/N` for multi-host dispatch.** Sharding is a round-robin partition
+  of the fully expanded canonical matrix list, independent of host, completion state,
+  and wall clock. Every host must use the same matrix and `N`, with a distinct `I`:
+  `./.venv/Scripts/python.exe scripts/run_matrix.py --matrix benchmark_grid --shard 2/4`.
+  The dry run prints canonical indices and the shard's status file is
+  `sweep_status.shard-I-of-N.json`, so hosts do not race on one JSON file.
+- **Merge shard status only after collection.** From the shared sweep-group directory,
+  run `./.venv/Scripts/python.exe scripts/merge_sweep_status.py --group-dir <group-dir>`.
+  The merger refuses missing or overlapping canonical indices before writing the
+  aggregate `sweep_status.json`. Each run manifest records its producing host and
+  shard; these are provenance fields, not substitutes for the modeled execution
+  telemetry required by Issue #28.
+- **Every unsharded sweep writes `sweep_status.json`** to its experiment-group directory,
   rewritten after each task so it survives a sweep that never reaches its summary. It
   carries `failed_indices` plus the label, exit code and full command of each failure.
   Read it before deciding what to re-run; it is scoped to one invocation and replaced

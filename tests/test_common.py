@@ -2,6 +2,8 @@
 
 import subprocess
 
+import pytest
+
 from scripts import common
 
 
@@ -48,3 +50,39 @@ def test_kill_ray_processes_uses_taskkill_on_windows(monkeypatch):
     assert calls[0] == ["uv", "run", "ray", "stop"]
     assert any(cmd[:2] == ["taskkill", "/F"] for cmd in calls[1:])
     assert not any(cmd[0] == "pkill" for cmd in calls[1:])
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 4, 7])
+def test_partition_tasks_is_disjoint_and_complete(count):
+    tasks = [{"canonical_index": index} for index in range(1, 18)]
+    shards = [
+        {task["canonical_index"] for task in common.partition_tasks(tasks, index, count)}
+        for index in range(1, count + 1)
+    ]
+
+    assert set().union(*shards) == set(range(1, 18))
+    assert sum(map(len, shards)) == len(tasks)
+    for index, left in enumerate(shards):
+        for right in shards[index + 1 :]:
+            assert left.isdisjoint(right)
+
+
+@pytest.mark.parametrize("value", ["0/3", "1/0", "4/3", "one/3", "1 / 3"])
+def test_parse_shard_rejects_invalid_selectors(value):
+    with pytest.raises(ValueError):
+        common.parse_shard(value)
+
+
+def test_parse_shard_is_one_based():
+    assert common.parse_shard("2/5") == (2, 5)
+    assert common.sharded_sweep_status_filename(2, 5) == "sweep_status.shard-2-of-5.json"
+
+
+def test_validate_unique_output_dirs_rejects_collisions():
+    with pytest.raises(ValueError, match="maps runs"):
+        common.validate_unique_output_dirs(
+            [
+                {"label": "first", "output_dir": "outputs/same"},
+                {"label": "second", "output_dir": "outputs/same"},
+            ]
+        )

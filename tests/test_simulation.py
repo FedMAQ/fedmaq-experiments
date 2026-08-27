@@ -912,6 +912,137 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     assert "algorithm=fedavg" in dispatched[0]
 
 
+def test_shard_dispatches_only_canonical_members_and_writes_host_status(
+    tmp_path, monkeypatch
+):
+    import socket
+    import subprocess
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+    from scripts.common import sharded_sweep_status_filename
+
+    group_dir = _write_probe_matrix(
+        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
+    monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(socket, "gethostname", lambda: "host-b")
+
+    dispatched = []
+
+    def fake_run(cmd, *args, **kwargs):
+        dispatched.append((cmd, kwargs["env"]))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(run_matrix.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_matrix.py", "--matrix", "probe", "--shard", "2/3"],
+    )
+    run_matrix.main()
+
+    assert ["algorithm=fedprox", "algorithm=qsgd"] == [
+        next(arg for arg in cmd if arg.startswith("algorithm=")) for cmd, _ in dispatched
+    ]
+    assert all(env["FEDMAQ_SWEEP_HOST"] == "host-b" for _, env in dispatched)
+    assert all(env["FEDMAQ_SWEEP_SHARD_INDEX"] == "2" for _, env in dispatched)
+    status = json.loads(
+        (group_dir / sharded_sweep_status_filename(2, 3)).read_text(encoding="utf-8")
+    )
+    assert status["total_tasks"] == 5
+    assert status["shard_tasks"] == 2
+    assert status["shard"]["canonical_indices"] == [2, 5]
+    assert {run["host"] for run in status["runs"]} == {"host-b"}
+    assert {run["source_root"] for run in status["runs"]} == {
+        run_dir.resolve().as_posix()
+        for run_dir in [
+            group_dir / "fedprox" / "dirichlet_alpha_0.1" / "seed_0",
+            group_dir / "qsgd" / "dirichlet_alpha_0.1" / "seed_0",
+        ]
+    }
+
+
+def test_sharding_rejects_only_filter(tmp_path, monkeypatch):
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    import scripts.run_matrix as run_matrix
+
+    _write_probe_matrix(tmp_path, ["fedavg"])
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_matrix.py", "--matrix", "probe", "--shard", "1/2", "--only", "fedavg"],
+    )
+
+    with pytest.raises(SystemExit):
+        run_matrix.main()
+
+
+def test_merge_shard_statuses_requires_full_disjoint_union(tmp_path):
+    import sys
+
+    sys.path.insert(0, str(Path(CONF_DIR).parent))
+    from scripts.merge_sweep_status import merge_statuses
+
+    def status(shard_index, indices):
+        return {
+            "matrix": "conf/matrix/probe.yaml",
+            "experiment_group": "status_probe",
+            "total_tasks": 4,
+            "state": "finished",
+            "host": f"host-{shard_index}",
+            "started_at": "2026-08-27T00:00:00",
+            "updated_at": "2026-08-27T00:01:00",
+            "shard": {"index": shard_index, "count": 2, "canonical_indices": indices},
+            "runs": [
+                {
+                    "index": index,
+                    "label": f"run-{index}",
+                    "state": "completed",
+                    "host": f"host-{shard_index}",
+                }
+                for index in indices
+            ],
+            "failures": [],
+        }
+
+    merged = merge_statuses([status(1, [1, 3]), status(2, [2, 4])])
+    assert merged["state"] == "finished"
+    assert merged["completed"] == 4
+    assert merged["hosts"] == ["host-1", "host-2"]
+
+    with pytest.raises(ValueError, match="shard union is not the matrix"):
+        merge_statuses([status(1, [1, 3])])
+
+
+def test_run_manifest_records_host_and_shard_provenance(monkeypatch, tmp_path):
+    import fedmaq.core.manifest as manifest
+
+    monkeypatch.setattr(manifest.socket, "gethostname", lambda: "host-c")
+    monkeypatch.setenv("FEDMAQ_SWEEP_SHARD_INDEX", "3")
+    monkeypatch.setenv("FEDMAQ_SWEEP_SHARD_COUNT", "4")
+
+    record = manifest.build_manifest({"algorithm": {}, "seed": 0}, repo_root=tmp_path)
+
+    assert record["environment"]["host"] == "host-c"
+    assert record["dispatch"]["shard"] == {"index": 3, "count": 4}
+
+
+def test_run_manifest_records_source_root(tmp_path):
+    from fedmaq.core.manifest import write_run_manifest
+
+    path = write_run_manifest({"algorithm": {}, "seed": 0}, tmp_path)
+    record = json.loads(path.read_text(encoding="utf-8"))
+
+    assert record["source_root"] == tmp_path.resolve().as_posix()
+
+
 def _write_probe_matrix(tmp_path, arms):
     """Write a minimal matrix file with one run per entry in ``arms``."""
     matrix_dir = tmp_path / "conf" / "matrix"

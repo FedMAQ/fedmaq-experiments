@@ -5,6 +5,7 @@ and subprocess execution helpers used by ``scripts/run_matrix.py``.
 """
 
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -15,6 +16,65 @@ from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
 logger = logging.getLogger("fedmaq.runner")
 
 SWEEP_STATUS_FILENAME = "sweep_status.json"
+SHARDED_SWEEP_STATUS_TEMPLATE = "sweep_status.shard-{index}-of-{count}.json"
+
+
+def parse_shard(value: str) -> tuple[int, int]:
+    """Parse a 1-based shard selector in the form ``i/N``.
+
+    Shard membership is deliberately expressed in terms of the canonical matrix
+    list, so the selector must be a positive index within a positive shard count.
+    Keeping parsing here makes the CLI and any future dispatcher use the same
+    validation rules.
+    """
+    match = re.fullmatch(r"([1-9][0-9]*)/([1-9][0-9]*)", value.strip())
+    if not match:
+        raise ValueError(f"shard must have the form i/N with 1 <= i <= N, got {value!r}")
+    index, count = (int(part) for part in match.groups())
+    if index > count:
+        raise ValueError(f"shard index {index} is outside 1..{count}")
+    return index, count
+
+
+def partition_tasks(tasks: list[dict], shard_index: int, shard_count: int) -> list[dict]:
+    """Return one deterministic round-robin partition of a canonical task list.
+
+    The caller owns the canonical order. This function neither sorts nor consults
+    completion state, host identity, or wall-clock time. Consequently every host
+    given the same matrix and ``N`` computes the same disjoint membership.
+    """
+    if not 1 <= shard_index <= shard_count:
+        raise ValueError(
+            f"shard index must satisfy 1 <= index <= count, got {shard_index}/{shard_count}"
+        )
+    return [
+        task
+        for zero_based_index, task in enumerate(tasks)
+        if zero_based_index % shard_count == shard_index - 1
+    ]
+
+
+def sharded_sweep_status_filename(shard_index: int, shard_count: int) -> str:
+    """Return the collision-free status filename for one shard invocation."""
+    if not 1 <= shard_index <= shard_count:
+        raise ValueError(
+            f"shard index must satisfy 1 <= index <= count, got {shard_index}/{shard_count}"
+        )
+    return SHARDED_SWEEP_STATUS_TEMPLATE.format(index=shard_index, count=shard_count)
+
+
+def validate_unique_output_dirs(tasks: list[dict]) -> None:
+    """Reject a matrix whose concrete runs would overwrite one another."""
+    seen: dict[str, str] = {}
+    for task in tasks:
+        output_dir = str(task["output_dir"])
+        prior = seen.get(output_dir)
+        if prior is not None:
+            raise ValueError(
+                f"matrix maps runs {prior!r} and {task['label']!r} onto {output_dir}; "
+                "give colliding runs distinct variants"
+            )
+        seen[output_dir] = task["label"]
 
 
 def kill_ray_processes() -> None:
@@ -225,6 +285,7 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
                 alg = run_item.get("alg")
                 tasks.append(
                     {
+                        "canonical_index": len(tasks) + 1,
                         "phase": matrix.get("phase", "smoke"),
                         "dataset": matrix.get("dataset", "cifar10"),
                         "model": matrix.get("model", "mobilenetv2"),

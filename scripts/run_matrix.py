@@ -18,6 +18,8 @@ Usage:
 import argparse
 import json
 import logging
+import os
+import socket
 import subprocess
 import sys
 import time
@@ -36,6 +38,10 @@ from scripts.common import (
     get_sweep_group_dir,
     is_run_complete,
     kill_ray_processes,
+    parse_shard,
+    partition_tasks,
+    sharded_sweep_status_filename,
+    validate_unique_output_dirs,
 )
 
 logging.basicConfig(
@@ -103,6 +109,16 @@ def main() -> None:
         help="Display planned execution grid without running commands",
     )
     parser.add_argument(
+        "--shard",
+        type=str,
+        default=None,
+        metavar="I/N",
+        help=(
+            "Dispatch only deterministic shard I of N over the canonical matrix "
+            "run list (for example, 2/4); completion state is not consulted"
+        ),
+    )
+    parser.add_argument(
         "-o",
         "--override",
         action="append",
@@ -167,6 +183,13 @@ def main() -> None:
     if args.run_timeout_seconds < 0:
         parser.error("--run_timeout_seconds must be >= 0")
 
+    try:
+        shard = parse_shard(args.shard) if args.shard else None
+    except ValueError as exc:
+        parser.error(str(exc))
+    if shard is not None and args.only_labels:
+        parser.error("--only cannot be combined with --shard; shard the full matrix")
+
     matrix_path = resolve_matrix_path(args.matrix)
     logger.info(f"Loading experiment matrix from {matrix_path}")
     cfg = OmegaConf.load(matrix_path)
@@ -206,7 +229,7 @@ def main() -> None:
     def seeds_for(run_item) -> list[int]:
         return [int(s) for s in run_item.get("seeds", seeds)]
 
-    tasks = []
+    canonical_tasks = []
     for spec in expand_matrix(matrix, matrix_path.stem):
         output_dir = get_canonical_output_dir(
             phase=spec["phase"],
@@ -236,8 +259,9 @@ def main() -> None:
             experiment=experiment,
         )
 
-        tasks.append(
+        canonical_tasks.append(
             {
+                "canonical_index": spec["canonical_index"],
                 "label": f"{spec['label']}-{spec['heterogeneity']}-seed{spec['seed']}",
                 "alg": spec["algorithm_config"],
                 "het": spec["heterogeneity"],
@@ -246,6 +270,14 @@ def main() -> None:
                 "cmd": cmd,
             }
         )
+
+    validate_unique_output_dirs(canonical_tasks)
+    tasks = (
+        partition_tasks(canonical_tasks, *shard)
+        if shard is not None
+        else canonical_tasks
+    )
+    host = socket.gethostname()
 
     print("=" * 70)
     print(f"FedMAQ Matrix Sweep: {exp_group.upper()}")
@@ -261,7 +293,10 @@ def main() -> None:
             print(f"  + {run_item.get('label', run_item.get('alg'))}: deepened with {extra}")
     if args.only_labels:
         print(f"Label filter (--only): {args.only_labels}")
+    print(f"Canonical Runs: {len(canonical_tasks)}")
     print(f"Total Runs Scheduled: {len(tasks)}")
+    if shard is not None:
+        print(f"Shard: {shard[0]}/{shard[1]} (host: {host})")
     if args.overrides:
         print(f"Sweep-wide overrides: {' '.join(args.overrides)}")
     if args.start_at > 1:
@@ -272,7 +307,7 @@ def main() -> None:
 
     def skip_reason(idx: int, task: dict) -> str | None:
         """Why this task would not run, or ``None`` if it would."""
-        if idx < args.start_at:
+        if task["canonical_index"] < args.start_at:
             return f"--start_at {args.start_at}"
         if args.skip_completed and is_run_complete(task["output_dir"]):
             return "already complete"
@@ -283,7 +318,10 @@ def main() -> None:
         for idx, task in enumerate(tasks, 1):
             reason = skip_reason(idx, task)
             skip_mark = f" (SKIPPED: {reason})" if reason else ""
-            print(f"\nTask {idx}/{len(tasks)} [{task['label']}]{skip_mark}")
+            print(
+                f"\nTask {task['canonical_index']}/{len(canonical_tasks)} "
+                f"(shard position {idx}/{len(tasks)}) [{task['label']}]{skip_mark}"
+            )
             print(f" Target Dir: {task['output_dir']}")
             print(f" Command:    {' '.join(task['cmd'])}")
         print("\nDry run completed successfully.")
@@ -297,7 +335,29 @@ def main() -> None:
     failures: list[dict] = []
     start_time = time.time()
     started_at = datetime.now().isoformat()
-    status_path = get_sweep_group_dir(phase, dataset, model, exp_group) / SWEEP_STATUS_FILENAME
+    status_filename = (
+        sharded_sweep_status_filename(*shard) if shard is not None else SWEEP_STATUS_FILENAME
+    )
+    status_path = get_sweep_group_dir(phase, dataset, model, exp_group) / status_filename
+    run_records = {
+        task["canonical_index"]: {
+            "index": task["canonical_index"],
+            "label": task["label"],
+            "output_dir": task["output_dir"].as_posix(),
+            "source_root": task["output_dir"].resolve().as_posix(),
+            "state": "pending",
+            "host": None,
+        }
+        for task in tasks
+    }
+    child_env = os.environ.copy()
+    child_env["FEDMAQ_SWEEP_HOST"] = host
+    if shard is not None:
+        child_env["FEDMAQ_SWEEP_SHARD_INDEX"] = str(shard[0])
+        child_env["FEDMAQ_SWEEP_SHARD_COUNT"] = str(shard[1])
+    else:
+        child_env.pop("FEDMAQ_SWEEP_SHARD_INDEX", None)
+        child_env.pop("FEDMAQ_SWEEP_SHARD_COUNT", None)
 
     def save_status(state: str) -> None:
         """Persist which task indices failed, after every task rather than at the end.
@@ -319,17 +379,30 @@ def main() -> None:
         explain itself from this file alone, and ``abort_reason`` is where it does.
         """
         payload = {
+            "schema_version": 2,
             "matrix": matrix_path.as_posix(),
             "experiment_group": exp_group,
             "state": state,
+            "host": host,
             "started_at": started_at,
             "updated_at": datetime.now().isoformat(),
-            "total_tasks": len(tasks),
+            "total_tasks": len(canonical_tasks),
+            "shard_tasks": len(tasks),
+            "shard": (
+                {
+                    "index": shard[0],
+                    "count": shard[1],
+                    "canonical_indices": [task["canonical_index"] for task in tasks],
+                }
+                if shard is not None
+                else None
+            ),
             "completed": completed,
             "failed": failed,
             "skipped": skipped,
             "failed_indices": [f["index"] for f in failures],
             "failures": failures,
+            "runs": list(run_records.values()),
             "abort_reason": abort_reason,
         }
         try:
@@ -342,10 +415,12 @@ def main() -> None:
     save_status("running")
 
     for idx, task in enumerate(tasks, 1):
+        canonical_index = task["canonical_index"]
         reason = skip_reason(idx, task)
         if reason:
             logger.info(f"[{idx}/{len(tasks)}] Skipping run '{task['label']}' ({reason})")
             skipped += 1
+            run_records[canonical_index].update({"state": "skipped", "reason": reason})
             continue
 
         logger.info(f"\n{'=' * 70}")
@@ -360,7 +435,7 @@ def main() -> None:
         timed_out = False
         try:
             returncode = subprocess.run(
-                task["cmd"], timeout=args.run_timeout_seconds or None
+                task["cmd"], timeout=args.run_timeout_seconds or None, env=child_env
             ).returncode
         except subprocess.TimeoutExpired:
             timed_out = True
@@ -386,13 +461,22 @@ def main() -> None:
             consecutive_failures += 1
             failures.append(
                 {
-                    "index": idx,
+                    "index": canonical_index,
                     "label": task["label"],
                     "returncode": returncode,
                     "timed_out": timed_out,
                     "output_dir": task["output_dir"].as_posix(),
                     "elapsed_seconds": round(elapsed, 1),
                     "command": " ".join(task["cmd"]),
+                    "host": host,
+                }
+            )
+            run_records[canonical_index].update(
+                {
+                    "state": "failed",
+                    "returncode": returncode,
+                    "elapsed_seconds": round(elapsed, 1),
+                    "host": host,
                 }
             )
         else:
@@ -401,6 +485,14 @@ def main() -> None:
             )
             completed += 1
             consecutive_failures = 0
+            run_records[canonical_index].update(
+                {
+                    "state": "completed",
+                    "returncode": 0,
+                    "elapsed_seconds": round(elapsed, 1),
+                    "host": host,
+                }
+            )
 
         if args.max_consecutive_failures and consecutive_failures >= args.max_consecutive_failures:
             abort_reason = (
