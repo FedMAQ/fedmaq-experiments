@@ -25,5 +25,11 @@ phi: 10
 q_min: 1
 q_max: 127
 
+# Hoenig et al. (2022) additionally specify difference coding, 0-run-length
+# encoding and Elias omega coding as part of DAdaQuant's own transmission
+# pipeline. This is not reproduced: DAdaQuant's transmitted bytes are measured
+# through the shared zlib-compressed transport (src/fedmaq/baselines/transport.py)
+# every arm uses, not through that paper-specific scheme. Manuscript §4.3.2.
+
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false
