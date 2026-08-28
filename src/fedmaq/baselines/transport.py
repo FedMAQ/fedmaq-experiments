@@ -20,8 +20,27 @@ post-processing path this seam generalizes (no stated reason to change it).
 
 import struct
 import zlib
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 _LENGTH_PREFIX = struct.Struct("<Q")
+
+
+@dataclass(frozen=True)
+class UploadReport:
+    """One compressor invocation's complete upload-byte account.
+
+    ``measured_bytes`` is the post-encoding total reported as communication
+    cost; ``payload_bytes`` is the pre-encoding companion. ``secondary_bytes``
+    is ``None`` when an as-published coder is not applicable, distinct from a
+    measured zero. ``payloads`` retains each measurement-call boundary because
+    :func:`measure_bytes` is not additive over concatenated payloads.
+    """
+
+    measured_bytes: int
+    payload_bytes: int
+    secondary_bytes: int | None
+    payloads: tuple[bytes, ...]
 
 
 def measure_bytes(payload: bytes) -> int:
@@ -34,7 +53,7 @@ def measure_bytes(payload: bytes) -> int:
     return len(zlib.compress(payload))
 
 
-def pack_payloads(payloads: list[bytes]) -> bytes:
+def pack_payloads(payloads: Sequence[bytes]) -> bytes:
     """Frame a list of pre-encoding payloads into one length-prefixed blob.
 
     Every :func:`measure_bytes` call site measures one payload per tensor/leg

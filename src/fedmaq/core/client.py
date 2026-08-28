@@ -1,6 +1,8 @@
 """Generic Flower Client implementation with customizable hooks for loss and compression."""
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import flwr as fl
 import numpy as np
@@ -10,6 +12,9 @@ from flwr.common import Config
 
 from fedmaq.core.client_hooks import ClientFitStrategy, get_fit_strategy
 from fedmaq.core.models import DEVICE
+
+if TYPE_CHECKING:
+    from fedmaq.baselines.transport import UploadReport
 
 
 class LossHook:
@@ -69,38 +74,9 @@ class FedProxLossHook(LossHook):
 
 
 class CompressionHook:
-    """Base class for compressing client model updates (deltas).
+    """Base class for compressing client model updates (deltas)."""
 
-    ``last_payload_bytes`` is the pre-encoding payload size from the most
-    recent ``compress()`` call — logged alongside the post-encoding
-    ``bytes_uploaded`` so a future encoder change can be re-scored offline
-    without re-running training (see ``TelemetryManager.record_fit_round``).
-    Every concrete hook sets it; it defaults to 0 here for a hook that hasn't
-    compressed anything yet.
-
-    ``last_payloads`` is the same round's payloads as an actual list of byte
-    strings, one per ``measure_bytes`` call the hook made (one per tensor for
-    the quantized/SVD hooks, one per non-empty tensor here). A summed length
-    alone cannot be re-scored against a different encoder — compression is
-    content-sensitive, not just size-sensitive — so full AC 2 reproducibility
-    needs the payloads themselves, with call boundaries preserved (summing a
-    new encoder over the list differs from running it once over a
-    concatenation). Every concrete hook sets it; kept unconditionally since
-    building the list costs nothing beyond what ``last_payload_bytes`` already
-    computes — callers decide whether to carry it further (see
-    ``fedmaq.baselines.transport.pack_payloads``).
-    """
-
-    last_payload_bytes: int = 0
-    last_payloads: list[bytes] = []
-
-    #: Secondary, as-published byte total (#26) for a hook whose source paper
-    #: mandates its own transport coder -- currently only
-    #: ``DAdaQuantCompressionHook``. ``None`` means "not applicable", distinct
-    #: from a measured 0; every other hook leaves this at the class default.
-    last_secondary_bytes: int | None = None
-
-    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Pass ``deltas`` through unchanged; measure their transmitted size.
 
         Default: identity (uncompressed float32 weights), routed through the
@@ -111,13 +87,16 @@ class CompressionHook:
         """
         # Deferred: fedmaq.baselines imports this module (CompressionHook), so
         # a top-level import here would cycle.
-        from fedmaq.baselines.transport import measure_bytes
+        from fedmaq.baselines.transport import UploadReport, measure_bytes
 
         payloads = [d.astype(np.float32).tobytes() for d in deltas if d.size]
-        self.last_payload_bytes = sum(len(p) for p in payloads)
-        self.last_payloads = payloads
         byte_size = sum(measure_bytes(p) for p in payloads)
-        return deltas, byte_size
+        return deltas, UploadReport(
+            measured_bytes=byte_size,
+            payload_bytes=sum(len(p) for p in payloads),
+            secondary_bytes=None,
+            payloads=tuple(payloads),
+        )
 
 
 def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:

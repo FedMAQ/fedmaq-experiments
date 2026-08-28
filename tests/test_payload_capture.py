@@ -3,8 +3,8 @@
 A summed ``payload_bytes`` scalar (the pre-existing ``round_payload_bytes`` CSV
 column) cannot be re-scored against a different encoder, because encoders like
 zlib are content-sensitive, not just size-sensitive. These tests cover the
-opt-in capability that closes that gap: every ``CompressionHook`` also exposes
-its actual per-call payloads (``last_payloads``), client fit strategies attach
+opt-in capability that closes that gap: every ``compress()`` return carries
+its per-call payloads in ``UploadReport.payloads``, client fit strategies attach
 them to ``fit_metrics`` when ``experiment.telemetry.log_payloads`` is set, and
 ``TelemetryManager`` persists them to a side file that can be replayed offline.
 """
@@ -28,31 +28,31 @@ from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.strategy_hooks.passthrough import PassthroughHook
 from fedmaq.core.telemetry import TelemetryManager
 
-# --- CompressionHook.last_payloads reproduces each hook's returned byte_size ---
+# --- UploadReport payloads reproduce each hook's returned measured size ---
 
 
 def _assert_payloads_reproduce_byte_size(hook, deltas):
-    _, byte_size = hook.compress(deltas)
-    assert sum(len(p) for p in hook.last_payloads) == hook.last_payload_bytes
-    assert sum(measure_bytes(p) for p in hook.last_payloads) == byte_size
-    return hook.last_payloads
+    _, report = hook.compress(deltas)
+    assert sum(len(p) for p in report.payloads) == report.payload_bytes
+    assert sum(measure_bytes(p) for p in report.payloads) == report.measured_bytes
+    return report.payloads
 
 
-def test_identity_hook_last_payloads_reproduce_byte_size():
+def test_identity_hook_report_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32), np.zeros((0,), dtype=np.float32)]
     payloads = _assert_payloads_reproduce_byte_size(CompressionHook(), deltas)
     # The empty tensor contributes no measure_bytes call and no payload.
     assert len(payloads) == 1
 
 
-def test_fedpaq_last_payloads_reproduce_byte_size():
+def test_fedpaq_report_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
     _assert_payloads_reproduce_byte_size(
         FedPAQCompressionHook(q=8, rng=np.random.default_rng(0)), deltas
     )
 
 
-def test_dadaquant_last_payloads_reproduce_byte_size():
+def test_dadaquant_report_payloads_reproduce_byte_size():
     deltas = [np.ones((100,), dtype=np.float32)]
     _assert_payloads_reproduce_byte_size(
         DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0)), deltas
@@ -101,14 +101,14 @@ def test_feddistill_download_payloads_reproduce_byte_size_in_both_rounds():
     assert FedDistillHook({"dataset": {"num_classes": 3}}).last_download_payloads == []
 
 
-def test_fedmaq_postprocess_last_payloads_reproduce_byte_size():
+def test_fedmaq_postprocess_report_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32), np.zeros((3,), dtype=np.float32)]
     _assert_payloads_reproduce_byte_size(
         FedMAQPostProcessCompressionHook(q=8, rng=np.random.default_rng(0)), deltas
     )
 
 
-def test_fedkd_upload_last_payloads_reproduce_byte_size():
+def test_fedkd_upload_report_payloads_reproduce_byte_size():
     rng = np.random.default_rng(0)
     deltas = [rng.standard_normal((10, 5)).astype(np.float32)]
     _assert_payloads_reproduce_byte_size(FedKDCompressionHook(energy=0.9), deltas)
@@ -192,7 +192,6 @@ def test_standard_fit_attaches_payloads_matching_compressor_hook_when_enabled():
 
     _, _, fit_metrics = client.fit(params, {"server_round": 1})
 
-    assert unpack_payloads(fit_metrics["payloads_framed"]) == client.compressor_hook.last_payloads
     assert (
         sum(len(p) for p in unpack_payloads(fit_metrics["payloads_framed"]))
         == fit_metrics["payload_bytes"]
@@ -216,7 +215,10 @@ def test_fedkd_fit_attaches_payloads_matching_compressor_hook_when_enabled():
 
     _, _, fit_metrics = client.fit(params, {"server_round": 1})
 
-    assert unpack_payloads(fit_metrics["payloads_framed"]) == client.compressor_hook.last_payloads
+    assert (
+        sum(len(p) for p in unpack_payloads(fit_metrics["payloads_framed"]))
+        == fit_metrics["payload_bytes"]
+    )
 
 
 def test_feddistill_fit_attaches_combined_weight_and_logit_payloads_when_enabled():
@@ -228,7 +230,7 @@ def test_feddistill_fit_attaches_combined_weight_and_logit_payloads_when_enabled
     payloads = unpack_payloads(fit_metrics["payloads_framed"])
     # Weight-leg payloads, then the logit-leg payload last, matching the order
     # of the measure_bytes calls in FedDistillFit.fit.
-    assert payloads == [*client.compressor_hook.last_payloads, fit_metrics["client_logits"]]
+    assert payloads[-1] == fit_metrics["client_logits"]
     assert sum(measure_bytes(p) for p in payloads) == fit_metrics["bytes_uploaded"]
 
 

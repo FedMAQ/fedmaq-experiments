@@ -17,6 +17,7 @@ from fedmaq.core.client_hooks.training_skeleton import (
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 
 if TYPE_CHECKING:
+    from fedmaq.baselines.transport import UploadReport
     from fedmaq.core.client import GenericClient
 
 
@@ -40,7 +41,7 @@ class StandardFit(ClientFitStrategy):
         """Value reported as ``local_loss``. Default: 0.0 (unused by the strategy)."""
         return 0.0
 
-    def _extra_fit_metrics(self, client: GenericClient) -> dict[str, Any]:
+    def _extra_fit_metrics(self, report: UploadReport) -> dict[str, Any]:
         """Additional per-round ``fit_metrics`` beyond the shared fields below.
 
         Default: none. Overridden by :class:`DAdaQuantFit` to report the
@@ -139,13 +140,13 @@ class StandardFit(ClientFitStrategy):
         )
 
         updated_params = get_model_parameters(client.model)
-        reconstructed_params, byte_size = compress_and_reconstruct(
+        reconstructed_params, report = compress_and_reconstruct(
             parameters, updated_params, client.compressor_hook
         )
 
         fit_metrics = {
-            "bytes_uploaded": byte_size,
-            "payload_bytes": client.compressor_hook.last_payload_bytes,
+            "bytes_uploaded": report.measured_bytes,
+            "payload_bytes": report.payload_bytes,
             "partition_id": int(client.cid),
             "local_loss": self._reported_local_loss(pretrain_loss, result.last_loss),
             "train_loss": result.avg_loss,
@@ -154,8 +155,8 @@ class StandardFit(ClientFitStrategy):
         }
         if "q" in config:
             fit_metrics["q"] = int(config["q"])
-        fit_metrics.update(self._extra_fit_metrics(client))
-        attach_payloads_if_enabled(client, fit_metrics, client.compressor_hook.last_payloads)
+        fit_metrics.update(self._extra_fit_metrics(report))
+        attach_payloads_if_enabled(client, fit_metrics, report.payloads)
 
         if instrument_fedprox:
             gn_affine_norm = 0.0
@@ -203,11 +204,10 @@ class DAdaQuantFit(StandardFit):
     def _reported_local_loss(self, pretrain_loss: float | None, last_loss: float) -> float:
         return float(pretrain_loss) if pretrain_loss is not None else 0.0
 
-    def _extra_fit_metrics(self, client: GenericClient) -> dict[str, Any]:
-        secondary = client.compressor_hook.last_secondary_bytes
-        if secondary is None:
+    def _extra_fit_metrics(self, report: UploadReport) -> dict[str, Any]:
+        if report.secondary_bytes is None:
             return {}
-        return {"secondary_bytes_uploaded": secondary}
+        return {"secondary_bytes_uploaded": report.secondary_bytes}
 
 
 class FedMAQFit(StandardFit):

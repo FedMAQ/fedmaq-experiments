@@ -201,7 +201,16 @@ class FedMDFit(ClientFitStrategy):
             num_classes = client.config.get("dataset", {}).get("num_classes", 10)
             predictions = np.zeros((1, num_classes), dtype=np.float32)
 
-        byte_size = predictions.nbytes
+        # ADR-0005 keeps dropped FedMD reproducible but outside the primary
+        # transport seam: it transmits raw public-set prediction arrays.
+        from fedmaq.baselines.transport import UploadReport
+
+        report = UploadReport(
+            measured_bytes=predictions.nbytes,
+            payload_bytes=predictions.nbytes,
+            secondary_bytes=None,
+            payloads=(predictions.tobytes(),),
+        )
         avg_train_loss = loss_sum / batches if batches > 0 else 0.0
         avg_train_acc = correct / total_samples if total_samples > 0 else 0.0
 
@@ -209,8 +218,8 @@ class FedMDFit(ClientFitStrategy):
             [predictions],
             len(client.trainloader.dataset),
             {
-                "bytes_uploaded": byte_size,
-                "payload_bytes": byte_size,
+                "bytes_uploaded": report.measured_bytes,
+                "payload_bytes": report.payload_bytes,
                 "partition_id": int(client.cid),
                 "local_loss": avg_train_loss,
                 "train_loss": avg_train_loss,

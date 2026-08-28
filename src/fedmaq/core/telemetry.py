@@ -177,39 +177,11 @@ class TelemetryManager:
         results: list[tuple[ClientProxy, FitRes]],
         aggregated_parameters: Parameters | None,
     ) -> tuple[float, int]:
-        """Compute this round's simulated delays, byte counts, and client-metric
-        aggregates from the raw fit results, and snapshot them for the strategy's
-        ``evaluate()`` to read back via :meth:`snapshot_for_round`.
+        """Snapshot this round's delays, communication totals, and client metrics.
 
-        Returns ``(round_time, round_total_bytes)`` for the caller's ``metrics``
-        dict. When ``results`` is empty, only the snapshot's
-        ``round_client_metrics`` is reset and ``(0.0, 0)`` is returned — the
-        caller should not set ``round_time``/``round_bytes`` on ``metrics`` in
-        that case (matching the pre-refactor behavior of skipping those keys
-        entirely).
-
-        Also snapshots ``round_secondary_bytes`` (#26) — the summed
-        as-published byte total for arms whose source paper specifies its own
-        transport coder (currently DAdaQuant only, via
-        ``secondary_bytes_uploaded``). ``None`` when no client in the round
-        reported one, so it's distinguishable from a measured 0 and stays
-        absent from every other arm's rows.
-
-        Also snapshots ``round_payload_bytes`` — the summed pre-encoding
-        payload size each hook stashes on ``compressor_hook.last_payload_bytes``
-        (see ``fedmaq.baselines.transport``). Because ``measure_bytes`` is
-        content-sensitive (zlib is not linear in payload length), this scalar
-        alone cannot be re-scored against a different encoder — only its
-        *own* total is reproducible, not a hypothetical alternative's. Full
-        AC 2 reproducibility needs the actual payloads: when a client attaches
-        ``"payloads_framed"`` (opt-in via ``experiment.telemetry.log_payloads``,
-        see ``fedmaq.core.client_hooks.base.attach_payloads_if_enabled``), this
-        method decodes and persists them to ``self.payloads_dir`` so a future
-        encoder can be replayed against the exact original payloads, call
-        boundaries preserved, without re-running training. The same opt-in
-        also persists the server broadcast payloads separately as
-        ``download_round_NNNN.pkl``; values are keyed by recipient partition
-        so replaying every call reproduces the aggregate download leg.
+        ``round_secondary_bytes`` remains ``None`` when no client reports the
+        DAdaQuant-only as-published axis. Payload replay persistence is enabled
+        only by ``experiment.telemetry.log_payloads``.
         """
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)

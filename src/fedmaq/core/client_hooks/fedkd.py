@@ -128,7 +128,7 @@ class FedKDFit(ClientFitStrategy):
                 client.compressor_hook.energy = float(config["energy"])
 
         updated_params = get_model_parameters(client.model)
-        reconstructed_params, byte_size = compress_and_reconstruct(
+        reconstructed_params, report = compress_and_reconstruct(
             parameters, updated_params, client.compressor_hook
         )
 
@@ -141,8 +141,8 @@ class FedKDFit(ClientFitStrategy):
         avg_task_loss_teacher = loss_t_task_sum / batches if batches > 0 else 0.0
 
         fit_metrics = {
-            "bytes_uploaded": byte_size,
-            "payload_bytes": client.compressor_hook.last_payload_bytes,
+            "bytes_uploaded": report.measured_bytes,
+            "payload_bytes": report.payload_bytes,
             "partition_id": int(client.cid),
             "local_loss": avg_total_loss,
             "train_loss": avg_total_loss,
@@ -154,7 +154,7 @@ class FedKDFit(ClientFitStrategy):
             "task_loss_teacher": avg_task_loss_teacher,
             "teacher_acc": avg_teacher_acc,
         }
-        attach_payloads_if_enabled(client, fit_metrics, client.compressor_hook.last_payloads)
+        attach_payloads_if_enabled(client, fit_metrics, report.payloads)
 
         return (
             reconstructed_params,

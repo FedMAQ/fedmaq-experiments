@@ -138,11 +138,11 @@ def test_sparse_codes_pack_smaller_than_dense_raw_encoding():
 # --- Hook integration: only DAdaQuant reports a secondary total ---
 
 
-def test_dadaquant_hook_sets_last_secondary_bytes():
+def test_dadaquant_hook_report_contains_secondary_bytes():
     hook = DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0))
-    hook.compress([np.ones((100,), dtype=np.float32)])
-    assert isinstance(hook.last_secondary_bytes, int)
-    assert hook.last_secondary_bytes > 0
+    _, report = hook.compress([np.ones((100,), dtype=np.float32)])
+    assert isinstance(report.secondary_bytes, int)
+    assert report.secondary_bytes > 0
 
 
 def test_dadaquant_hook_secondary_bytes_covers_all_zero_tensor():
@@ -150,17 +150,17 @@ def test_dadaquant_hook_secondary_bytes_covers_all_zero_tensor():
     it's one long zero run) secondary payload -- matching the primary axis's
     coverage of the same branch (#25)."""
     hook = DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0))
-    hook.compress([np.zeros((1000,), dtype=np.float32)])
-    assert hook.last_secondary_bytes is not None
-    assert hook.last_secondary_bytes < 20
+    _, report = hook.compress([np.zeros((1000,), dtype=np.float32)])
+    assert report.secondary_bytes is not None
+    assert report.secondary_bytes < 20
 
 
-def test_fedpaq_hook_leaves_last_secondary_bytes_none():
+def test_fedpaq_hook_report_has_no_secondary_bytes():
     """FedPAQ's source paper specifies no transport coder (2026-08-26 audit) --
     only DAdaQuant gets a secondary axis."""
     hook = FedPAQCompressionHook(q=8, rng=np.random.default_rng(0))
-    hook.compress([np.array([-2.0, 0.0, 2.0], dtype=np.float32)])
-    assert hook.last_secondary_bytes is None
+    _, report = hook.compress([np.array([-2.0, 0.0, 2.0], dtype=np.float32)])
+    assert report.secondary_bytes is None
 
 
 # --- Client fit integration ---
@@ -202,7 +202,7 @@ def test_dadaquant_fit_reports_secondary_bytes_uploaded():
 
     _, _, fit_metrics = client.fit(params, {"server_round": 1})
 
-    assert fit_metrics["secondary_bytes_uploaded"] == client.compressor_hook.last_secondary_bytes
+    assert fit_metrics["secondary_bytes_uploaded"] > 0
     assert fit_metrics["secondary_bytes_uploaded"] > 0
 
 

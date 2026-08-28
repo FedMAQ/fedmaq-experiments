@@ -377,12 +377,12 @@ def test_dadaquant_compression_hook():
 
     hook = DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0))
     deltas = [np.ones((100,), dtype=np.float32)]
-    compressed_deltas, byte_size = hook.compress(deltas)
+    compressed_deltas, report = hook.compress(deltas)
 
     # With source-faithful l2 normalization, ||ones(100)||_2 = 10 and every
     # scaled coordinate is 0.4. The pinned value therefore includes the fixed
     # seed's stochastic 0/1 code pattern, measured through the shared encoder.
-    assert byte_size == 55
+    assert report.measured_bytes == 55
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
@@ -619,13 +619,13 @@ def test_fedkd_compression_hook():
     rank1_matrix = u_true @ v_true
 
     deltas = [rank1_matrix]
-    reconstructed, byte_size = hook.compress(deltas)
+    reconstructed, report = hook.compress(deltas)
 
     assert len(reconstructed) == 1
     assert reconstructed[0].shape == (10, 5)
     # Pinned regression value from measure_bytes (#25): zlib on the float32
     # U/Sigma/V factors, not the old raw (U.size+Sigma.size+V.size)*4 formula.
-    assert byte_size == 71
+    assert report.measured_bytes == 71
     np.testing.assert_allclose(reconstructed[0], rank1_matrix, atol=1e-5)
 
 
@@ -907,9 +907,9 @@ def test_fedpaq_compression_hook():
 
     hook = FedPAQCompressionHook(q=8, rng=np.random.default_rng(0))
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
-    compressed, byte_size = hook.compress(deltas)
+    compressed, report = hook.compress(deltas)
 
-    assert byte_size == 21
+    assert report.measured_bytes == 21
     assert len(compressed) == 1
     np.testing.assert_allclose(
         compressed[0], np.array([-2.0043972, 0.0, 2.0043972], dtype=np.float32)
@@ -985,15 +985,15 @@ def test_fedpaq_same_seed_twice_is_bit_identical():
     from fedmaq.baselines.quantization import FedPAQCompressionHook
 
     deltas = [np.linspace(-1, 1, 500).astype(np.float32)]
-    out_a, bytes_a = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
+    out_a, report_a = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
         [d.copy() for d in deltas]
     )
-    out_b, bytes_b = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
+    out_b, report_b = FedPAQCompressionHook(q=4, rng=np.random.default_rng(3)).compress(
         [d.copy() for d in deltas]
     )
 
     np.testing.assert_array_equal(out_a[0], out_b[0])
-    assert bytes_a == bytes_b
+    assert report_a.measured_bytes == report_b.measured_bytes
 
 
 def test_fedprox_loss_hook():
@@ -2016,6 +2016,6 @@ def test_feddistill_two_round_reg_path(mock_dataset):
     # rather than a bespoke nbytes sum (#25).
     from fedmaq.baselines.transport import measure_bytes
 
-    _, expected_weight_bytes = CompressionHook().compress(p2)
+    _, expected_weight_report = CompressionHook().compress(p2)
     expected_logit_bytes = measure_bytes(m2["client_logits"])
-    assert m2["bytes_uploaded"] == expected_weight_bytes + expected_logit_bytes
+    assert m2["bytes_uploaded"] == expected_weight_report.measured_bytes + expected_logit_bytes

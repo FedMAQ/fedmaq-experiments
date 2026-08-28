@@ -180,6 +180,17 @@ class CFDFit(ClientFitStrategy):
         if state is not None:
             state[_PREV_UP_CODES_KEY] = ArrayRecord(numpy_ndarrays=[codes_for_next])
 
+        # ADR-0005 keeps dropped CFD reproducible but outside the primary
+        # transport seam: its published soft-label coder owns this byte count.
+        from fedmaq.baselines.transport import UploadReport
+
+        report = UploadReport(
+            measured_bytes=nbytes,
+            payload_bytes=nbytes,
+            secondary_bytes=None,
+            payloads=(),
+        )
+
         avg_ce_loss = ce_result.avg_loss
         avg_distill_loss = distill_loss_sum / distill_batches if distill_batches > 0 else 0.0
         avg_train_acc = ce_result.accuracy if ce_result.accuracy is not None else 0.0
@@ -188,8 +199,8 @@ class CFDFit(ClientFitStrategy):
             [codes.astype(np.int64)],
             len(client.trainloader.dataset),
             {
-                "bytes_uploaded": nbytes,
-                "payload_bytes": nbytes,
+                "bytes_uploaded": report.measured_bytes,
+                "payload_bytes": report.payload_bytes,
                 "partition_id": int(client.cid),
                 "local_loss": avg_ce_loss,
                 "train_loss": avg_ce_loss,

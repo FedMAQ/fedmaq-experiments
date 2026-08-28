@@ -28,6 +28,8 @@ import torch
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
+    from fedmaq.baselines.transport import UploadReport
+
 
 @dataclass
 class StepResult:
@@ -125,7 +127,7 @@ def compress_and_reconstruct(
     original_params: list[np.ndarray],
     updated_params: list[np.ndarray],
     compressor_hook: Any,
-) -> tuple[list[np.ndarray], int]:
+) -> tuple[list[np.ndarray], UploadReport]:
     """Delta -> compress -> reconstruct tail shared by ``standard`` and ``fedkd``.
 
     ``w_new_reconstructed = w_old + compress(w_new - w_old)``. Returns the
@@ -133,8 +135,8 @@ def compress_and_reconstruct(
     compressed byte size.
     """
     deltas = [u - o for u, o in zip(updated_params, original_params, strict=True)]
-    compressed_deltas, byte_size = compressor_hook.compress(deltas)
+    compressed_deltas, report = compressor_hook.compress(deltas)
     reconstructed_params = [
         o + cd for o, cd in zip(original_params, compressed_deltas, strict=True)
     ]
-    return reconstructed_params, byte_size
+    return reconstructed_params, report

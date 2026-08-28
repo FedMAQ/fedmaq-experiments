@@ -150,7 +150,7 @@ class FedDistillFit(ClientFitStrategy):
 
         # Deferred: fedmaq.baselines imports fedmaq.core.client, which imports
         # this module's package — a top-level import here would cycle.
-        from fedmaq.baselines.transport import measure_bytes
+        from fedmaq.baselines.transport import UploadReport, measure_bytes
 
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
@@ -158,9 +158,14 @@ class FedDistillFit(ClientFitStrategy):
         # weight payload is billed through the same compressor_hook every other
         # arm uses (identity by default) rather than a bespoke nbytes sum here —
         # this hook previously bypassed compressor_hook entirely (#25).
-        _, weight_bytes = client.compressor_hook.compress(updated_params)
+        _, weight_report = client.compressor_hook.compress(updated_params)
         logit_measured_bytes = measure_bytes(logit_bytes)
-        payload_bytes = client.compressor_hook.last_payload_bytes + len(logit_bytes)
+        report = UploadReport(
+            measured_bytes=weight_report.measured_bytes + logit_measured_bytes,
+            payload_bytes=weight_report.payload_bytes + len(logit_bytes),
+            secondary_bytes=weight_report.secondary_bytes,
+            payloads=(*weight_report.payloads, logit_bytes),
+        )
 
         avg_total_loss = result.avg_loss
         avg_task_loss = result.extra_avgs["task_loss"]
@@ -168,8 +173,8 @@ class FedDistillFit(ClientFitStrategy):
         avg_train_acc = result.accuracy if result.accuracy is not None else 0.0
 
         fit_metrics = {
-            "bytes_uploaded": weight_bytes + logit_measured_bytes,
-            "payload_bytes": payload_bytes,
+            "bytes_uploaded": report.measured_bytes,
+            "payload_bytes": report.payload_bytes,
             "partition_id": int(client.cid),
             "local_loss": avg_total_loss,
             "train_loss": avg_total_loss,
@@ -183,7 +188,7 @@ class FedDistillFit(ClientFitStrategy):
         # the measure_bytes calls above (compressor_hook.compress, then the
         # logit-side measure_bytes) so replay preserves call boundaries.
         attach_payloads_if_enabled(
-            client, fit_metrics, [*client.compressor_hook.last_payloads, logit_bytes]
+            client, fit_metrics, report.payloads
         )
 
         return (

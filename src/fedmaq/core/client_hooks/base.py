@@ -10,6 +10,7 @@ config without duplicating that state.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -77,7 +78,7 @@ def standard_evaluate(
 
 
 def attach_payloads_if_enabled(
-    client: GenericClient, fit_metrics: dict[str, Any], payloads: list[bytes]
+    client: GenericClient, fit_metrics: dict[str, Any], payloads: Sequence[bytes]
 ) -> None:
     """Frame and attach this fit's pre-encoding payloads to ``fit_metrics``.
 

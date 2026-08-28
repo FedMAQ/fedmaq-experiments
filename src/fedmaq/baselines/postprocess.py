@@ -20,7 +20,7 @@ from fedmaq.baselines.quantization import (
     _serialize_codes,
     _stochastic_round,
 )
-from fedmaq.baselines.transport import measure_bytes
+from fedmaq.baselines.transport import UploadReport, measure_bytes
 from fedmaq.core.client import CompressionHook
 
 logger = logging.getLogger(__name__)
@@ -67,20 +67,8 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         """Number of positive quantization levels for symmetric bounds (see FedPAQ)."""
         return max(1, (1 << (self.q - 1)) - 1)
 
-    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
-        """Compress deltas with error-feedback + diff-coding + zlib.
-
-        Parameters
-        ----------
-        deltas : list[np.ndarray]
-            List of model weight updates (deltas).
-
-        Returns
-        -------
-        tuple[list[np.ndarray], int]
-            Dequantized deltas (same contract as other :class:`CompressionHook`
-            implementations) and the real, zlib-measured byte size.
-        """
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
+        """Apply error feedback and diff coding, then return the upload report."""
         residual_record = self._state.get(_RESIDUAL_KEY)
         residuals = residual_record.to_numpy_ndarrays() if residual_record is not None else None
         prev_codes_record = self._state.get(_PREV_CODES_KEY)
@@ -173,6 +161,9 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         self._state[_RESIDUAL_KEY] = ArrayRecord(numpy_ndarrays=new_residuals)
         self._state[_PREV_CODES_KEY] = ArrayRecord(numpy_ndarrays=new_codes)
 
-        self.last_payload_bytes = total_payload_bytes
-        self.last_payloads = payloads
-        return out_deltas, total_bytes
+        return out_deltas, UploadReport(
+            measured_bytes=total_bytes,
+            payload_bytes=total_payload_bytes,
+            secondary_bytes=None,
+            payloads=tuple(payloads),
+        )

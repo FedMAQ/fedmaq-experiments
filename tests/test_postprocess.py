@@ -36,15 +36,15 @@ def test_round1_same_seed_twice_is_bit_identical():
     """Determinism under a fixed seed (ADR-0006 surrogate)."""
     delta = np.linspace(-1, 1, 64).astype(np.float32)
 
-    out_a, bytes_a = FedMAQPostProcessCompressionHook(q=4, rng=np.random.default_rng(5)).compress(
+    out_a, report_a = FedMAQPostProcessCompressionHook(q=4, rng=np.random.default_rng(5)).compress(
         [delta.copy()]
     )
-    out_b, bytes_b = FedMAQPostProcessCompressionHook(q=4, rng=np.random.default_rng(5)).compress(
+    out_b, report_b = FedMAQPostProcessCompressionHook(q=4, rng=np.random.default_rng(5)).compress(
         [delta.copy()]
     )
 
     np.testing.assert_array_equal(out_a[0], out_b[0])
-    assert bytes_a == bytes_b
+    assert report_a.measured_bytes == report_b.measured_bytes
 
 
 def test_requires_rng_for_stochastic_rounding():
@@ -77,9 +77,9 @@ def test_state_persists_and_diffing_engages_on_second_call():
     fresh_hook = FedMAQPostProcessCompressionHook(q=8, rng=np.random.default_rng())
     fresh_hook.rng.bit_generator.state = hook.rng.bit_generator.state
 
-    _, bytes_round2 = hook.compress([delta.copy()])
-    _, bytes_fresh = fresh_hook.compress([delta.copy()])
-    assert bytes_round2 <= bytes_fresh
+    _, report_round2 = hook.compress([delta.copy()])
+    _, report_fresh = fresh_hook.compress([delta.copy()])
+    assert report_round2.measured_bytes <= report_fresh.measured_bytes
 
 
 def test_error_feedback_carries_quantization_error_into_next_round():
@@ -118,7 +118,7 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
     fresh_hook = FedMAQPostProcessCompressionHook(
         q=8, state=fresh_state, rng=np.random.default_rng(0)
     )
-    _, bytes_raw = fresh_hook.compress([delta.copy()])
+    _, report_raw = fresh_hook.compress([delta.copy()])
     raw_codes = fresh_state.get("fedmaq_postprocess_prev_codes").to_numpy_ndarrays()[0]
 
     from flwr.app import ArrayRecord
@@ -128,12 +128,12 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
     seeded_hook = FedMAQPostProcessCompressionHook(
         q=8, state=seeded_state, rng=np.random.default_rng(0)
     )
-    _, bytes_diffed = seeded_hook.compress([delta.copy()])
+    _, report_diffed = seeded_hook.compress([delta.copy()])
 
     scale = float(np.max(np.abs(delta)))
     all_zero_codes = np.zeros_like(raw_codes)
-    assert bytes_diffed == measure_bytes(_serialize_codes(all_zero_codes, scale))
-    assert bytes_diffed < bytes_raw
+    assert report_diffed.measured_bytes == measure_bytes(_serialize_codes(all_zero_codes, scale))
+    assert report_diffed.measured_bytes < report_raw.measured_bytes
 
 
 def test_byte_count_realism():
@@ -145,18 +145,18 @@ def test_byte_count_realism():
 
     compressible = np.zeros(size, dtype=np.float32)
     compressible[0] = 1.0  # mostly-zero -> highly compressible codes
-    _, bytes_compressible = FedMAQPostProcessCompressionHook(
+    _, report_compressible = FedMAQPostProcessCompressionHook(
         q=bits, rng=np.random.default_rng(1)
     ).compress([compressible])
 
     rng = np.random.default_rng(2)
     incompressible = rng.normal(size=size).astype(np.float32)
-    _, bytes_incompressible = FedMAQPostProcessCompressionHook(
+    _, report_incompressible = FedMAQPostProcessCompressionHook(
         q=bits, rng=np.random.default_rng(3)
     ).compress([incompressible])
 
-    assert 0 < bytes_compressible < bytes_incompressible
-    assert bytes_incompressible < size * 8 * 2 + 64
+    assert 0 < report_compressible.measured_bytes < report_incompressible.measured_bytes
+    assert report_incompressible.measured_bytes < size * 8 * 2 + 64
 
 
 def test_shape_mismatch_cold_state_fallback_does_not_raise():
@@ -174,9 +174,9 @@ def test_shape_mismatch_cold_state_fallback_does_not_raise():
     hook = FedMAQPostProcessCompressionHook(q=8, state=state, rng=np.random.default_rng(0))
 
     mismatched_delta = np.ones(10, dtype=np.float32)
-    out, nbytes = hook.compress([mismatched_delta])
+    out, report = hook.compress([mismatched_delta])
     assert out[0].shape == (10,)
-    assert nbytes > 0
+    assert report.measured_bytes > 0
 
 
 def test_empty_and_all_zero_tensor_pass_through():
@@ -188,14 +188,14 @@ def test_empty_and_all_zero_tensor_pass_through():
 
     empty = np.zeros((0,), dtype=np.float32)
     zero = np.zeros((5,), dtype=np.float32)
-    out, nbytes = hook.compress([empty, zero])
+    out, report = hook.compress([empty, zero])
 
     assert out[0].shape == (0,)
     np.testing.assert_allclose(out[1], zero)
     # Only the all-zero tensor contributes (empty is free); its codes+scale
     # payload is still routed through measure_bytes, not a flat constant (#25).
     expected = measure_bytes(_serialize_codes(np.zeros(5, dtype=np.int64), 0.0))
-    assert nbytes == expected
+    assert report.measured_bytes == expected
 
 
 def test_output_contract_matches_input_shape_dtype():

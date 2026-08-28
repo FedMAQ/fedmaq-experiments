@@ -68,7 +68,7 @@ class FedKDHook(StrategyHook):
 
         Also stashes the summed pre-encoding payload size on
         ``self._last_download_payload_bytes``, mirroring the upload-side
-        ``last_payload_bytes`` seam (:class:`FedKDCompressionHook.compress`),
+        :class:`~fedmaq.baselines.transport.UploadReport` companion,
         so a future download-side encoder change can be re-scored against
         already-logged rounds without re-running training.
         """

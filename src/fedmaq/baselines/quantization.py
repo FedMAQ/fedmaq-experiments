@@ -5,7 +5,7 @@ from collections.abc import Callable
 import numpy as np
 
 from fedmaq.baselines.dadaquant_coder import dadaquant_pack
-from fedmaq.baselines.transport import measure_bytes
+from fedmaq.baselines.transport import UploadReport, measure_bytes
 from fedmaq.core.client import CompressionHook
 
 
@@ -175,27 +175,17 @@ class FedPAQCompressionHook(CompressionHook):
         codes = _stochastic_round(scaled, rng)
         return _codes_to_float(codes, scale, self.levels), codes.astype(np.int64)
 
-    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
-        """Compress deltas using symmetric uniform quantization.
-
-        Parameters
-        ----------
-        deltas : list[np.ndarray]
-            List of model weight updates (deltas).
-
-        Returns
-        -------
-        tuple[list[np.ndarray], int]
-            Quantized deltas and the measured size in bytes. The pre-encoding
-            payload size is stashed on ``self.last_payload_bytes`` and the
-            payloads themselves on ``self.last_payloads``.
-        """
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
+        """Quantize ``deltas`` and return the complete upload-byte report."""
         quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
             deltas, self._scale, self._quantize_elem
         )
-        self.last_payload_bytes = payload_bytes
-        self.last_payloads = payloads
-        return quantized_deltas, total_bytes
+        return quantized_deltas, UploadReport(
+            measured_bytes=total_bytes,
+            payload_bytes=payload_bytes,
+            secondary_bytes=None,
+            payloads=tuple(payloads),
+        )
 
 
 class DAdaQuantCompressionHook(CompressionHook):
@@ -245,24 +235,8 @@ class DAdaQuantCompressionHook(CompressionHook):
         codes = _stochastic_round(scaled, rng)
         return (codes / self.q) * scale, codes.astype(np.int64)
 
-    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], int]:
-        """Compress deltas using stochastic uniform quantization with ``self.q`` bins per sign.
-
-        Parameters
-        ----------
-        deltas : list[np.ndarray]
-            List of model weight updates (deltas).
-
-        Returns
-        -------
-        tuple[list[np.ndarray], int]
-            Quantized deltas and the measured size in bytes. The pre-encoding
-            payload size is stashed on ``self.last_payload_bytes`` and the
-            payloads themselves on ``self.last_payloads``. ``self.last_secondary_bytes``
-            gets DAdaQuant's own as-published total (0-RLE + Elias omega, #26)
-            -- a second, parallel measurement alongside the primary one, not a
-            substitute for it.
-        """
+    def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
+        """Quantize ``deltas`` and include DAdaQuant's as-published byte axis."""
         secondary_total = 0
 
         def _accumulate_secondary(codes: np.ndarray, scale: float) -> None:
@@ -276,7 +250,9 @@ class DAdaQuantCompressionHook(CompressionHook):
         quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
             deltas, self._scale, self._quantize_elem, on_codes=_accumulate_secondary
         )
-        self.last_payload_bytes = payload_bytes
-        self.last_payloads = payloads
-        self.last_secondary_bytes = secondary_total
-        return quantized_deltas, total_bytes
+        return quantized_deltas, UploadReport(
+            measured_bytes=total_bytes,
+            payload_bytes=payload_bytes,
+            secondary_bytes=secondary_total,
+            payloads=tuple(payloads),
+        )
