@@ -245,9 +245,7 @@ class TelemetryManager:
         compute_scale = strategy.hook.compute_speed_scale()
 
         for client_proxy, fit_res in results:
-            cid = int(fit_res.metrics.get("partition_id", -1))
-            if cid < 0 or cid >= strategy.num_clients:
-                cid = hash(client_proxy.cid) % strategy.num_clients
+            cid = strategy._partition_sort_key(client_proxy, fit_res)
 
             bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
             client_bytes_uploaded.append(bytes_uploaded)

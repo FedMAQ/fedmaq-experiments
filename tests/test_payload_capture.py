@@ -13,6 +13,7 @@ import bz2
 import pickle
 
 import numpy as np
+import pytest
 import torch
 from flwr.common import Code, FitRes, Status, ndarrays_to_parameters
 from torch.utils.data import TensorDataset
@@ -284,6 +285,33 @@ def _fit_res_with_payloads(payloads: list[bytes]) -> FitRes:
             "payloads_framed": pack_payloads(payloads),
         },
     )
+
+
+@pytest.mark.parametrize(
+    "partition_metrics",
+    [{}, {"partition_id": -1}, {"partition_id": 1}],
+)
+def test_record_fit_round_matches_sort_failure_for_unresolved_partition(
+    tmp_path, monkeypatch, partition_metrics
+):
+    strategy, tm = _make_strategy(tmp_path, monkeypatch, log_payloads=False)
+    proxy = _FakeProxy("node-without-partition")
+    metrics = {"bytes_uploaded": 100, "payload_bytes": 100, **partition_metrics}
+    fit_res = FitRes(
+        status=Status(code=Code.OK, message=""),
+        parameters=ndarrays_to_parameters([]),
+        num_examples=10,
+        metrics=metrics,
+    )
+
+    with pytest.raises(ValueError) as recorder_error:
+        tm.record_fit_round(
+            strategy, server_round=1, results=[(proxy, fit_res)], aggregated_parameters=None
+        )
+    with pytest.raises(ValueError) as sort_error:
+        strategy._partition_sort_key(proxy, fit_res)
+
+    assert str(recorder_error.value) == str(sort_error.value)
 
 
 def test_record_fit_round_persists_payloads_and_replays_the_original_total(tmp_path, monkeypatch):
