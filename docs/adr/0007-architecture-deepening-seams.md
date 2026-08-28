@@ -34,9 +34,16 @@ surface.**
 | Delta→compress→reconstruct tail | `compress_and_reconstruct` | `standard.py` / `fedkd.py` |
 | FedMAQ quantization policy | `quantization_planner.py` | `strategy_hooks/fedmaq.py` |
 | Config quintuple resolution | `resolve_run_context` in `config_defaults.py` | inline `config.get(...)` pulls |
+| Canonical run-path build and parse | `fedmaq.core.run_identity` | inline path-segment slicing in callers |
+| Raw-payload persistence | `PayloadArchive` in `fedmaq.core.payload_archive` | filesystem writes in telemetry or hooks |
 | Physical time/bandwidth/compute/memory | `PhysicalCostModel` (`strategy.py`) | `TelemetryFedAvg.__init__`, `telemetry.py` |
 | Per-round telemetry fields | `RoundSnapshot` | 7 separate `last_*` attributes |
 | Server-side KD per-batch update | `kd_distill_step` | `run_server_side_kd`'s loop |
+
+The config-quintuple row was found violated and restored on 2026-08-28. The
+four affected hooks are `fedmaq.py`, `dadaquant.py`, `fedavg_kd.py` and
+`cfd.py`; they now consume the resolved run context rather than re-pulling its
+fields inline.
 
 **`QuantizationPlanner`.** Owns the policy previously embedded in `FedMAQHook`:
 `plan_round(...)`, the `QuantPlan` frozen dataclass (`client_q` + `grad_norms`),

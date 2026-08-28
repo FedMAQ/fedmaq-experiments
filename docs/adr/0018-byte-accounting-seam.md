@@ -73,6 +73,18 @@ dropped upload arms remain explicit as well: FedMD reports raw prediction-array
 bytes, while CFD reports the output of its published soft-label coder. Only
 FedMD computes a raw array byte count; the distinction is intentional.
 
+## 2026-08-28 architecture pass 2 — shared capture predicate and archive owner
+
+The earlier "single gate checkpoint" wording was too strong. The client-side
+attachment and server-side telemetry recorder straddle Flower process boundaries,
+so they cannot share one runtime check. They now both call the shared
+`payload_capture_enabled` predicate from `fedmaq.core.payload_archive`.
+
+`PayloadArchive` is the persistence owner for raw payloads. It owns the payload
+directory, filename formats, unframing, per-file gating, lazy directory creation,
+and the swallow-don't-abort write policy. Telemetry retains only the per-round
+call that supplies framed uploads and downloads.
+
 ## Context
 
 Byte accounting had grown four independent implementations, not two as first scoped: `_quantize_deltas`'s `ceil(size*bits/8)+4` and `postprocess.py`'s `len(zlib.compress(payload))+4` were the two named in Issue #25's original framing, but FedDistill carried a fifth, undocumented path of its own. Every arm computing its own transmitted-byte arithmetic meant AC1 ("no per-arm arithmetic outside one function") was failing silently — a new baseline could add a sixth path and nothing would flag it.
@@ -87,7 +99,7 @@ A `payload_bytes` telemetry companion (pre-encoding size, logged as `communicati
 
 **AC2 ("byte totals reproducible offline from logged telemetry") is not satisfied by counts.** zlib's output size depends on the payload's actual bytes, not just its length — a summed `measure_bytes` total can't be re-scored against a hypothetical alternative encoder after the fact, and per-client counts or hashes were both rejected as insufficient for the same reason. The seam's own logged counts satisfy AC1 and AC3 but leave a real reproducibility gap.
 
-That gap is closed by an **opt-in** mechanism, not a default one: `experiment.telemetry.log_payloads` (default `False`) gates whether each hook's actual payload bytes (`last_payloads: list[bytes]`), not just their measured length, are retained and persisted per round (`payloads/round_{NNNN}.pkl`). `attach_payloads_if_enabled` in `client_hooks/base.py` is the single gate checkpoint — every hook's capture path routes through it, so the on/off behavior can't diverge per-arm the way the original byte arithmetic did. Off by default because a multi-MB blob per client per round is a real cost over Flower's simulated Ray object-store channel; no run pays it unless it specifically wants full AC2 reproducibility.
+That gap is closed by an **opt-in** mechanism, not a default one: `experiment.telemetry.log_payloads` (default `False`) gates whether each hook's actual payload bytes (`last_payloads: list[bytes]`), not just their measured length, are retained and persisted per round (`payloads/round_{NNNN}.pkl`). The shared `payload_capture_enabled` predicate in `payload_archive.py` is read by the client-side attachment in `client_hooks/base.py` and by the server-side recorder in `telemetry.py`. Those reads remain separate because they cross Flower process boundaries; the predicate is shared so the on/off behavior cannot diverge per-arm or per-process. `PayloadArchive` owns the persistence side of the mechanism. Off by default because a multi-MB blob per client per round is a real cost over Flower's simulated Ray object-store channel; no run pays it unless it specifically wants full AC2 reproducibility.
 
 **AC4 (§4 manuscript disclosure of the accounting) was closed on 2026-08-28.** The
 methods chapter defines cumulative MB as aggregate bidirectional client--server

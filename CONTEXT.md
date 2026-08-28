@@ -214,6 +214,18 @@ total bytes. Pair it with per-round payload or do not cite it.
 _Avoid_: **rounds-to-converge** (former Ch3 §3.3.2 wording, fixed 2026-08-07;
 `chapter_4.tex:280` is canonical)
 
+### Run Identity (`fedmaq-experiments`#55)
+
+**Run identity**:
+A run is identified by the matrix and resolved configuration that produced it,
+not by the algorithm hook name alone. The owner is `fedmaq.core.run_identity`,
+which builds and parses the canonical seven-segment output path and serializes
+the analysis identity key from dataset, experiment group, algorithm config,
+variant, heterogeneity parameter, formulation and seed. Callers must use this
+module rather than slicing path segments inline; a failed canonical-path parse
+is reported as a malformed run rather than silently assigned to a group.
+[ADR-0009](docs/adr/0009-run-identity-and-analysis-scoping.md)
+
 ### Byte-Accounting Seam (`fedmaq-experiments`#25)
 
 The measurement layer the terms above are read off of. One canonical function
@@ -242,6 +254,9 @@ Exists because measured bytes can't be re-scored against a hypothetical encoder
 from a count alone — full offline reproducibility needs the payloads themselves.
 Off by default: a multi-MB blob per client per round is a real cost over Flower's
 simulated Ray channel.
+Persistence is owned by `PayloadArchive` in `fedmaq.core.payload_archive`;
+telemetry supplies the one per-round record call and does not own the filesystem
+format or write policy.
 _Avoid_: payload logging (ambiguous with ordinary telemetry, which is always on)
 
 ### Secondary Byte Axis (`fedmaq-experiments`#26)
