@@ -37,9 +37,7 @@ class FedDistillHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        self._run_context = resolve_run_context(config)
-        self.num_classes = self._run_context.num_classes
-        self.batch_size = self._run_context.batch_size
+        self.num_classes = resolve_run_context(config).num_classes
         # Consensus per-class logit matrix; None until the first aggregation.
         self.global_logits: np.ndarray | None = None
 

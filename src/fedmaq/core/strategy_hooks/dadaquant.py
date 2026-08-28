@@ -87,12 +87,7 @@ class DAdaQuantHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        self._run_context = resolve_run_context(config)
-        self.dataset_name = self._run_context.dataset_name
-        self.num_classes = self._run_context.num_classes
-        self.batch_size = self._run_context.batch_size
-        self.device = self._run_context.device
-        self.alg_cfg = self._run_context.alg_cfg
+        self.alg_cfg = resolve_run_context(config).alg_cfg
         self._q_min = int(self.alg_cfg.get("q_min", 1))
         self._q_max = int(self.alg_cfg.get("q_max", 8))
         self.q_t: int = self._q_min
