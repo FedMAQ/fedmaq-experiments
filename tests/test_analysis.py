@@ -43,11 +43,12 @@ from analysis import (
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
-    variant_of,
     write_baseline_tuning_plots,
 )
 from common import get_canonical_output_dir
 from dump_expected_runs import POWER_MEAN_RECUT_MATRICES, expected_identities
+
+from fedmaq.core.run_identity import parse_run_directory
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -1050,8 +1051,8 @@ def test_factorial_on_disk_reads_back_as_eight_distinct_cells(tmp_path):
 
     Asserting directory uniqueness (test_simulation.py) proves the runs do not
     overwrite each other. It does not prove analysis.py can still *find* them:
-    ``phase_and_group_of`` keys on a path length of exactly 7 and reads the group
-    from ``parts[3]``, so the ``fedmaq__<variant>`` segment introduced by
+    ``parse_run_directory`` keys on a path length of exactly 7 and reads the group
+    from the canonical record, so the ``fedmaq__<variant>`` segment introduced by
     Decision 76 is only safe while it stays one path component. This walks the
     real matrix file to real paths to a real margin.
 
@@ -1085,8 +1086,8 @@ def test_factorial_on_disk_reads_back_as_eight_distinct_cells(tmp_path):
         "on disk or the path no longer parses as an exploration layout."
     )
     assert {r.experiment_group for r in runs} == {"pass2_factorial"}, (
-        "the fedmaq__<variant> segment broke group parsing; phase_and_group_of "
-        "reads the group from parts[3] of a 7-part path."
+        "the fedmaq__<variant> segment broke group parsing; the canonical parser "
+        "must recover the group from the 7-part path."
     )
     assert {r.algorithm for r in runs} == {"fedmaq"}
     assert {r.phase for r in runs} == {"explore"}
@@ -1418,7 +1419,7 @@ def test_closure_certificate_names_a_group_the_manifest_does_not_hold():
 
 def test_closure_certificate_ignores_runs_belonging_to_no_group(tmp_path):
     """A bare scripts/run.py invocation lands outside the canonical 7-part path,
-    so ``phase_and_group_of`` gives it no group and ``discover_runs`` still finds
+    so ``parse_run_directory`` gives it no group and ``discover_runs`` still finds
     it. Differencing globally would file it as ``unexpected`` and leave the
     certificate red on any checkout that has ever run a smoke test."""
     stray = _write_run(tmp_path, "fedmaq", 2, 0, [0.5] * 100, list(range(1, 101)))
@@ -1949,7 +1950,7 @@ def test_wide_baseline_tuning_report_withholds_partial_verdict(tmp_path):
     assert cell["missing_variants"] == ["qmax6", "qmax8", "qmax32"]
 
 
-def test_variant_of_round_trips_the_canonical_output_path(tmp_path):
+def test_run_directory_parser_round_trips_the_variant(tmp_path):
     job_dir = tmp_path / get_canonical_output_dir(
         "explore",
         "cifar10",
@@ -1960,11 +1961,11 @@ def test_variant_of_round_trips_the_canonical_output_path(tmp_path):
         0,
         variant="mu0p01",
     )
-    assert variant_of(job_dir, tmp_path) == "mu0p01"
+    assert parse_run_directory(job_dir, tmp_path).variant == "mu0p01"
 
 
-def test_variant_of_is_empty_when_the_matrix_set_none(tmp_path):
+def test_run_directory_parser_returns_empty_variant_when_matrix_set_none(tmp_path):
     job_dir = tmp_path / get_canonical_output_dir(
         "formal", "cifar10", "mobilenetv2", "ablation", "fedmaq_no_kd", "dirichlet_alpha_0.1", 0
     )
-    assert variant_of(job_dir, tmp_path) == ""
+    assert parse_run_directory(job_dir, tmp_path).variant == ""

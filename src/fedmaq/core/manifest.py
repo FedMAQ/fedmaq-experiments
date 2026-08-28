@@ -14,7 +14,6 @@ exactly one configuration hash and one seed" is checkable against this field.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -25,20 +24,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fedmaq.core.run_identity import config_sha256
+
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "run_manifest.json"
 _GENERATED_ARTIFACT_ROOTS = ("outputs", "scripts/analysis_output")
-
-
-def config_sha256(cfg_dict: dict[str, Any]) -> str:
-    """Stable content hash of a resolved config.
-
-    ``sort_keys`` makes the digest independent of Hydra's composition order, so
-    the same configuration reached by different override spellings hashes alike.
-    """
-    canonical = json.dumps(cfg_dict, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _is_generated_artifact(path: str) -> bool:

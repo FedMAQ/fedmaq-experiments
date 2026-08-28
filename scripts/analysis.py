@@ -43,6 +43,7 @@ from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fedmaq.core.run_identity import parse_run_directory
 from scripts.common import identity_key
 
 
@@ -112,42 +113,6 @@ def algorithm_config_name(job_dir: Path, fallback: str) -> str:
     return str(choice) if choice is not None else fallback
 
 
-def phase_and_group_of(job_dir: Path, experiments_root: Path) -> tuple[str | None, str | None]:
-    """The phase and matrix-group segments of a canonical output path.
-
-    ``scripts/common.get_canonical_output_dir`` lays runs out as
-    ``outputs/<phase>/<dataset>_<model>/<exp_group>/<algorithm>/<het>/seed_<n>``.
-    Runs from outside a matrix (a bare ``scripts/run.py`` invocation) carry
-    neither and return ``(None, None)``.
-    """
-    try:
-        parts = job_dir.resolve().relative_to(experiments_root.resolve()).parts
-    except ValueError:
-        return None, None
-    if len(parts) == 7 and parts[0] == "outputs":
-        return parts[1], parts[3]
-    return None, None
-
-
-def variant_of(job_dir: Path, experiments_root: Path) -> str:
-    """The matrix ``variant:`` label, recovered from the algorithm path segment.
-
-    ``common.get_canonical_output_dir`` writes it as ``<algorithm>__<variant>``
-    and nothing else records it -- not the resolved Hydra config, which holds the
-    *value* of the swept override but not the label, and not
-    ``hydra.runtime.choices``, which names the same ``conf/algorithm/*.yaml`` for
-    every cell of a Stage 1b baseline. Runs outside the canonical layout, and
-    matrices that set no ``variant:``, return ``""``.
-    """
-    try:
-        parts = job_dir.resolve().relative_to(experiments_root.resolve()).parts
-    except ValueError:
-        return ""
-    if len(parts) == 7 and parts[0] == "outputs" and "__" in parts[4]:
-        return parts[4].split("__", 1)[1]
-    return ""
-
-
 def discover_runs(experiments_root: Path) -> list[RunRecord]:
     """Join every run's telemetry CSV against its resolved Hydra config.
 
@@ -173,7 +138,7 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
             continue
         cfg = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
         algorithm = cfg["algorithm"]["name"]
-        phase, group = phase_and_group_of(job_dir, experiments_root)
+        parsed_path = parse_run_directory(job_dir, experiments_root)
         runs.append(
             RunRecord(
                 job_dir=job_dir,
@@ -189,10 +154,10 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                     bool(cfg["algorithm"].get("grad_norm_ema", False)),
                 ),
                 algorithm_config=algorithm_config_name(job_dir, algorithm),
-                experiment_group=group,
-                phase=phase,
+                experiment_group=parsed_path.experiment_group if parsed_path else None,
+                phase=parsed_path.phase if parsed_path else None,
                 post_process=bool(cfg["algorithm"].get("post_process", False)),
-                variant=variant_of(job_dir, experiments_root),
+                variant=parsed_path.variant if parsed_path else "",
             )
         )
     return runs
@@ -1050,6 +1015,18 @@ def _declared_round(name: str, body: dict) -> int:
     return declared.pop()
 
 
+def _noncanonical_output_dir(job_dir: Path) -> bool:
+    parts = job_dir.resolve().parts
+    try:
+        output_index = next(
+            index for index, part in enumerate(parts) if part.casefold() == "outputs"
+        )
+    except StopIteration:
+        return False
+    repo_root = Path(*parts[:output_index])
+    return parse_run_directory(job_dir, repo_root) is None
+
+
 def closure_certificate(
     runs: list[RunRecord],
     manifest_groups: dict[str, dict],
@@ -1078,15 +1055,10 @@ def closure_certificate(
     30 fully-dispatched runs incomplete and puts ``all_closed`` permanently out of
     reach.
 
-    **Observation is scoped by group membership, never by a global set
-    difference.** ``discover_runs`` also globs ``multirun/`` and
-    ``phase_and_group_of`` returns no group for anything outside the canonical
-    7-part path, so a bare ``scripts/run.py`` invocation or a legacy pre-matrix
-    tree is discoverable with ``experiment_group`` unset. Differencing globally
-    would file every one of those as ``unexpected`` and leave the certificate
-    permanently red on any checkout that has ever run a smoke test. A run outside
-    the canonical layout belongs to no group and is certified against none: that
-    is out of scope for this check, not a defect in it.
+    Observation remains scoped by group membership for expected identities. A
+    malformed run directory beneath ``outputs/`` is reported separately because
+    its missing group is the defect under audit; legacy ``multirun/`` directories
+    remain outside this check.
 
     Ablation Configuration 1 is certified under ``benchmark_grid``, not
     ``ablation``. ``conf/matrix/ablation.yaml`` dispatches Configurations 2-7 and
@@ -1104,6 +1076,9 @@ def closure_certificate(
         )
 
     certified: dict[str, dict] = {}
+    non_canonical = sorted(
+        str(r.job_dir) for r in runs if _noncanonical_output_dir(r.job_dir)
+    )
     for name in names:
         body = manifest_groups[name]
         # Not ``expected_round or ...``: the override is documented as an override,
@@ -1123,9 +1098,11 @@ def closure_certificate(
             "missing": missing,
             "unexpected": unexpected,
             "duplicate": duplicate,
+            "non_canonical": non_canonical,
             "incomplete_runs": completeness["incomplete_runs"],
             "all_complete": completeness["all_complete"],
-            "closed": not (missing or unexpected or duplicate) and completeness["all_complete"],
+            "closed": not (missing or unexpected or duplicate or non_canonical)
+            and completeness["all_complete"],
         }
     return {
         "groups": certified,

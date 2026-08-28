@@ -14,10 +14,17 @@ import heapq
 import json
 import math
 import os
+import sys
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    from fedmaq.core.run_identity import config_sha256, identity_key, parse_run_directory
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from fedmaq.core.run_identity import config_sha256, identity_key, parse_run_directory
 
 STUDY1_GROUPS = (
     "benchmark_grid",
@@ -58,27 +65,6 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def config_sha256(config: dict[str, Any]) -> str:
-    canonical = json.dumps(config, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def identity_key(
-    dataset: str,
-    experiment_group: str,
-    algorithm_config: str,
-    variant: str,
-    alpha: float,
-    formulation: int | None,
-    seed: int,
-) -> str:
-    form = "none" if formulation is None else str(int(formulation))
-    return (
-        f"{dataset}|{experiment_group}|{algorithm_config}|{variant}|"
-        f"a{float(alpha)!r}|f{form}|s{int(seed)}"
-    )
-
-
 def relative_text(path: Path, root: Path) -> str:
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
@@ -87,28 +73,23 @@ def relative_text(path: Path, root: Path) -> str:
 
 
 def canonical_path_fields(job_dir: Path, repo_root: Path) -> dict[str, Any]:
-    try:
-        parts = job_dir.resolve().relative_to(repo_root.resolve()).parts
-    except ValueError:
-        return {"canonical": False}
-    if len(parts) != 7 or parts[0] != "outputs" or not parts[6].startswith("seed_"):
+    parsed = parse_run_directory(job_dir, repo_root)
+    if parsed is None:
+        try:
+            parts = job_dir.resolve().relative_to(repo_root.resolve()).parts
+        except ValueError:
+            return {"canonical": False}
         return {"canonical": False, "parts": list(parts)}
-    algorithm_segment = parts[4]
-    algorithm_path, separator, variant = algorithm_segment.partition("__")
-    try:
-        path_seed = int(parts[6].removeprefix("seed_"))
-    except ValueError:
-        path_seed = None
     return {
         "canonical": True,
-        "phase": parts[1],
-        "dataset_model": parts[2],
-        "experiment_group": parts[3],
-        "algorithm_path": algorithm_path,
-        "algorithm_segment": algorithm_segment,
-        "variant": variant if separator else "",
-        "heterogeneity_path": parts[5],
-        "path_seed": path_seed,
+        "phase": parsed.phase,
+        "dataset_model": parsed.dataset_model,
+        "experiment_group": parsed.experiment_group,
+        "algorithm_path": parsed.algorithm_path,
+        "algorithm_segment": parsed.algorithm_segment,
+        "variant": parsed.variant,
+        "heterogeneity_path": parsed.heterogeneity_path,
+        "path_seed": parsed.seed,
     }
 
 
@@ -529,7 +510,7 @@ def run_identity_from_artifacts(
                 str(algorithm_config),
                 str(variant),
                 float(alpha),
-                int(formulation) if formulation is not None else None,
+                formulation,
                 int(seed),
             ),
             fields,
