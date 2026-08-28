@@ -124,6 +124,7 @@ class QuantPlan:
     client_q_max: dict[str, float] = field(default_factory=dict)
     client_q_hat: dict[str, float] = field(default_factory=dict)
     tier1_enabled: bool = True
+    bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS
 
 
 @dataclass(frozen=True)
@@ -365,6 +366,7 @@ class QuantizationPlanner:
             client_q_max=client_q_max,
             client_q_hat=client_q_hat,
             tier1_enabled=qp.resource_aware,
+            bit_widths=qp.bit_widths,
         )
 
     def _ensure_grad_norm_model(self, parameters: Parameters, ctx: RunContext) -> nn.Module:

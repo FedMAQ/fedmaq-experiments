@@ -100,6 +100,23 @@ def test_hook_aggregates_ceiling_distribution_and_binding_fraction():
     assert metrics["algorithm/fedmaq/tier1_binding_fraction"] == pytest.approx(1 / 3)
 
 
+def test_hook_binding_fraction_compares_realized_bit_width_not_raw_cap():
+    """Regression for #40: raw=9,q_hat=12 both snap to 8 — the clamp changed
+    nothing, so it must not count as binding, unlike the true raw=9,q_hat=16 case."""
+    hook = FedMAQHook({"algorithm": {"name": "fedmaq"}})
+    hook._current_plan = QuantPlan(
+        client_q={"a": 8, "b": 8},
+        grad_norms=[],
+        client_q_max={"a": 9.0, "b": 9.0},
+        client_q_hat={"a": 12.0, "b": 16.0},
+        tier1_enabled=True,
+    )
+
+    metrics = hook.get_eval_metrics(None, 1)
+
+    assert metrics["algorithm/fedmaq/tier1_binding_fraction"] == pytest.approx(0.5)
+
+
 def test_non_resource_aware_plan_does_not_emit_tier1_metrics():
     hook = FedMAQHook({"algorithm": {"name": "fedmaq"}})
     hook._current_plan = QuantPlan(

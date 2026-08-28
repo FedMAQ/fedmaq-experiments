@@ -27,7 +27,12 @@ from fedmaq.core.kd_utils import (
     kd_server_sim_time,
 )
 from fedmaq.core.models import get_server_model_factory
-from fedmaq.core.quantization_planner import QuantizationPlanner, QuantPlan, inject_client_q
+from fedmaq.core.quantization_planner import (
+    QuantizationPlanner,
+    QuantPlan,
+    _snap_floor,
+    inject_client_q,
+)
 from fedmaq.core.strategy_hooks._partition import resolve_partition_id
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
@@ -154,8 +159,10 @@ class FedMAQHook(StrategyHook):
             metrics["algorithm/fedmaq/std_q_k_max"] = float(np.std(q_k_max_vals))
             q_hat_by_cid = self._current_plan.client_q_hat
             if q_hat_by_cid:
+                bit_widths = self._current_plan.bit_widths
                 binding = [
-                    q_k_max < q_hat_by_cid[cid]
+                    _snap_floor(min(q_k_max, q_hat_by_cid[cid]), bit_widths)
+                    < _snap_floor(q_hat_by_cid[cid], bit_widths)
                     for cid, q_k_max in self._current_plan.client_q_max.items()
                     if cid in q_hat_by_cid
                 ]

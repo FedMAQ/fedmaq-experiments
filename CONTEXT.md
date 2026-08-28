@@ -108,11 +108,15 @@ Logged as `algorithm/fedmaq/{avg,min,max,std}_q_k_max`.
 _Avoid_: memory ceiling (bare — ambiguous with host VRAM, below)
 
 **Tier 1 binding fraction**:
-The fraction of sampled clients where `q_k_max < q_hat` — i.e. where Tier 1, not
-Tier 2, is the active constraint. This is what separates "the clamp is binding on
-most clients" from "the clamp is inert and Tier 2 is doing all the work"; without
-it a realized `avg_q` is unreadable. Logged as
-`algorithm/fedmaq/tier1_binding_fraction`.
+The fraction of sampled clients whose realized bit-width differs with and
+without the Tier 1 clamp — i.e. where Tier 1, not Tier 2, is the active
+constraint. This is what separates "the clamp is binding on most clients" from
+"the clamp is inert and Tier 2 is doing all the work"; without it a realized
+`avg_q` is unreadable. Logged as `algorithm/fedmaq/tier1_binding_fraction`.
+_Not_ `q_k_max < q_hat` on the raw ceiling: both values are snapped onto the
+bit-width set before comparison, since a raw cap below `q_hat` can still snap
+to the same level `q_hat` would have snapped to on its own — that comparison
+over-reported binding until `fedmaq-experiments`#40.
 
 **Host resource consumption is not this and was explicitly declined.** VRAM/RAM on
 the JupyterHub box is a property of the simulator and its co-tenants, not of the
