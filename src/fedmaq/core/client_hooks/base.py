@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 from fedmaq.core.models import set_model_parameters
+from fedmaq.core.payload_archive import payload_capture_enabled
 
 if TYPE_CHECKING:
     from fedmaq.core.client import GenericClient
@@ -82,16 +83,12 @@ def attach_payloads_if_enabled(
 ) -> None:
     """Frame and attach this fit's pre-encoding payloads to ``fit_metrics``.
 
-    Gated on ``experiment.telemetry.log_payloads`` (default off): a multi-MB
-    blob per client per round is a real cost over Flower's simulated Ray
-    object-store channel, so no run pays it unless it wants AC 2's full
-    reproducible-offline capability (see
-    ``fedmaq.baselines.transport.pack_payloads`` and
-    ``TelemetryManager.record_fit_round``). When off, ``fit_metrics`` is left
-    untouched — no key, no behavior change.
+    Gated by the shared capture predicate (default off): a multi-MB blob per
+    client per round is a real cost over Flower's simulated Ray object-store
+    channel. When off, ``fit_metrics`` is left untouched — no key, no behavior
+    change.
     """
-    exp_config = client.config.get("experiment", client.config)
-    if not exp_config.get("telemetry", {}).get("log_payloads", False):
+    if not payload_capture_enabled(client.config):
         return
 
     from fedmaq.baselines.transport import pack_payloads

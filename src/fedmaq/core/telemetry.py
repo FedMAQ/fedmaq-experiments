@@ -4,7 +4,6 @@ import csv
 import json
 import logging
 import os
-import pickle
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -16,6 +15,7 @@ from flwr.common import FitRes, Parameters, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import require_num_public_samples
+from fedmaq.core.payload_archive import PayloadArchive, payload_capture_enabled
 
 try:
     import wandb
@@ -125,9 +125,7 @@ class TelemetryManager:
 
         self.jsonl_path = self.log_dir / "experiment_log.jsonl"
         self.csv_path = self.log_dir / "experiment_log.csv"
-        # Only created when upload or download capture has content (opt-in via
-        # experiment.telemetry.log_payloads; see record_fit_round).
-        self.payloads_dir = self.log_dir / "payloads"
+        self.payload_archive = PayloadArchive(self.log_dir)
 
         # Stable CSV field schema — captured on first write, held constant thereafter.
         # Rows with missing keys are written as empty strings; extra keys are silently
@@ -181,7 +179,7 @@ class TelemetryManager:
 
         ``round_secondary_bytes`` remains ``None`` when no client reports the
         DAdaQuant-only as-published axis. Payload replay persistence is enabled
-        only by ``experiment.telemetry.log_payloads``.
+        only by the shared payload-capture predicate.
         """
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
@@ -229,13 +227,13 @@ class TelemetryManager:
         round_secondary_bytes = 0
         has_secondary_bytes = False
         client_bytes_uploaded: list[int] = []
-        round_payloads: dict[int, list[bytes]] = {}
+        round_framed_uploads: dict[int, bytes] = {}
 
         exp_config = strategy.config.get("experiment", strategy.config)
-        log_payloads = bool(exp_config.get("telemetry", {}).get("log_payloads", False))
+        capture_enabled = payload_capture_enabled(strategy.config)
         download_payloads = (
             list(download_report.payloads)
-            if download_report is not None and log_payloads
+            if download_report is not None and capture_enabled
             else []
         )
         round_download_payloads: dict[int, list[bytes]] = {}
@@ -258,9 +256,7 @@ class TelemetryManager:
 
             payloads_framed = fit_res.metrics.get("payloads_framed")
             if isinstance(payloads_framed, bytes) and payloads_framed:
-                from fedmaq.baselines.transport import unpack_payloads
-
-                round_payloads[cid] = unpack_payloads(payloads_framed)
+                round_framed_uploads[cid] = payloads_framed
 
             if download_payloads:
                 # Every sampled client receives the same server broadcast.
@@ -290,10 +286,9 @@ class TelemetryManager:
             round_bytes_downloaded += model_size_bytes
             round_bytes_uploaded += bytes_uploaded
 
-        if round_payloads:
-            self._write_round_payloads(server_round, round_payloads)
-        if round_download_payloads:
-            self._write_round_download_payloads(server_round, round_download_payloads)
+        self.payload_archive.record_round(
+            server_round, round_framed_uploads, round_download_payloads
+        )
 
         client_sim_time = max(round_delays) if round_delays else 0.0
 
@@ -430,44 +425,6 @@ class TelemetryManager:
                 writer.writerow(metrics)
         except Exception as exc:
             logger.warning(f"Failed to write to local CSV log: {exc}")
-
-    def _write_round_payloads(
-        self, server_round: int, round_payloads: dict[int, list[bytes]]
-    ) -> None:
-        """Persist this round's pre-encoding payloads, keyed by partition id.
-
-        One file per round (rather than one growing file for the whole run)
-        so a crash mid-run loses at most the in-progress round, matching the
-        CSV/JSONL durability pattern. Opt-in only (see
-        ``fedmaq.core.client_hooks.base.attach_payloads_if_enabled``) — this
-        is never called for a run that never attaches ``"payloads_framed"``.
-        """
-        try:
-            self.payloads_dir.mkdir(parents=True, exist_ok=True)
-            path = self.payloads_dir / f"round_{server_round:04d}.pkl"
-            with open(path, "wb") as f:
-                pickle.dump(round_payloads, f)
-        except Exception as exc:
-            logger.warning(f"Failed to write round {server_round} payloads: {exc}")
-
-    def _write_round_download_payloads(
-        self, server_round: int, round_payloads: dict[int, list[bytes]]
-    ) -> None:
-        """Persist an opt-in round's server broadcast payloads by recipient.
-
-        A separate filename keeps the established upload-side
-        ``round_NNNN.pkl`` format unchanged. Replaying every payload in every
-        mapping value reproduces the aggregate download bytes charged to the
-        round, while pickle memoization avoids duplicating the shared broadcast
-        bytes on disk for each recipient.
-        """
-        try:
-            self.payloads_dir.mkdir(parents=True, exist_ok=True)
-            path = self.payloads_dir / f"download_round_{server_round:04d}.pkl"
-            with open(path, "wb") as f:
-                pickle.dump(round_payloads, f)
-        except Exception as exc:
-            logger.warning(f"Failed to write round {server_round} download payloads: {exc}")
 
     def finish(self) -> None:
         """Close the WandB run.

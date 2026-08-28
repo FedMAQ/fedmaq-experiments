@@ -22,6 +22,7 @@ from fedmaq.baselines.dadaquant_coder import (
 from fedmaq.baselines.quantization import DAdaQuantCompressionHook, FedPAQCompressionHook
 from fedmaq.core.client import GenericClient, LossHook
 from fedmaq.core.models import SimpleCNN, get_model_parameters
+from fedmaq.core.payload_archive import PayloadArchive
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
@@ -239,7 +240,7 @@ def _make_strategy(tmp_path, monkeypatch) -> tuple[TelemetryFedAvg, TelemetryMan
     tm.log_dir = tmp_path
     tm.jsonl_path = tmp_path / "experiment_log.jsonl"
     tm.csv_path = tmp_path / "experiment_log.csv"
-    tm.payloads_dir = tmp_path / "payloads"
+    tm.payload_archive = PayloadArchive(tmp_path)
     strategy = TelemetryFedAvg(
         telemetry_manager=tm,
         config=cfg_dict,

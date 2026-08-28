@@ -5,12 +5,13 @@ column) cannot be re-scored against a different encoder, because encoders like
 zlib are content-sensitive, not just size-sensitive. These tests cover the
 opt-in capability that closes that gap: every ``compress()`` return carries
 its per-call payloads in ``UploadReport.payloads``, client fit strategies attach
-them to ``fit_metrics`` when ``experiment.telemetry.log_payloads`` is set, and
-``TelemetryManager`` persists them to a side file that can be replayed offline.
+them to ``fit_metrics`` when capture is enabled, and ``PayloadArchive`` persists
+them to a side file that can be replayed offline.
 """
 
 import bz2
 import pickle
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -25,6 +26,7 @@ from fedmaq.baselines.transport import measure_bytes, pack_payloads, unpack_payl
 from fedmaq.core.client import CompressionHook, GenericClient, LossHook
 from fedmaq.core.client_hooks.base import attach_payloads_if_enabled
 from fedmaq.core.models import SimpleCNN, get_model_parameters
+from fedmaq.core.payload_archive import PayloadArchive
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.strategy_hooks.passthrough import PassthroughHook
 from fedmaq.core.telemetry import TelemetryManager
@@ -150,6 +152,18 @@ def test_attach_payloads_if_enabled_true_roundtrips_the_payloads():
     assert unpack_payloads(fit_metrics["payloads_framed"]) == payloads
 
 
+def test_payload_capture_flag_is_read_only_by_the_shared_predicate():
+    repo_root = Path(__file__).resolve().parents[1]
+    source_files = sorted((repo_root / "src" / "fedmaq").rglob("*.py"))
+    flag_readers = [
+        path.relative_to(repo_root).as_posix()
+        for path in source_files
+        if '"log_payloads"' in path.read_text(encoding="utf-8")
+    ]
+
+    assert flag_readers == ["src/fedmaq/core/payload_archive.py"]
+
+
 # --- Client-hook integration: standard/FedKD/FedDistill fit() attach the gate ---
 
 
@@ -260,7 +274,7 @@ def _make_strategy(
     tm.log_dir = tmp_path
     tm.jsonl_path = tmp_path / "experiment_log.jsonl"
     tm.csv_path = tmp_path / "experiment_log.csv"
-    tm.payloads_dir = tmp_path / "payloads"
+    tm.payload_archive = PayloadArchive(tmp_path)
     strategy = TelemetryFedAvg(
         telemetry_manager=tm,
         config=cfg_dict,
@@ -323,7 +337,7 @@ def test_record_fit_round_persists_payloads_and_replays_the_original_total(tmp_p
         strategy, server_round=1, results=[(_FakeProxy("0"), fit_res)], aggregated_parameters=None
     )
 
-    payloads_path = tm.payloads_dir / "round_0001.pkl"
+    payloads_path = tm.payload_archive.payloads_dir / "round_0001.pkl"
     assert payloads_path.exists()
     with open(payloads_path, "rb") as f:
         persisted = pickle.load(f)
@@ -350,7 +364,7 @@ def test_record_fit_round_persists_download_payloads_and_replays_logged_total(
         aggregated_parameters=aggregated,
     )
 
-    path = tm.payloads_dir / "download_round_0001.pkl"
+    path = tm.payload_archive.payloads_dir / "download_round_0001.pkl"
     assert path.exists()
     with open(path, "rb") as f:
         persisted = pickle.load(f)
@@ -377,7 +391,7 @@ def test_record_fit_round_persisted_payloads_rescore_under_an_alternate_encoder(
         strategy, server_round=1, results=[(_FakeProxy("0"), fit_res)], aggregated_parameters=None
     )
 
-    with open(tm.payloads_dir / "round_0001.pkl", "rb") as f:
+    with open(tm.payload_archive.payloads_dir / "round_0001.pkl", "rb") as f:
         persisted = pickle.load(f)
 
     original_total = fit_res.metrics["bytes_uploaded"]
@@ -403,4 +417,32 @@ def test_record_fit_round_writes_no_payloads_file_when_flag_disabled(tmp_path, m
         ),
     )
 
-    assert not tm.payloads_dir.exists()
+    assert not tm.payload_archive.payloads_dir.exists()
+
+
+def test_payload_archive_writes_downloads_without_uploads(tmp_path):
+    archive = PayloadArchive(tmp_path)
+
+    archive.record_round(1, {}, {0: [b"broadcast"]})
+
+    assert not (archive.payloads_dir / "round_0001.pkl").exists()
+    assert (archive.payloads_dir / "download_round_0001.pkl").exists()
+
+
+def test_payload_archive_skips_empty_upload_and_download_files(tmp_path):
+    archive = PayloadArchive(tmp_path)
+
+    archive.record_round(1, {0: b""}, {0: []})
+
+    assert not archive.payloads_dir.exists()
+
+
+def test_payload_archive_write_failure_logs_and_does_not_raise(tmp_path, caplog):
+    payloads_dir = tmp_path / "payloads"
+    payloads_dir.write_bytes(b"not a directory")
+    archive = PayloadArchive(tmp_path)
+
+    with caplog.at_level("WARNING"):
+        archive.record_round(1, {}, {0: [b"broadcast"]})
+
+    assert "Failed to write round 1 download payloads" in caplog.text
