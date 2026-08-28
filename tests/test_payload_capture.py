@@ -66,11 +66,11 @@ def test_default_download_payloads_use_float32_and_shared_transport():
         np.zeros((0,), dtype=np.float32),
     ]
 
-    byte_size = hook.download_size_bytes(None, parameters)
+    report = hook.download_size_bytes(None, parameters)
     expected_payload = parameters[0].astype(np.float32).tobytes()
 
-    assert hook.last_download_payloads == [expected_payload]
-    assert byte_size == measure_bytes(expected_payload)
+    assert report.payloads == (expected_payload,)
+    assert report.measured_bytes == measure_bytes(expected_payload)
 
 
 def test_feddistill_download_payloads_reproduce_byte_size_in_both_rounds():
@@ -87,18 +87,15 @@ def test_feddistill_download_payloads_reproduce_byte_size_in_both_rounds():
     parameters = [np.arange(6, dtype=np.float32).reshape(2, 3)]
 
     first = hook.download_size_bytes(None, parameters)
-    assert sum(measure_bytes(p) for p in hook.last_download_payloads) == first
+    assert sum(measure_bytes(p) for p in first.payloads) == first.measured_bytes
 
     hook.global_logits = np.full((3, 3), 0.25, dtype=np.float32)
     second = hook.download_size_bytes(None, parameters)
     logit_payload = logits_to_bytes(hook.global_logits)
 
-    assert hook.last_download_payloads[-1] == logit_payload
-    assert sum(measure_bytes(p) for p in hook.last_download_payloads) == second
-    assert second == first + measure_bytes(logit_payload)
-
-    # The payload list is per-instance, not the shared class-level default.
-    assert FedDistillHook({"dataset": {"num_classes": 3}}).last_download_payloads == []
+    assert second.payloads[-1] == logit_payload
+    assert sum(measure_bytes(p) for p in second.payloads) == second.measured_bytes
+    assert second.measured_bytes == first.measured_bytes + measure_bytes(logit_payload)
 
 
 def test_fedmaq_postprocess_report_payloads_reproduce_byte_size():

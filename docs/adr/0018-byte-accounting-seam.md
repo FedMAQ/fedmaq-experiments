@@ -32,13 +32,46 @@ even though FedDistill's *upload* leg already measured the same logit payload
 through `measure_bytes`. The override now delegates the weight leg to the default
 path and measures the broadcast logit payload as its own call — `measure_bytes`
 is not additive over concatenation, so the two legs are measured separately and
-summed — appending that payload to a fresh `last_download_payloads` list so the
-replay identity holds for this arm too. On CIFAR-10/MobileNetV2GN this moves
+summed — adding that payload to the returned report so the replay identity holds
+for this arm too. On CIFAR-10/MobileNetV2GN this moves
 FedDistill's per-round download leg from 8,947,128 raw bytes to 8,176,145
 measured: the old figure over-charged a baseline by 9.4%, in FedMAQ's favor.
 FedDistill falls under the same fresh-capture requirement as the arms above.
-The only raw-`nbytes` download paths left are `cfd.py` and `fedmd.py`, both
-dropped baselines (ADR-0005) and out of scope here as they were originally.
+CFD remains the only download path outside the shared transport seam: it uses
+its published soft-label coder, and is represented by a report with no
+`measure_bytes` payloads. FedMD inherits the shared default download path; its
+raw prediction-array accounting remains on its upload leg.
+
+## 2026-08-28 architecture pass 1 — typed reports on both legs
+
+The source re-derivation required by #49 and #50 produced this enumeration,
+rather than copying the earlier handoff:
+
+- Upload implementations are `CompressionHook.compress`,
+  `FedPAQCompressionHook.compress`, `DAdaQuantCompressionHook.compress`,
+  `FedKDCompressionHook.compress`, and
+  `FedMAQPostProcessCompressionHook.compress`. The base identity implementation
+  is included in the coverage test alongside the four concrete overrides.
+- Download implementations are `StrategyHook.download_size_bytes`,
+  `FedKDHook.download_size_bytes`, `FedDistillHook.download_size_bytes`, and
+  `CFDHook.download_size_bytes`. `PassthroughHook`, `DAdaQuantHook`,
+  `FedAvgKDHook`, `FedMAQHook`, and `FedMDHook` inherit the shared default.
+
+Both legs now return the existing frozen `UploadReport` value. Its contract is
+`measured_bytes` for the reported communication total, `payload_bytes` for the
+pre-encoding companion, nullable `secondary_bytes` for the DAdaQuant-only
+as-published axis, and `payloads` preserving one byte string per
+`measure_bytes` call. The name is retained to reuse #49's type rather than
+introduce a second transport abstraction. Telemetry consumes the returned
+download report directly; no string-keyed payload attribute remains.
+
+CFD constructs a report whose measured and payload totals are the output of its
+own published soft-label coder and whose payload tuple is empty because that
+path does not call `measure_bytes`. This records its ADR-0005 exclusion without
+pretending that its coder is replayable through the shared transport. The two
+dropped upload arms remain explicit as well: FedMD reports raw prediction-array
+bytes, while CFD reports the output of its published soft-label coder. Only
+FedMD computes a raw array byte count; the distinction is intentional.
 
 ## Context
 

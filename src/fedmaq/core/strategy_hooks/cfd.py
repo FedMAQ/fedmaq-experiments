@@ -73,6 +73,7 @@ from fedmaq.core.softlabel_codec import (
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
+    from fedmaq.baselines.transport import UploadReport
     from fedmaq.core.strategy import TelemetryFedAvg
 
 logger = logging.getLogger(__name__)
@@ -282,9 +283,18 @@ class CFDHook(StrategyHook):
         self,
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
-    ) -> int:
+    ) -> UploadReport:
         # CFD sends soft-label codes downstream, not model weights (0 in round 1).
-        return self._last_downstream_bytes
+        # ADR-0005 keeps its published soft-label coder outside the shared
+        # measure_bytes seam; an empty payload list makes that distinction explicit.
+        from fedmaq.baselines.transport import UploadReport
+
+        return UploadReport(
+            measured_bytes=self._last_downstream_bytes,
+            payload_bytes=self._last_downstream_bytes,
+            secondary_bytes=None,
+            payloads=(),
+        )
 
     def server_sim_time(
         self,

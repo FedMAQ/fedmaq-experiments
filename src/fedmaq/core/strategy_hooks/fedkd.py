@@ -21,7 +21,7 @@ from fedmaq.baselines.compression import (
     decompress_tensor,
     svd_payload,
 )
-from fedmaq.baselines.transport import measure_bytes
+from fedmaq.baselines.transport import UploadReport, measure_bytes
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -58,20 +58,14 @@ class FedKDHook(StrategyHook):
         # evaluates the exact same compressed state clients received, instead of
         # running a second, independent compression pass.
         self._last_reconstructed: Parameters | None = None
+        self._last_download_report: UploadReport | None = None
 
     def download_size_bytes(
         self,
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
-    ) -> int:
-        """SVD-compressed download size at the current round's energy level.
-
-        Also stashes the summed pre-encoding payload size on
-        ``self._last_download_payload_bytes``, mirroring the upload-side
-        :class:`~fedmaq.baselines.transport.UploadReport` companion,
-        so a future download-side encoder change can be re-scored against
-        already-logged rounds without re-running training.
-        """
+    ) -> UploadReport:
+        """Return the SVD-compressed download report at the current energy."""
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         model_size_bytes = 0
         payload_bytes = 0
@@ -85,9 +79,13 @@ class FedKDHook(StrategyHook):
             model_size_bytes += measure_bytes(payload)
             payload_bytes += len(payload)
             payloads.append(payload)
-        self._last_download_payload_bytes = payload_bytes
-        self.last_download_payloads = payloads
-        return model_size_bytes
+        self._last_download_report = UploadReport(
+            measured_bytes=model_size_bytes,
+            payload_bytes=payload_bytes,
+            secondary_bytes=None,
+            payloads=tuple(payloads),
+        )
+        return self._last_download_report
 
     def compute_speed_scale(self) -> float:
         return 1.0 / self._compute_penalty
@@ -198,8 +196,10 @@ class FedKDHook(StrategyHook):
         if hasattr(self, "_last_mean_rank_retained"):
             metrics["algorithm/fedkd/mean_rank_retained"] = self._last_mean_rank_retained
         metrics["algorithm/fedkd/energy"] = self._current_energy
-        if hasattr(self, "_last_download_payload_bytes"):
-            metrics["algorithm/fedkd/download_payload_bytes"] = self._last_download_payload_bytes
+        if self._last_download_report is not None:
+            metrics["algorithm/fedkd/download_payload_bytes"] = (
+                self._last_download_report.payload_bytes
+            )
         return metrics
 
     def metric_keys(self) -> list[str]:

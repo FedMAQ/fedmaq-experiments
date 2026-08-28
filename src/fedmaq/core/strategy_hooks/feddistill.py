@@ -21,6 +21,7 @@ from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
+    from fedmaq.baselines.transport import UploadReport
     from fedmaq.core.strategy import TelemetryFedAvg
 
 logger = logging.getLogger(__name__)
@@ -77,21 +78,26 @@ class FedDistillHook(StrategyHook):
         self,
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
-    ) -> int:
+    ) -> UploadReport:
         # FedAvg weights through the shared seam, plus the broadcast global logit
         # matrix (once present) measured as the payload configure_fit actually
         # sends. measure_bytes is not additive over concatenation (ADR-0018), so
         # the logit payload is measured separately and summed, and appended to a
-        # fresh payload list so a replay of last_download_payloads reproduces
-        # this total.
-        from fedmaq.baselines.transport import measure_bytes
+        # fresh payload tuple so replaying the returned report reproduces this
+        # total.
+        from fedmaq.baselines.transport import UploadReport, measure_bytes
 
-        total = super().download_size_bytes(strategy, ndarrays)
-        if self.global_logits is not None:
-            logit_payload = logits_to_bytes(self.global_logits)
-            self.last_download_payloads = [*self.last_download_payloads, logit_payload]
-            total += measure_bytes(logit_payload)
-        return total
+        weight_report = super().download_size_bytes(strategy, ndarrays)
+        if self.global_logits is None:
+            return weight_report
+
+        logit_payload = logits_to_bytes(self.global_logits)
+        return UploadReport(
+            measured_bytes=weight_report.measured_bytes + measure_bytes(logit_payload),
+            payload_bytes=weight_report.payload_bytes + len(logit_payload),
+            secondary_bytes=weight_report.secondary_bytes,
+            payloads=(*weight_report.payloads, logit_payload),
+        )
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         return {}

@@ -12,6 +12,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
 if TYPE_CHECKING:
+    from fedmaq.baselines.transport import UploadReport
     from fedmaq.core.strategy import TelemetryFedAvg
 
 
@@ -35,11 +36,6 @@ class StrategyHook(ABC):
     New baselines (FedDistill, CFD) add a single hook file and register in
     ``__init__.py`` — the strategy itself stays untouched.
     """
-
-    #: Exact payloads from the most recent server-to-client measurement, one
-    #: byte string per ``measure_bytes`` call. Telemetry may persist these for
-    #: offline replay when ``experiment.telemetry.log_payloads`` is enabled.
-    last_download_payloads: list[bytes] = []
 
     def pre_configure_fit(
         self,
@@ -133,8 +129,8 @@ class StrategyHook(ABC):
         self,
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
-    ) -> int:
-        """Measured size of the server-to-client model broadcast, in bytes.
+    ) -> UploadReport:
+        """Return the shared-transport report for a model broadcast.
 
         The default identity path serializes each non-empty tensor as float32
         and routes each payload through the same held-constant transport used
@@ -142,11 +138,15 @@ class StrategyHook(ABC):
         """
         # Deferred to avoid coupling strategy-hook imports to the baseline
         # registry during module initialization.
-        from fedmaq.baselines.transport import measure_bytes
+        from fedmaq.baselines.transport import UploadReport, measure_bytes
 
         payloads = [np.asarray(arr, dtype=np.float32).tobytes() for arr in ndarrays if arr.size]
-        self.last_download_payloads = payloads
-        return sum(measure_bytes(payload) for payload in payloads)
+        return UploadReport(
+            measured_bytes=sum(measure_bytes(payload) for payload in payloads),
+            payload_bytes=sum(len(payload) for payload in payloads),
+            secondary_bytes=None,
+            payloads=tuple(payloads),
+        )
 
     def compute_speed_scale(self) -> float:
         """Multiplicative factor on client compute speed for local-training time.

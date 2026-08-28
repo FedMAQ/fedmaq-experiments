@@ -36,6 +36,23 @@ No shared "return upload payload" abstraction is imposed beyond piece 3. `feddis
 
 No unification of the metrics dict. Step 1 (`StrategyHook.metric_keys()`) already lets each algorithm declare its own CSV columns; a common metrics shape here would be scope creep on top of an already-closed seam.
 
+### 2026-08-28 clarification — what is uploaded versus what is measured
+
+The rejection above concerns a shared abstraction for **what is uploaded**:
+payload contents remain different across the arms (weights, logits, quantized
+soft labels, or public predictions). The byte-accounting pass types **what is
+measured about an upload or download**, which is uniform enough to use the
+existing `UploadReport` value on both legs. This does not unify payload assembly,
+the training loops, or the metrics dictionary, and therefore does not contradict
+this ADR's narrow-seam decision.
+
+Collapsing the four arm registries was also considered and declined on evidence.
+The apparent dispatch chains are three single-arm special cases, not a shared
+chain, and the registries select independently across four orthogonal axes:
+compressor, strategy hook, client fit, and loss hook. A single registry would
+therefore widen the seam to fit its least-similar member, with no behavior or
+coverage benefit. No ADR revision is needed for that candidate.
+
 ## Consequences
 
 - **`standard.py` is not one behavior for golden-diff purposes.** It's the shared `fit()` entry for FedAvg, FedProx, FedPAQ, FedAvgKD, FedDistill's non-hook path, plus the `DAdaQuantFit`/`FedMAQFit` subclasses — each exercises a different branch (FedProx: `on_after_backward` instrumentation + prox-penalty loss hook; KD: `ClientKDLossHook`; DAdaQuant: `_pretrain_local_loss` + dynamic `q`; FedMAQ: `_reported_local_loss` reading `last_loss`). The S2a golden set must run **one config per branch**, not just one algorithm — a harness that only diffs plain FedAvg passes green while silently breaking FedProx or KD, since those branches are never exercised by the diff.

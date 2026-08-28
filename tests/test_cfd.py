@@ -13,6 +13,7 @@ from flwr.common import Code, FitIns, Status, ndarrays_to_parameters
 from flwr.common.typing import FitRes
 from torch.utils.data import DataLoader, TensorDataset
 
+from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook, GenericClient, LossHook
 from fedmaq.core.client_hooks.cfd import CFDFit
 from fedmaq.core.models import get_model_parameters
@@ -174,11 +175,17 @@ def test_cfd_hook_downstream_broadcast_skips_round1():
 
     round1 = hook.configure_fit(None, 1, ndarrays_to_parameters([]), None, instructions)
     assert "cfd_server_labels" not in round1[0][1].config
-    assert hook.download_size_bytes(None, []) == 0
+    round1_report = hook.download_size_bytes(None, [])
+    assert isinstance(round1_report, UploadReport)
+    assert round1_report.measured_bytes == 0
 
     round2 = hook.configure_fit(None, 2, ndarrays_to_parameters([]), None, instructions)
     assert isinstance(round2[0][1].config["cfd_server_labels"], bytes)
-    assert hook.download_size_bytes(None, []) > 0
+    round2_report = hook.download_size_bytes(None, [])
+    assert isinstance(round2_report, UploadReport)
+    assert round2_report.measured_bytes > 0
+    assert round2_report.payload_bytes == round2_report.measured_bytes
+    assert round2_report.payloads == ()
 
 
 

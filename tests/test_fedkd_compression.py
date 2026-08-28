@@ -63,15 +63,16 @@ def test_download_payload_bytes_pinned_golden():
     hook = FedKDHook({"algorithm": {}})
     hook._current_energy = 0.5
 
-    hook.download_size_bytes(None, [_concentrated_spectrum_matrix()])
+    report = hook.download_size_bytes(None, [_concentrated_spectrum_matrix()])
 
-    assert hook._last_download_payload_bytes == 168
+    assert report.payload_bytes == 168
 
 
 def test_download_size_bytes_payload_bytes_zero_for_empty_ndarrays():
     hook = FedKDHook({"algorithm": {}})
-    assert hook.download_size_bytes(None, []) == 0
-    assert hook._last_download_payload_bytes == 0
+    report = hook.download_size_bytes(None, [])
+    assert report.measured_bytes == 0
+    assert report.payload_bytes == 0
 
 
 def test_get_eval_metrics_surfaces_download_payload_bytes_after_download_size_bytes():
@@ -80,8 +81,8 @@ def test_get_eval_metrics_surfaces_download_payload_bytes_after_download_size_by
 
     assert "algorithm/fedkd/download_payload_bytes" not in hook.get_eval_metrics(None, 0)
 
-    hook.download_size_bytes(None, [_concentrated_spectrum_matrix(seed=2)])
+    report = hook.download_size_bytes(None, [_concentrated_spectrum_matrix(seed=2)])
 
     metrics = hook.get_eval_metrics(None, 1)
-    assert metrics["algorithm/fedkd/download_payload_bytes"] == hook._last_download_payload_bytes
+    assert metrics["algorithm/fedkd/download_payload_bytes"] == report.payload_bytes
     assert "algorithm/fedkd/download_payload_bytes" in hook.metric_keys()

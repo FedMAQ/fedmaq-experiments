@@ -216,8 +216,10 @@ class TelemetryManager:
 
         if aggregated_parameters is not None:
             ndarrays = parameters_to_ndarrays(aggregated_parameters)
-            model_size_bytes = strategy.hook.download_size_bytes(strategy, ndarrays)
+            download_report = strategy.hook.download_size_bytes(strategy, ndarrays)
+            model_size_bytes = download_report.measured_bytes
         else:
+            download_report = None
             model_size_bytes = 0
 
         round_delays = []
@@ -232,8 +234,8 @@ class TelemetryManager:
         exp_config = strategy.config.get("experiment", strategy.config)
         log_payloads = bool(exp_config.get("telemetry", {}).get("log_payloads", False))
         download_payloads = (
-            list(getattr(strategy.hook, "last_download_payloads", []))
-            if aggregated_parameters is not None and log_payloads
+            list(download_report.payloads)
+            if download_report is not None and log_payloads
             else []
         )
         round_download_payloads: dict[int, list[bytes]] = {}
