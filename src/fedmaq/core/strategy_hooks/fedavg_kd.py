@@ -44,7 +44,14 @@ class FedAvgKDHook(StrategyHook):
 
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
+        self._run_context = resolve_run_context(config)
+        self.dataset_name = self._run_context.dataset_name
+        self.num_classes = self._run_context.num_classes
+        self.batch_size = self._run_context.batch_size
+        self.device = self._run_context.device
+        self.alg_cfg = self._run_context.alg_cfg
         self._ema_params: list[Any] | None = None
+        self._last_round_kd_metrics: dict[str, float] = {}
 
     def configure_fit(
         self,
@@ -68,19 +75,17 @@ class FedAvgKDHook(StrategyHook):
         if aggregated_parameters is None:
             return aggregated_parameters, metrics
 
-        ctx = resolve_run_context(self._config)
-
         # FedAvgKD uses the standard model for both teacher and student.
         aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
             model_factory=get_model,
             aggregated_parameters=aggregated_parameters,
             results=results,
             public_indices=strategy.public_indices,
-            dataset_name=ctx.dataset_name,
-            num_classes=ctx.num_classes,
-            batch_size=ctx.batch_size,
-            alg_cfg=ctx.alg_cfg,
-            device=ctx.device,
+            dataset_name=self.dataset_name,
+            num_classes=self.num_classes,
+            batch_size=self.batch_size,
+            alg_cfg=self.alg_cfg,
+            device=self.device,
         )
 
         # Student EMA is quantization-independent, so §4.3.7's refinement parity
@@ -88,7 +93,7 @@ class FedAvgKDHook(StrategyHook):
         # recorded as inapplicable here: both act on a quantization signal).
         if aggregated_parameters is not None:
             aggregated_parameters, self._ema_params = apply_student_ema(
-                aggregated_parameters, self._ema_params, ctx.alg_cfg
+                aggregated_parameters, self._ema_params, self.alg_cfg
             )
         return aggregated_parameters, metrics
 
@@ -100,18 +105,17 @@ class FedAvgKDHook(StrategyHook):
     ) -> float:
         if aggregated_parameters is None:
             return 0.0
-        alg_cfg = self._config.get("algorithm", {})
         num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,
-            kd_epochs=int(alg_cfg.get("kd_epochs", 1)),
+            kd_epochs=int(self.alg_cfg.get("kd_epochs", 1)),
             num_teachers=len(results),
             server_compute_speed=resolve_server_compute_speed(self._config),
         )
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         metrics = {}
-        if hasattr(self, "_last_round_kd_metrics") and self._last_round_kd_metrics:
+        if self._last_round_kd_metrics:
             for k, v in self._last_round_kd_metrics.items():
                 metrics[f"algorithm/fedavg_kd/{k}"] = v
         return metrics

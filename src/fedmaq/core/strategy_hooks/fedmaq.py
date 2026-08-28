@@ -16,7 +16,6 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
-    BATCH_SIZE,
     require_num_public_samples,
     resolve_run_context,
     resolve_server_compute_speed,
@@ -52,7 +51,14 @@ class FedMAQHook(StrategyHook):
 
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
-        alg_name = config.get("algorithm", {}).get("name", "fedmaq")
+        self._run_context = resolve_run_context(config)
+        alg_cfg = self._run_context.alg_cfg
+        self.dataset_name = self._run_context.dataset_name
+        self.num_classes = self._run_context.num_classes
+        self.batch_size = self._run_context.batch_size
+        self.device = self._run_context.device
+        self.alg_cfg = alg_cfg
+        alg_name = alg_cfg.get("name", "fedmaq")
         self._planner = QuantizationPlanner(alg_name, get_server_model_factory(alg_name))
         self._current_plan: QuantPlan = QuantPlan(client_q={}, grad_norms=[])
         self._ema_params: list[np.ndarray] | None = None
@@ -66,7 +72,7 @@ class FedMAQHook(StrategyHook):
         client_manager: ClientManager,
         client_instructions: list[tuple[ClientProxy, FitIns]],
     ) -> list[tuple[ClientProxy, FitIns]]:
-        ctx = resolve_run_context(self._config)
+        ctx = self._run_context
         client_pids = [resolve_partition_id(c, strategy) for c, _ in client_instructions]
         client_cids = [c.cid for c, _ in client_instructions]
 
@@ -95,10 +101,10 @@ class FedMAQHook(StrategyHook):
         if aggregated_parameters is None:
             return aggregated_parameters, metrics
 
-        ctx = resolve_run_context(self._config)
-        alg_cfg = ctx.alg_cfg
+        ctx = self._run_context
+        alg_cfg = self.alg_cfg
 
-        alg_name = self._config.get("algorithm", {}).get("name", "fedmaq")
+        alg_name = self.alg_cfg.get("name", "fedmaq")
         model_fn = get_server_model_factory(alg_name)
 
         teacher_bit_widths = None
@@ -197,7 +203,7 @@ class FedMAQHook(StrategyHook):
     ) -> float:
         if aggregated_parameters is None:
             return 0.0
-        alg_cfg = self._config.get("algorithm", {})
+        alg_cfg = self.alg_cfg
         num_public = require_num_public_samples(self._config)
         server_compute_speed = resolve_server_compute_speed(self._config)
         kd_time = kd_server_sim_time(
@@ -211,8 +217,7 @@ class FedMAQHook(StrategyHook):
         # the same sample-pass units as the KD term. Previously unmodeled, so the
         # server-side cost of the adaptive-quantization signal was under-reported.
         if server_compute_speed > 0.0:
-            batch_size = int(self._config.get("experiment", {}).get("batch_size", BATCH_SIZE))
-            probe_time = (len(results) * batch_size) / server_compute_speed
+            probe_time = (len(results) * self.batch_size) / server_compute_speed
         else:
             probe_time = 0.0
         return kd_time + probe_time

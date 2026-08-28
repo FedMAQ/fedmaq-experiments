@@ -56,7 +56,6 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
-    BATCH_SIZE,
     require_num_public_samples,
     resolve_run_context,
     resolve_server_compute_speed,
@@ -90,11 +89,13 @@ class CFDHook(StrategyHook):
 
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
-        ctx = resolve_run_context(config)
+        self._run_context = resolve_run_context(config)
+        ctx = self._run_context
         self.dataset_name = ctx.dataset_name
         self.num_classes = ctx.num_classes
+        self.batch_size = ctx.batch_size
 
-        alg_cfg = config.get("algorithm", {})
+        alg_cfg = ctx.alg_cfg
         self.b_up = int(alg_cfg.get("b_up", 1))
         self.b_down = int(alg_cfg.get("b_down", 1))
         self.distill_epochs = int(alg_cfg.get("distill_epochs", 1))
@@ -119,10 +120,8 @@ class CFDHook(StrategyHook):
             and strategy is not None
             and strategy.public_indices is not None
         ):
-            exp_cfg = self._config.get("experiment", {})
-            batch_size = int(exp_cfg.get("batch_size", BATCH_SIZE))
             self._public_loader, _ = get_server_loaders(
-                self.dataset_name, strategy.public_indices, batch_size=batch_size
+                self.dataset_name, strategy.public_indices, batch_size=self.batch_size
             )
             self._public_labels = np.concatenate(
                 [labels.numpy() for _, labels in self._public_loader]
@@ -223,7 +222,7 @@ class CFDHook(StrategyHook):
         images_all = torch.cat([images for images, _ in public_loader], dim=0)
         targets_all = torch.tensor(targets, dtype=torch.float32)
 
-        alg_cfg = self._config.get("algorithm", {})
+        alg_cfg = self._run_context.alg_cfg
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
             lr=float(alg_cfg.get("server_kd_lr", 0.01)),

@@ -59,6 +59,7 @@ class FedKDHook(StrategyHook):
         # running a second, independent compression pass.
         self._last_reconstructed: Parameters | None = None
         self._last_download_report: UploadReport | None = None
+        self._last_mean_rank_retained: float | None = None
 
     def download_size_bytes(
         self,
@@ -193,7 +194,7 @@ class FedKDHook(StrategyHook):
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         metrics = {}
-        if hasattr(self, "_last_mean_rank_retained"):
+        if self._last_mean_rank_retained is not None:
             metrics["algorithm/fedkd/mean_rank_retained"] = self._last_mean_rank_retained
         metrics["algorithm/fedkd/energy"] = self._current_energy
         if self._last_download_report is not None:

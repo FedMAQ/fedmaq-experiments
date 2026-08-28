@@ -18,6 +18,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+from fedmaq.core.config_defaults import resolve_run_context
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -36,8 +37,9 @@ class FedDistillHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        self._config = config
-        self.num_classes = int(config.get("dataset", {}).get("num_classes", 10))
+        self._run_context = resolve_run_context(config)
+        self.num_classes = self._run_context.num_classes
+        self.batch_size = self._run_context.batch_size
         # Consensus per-class logit matrix; None until the first aggregation.
         self.global_logits: np.ndarray | None = None
 

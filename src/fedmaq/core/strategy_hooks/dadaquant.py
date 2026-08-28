@@ -11,6 +11,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.config_defaults import resolve_run_context
 from fedmaq.core.quantization_planner import inject_client_q
 from fedmaq.core.strategy_hooks._partition import (
     partition_dataset_size,
@@ -86,11 +87,17 @@ class DAdaQuantHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        alg_cfg = config.get("algorithm", {})
-        self._config = config
-        self.q_t: int = int(alg_cfg.get("q_min", 1))
-        self.psi: float = float(alg_cfg.get("psi", 0.9))
-        self.phi: int = int(alg_cfg.get("phi", 5))
+        self._run_context = resolve_run_context(config)
+        self.dataset_name = self._run_context.dataset_name
+        self.num_classes = self._run_context.num_classes
+        self.batch_size = self._run_context.batch_size
+        self.device = self._run_context.device
+        self.alg_cfg = self._run_context.alg_cfg
+        self._q_min = int(self.alg_cfg.get("q_min", 1))
+        self._q_max = int(self.alg_cfg.get("q_max", 8))
+        self.q_t: int = self._q_min
+        self.psi: float = float(self.alg_cfg.get("psi", 0.9))
+        self.phi: int = int(self.alg_cfg.get("phi", 5))
         self.moving_average_history: list[float] = []
         self.running_average_loss: float | None = None
         self.last_quantization_increase_round: int = 0
@@ -104,8 +111,8 @@ class DAdaQuantHook(StrategyHook):
         client_manager: ClientManager,
         client_instructions: list[tuple[ClientProxy, FitIns]],
     ) -> list[tuple[ClientProxy, FitIns]]:
-        q_min = int(self._config.get("algorithm", {}).get("q_min", 1))
-        q_max = int(self._config.get("algorithm", {}).get("q_max", 8))
+        q_min = self._q_min
+        q_max = self._q_max
 
         if server_round == 1:
             self.q_t = q_min
