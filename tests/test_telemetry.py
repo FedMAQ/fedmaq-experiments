@@ -10,7 +10,7 @@ import csv
 from pathlib import Path
 
 from fedmaq.core.strategy_hooks import get_strategy_hook
-from fedmaq.core.telemetry import TelemetryManager
+from fedmaq.core.telemetry import COMMON_CSV_FIELDNAMES, TelemetryManager
 
 CONF_DIR = str((Path(__file__).parent.parent / "conf").resolve())
 
@@ -27,6 +27,40 @@ def _make_manager(tmp_path, monkeypatch):
 def _read_csv(path):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.reader(f))
+
+
+def test_common_csv_fieldnames_are_public_contract():
+    # Deliberately independent: this pins the public schema owner itself.
+    assert COMMON_CSV_FIELDNAMES == [
+        "round",
+        "test/loss",
+        "test/accuracy",
+        "test/precision",
+        "test/recall",
+        "test/f1",
+        "communication/round_bytes",
+        "communication/round_payload_bytes",
+        "communication/round_secondary_bytes",
+        "communication/cumulative_bytes",
+        "communication/cumulative_mb",
+        "system/round_time_sec",
+        "system/cumulative_time_sec",
+        "system/client_sim_time_sec",
+        "system/cumulative_client_time_sec",
+        "system/server_sim_time_sec",
+        "system/cumulative_server_time_sec",
+        "system/wall_time_sec",
+        "system/cumulative_wall_time_sec",
+        "communication/client_bytes_uploaded_mean",
+        "communication/client_bytes_uploaded_min",
+        "communication/client_bytes_uploaded_max",
+        "communication/client_bytes_uploaded_std",
+        "client/avg_train_loss",
+        "client/avg_train_acc",
+        "client/avg_local_loss",
+        "client/avg_epochs_trained",
+        "client/avg_q",
+    ]
 
 
 def test_hook_metric_key_reserves_header_column_before_it_appears(tmp_path, monkeypatch):

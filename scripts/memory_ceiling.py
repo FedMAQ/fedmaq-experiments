@@ -9,8 +9,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from fedmaq.core.telemetry import COMMON_CSV_FIELDNAMES
+
+_ROUND_COLUMN = COMMON_CSV_FIELDNAMES[0]
 _REQUIRED_COLUMNS = (
-    "round",
+    _ROUND_COLUMN,
     "algorithm/fedmaq/avg_q",
     "algorithm/fedmaq/avg_q_k_max",
     "algorithm/fedmaq/tier1_binding_fraction",
@@ -56,12 +59,12 @@ def build_tier1_ceiling_frame(csv_paths: Iterable[Path]) -> pd.DataFrame:
         selected.insert(0, "run", _run_label(source))
         frames.append(selected)
 
-    columns = ["run", "round", "realized_q", "tier1_ceiling_q", "tier1_binding_fraction"]
+    columns = ["run", _ROUND_COLUMN, "realized_q", "tier1_ceiling_q", "tier1_binding_fraction"]
     if not frames:
         return pd.DataFrame(columns=columns)
     return (
         pd.concat(frames, ignore_index=True)
-        .sort_values(["run", "round"], kind="stable")
+        .sort_values(["run", _ROUND_COLUMN], kind="stable")
         .reset_index(drop=True)
     )
 
@@ -74,9 +77,11 @@ def write_tier1_ceiling_analysis(csv_paths: Iterable[Path], output_prefix: Path)
 
     figure, axes = plt.subplots(2, 1, sharex=True, figsize=(9, 7), constrained_layout=True)
     for run, run_frame in frame.groupby("run", sort=False):
-        axes[0].plot(run_frame["round"], run_frame["realized_q"], label=f"{run} realized q")
-        axes[0].plot(run_frame["round"], run_frame["tier1_ceiling_q"], "--", label=f"{run} Tier 1")
-        axes[1].plot(run_frame["round"], run_frame["tier1_binding_fraction"], label=run)
+        axes[0].plot(run_frame[_ROUND_COLUMN], run_frame["realized_q"], label=f"{run} realized q")
+        axes[0].plot(
+            run_frame[_ROUND_COLUMN], run_frame["tier1_ceiling_q"], "--", label=f"{run} Tier 1"
+        )
+        axes[1].plot(run_frame[_ROUND_COLUMN], run_frame["tier1_binding_fraction"], label=run)
     axes[0].set_ylabel("bits")
     axes[0].set_title("Realized bit-width and modeled Tier 1 ceiling")
     axes[0].legend(fontsize="small", ncol=2)

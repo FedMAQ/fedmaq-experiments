@@ -36,7 +36,7 @@ except Exception:
 if TYPE_CHECKING:
     from fedmaq.core.strategy import TelemetryFedAvg
 
-_COMMON_CSV_FIELDNAMES: list[str] = [
+COMMON_CSV_FIELDNAMES: list[str] = [
     "round",
     "test/loss",
     "test/accuracy",
@@ -440,7 +440,7 @@ class TelemetryManager:
 
         try:
             if self._csv_fieldnames is None:
-                canonical = _COMMON_CSV_FIELDNAMES + self._hook_metric_keys
+                canonical = COMMON_CSV_FIELDNAMES + self._hook_metric_keys
                 seen = set(canonical)
                 fieldnames = list(canonical)
                 for key in sorted(metrics.keys()):

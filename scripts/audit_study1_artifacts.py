@@ -31,6 +31,7 @@ RUN_MARKERS = {
     "run_manifest.json",
     "final_global_model.pt",
 }
+# Deliberately independent: this auditor is the required-column schema tripwire.
 REQUIRED_COLUMNS = {
     "round",
     "test/loss",

@@ -75,6 +75,7 @@ def write_run(root: Path, group: str, algorithm: str, variant: str = "") -> None
     (hydra_dir / "config.yaml").write_text("seed: 0\n", encoding="utf-8")
     (hydra_dir / "hydra.yaml").write_text("hydra: {}\n", encoding="utf-8")
     (hydra_dir / "overrides.yaml").write_text("[]\n", encoding="utf-8")
+    # Deliberately independent: this fixture must catch schema drift in the auditor.
     fieldnames = [
         "round",
         "test/loss",
