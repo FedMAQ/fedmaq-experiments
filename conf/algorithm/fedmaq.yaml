@@ -28,7 +28,7 @@ formulation: 2
 # Formulation-specific parameters
 gamma1: 0.5      # Alternative 1 & 2 (gradient weight)
 gamma2: 0.5      # Alternative 1 & 2 (dataset size weight)
-lambda_val: 1.0  # Alternative 3 (dataset size modulator strength)
+kappa: 1.0  # Formulation 3 (dataset size modulator strength)
 tau_g: 0.5       # Alternative 4 (gradient norm threshold)
 tau_n: 0.5       # Alternative 4 (dataset size threshold)
 

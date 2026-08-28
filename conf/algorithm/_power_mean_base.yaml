@@ -6,7 +6,7 @@ bit_widths: [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
 c_unit: 512.0
 resource_aware: true
 
-lambda_val: 1.0
+kappa: 1.0
 tau_g: 0.5
 tau_n: 0.5
 

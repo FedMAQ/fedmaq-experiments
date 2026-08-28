@@ -34,7 +34,7 @@ FORMULATION_CONSTANTS: dict[Formulation, tuple[str, ...]] = {
     0: (),
     1: ("gamma1", "gamma2"),
     2: ("gamma1", "gamma2"),
-    3: ("lambda_val",),
+    3: ("kappa",),
     4: ("tau_g", "tau_n"),
     POWER_MEAN_FORMULATION: ("p", "omega"),
 }
@@ -61,7 +61,7 @@ class _QuantParams:
     formulation: Formulation
     gamma1: float
     gamma2: float
-    lambda_val: float
+    kappa: float
     tau_g: float
     tau_n: float
     p: PowerMeanDegree
@@ -96,7 +96,7 @@ class _QuantParams:
             formulation=formulation,
             gamma1=constant("gamma1", 0.5),
             gamma2=constant("gamma2", 0.5),
-            lambda_val=constant("lambda_val", 1.0),
+            kappa=constant("kappa", 1.0),
             tau_g=constant("tau_g", 0.5),
             tau_n=constant("tau_n", 0.5),
             p=_parse_power_mean_degree(
@@ -197,7 +197,7 @@ def compute_fedmaq_q_k_t_details(
     q_max: int,
     gamma1: float = 0.5,
     gamma2: float = 0.5,
-    lambda_val: float = 1.0,
+    kappa: float = 1.0,
     tau_g: float = 0.5,
     tau_n: float = 0.5,
     p: PowerMeanDegree = 0.0,
@@ -231,7 +231,7 @@ def compute_fedmaq_q_k_t_details(
         term = (tilde_g**gamma1) * (tilde_n**gamma2)
         q_hat = q_min + np.round((q_max - q_min) * term)
     elif formulation == 3:
-        modulator = (1.0 + lambda_val * tilde_n) / (1.0 + lambda_val)
+        modulator = (1.0 + kappa * tilde_n) / (1.0 + kappa)
         q_hat = q_min + np.round((q_max - q_min) * tilde_g * modulator)
     elif formulation == 4:
         q_mid = int(np.round((q_max + q_min) / 2.0))
@@ -273,7 +273,7 @@ def compute_fedmaq_q_k_t(
     q_max: int,
     gamma1: float = 0.5,
     gamma2: float = 0.5,
-    lambda_val: float = 1.0,
+    kappa: float = 1.0,
     tau_g: float = 0.5,
     tau_n: float = 0.5,
     p: PowerMeanDegree = 0.0,
@@ -294,7 +294,7 @@ def compute_fedmaq_q_k_t(
         q_max=q_max,
         gamma1=gamma1,
         gamma2=gamma2,
-        lambda_val=lambda_val,
+        kappa=kappa,
         tau_g=tau_g,
         tau_n=tau_n,
         p=p,
@@ -482,7 +482,7 @@ class QuantizationPlanner:
                 q_max=qp.q_max,
                 gamma1=qp.gamma1,
                 gamma2=qp.gamma2,
-                lambda_val=qp.lambda_val,
+                kappa=qp.kappa,
                 tau_g=qp.tau_g,
                 tau_n=qp.tau_n,
                 p=qp.p,

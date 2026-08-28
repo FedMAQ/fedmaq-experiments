@@ -1026,7 +1026,7 @@ def test_fedmaq_strategy_allocation():
             "q_max": 8,
             "c_unit": 2048.0,
             "formulation": 3,
-            "lambda_val": 1.0,
+            "kappa": 1.0,
         },
     }
 
@@ -1158,7 +1158,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
                 "q_max": 8,
                 "c_unit": 2048.0,
                 "formulation": 3,
-                "lambda_val": 1.0,
+                "kappa": 1.0,
                 "temperature": 1.0,
                 "kd_weight": 0.5,
             },
@@ -1246,15 +1246,15 @@ def test_formulation_constants_fail_loud_when_the_formulation_consumes_them():
 
     base = {"q_min": 1, "q_max": 16, "c_unit": 512.0}
 
-    # Formulation 3 reads lambda_val, so a misspelling of it must not survive.
+    # Formulation 3 reads kappa, so a misspelling of it must not survive.
     with pytest.raises(KeyError):
-        _QuantParams.from_cfg({**base, "formulation": 3, "lambda_value": 1.0})
+        _QuantParams.from_cfg({**base, "formulation": 3, "kapa": 1.0})
 
     # ...but tau_g/tau_n are inert under Formulation 3 and may be absent.
-    qp = _QuantParams.from_cfg({**base, "formulation": 3, "lambda_val": 1.0})
-    assert qp.lambda_val == 1.0
+    qp = _QuantParams.from_cfg({**base, "formulation": 3, "kappa": 1.0})
+    assert qp.kappa == 1.0
 
-    # Formulation 1 reads the weights instead, and is indifferent to lambda_val.
+    # Formulation 1 reads the weights instead, and is indifferent to kappa.
     with pytest.raises(KeyError):
         _QuantParams.from_cfg({**base, "formulation": 1, "gamma1": 0.5})
     linear = _QuantParams.from_cfg({**base, "formulation": 1, "gamma1": 0.0, "gamma2": 1.0})
@@ -1263,7 +1263,7 @@ def test_formulation_constants_fail_loud_when_the_formulation_consumes_them():
     # An unrecognized formulation used to resolve to q_min for every client,
     # which is a valid-looking assignment produced by no formulation at all.
     with pytest.raises(ValueError, match="formulation"):
-        _QuantParams.from_cfg({**base, "formulation": 5, "lambda_val": 1.0})
+        _QuantParams.from_cfg({**base, "formulation": 5, "kappa": 1.0})
     with pytest.raises(ValueError, match="formulation"):
         compute_fedmaq_q_k_t(
             c_k=8192.0,
@@ -1458,15 +1458,15 @@ def test_ablation_leave_one_out_arms():
     # data term drops out and q depends on the gradient norm alone. Two clients
     # differing only in dataset size must then receive identical bit-widths.
     kw = dict(c_k=16384.0, c_unit=2048.0, g_k=0.5, g_max=1.0, n_max=200, q_min=2, q_max=8)
-    q_small = compute_fedmaq_q_k_t(n_k=10, formulation=3, lambda_val=0.0, **kw)
-    q_large = compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=0.0, **kw)
+    q_small = compute_fedmaq_q_k_t(n_k=10, formulation=3, kappa=0.0, **kw)
+    q_large = compute_fedmaq_q_k_t(n_k=200, formulation=3, kappa=0.0, **kw)
     assert q_small == q_large
 
     # Sanity: with the data term restored (kappa=1) those same two clients diverge,
     # confirming the equality above is the removal and not a degenerate setup.
     assert compute_fedmaq_q_k_t(
-        n_k=10, formulation=3, lambda_val=1.0, **kw
-    ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, lambda_val=1.0, **kw)
+        n_k=10, formulation=3, kappa=1.0, **kw
+    ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, kappa=1.0, **kw)
 
 
 def test_formulation_2_expresses_both_single_signal_removals_symmetrically():
@@ -1666,7 +1666,7 @@ def test_compute_fedmaq_q_k_t():
         formulation=3,
         q_min=2,
         q_max=8,
-        lambda_val=1.0,
+        kappa=1.0,
     )
     assert q_mod == 4
 

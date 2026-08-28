@@ -75,19 +75,18 @@ The two-signal aggregate $M_p(\tilde g,\tilde n;\omega) = (\omega\tilde g^p + (1
 _Avoid_: treating $p$ as a second formulation identifier.
 
 **Formulation constants**:
-The tunable constants inside Formulations 1-4. **The manuscript's Greek symbols are canonical**; the config keys currently differ and are pending a rename:
+The tunable constants inside Formulations 1-4. **The manuscript's Greek symbols are canonical**; the config keys were pending a rename tracked in [Issue #20](https://github.com/FedMAQ/fedmaq-experiments/issues/20):
 
-| Canonical | Config key (pending rename) | Role |
+| Canonical | Config key | Role |
 |---|---|---|
-| $\omega_1$, $\omega_2$ | `gamma1`, `gamma2` | Formulation 1 & 2 signal weights |
-| $\kappa$ | `lambda_val` | Formulation 3 data modulator |
+| $\kappa$ | `kappa` | Formulation 3 data modulator — renamed from `lambda_val` via #20 |
 | $\tau_g$, $\tau_n$ | `tau_g`, `tau_n` | Formulation 4 thresholds (already aligned) |
 
-Values agree on both sides ($\omega_1 = \omega_2 = 0.5$, $\kappa = 1.0$, $\tau_g = \tau_n = 0.5$); only the names differ, so nothing is numerically wrong today.
+Formulations 1 & 2's `gamma1`/`gamma2` no longer exist — #34 replaced them with the power-mean family's single `omega`, rather than renaming them to `omega1`/`omega2`; see the Power-mean family entry above.
 
-Decided 2026-07-25 by collision-checking every candidate symbol against all 40 `fedmaq-literature/kg/papers/*.md` nodes. $\gamma$ was ruled out: it appears 29 times in the corpus, including as FedProx's inexactness parameter $\gamma_k^t$, and FedProx is one of this thesis's own baselines. $\lambda$ was ruled out at 18 occurrences (AdaDQ-KD's KD loss weight, AdaGQ's step sizes), which is also why the config key carries the awkward `_val` suffix. $\kappa$ has zero corpus occurrences; $\omega$ has two, neither in a compared method. **Do not "fix" the manuscript toward the config keys** — that reintroduces the FedProx collision.
+Values agree on both sides ($\kappa = 1.0$, $\tau_g = \tau_n = 0.5$); nothing is numerically different, only the name changed.
 
-Pending rename tracked in [Issue #20](https://github.com/FedMAQ/fedmaq-experiments/issues/20), not here — this is pending work, and pending work lives in Issues per the authority map above.
+Decided 2026-07-25 by collision-checking every candidate symbol against all 40 `fedmaq-literature/kg/papers/*.md` nodes. $\gamma$ was ruled out: it appears 29 times in the corpus, including as FedProx's inexactness parameter $\gamma_k^t$, and FedProx is one of this thesis's own baselines. $\lambda$ was ruled out at 18 occurrences (AdaDQ-KD's KD loss weight, AdaGQ's step sizes), which is also why the config key used to carry the awkward `_val` suffix. $\kappa$ has zero corpus occurrences; $\omega$ has two, neither in a compared method. **Do not "fix" the manuscript toward the old config keys** — that reintroduces the FedProx collision.
 
 **Bit-width**:
 A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32\}$ — never an arbitrary continuous integer.

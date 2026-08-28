@@ -57,19 +57,19 @@ runs:
     variant: f3-kappa-0.5
     overrides:
       - algorithm.formulation=3
-      - algorithm.lambda_val=0.5
+      - algorithm.kappa=0.5
   - alg: power_mean
     label: gradient-primary-kappa-1.0
     variant: f3-kappa-1.0
     overrides:
       - algorithm.formulation=3
-      - algorithm.lambda_val=1.0
+      - algorithm.kappa=1.0
   - alg: power_mean
     label: gradient-primary-kappa-2.0
     variant: f3-kappa-2.0
     overrides:
       - algorithm.formulation=3
-      - algorithm.lambda_val=2.0
+      - algorithm.kappa=2.0
   - alg: power_mean
     label: threshold-tied-0.3
     variant: f4-threshold-0.3
