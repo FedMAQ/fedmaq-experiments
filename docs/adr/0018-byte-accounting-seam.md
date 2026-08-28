@@ -23,6 +23,23 @@ This is an accounting change across every ordinary-download arm and a model-outp
 change for none. It invalidates prior communication-byte goldens and requires a
 fresh GPU-host capture and compare at the exact pre-registration commit.
 
+### Same-day follow-up — FedDistill's download override
+
+That sweep enumerated two download paths, the default hook and FedKD, and missed
+a third. `strategy_hooks/feddistill.py` overrides `download_size_bytes` and still
+returned raw `nbytes` for both the weight broadcast and the global logit matrix,
+even though FedDistill's *upload* leg already measured the same logit payload
+through `measure_bytes`. The override now delegates the weight leg to the default
+path and measures the broadcast logit payload as its own call — `measure_bytes`
+is not additive over concatenation, so the two legs are measured separately and
+summed — appending that payload to a fresh `last_download_payloads` list so the
+replay identity holds for this arm too. On CIFAR-10/MobileNetV2GN this moves
+FedDistill's per-round download leg from 8,947,128 raw bytes to 8,176,145
+measured: the old figure over-charged a baseline by 9.4%, in FedMAQ's favor.
+FedDistill falls under the same fresh-capture requirement as the arms above.
+The only raw-`nbytes` download paths left are `cfd.py` and `fedmd.py`, both
+dropped baselines (ADR-0005) and out of scope here as they were originally.
+
 ## Context
 
 Byte accounting had grown four independent implementations, not two as first scoped: `_quantize_deltas`'s `ceil(size*bits/8)+4` and `postprocess.py`'s `len(zlib.compress(payload))+4` were the two named in Issue #25's original framing, but FedDistill carried a fifth, undocumented path of its own. Every arm computing its own transmitted-byte arithmetic meant AC1 ("no per-arm arithmetic outside one function") was failing silently — a new baseline could add a sixth path and nothing would flag it.

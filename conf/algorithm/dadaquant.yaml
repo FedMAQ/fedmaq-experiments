@@ -27,9 +27,14 @@ q_max: 127
 
 # Hoenig et al. (2022) additionally specify difference coding, 0-run-length
 # encoding and Elias omega coding as part of DAdaQuant's own transmission
-# pipeline. This is not reproduced: DAdaQuant's transmitted bytes are measured
-# through the shared zlib-compressed transport (src/fedmaq/baselines/transport.py)
-# every arm uses, not through that paper-specific scheme. Manuscript §4.3.2.
+# pipeline. Difference coding is structural -- every arm quantizes parameter
+# deltas. The other two are implemented in src/fedmaq/baselines/dadaquant_coder.py
+# and reported as a DAdaQuant-only SECONDARY axis
+# (communication/round_secondary_bytes, ADR-0020). The PRIMARY axis remains the
+# shared zlib-compressed transport every arm is measured through
+# (src/fedmaq/baselines/transport.py, ADR-0018), so the headline comparison
+# isolates compression policy rather than transport engineering.
+# Manuscript §4.3.2.
 
 # Post-processing pipeline (§4.3, FedMAQ-only) — not applicable here.
 post_process: false

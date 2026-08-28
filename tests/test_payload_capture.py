@@ -73,6 +73,34 @@ def test_default_download_payloads_use_float32_and_shared_transport():
     assert byte_size == measure_bytes(expected_payload)
 
 
+def test_feddistill_download_payloads_reproduce_byte_size_in_both_rounds():
+    """FedDistill charges both download legs through the shared seam (ADR-0018).
+
+    Round 1 has no consensus matrix, so only the weight leg exists; the logit
+    leg appears from round 2 and is measured as its own payload rather than
+    concatenated, because ``measure_bytes`` is not additive over concatenation.
+    """
+    from fedmaq.core.client_hooks.feddistill import logits_to_bytes
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    hook = FedDistillHook({"dataset": {"num_classes": 3}})
+    parameters = [np.arange(6, dtype=np.float32).reshape(2, 3)]
+
+    first = hook.download_size_bytes(None, parameters)
+    assert sum(measure_bytes(p) for p in hook.last_download_payloads) == first
+
+    hook.global_logits = np.full((3, 3), 0.25, dtype=np.float32)
+    second = hook.download_size_bytes(None, parameters)
+    logit_payload = logits_to_bytes(hook.global_logits)
+
+    assert hook.last_download_payloads[-1] == logit_payload
+    assert sum(measure_bytes(p) for p in hook.last_download_payloads) == second
+    assert second == first + measure_bytes(logit_payload)
+
+    # The payload list is per-instance, not the shared class-level default.
+    assert FedDistillHook({"dataset": {"num_classes": 3}}).last_download_payloads == []
+
+
 def test_fedmaq_postprocess_last_payloads_reproduce_byte_size():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32), np.zeros((3,), dtype=np.float32)]
     _assert_payloads_reproduce_byte_size(
@@ -286,9 +314,7 @@ def test_record_fit_round_persists_download_payloads_and_replays_logged_total(
     strategy, tm = _make_strategy(tmp_path, monkeypatch, log_payloads=True)
     upload_payloads = [b"client update"]
     fit_res = _fit_res_with_payloads(upload_payloads)
-    aggregated = ndarrays_to_parameters(
-        [np.array([1.0, -2.0, 3.0], dtype=np.float32)]
-    )
+    aggregated = ndarrays_to_parameters([np.array([1.0, -2.0, 3.0], dtype=np.float32)])
 
     _, round_total = tm.record_fit_round(
         strategy,

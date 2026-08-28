@@ -78,11 +78,20 @@ class FedDistillHook(StrategyHook):
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
     ) -> int:
-        # FedAvg model weights plus the broadcast global logit matrix (once present).
-        base = sum(int(arr.nbytes) for arr in ndarrays)
+        # FedAvg weights through the shared seam, plus the broadcast global logit
+        # matrix (once present) measured as the payload configure_fit actually
+        # sends. measure_bytes is not additive over concatenation (ADR-0018), so
+        # the logit payload is measured separately and summed, and appended to a
+        # fresh payload list so a replay of last_download_payloads reproduces
+        # this total.
+        from fedmaq.baselines.transport import measure_bytes
+
+        total = super().download_size_bytes(strategy, ndarrays)
         if self.global_logits is not None:
-            base += int(self.global_logits.astype(np.float32).nbytes)
-        return base
+            logit_payload = logits_to_bytes(self.global_logits)
+            self.last_download_payloads = [*self.last_download_payloads, logit_payload]
+            total += measure_bytes(logit_payload)
+        return total
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         return {}
