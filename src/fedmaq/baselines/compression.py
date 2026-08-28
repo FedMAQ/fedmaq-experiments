@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from fedmaq.baselines.transport import UploadReport, measure_bytes
+from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook
 
 # Explicit Union type for compress_tensor return value.
@@ -114,8 +114,6 @@ class FedKDCompressionHook(CompressionHook):
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """SVD-compress ``deltas`` and return the complete upload-byte report."""
         reconstructed_deltas = []
-        total_bytes = 0
-        total_payload_bytes = 0
         payloads: list[bytes] = []
 
         for d in deltas:
@@ -126,8 +124,6 @@ class FedKDCompressionHook(CompressionHook):
             orig_shape = d.shape
             compressed = compress_tensor(d, self.energy, self.min_rank_frac)
             payload = svd_payload(compressed)
-            total_bytes += measure_bytes(payload)
-            total_payload_bytes += len(payload)
             payloads.append(payload)
 
             if len(compressed) == 3:
@@ -138,9 +134,4 @@ class FedKDCompressionHook(CompressionHook):
                 # Uncompressed pass-through
                 reconstructed_deltas.append(d)
 
-        return reconstructed_deltas, UploadReport(
-            measured_bytes=total_bytes,
-            payload_bytes=total_payload_bytes,
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        return reconstructed_deltas, UploadReport.from_payloads(payloads)

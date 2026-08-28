@@ -21,7 +21,7 @@ from fedmaq.baselines.compression import (
     decompress_tensor,
     svd_payload,
 )
-from fedmaq.baselines.transport import UploadReport, measure_bytes
+from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -68,8 +68,6 @@ class FedKDHook(StrategyHook):
     ) -> UploadReport:
         """Return the SVD-compressed download report at the current energy."""
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
-        model_size_bytes = 0
-        payload_bytes = 0
         payloads: list[bytes] = []
         for arr, ref in zip(ndarrays, reference, strict=True):
             if arr.size == 0:
@@ -77,15 +75,8 @@ class FedKDHook(StrategyHook):
             delta = arr - ref
             compressed = compress_tensor(delta, self._current_energy, self._min_rank_frac)
             payload = svd_payload(compressed)
-            model_size_bytes += measure_bytes(payload)
-            payload_bytes += len(payload)
             payloads.append(payload)
-        self._last_download_report = UploadReport(
-            measured_bytes=model_size_bytes,
-            payload_bytes=payload_bytes,
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        self._last_download_report = UploadReport.from_payloads(payloads)
         return self._last_download_report
 
     def compute_speed_scale(self) -> float:

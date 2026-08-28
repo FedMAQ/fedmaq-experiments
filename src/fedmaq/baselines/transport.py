@@ -42,6 +42,19 @@ class UploadReport:
     secondary_bytes: int | None
     payloads: tuple[bytes, ...]
 
+    @classmethod
+    def from_payloads(
+        cls, payloads: Sequence[bytes], secondary_bytes: int | None = None
+    ) -> "UploadReport":
+        """Build an upload report from the payloads measured at each boundary."""
+        payload_tuple = tuple(payloads)
+        return cls(
+            measured_bytes=sum(measure_bytes(payload) for payload in payload_tuple),
+            payload_bytes=sum(len(payload) for payload in payload_tuple),
+            secondary_bytes=secondary_bytes,
+            payloads=payload_tuple,
+        )
+
 
 def measure_bytes(payload: bytes) -> int:
     """Return the transmitted size of ``payload`` under the held-constant transport.

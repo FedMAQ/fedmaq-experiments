@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from flwr.common import Parameters, Scalar
 from flwr.common.typing import FitIns, FitRes
@@ -42,6 +42,3 @@ class PassthroughHook(StrategyHook):
         metrics: dict[str, Scalar],
     ) -> tuple[Parameters | None, dict[str, Scalar]]:
         return aggregated_parameters, metrics
-
-    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
-        return {}

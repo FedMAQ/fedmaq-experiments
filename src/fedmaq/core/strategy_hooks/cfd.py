@@ -310,6 +310,3 @@ class CFDHook(StrategyHook):
             num_teachers=1,
             server_compute_speed=resolve_server_compute_speed(self._config),
         )
-
-    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
-        return {}

@@ -87,16 +87,10 @@ class CompressionHook:
         """
         # Deferred: fedmaq.baselines imports this module (CompressionHook), so
         # a top-level import here would cycle.
-        from fedmaq.baselines.transport import UploadReport, measure_bytes
+        from fedmaq.baselines.transport import UploadReport
 
         payloads = [d.astype(np.float32).tobytes() for d in deltas if d.size]
-        byte_size = sum(measure_bytes(p) for p in payloads)
-        return deltas, UploadReport(
-            measured_bytes=byte_size,
-            payload_bytes=sum(len(p) for p in payloads),
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        return deltas, UploadReport.from_payloads(payloads)
 
 
 def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:

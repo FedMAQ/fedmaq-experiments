@@ -85,19 +85,14 @@ class FedDistillHook(StrategyHook):
         # the logit payload is measured separately and summed, and appended to a
         # fresh payload tuple so replaying the returned report reproduces this
         # total.
-        from fedmaq.baselines.transport import UploadReport, measure_bytes
+        from fedmaq.baselines.transport import UploadReport
 
         weight_report = super().download_size_bytes(strategy, ndarrays)
         if self.global_logits is None:
             return weight_report
 
         logit_payload = logits_to_bytes(self.global_logits)
-        return UploadReport(
-            measured_bytes=weight_report.measured_bytes + measure_bytes(logit_payload),
-            payload_bytes=weight_report.payload_bytes + len(logit_payload),
+        return UploadReport.from_payloads(
+            (*weight_report.payloads, logit_payload),
             secondary_bytes=weight_report.secondary_bytes,
-            payloads=(*weight_report.payloads, logit_payload),
         )
-
-    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
-        return {}

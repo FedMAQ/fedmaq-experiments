@@ -5,7 +5,7 @@ from collections.abc import Callable
 import numpy as np
 
 from fedmaq.baselines.dadaquant_coder import dadaquant_pack
-from fedmaq.baselines.transport import UploadReport, measure_bytes
+from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook
 
 
@@ -32,6 +32,11 @@ def _require_rng(rng: np.random.Generator | None, hook_name: str) -> np.random.G
 def _codes_to_float(codes: np.ndarray, scale: float, levels: int) -> np.ndarray:
     """Map integer-valued codes in [-levels, levels] back to float via ``scale``."""
     return (codes / levels) * scale
+
+
+def symmetric_levels(q: int) -> int:
+    """Return the positive levels for a symmetric ``q``-bit quantizer."""
+    return max(1, (1 << (q - 1)) - 1)
 
 
 def _serialize_codes(codes: np.ndarray, scale: float) -> bytes:
@@ -67,7 +72,7 @@ def _quantize_deltas(
     scale_fn: Callable[[np.ndarray], float],
     quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
     on_codes: Callable[[np.ndarray, float], None] | None = None,
-) -> tuple[list[np.ndarray], int, int, list[bytes]]:
+) -> tuple[list[np.ndarray], list[bytes]]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
     Iterates ``deltas``, skipping empty tensors (free: nothing is transmitted)
@@ -75,8 +80,7 @@ def _quantize_deltas(
     ``quantize_elem(d, scale)``, which returns ``(dequantized, codes)``.
     ``scale_fn`` is a per-call-site choice (l2 vs l∞ normalization, #24) rather
     than hardcoded here. All-zero tensors (scale 0) skip quantization but still
-    route their (all-zero) codes through the same measured transport, so no
-    per-arm byte arithmetic survives outside it.
+    produce an all-zero payload for the shared upload report.
 
     ``on_codes``, if given, is called with each non-empty tensor's
     ``(codes, scale)`` right after they're determined -- both branches above,
@@ -85,16 +89,11 @@ def _quantize_deltas(
     coder) without folding that axis into this shared, arm-agnostic skeleton
     or duplicating its loop.
 
-    Returns ``(quantized_deltas, measured_bytes, payload_bytes, payloads)``.
-    ``payload_bytes`` is the pre-encoding payload size (codes + scale, before
-    ``measure_bytes``); ``payloads`` is the same data as the actual per-tensor
-    byte strings, one per ``measure_bytes`` call above, so a future encoder
-    change can be re-scored against the exact original payloads offline,
-    not just their summed length (see ``TelemetryManager.record_fit_round``).
+    Returns ``(quantized_deltas, payloads)``. The payloads are the actual
+    per-tensor byte strings, one per measurement boundary, so a future encoder
+    change can be re-scored against the exact original payloads offline.
     """
     quantized_deltas: list[np.ndarray] = []
-    total_bytes = 0
-    total_payload_bytes = 0
     payloads: list[bytes] = []
 
     for d in deltas:
@@ -114,11 +113,9 @@ def _quantize_deltas(
             on_codes(codes, scale)
 
         payload = _serialize_codes(codes, scale)
-        total_bytes += measure_bytes(payload)
-        total_payload_bytes += len(payload)
         payloads.append(payload)
 
-    return quantized_deltas, total_bytes, total_payload_bytes, payloads
+    return quantized_deltas, payloads
 
 
 class FedPAQCompressionHook(CompressionHook):
@@ -155,7 +152,7 @@ class FedPAQCompressionHook(CompressionHook):
         levels and a 0/0 NaN on dequantization) is well-defined; ``compress``
         additionally special-cases ``q<=1`` as pure sign quantization.
         """
-        return max(1, (1 << (self.q - 1)) - 1)
+        return symmetric_levels(self.q)
 
     def _scale(self, d: np.ndarray) -> float:
         if self.q <= 1:
@@ -177,15 +174,8 @@ class FedPAQCompressionHook(CompressionHook):
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Quantize ``deltas`` and return the complete upload-byte report."""
-        quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
-            deltas, self._scale, self._quantize_elem
-        )
-        return quantized_deltas, UploadReport(
-            measured_bytes=total_bytes,
-            payload_bytes=payload_bytes,
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        quantized_deltas, payloads = _quantize_deltas(deltas, self._scale, self._quantize_elem)
+        return quantized_deltas, UploadReport.from_payloads(payloads)
 
 
 class DAdaQuantCompressionHook(CompressionHook):
@@ -247,12 +237,9 @@ class DAdaQuantCompressionHook(CompressionHook):
             # quantization levels, not a single per-tensor normalization float.
             secondary_total += len(dadaquant_pack(codes)) + 4
 
-        quantized_deltas, total_bytes, payload_bytes, payloads = _quantize_deltas(
+        quantized_deltas, payloads = _quantize_deltas(
             deltas, self._scale, self._quantize_elem, on_codes=_accumulate_secondary
         )
-        return quantized_deltas, UploadReport(
-            measured_bytes=total_bytes,
-            payload_bytes=payload_bytes,
-            secondary_bytes=secondary_total,
-            payloads=tuple(payloads),
+        return quantized_deltas, UploadReport.from_payloads(
+            payloads, secondary_bytes=secondary_total
         )

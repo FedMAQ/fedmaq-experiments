@@ -5,7 +5,7 @@ import zlib
 
 import numpy as np
 
-from fedmaq.baselines.transport import measure_bytes, pack_payloads, unpack_payloads
+from fedmaq.baselines.transport import UploadReport, measure_bytes, pack_payloads, unpack_payloads
 
 
 def test_measure_bytes_matches_zlib_compress_length():
@@ -36,6 +36,17 @@ def test_pack_unpack_payloads_roundtrip():
 
 def test_pack_unpack_payloads_empty_list():
     assert unpack_payloads(pack_payloads([])) == []
+
+
+def test_upload_report_from_payloads_preserves_measurement_boundaries():
+    payloads = (b"A" * 20, b"B" * 30)
+
+    report = UploadReport.from_payloads(payloads, secondary_bytes=17)
+
+    assert report.payloads == payloads
+    assert report.payload_bytes == sum(map(len, payloads))
+    assert report.measured_bytes == sum(map(measure_bytes, payloads))
+    assert report.secondary_bytes == 17
 
 
 def test_summed_measure_bytes_differs_from_measuring_the_concatenation():

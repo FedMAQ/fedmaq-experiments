@@ -150,7 +150,7 @@ class FedDistillFit(ClientFitStrategy):
 
         # Deferred: fedmaq.baselines imports fedmaq.core.client, which imports
         # this module's package — a top-level import here would cycle.
-        from fedmaq.baselines.transport import UploadReport, measure_bytes
+        from fedmaq.baselines.transport import UploadReport
 
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
@@ -159,12 +159,9 @@ class FedDistillFit(ClientFitStrategy):
         # arm uses (identity by default) rather than a bespoke nbytes sum here —
         # this hook previously bypassed compressor_hook entirely (#25).
         _, weight_report = client.compressor_hook.compress(updated_params)
-        logit_measured_bytes = measure_bytes(logit_bytes)
-        report = UploadReport(
-            measured_bytes=weight_report.measured_bytes + logit_measured_bytes,
-            payload_bytes=weight_report.payload_bytes + len(logit_bytes),
+        report = UploadReport.from_payloads(
+            (*weight_report.payloads, logit_bytes),
             secondary_bytes=weight_report.secondary_bytes,
-            payloads=(*weight_report.payloads, logit_bytes),
         )
 
         avg_total_loss = result.avg_loss
@@ -184,12 +181,8 @@ class FedDistillFit(ClientFitStrategy):
             "distill_loss": avg_distill_loss,
             "client_logits": logit_bytes,
         }
-        # Weight-leg payloads plus the logit-leg payload, in the same order as
-        # the measure_bytes calls above (compressor_hook.compress, then the
-        # logit-side measure_bytes) so replay preserves call boundaries.
-        attach_payloads_if_enabled(
-            client, fit_metrics, report.payloads
-        )
+        # Preserve the compressor's per-tensor boundaries before the logit leg.
+        attach_payloads_if_enabled(client, fit_metrics, report.payloads)
 
         return (
             updated_params,

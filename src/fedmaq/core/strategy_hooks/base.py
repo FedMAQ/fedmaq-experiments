@@ -124,7 +124,6 @@ class StrategyHook(ABC):
         """
         return []
 
-
     def download_size_bytes(
         self,
         strategy: TelemetryFedAvg,
@@ -138,15 +137,10 @@ class StrategyHook(ABC):
         """
         # Deferred to avoid coupling strategy-hook imports to the baseline
         # registry during module initialization.
-        from fedmaq.baselines.transport import UploadReport, measure_bytes
+        from fedmaq.baselines.transport import UploadReport
 
         payloads = [np.asarray(arr, dtype=np.float32).tobytes() for arr in ndarrays if arr.size]
-        return UploadReport(
-            measured_bytes=sum(measure_bytes(payload) for payload in payloads),
-            payload_bytes=sum(len(payload) for payload in payloads),
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        return UploadReport.from_payloads(payloads)
 
     def compute_speed_scale(self) -> float:
         """Multiplicative factor on client compute speed for local-training time.

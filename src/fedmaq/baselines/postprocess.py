@@ -19,8 +19,9 @@ from fedmaq.baselines.quantization import (
     _require_rng,
     _serialize_codes,
     _stochastic_round,
+    symmetric_levels,
 )
-from fedmaq.baselines.transport import UploadReport, measure_bytes
+from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook
 
 logger = logging.getLogger(__name__)
@@ -64,8 +65,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
 
     @property
     def levels(self) -> int:
-        """Number of positive quantization levels for symmetric bounds (see FedPAQ)."""
-        return max(1, (1 << (self.q - 1)) - 1)
+        return symmetric_levels(self.q)
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Apply error feedback and diff coding, then return the upload report."""
@@ -79,8 +79,6 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         out_deltas: list[np.ndarray] = []
         new_residuals: list[np.ndarray] = []
         new_codes: list[np.ndarray] = []
-        total_bytes = 0
-        total_payload_bytes = 0
         payloads: list[bytes] = []
 
         for i, d in enumerate(deltas):
@@ -114,8 +112,6 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 new_residuals.append(np.zeros_like(d_fb, dtype=np.float32))
                 new_codes.append(zero_codes)
                 zero_payload = _serialize_codes(zero_codes, scale)
-                total_bytes += measure_bytes(zero_payload)
-                total_payload_bytes += len(zero_payload)
                 payloads.append(zero_payload)
                 continue
 
@@ -154,16 +150,9 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 diffed = codes
 
             payload = _serialize_codes(diffed, scale)
-            total_bytes += measure_bytes(payload)
-            total_payload_bytes += len(payload)
             payloads.append(payload)
 
         self._state[_RESIDUAL_KEY] = ArrayRecord(numpy_ndarrays=new_residuals)
         self._state[_PREV_CODES_KEY] = ArrayRecord(numpy_ndarrays=new_codes)
 
-        return out_deltas, UploadReport(
-            measured_bytes=total_bytes,
-            payload_bytes=total_payload_bytes,
-            secondary_bytes=None,
-            payloads=tuple(payloads),
-        )
+        return out_deltas, UploadReport.from_payloads(payloads)

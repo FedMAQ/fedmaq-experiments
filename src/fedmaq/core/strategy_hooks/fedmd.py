@@ -79,6 +79,3 @@ class FedMDHook(StrategyHook):
         metrics: dict[str, Scalar],
     ) -> tuple[Parameters | None, dict[str, Scalar]]:
         return aggregated_parameters, metrics
-
-    def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
-        return {}
