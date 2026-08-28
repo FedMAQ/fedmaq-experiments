@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from flwr.common import Parameters, Scalar
 from flwr.common.typing import FitIns, FitRes
 from flwr.server.client_manager import ClientManager
@@ -34,6 +35,11 @@ class StrategyHook(ABC):
     New baselines (FedDistill, CFD) add a single hook file and register in
     ``__init__.py`` — the strategy itself stays untouched.
     """
+
+    #: Exact payloads from the most recent server-to-client measurement, one
+    #: byte string per ``measure_bytes`` call. Telemetry may persist these for
+    #: offline replay when ``experiment.telemetry.log_payloads`` is enabled.
+    last_download_payloads: list[bytes] = []
 
     def pre_configure_fit(
         self,
@@ -128,12 +134,19 @@ class StrategyHook(ABC):
         strategy: TelemetryFedAvg,
         ndarrays: list[Any],
     ) -> int:
-        """Transmitted size of the server->client model broadcast, in bytes.
+        """Measured size of the server-to-client model broadcast, in bytes.
 
-        Default: the raw float32 size. FedKD overrides this with its SVD-compressed
-        download size.
+        The default identity path serializes each non-empty tensor as float32
+        and routes each payload through the same held-constant transport used
+        for identity uploads. FedKD overrides this with its SVD payloads.
         """
-        return sum(int(arr.nbytes) for arr in ndarrays)
+        # Deferred to avoid coupling strategy-hook imports to the baseline
+        # registry during module initialization.
+        from fedmaq.baselines.transport import measure_bytes
+
+        payloads = [np.asarray(arr, dtype=np.float32).tobytes() for arr in ndarrays if arr.size]
+        self.last_download_payloads = payloads
+        return sum(measure_bytes(payload) for payload in payloads)
 
     def compute_speed_scale(self) -> float:
         """Multiplicative factor on client compute speed for local-training time.

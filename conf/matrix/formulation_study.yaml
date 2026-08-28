@@ -1,5 +1,11 @@
-# Formulation study, manuscript §4.3.6. The five candidate multi-adaptive
-# quantization formulations on CIFAR-10 at both skews, three seeds: 30 runs.
+# SUPERSEDED V1-PROVISIONAL MATRIX — DO NOT DISPATCH FOR THE REPLACEMENT CAMPAIGN.
+# The current formulation design is `power_mean_design.yaml` (84 Stage-1a cells)
+# followed by a selected-p omega matrix (12 cells) materialized only after Stage 1a.
+# This file remains solely to reproduce the historical 30-run evidence and its
+# amendment chronology.
+#
+# Historical formulation study, manuscript §4.3.6. The five candidate
+# multi-adaptive quantization formulations on CIFAR-10 at both skews, three seeds.
 #
 # WHY THIS IS A MATRIX AND NOT A RAW --multirun
 #
@@ -24,7 +30,7 @@
 # carry its surviving refinement layer, and Configuration 4's anchor only anchors
 # if it carries the same layer as the arm.
 #
-# ALSO BEFORE DISPATCH: the benchmark grid's six CIFAR-10 `fedavg` rows (Stage 1c,
+# HISTORICAL V1 ORDER ONLY: the benchmark grid's six CIFAR-10 `fedavg` rows (Stage 1c,
 # `run_matrix.py --matrix benchmark_grid --only fedavg`). The winner rule here is
 # not scale-free -- every candidate is judged against a floor of 90% of
 # uncompressed FedAvg's final accuracy at its own skew, and analysis.py raises

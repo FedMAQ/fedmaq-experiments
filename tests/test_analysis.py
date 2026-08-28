@@ -22,6 +22,7 @@ from analysis import (
     accuracy_at_budget,
     accuracy_at_round,
     baseline_tuning_margin,
+    baseline_tuning_specs,
     build_ablation_table,
     closure_certificate,
     compare_to_baselines,
@@ -1899,7 +1900,7 @@ def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
     cell = report["baselines"]["fedmaq"]
 
     assert cell["knob"] == "q_max"
-    assert cell["paper_default_variant"] == "qmax16"
+    assert cell["paper_default_variant"] is None
     assert "no source-paper default" in cell["paper_default_note"]
     assert cell["shipped_adopted_variant"] == "qmax16"
     assert cell["adopted_variant"] == "qmax32"
@@ -1910,6 +1911,17 @@ def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
     paths = write_baseline_tuning_plots(report, tmp_path / "plots")
     assert paths == [tmp_path / "plots" / "fedmaq_q_max.png"]
     assert paths[0].is_file()
+
+
+def test_wide_baseline_tuning_metadata_does_not_invent_source_defaults():
+    specs = baseline_tuning_specs(BASELINE_TUNING_WIDE_GROUP)
+
+    assert specs["fedpaq"]["paper_default_variant"] is None
+    assert "level counts" in specs["fedpaq"]["paper_default_note"]
+    assert specs["fedkd"]["paper_default_variant"] is None
+    assert "does not report numeric defaults" in specs["fedkd"]["paper_default_note"]
+    assert specs["fedmaq"]["paper_default_variant"] is None
+    assert "no source-paper default" in specs["fedmaq"]["paper_default_note"]
 
 
 def test_wide_baseline_tuning_report_withholds_partial_verdict(tmp_path):

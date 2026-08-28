@@ -848,15 +848,12 @@ def load_round_metrics(csv_path: Path) -> pd.DataFrame:
 
 
 def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> float:
-    """90% of the mean final-round (R=100) top-1 accuracy of the uncompressed FedAvg
-    reference, averaged across FedAvg's 3 seeds for this (dataset, alpha).
+    """Legacy v1 floor: 90% of mean final-round uncompressed FedAvg accuracy.
 
-    The reference is the confirmatory grid's own FedAvg rows -- chapter_4.tex:312
-    defines the floor as "reusing the FedAvg runs already present in the benchmark
-    grid", and pinning the group here is what makes that sentence true of the code
-    rather than merely of the intent. Those six CIFAR-10 rows are dispatched ahead
-    of the rest of the grid (docs/agents/execution-model.md Stage 1c) precisely so this function
-    has something to read when the formulation study needs it.
+    The replacement power-mean selector does not use this floor; it ranks Stage 1a
+    at the minimum common cumulative-byte budget. This function remains only to
+    reproduce the superseded v1-provisional analysis, where the reference is the
+    confirmatory grid's own FedAvg rows.
     """
     fedavg_runs = [
         r
@@ -870,9 +867,8 @@ def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> f
         raise ValueError(
             f"No FedAvg reference runs found in experiment_group={GRID_GROUP!r} for "
             f"dataset={dataset}, alpha={alpha}. The accuracy floor is defined against "
-            f"the grid's uncompressed control (chapter_4.tex:312). If the formulation "
-            f"study has run and this fails, Stage 1c was skipped: dispatch "
-            f"`run_matrix.py --matrix benchmark_grid --only fedavg` first."
+            f"the grid's uncompressed control. This is a legacy-v1 analysis input, "
+            f"not authorization to dispatch replacement-grid rows early."
         )
     final_accs = [load_round_metrics(r.csv_path)["test/accuracy"].iloc[-1] for r in fedavg_runs]
     return 0.9 * (sum(final_accs) / len(final_accs))
@@ -1857,12 +1853,12 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], frozen_formulation: int
 def fedavg_at_fedmaq_budget(
     runs: list[RunRecord], formulation: int, dataset: str = "cifar10"
 ) -> dict:
-    """What the uncompressed control reaches on the frozen formulation's byte budget.
+    """Legacy-v1 preview of FedAvg at a provisional FedMAQ byte budget.
 
-    The single number chapters 5 and 6 are framed around, available before the
-    177-run grid finishes because both sides already exist: the formulation
-    study's FedMAQ runs (Stage 2) and the grid's CIFAR-10 FedAvg rows, dispatched
-    early at Stage 1c so the accuracy floor had something to read.
+    Both sides exist only in the historical bundle: the old formulation-study
+    FedMAQ runs and the v1 grid's early FedAvg rows. The replacement campaign does
+    not dispatch those rows before its governing tag and does not use this preview
+    as a selection input.
 
     It is a preview of :func:`compare_to_baselines_iso_byte`, not a substitute
     for it, and it is conservative in a knowable direction: FedMAQ's side is the
@@ -2331,8 +2327,7 @@ def main() -> None:
         print(f"Wrote freeze resolution to {args.freeze_output}")
         print(f"  rule={freeze['rule']}  frozen_formulation={frozen_formulation}")
 
-    # The number chapters 5 and 6 are framed around; available before the grid
-    # finishes, since Stage 1c dispatched the FedAvg rows early.
+    # Historical-v1 preview only; replacement reporting waits for the tagged grid.
     if frozen_formulation is not None:
         preview = fedavg_at_fedmaq_budget(runs, frozen_formulation)
         with open(args.fedavg_budget_output, "w", encoding="utf-8") as f:

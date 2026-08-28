@@ -169,9 +169,12 @@ non-hit. Only a full read of the surface catches this class — which is why a s
 clean bill never licenses skipping it.
 
 **Accuracy-vs-cumulative-MB curve**:
-The **primary** communication-efficiency comparison. No free parameters. Mandated for
-every run by the evaluation-metrics rule, and the axis on which every selection verdict
-is read.
+The **primary** communication-efficiency comparison. Its MB axis is aggregate
+bidirectional client--server traffic: each round sums the model download and measured
+upload for every sampled client, then accumulates those totals across rounds. No free
+parameters. Mandated for every run by the evaluation-metrics rule, and the axis on
+which every selection verdict is read.
+_Avoid_: MB per client, uploaded MB (both name different quantities)
 _Avoid_: single-round compression ratio as a stand-in (measures a different thing)
 
 **Minimum common cumulative-MB budget**:
@@ -188,9 +191,9 @@ pass notes as informal shorthand; none is the canonical term). Note that the $R 
 round budget equalizes **training** expenditure, not bytes — do not conflate the two.
 
 **Bytes-to-target**:
-Cumulative megabytes transmitted per client to reach a per-configuration target
-accuracy. **Demoted 2026-08-06 from primary criterion to descriptor**, reported beside
-the two above, never as the verdict. The target accuracy floor it rests on
+Cumulative aggregate bidirectional client--server megabytes required to reach a
+per-configuration target accuracy. **Demoted 2026-08-06 from primary criterion to
+descriptor**, reported beside the two above, never as the verdict. The target accuracy floor it rests on
 (0.9 x FedAvg-at-equal-rounds) is **superseded**; cite it as such.
 _Avoid_: **bits-to-target-accuracy**, **bits-to-accuracy**, **cumulative-MB-to-target**
 — three non-canonical spellings of this one quantity. **All three are clear as of

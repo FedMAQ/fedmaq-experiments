@@ -3,6 +3,28 @@
 **Status**: Accepted · 2026-08-01, executed 2026-08-05, analyser committed 2026-08-06
 **Supersedes**: `docs/DECISIONS.md` Decisions 67, 73, 81, 87 (file deleted; see ADR-0014)
 
+## 2026-08-28 amendment — widened reporting stage before Stage 1a
+
+The 55-run Stage 1b below is historical, provisional evidence. The replacement
+campaign adds `baseline_tuning_wide`: FedProx, FedPAQ, DAdaQuant, FedDistill,
+FedKD, and FedMAQ each contribute a five-seed shipped-reference cell plus four
+three-seed challengers, for 17 cells per algorithm and 102 total. FedMAQ varies
+`q_max` over `{4, 6, 8, 16, 32}`; the hardware-grounded `c_unit=512` is not a
+free tuning parameter.
+
+The adoption rule remains a strict delta greater than `sqrt(2) * sigma` of the
+reference cell. All five points are reported whether or not any challenger
+clears; widening the curve does not license an argmax selection. The stage must
+complete before `pre-registration-stage1a`, because its verdicts configure both
+the formulation study and downstream benchmark. It adds 102 exploratory GPU
+cells outside the 243 reported replacement cells.
+
+Metadata distinguishes a shipped reference from a source-paper default.
+FedPAQ `q=8`, FedKD `tmax=0.95`, and FedMAQ `q_max=16` have no source-paper
+default and therefore carry `paper_default_variant: null` plus an explicit
+provenance note. The historical verdicts below remain the shipped references
+until the widened stage produces current evidence.
+
 ## Context
 
 ADR-0004 promises baseline parity through "matched light tuning," and the
@@ -134,8 +156,9 @@ artifact, and the tag is the thing one does not want to cut twice (ADR-0010).
 
 - The revised constants ship in `conf/algorithm/{fedprox,feddistill}.yaml` and are
   frozen behind the tag; the manuscript's baseline table carries them.
-- A future baseline added to the stack owes the same treatment — one knob, a
-  five-seed reference, two three-seed challengers, √2σ — or an explicit statement
-  of why it is exempt.
+- A future tunable algorithm added to the stack owes the widened treatment — one
+  trade-off knob, a five-seed shipped reference, four three-seed challengers,
+  complete reporting, and the unchanged √2σ adoption rule — or an explicit
+  statement of why it is exempt.
 - `exploration_noise_margin` and `baseline_tuning_margin` are separate functions by
   necessity, not duplication. Do not merge them.

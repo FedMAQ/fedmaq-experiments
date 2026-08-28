@@ -201,6 +201,10 @@ class FedPAQCompressionHook(CompressionHook):
 class DAdaQuantCompressionHook(CompressionHook):
     """Doubly-adaptive quantization hook implementing DAdaQuant's client-side quantizer.
 
+    Each update tensor is normalized by its Euclidean norm, matching the
+    source method's quantizer. This differs from FedMAQ's error-feedback path,
+    which deliberately retains l-infinity normalization.
+
     .. note::
         The attribute ``q`` represents the number of quantization *levels per sign*
         (symmetric around zero), NOT a bit-width. The total number of discrete levels
@@ -230,8 +234,9 @@ class DAdaQuantCompressionHook(CompressionHook):
 
     def _scale(self, d: np.ndarray) -> float:
         # Kept explicit at this call site rather than inherited from FedPAQ's
-        # scale switch (#24): out of scope for DAdaQuant's own normalization.
-        return float(np.max(np.abs(d)))
+        # q-dependent scale switch: DAdaQuant specifies l2 normalization for
+        # its own adaptive quantizer at every q.
+        return float(np.linalg.norm(d))
 
     def _quantize_elem(self, d: np.ndarray, scale: float) -> tuple[np.ndarray, np.ndarray]:
         rng = _require_rng(self.rng, "DAdaQuantCompressionHook")

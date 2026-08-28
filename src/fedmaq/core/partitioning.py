@@ -14,7 +14,7 @@ Supported partition modes:
     distance to the global label distribution 0.0013) *and* gave every client an
     identical local dataset size. The latter silently disabled FedMAQ's data-richness
     signal on FEMNIST, since a constant :math:`|D_k|` carries no information. Real LEAF
-    writers give TV distance 0.259 and an 8.9x spread in samples per client.
+    writers give TV distance 0.259 and a 17.2x spread in samples per client.
 """
 
 import json

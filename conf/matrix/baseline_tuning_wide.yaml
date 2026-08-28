@@ -26,7 +26,8 @@ tuning:
     values: {mu0p001: 0.001, mu0p01: 0.01, mu0p1: 0.1, mu1p0: 1.0, mu10p0: 10.0}
   fedpaq:
     knob: q
-    paper_default_variant: q8
+    paper_default_variant: null
+    paper_default_note: FedPAQ reports level counts rather than a bit-width default; q8 is the shipped reference adopted from Wu et al.
     adopted_variant: q8
     values: {q2: 2, q4: 4, q8: 8, q16: 16, q32: 32}
   dadaquant:
@@ -41,12 +42,13 @@ tuning:
     values: {a0p1: 0.1, a0p5: 0.5, a1p0: 1.0, a2p0: 2.0, a4p0: 4.0}
   fedkd:
     knob: tmax
-    paper_default_variant: t0p95
+    paper_default_variant: null
+    paper_default_note: The FedKD source names the schedule endpoints but does not report numeric defaults; t0p95 is the shipped reference.
     adopted_variant: t0p95
     values: {t0p75: 0.75, t0p85: 0.85, t0p95: 0.95, t0p99: 0.99, t1p0: 1.0}
   fedmaq:
     knob: q_max
-    paper_default_variant: qmax16
+    paper_default_variant: null
     paper_default_note: q_max has no source-paper default; qmax16 is the shipped reference.
     adopted_variant: qmax16
     values: {qmax4: 4, qmax6: 6, qmax8: 8, qmax16: 16, qmax32: 32}

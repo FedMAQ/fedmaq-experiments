@@ -130,5 +130,6 @@ runs in a date-keyed tree with no `experiment_group`.
   identify an arm by `algorithm_config`.
 - Any matrix that lists one algorithm twice under different overrides **must** set
   `variant`. The guard test fails in CI rather than at analysis time.
-- Stage 1c's FedAvg rows are the single disclosed ordering exception. Do not extend
-  the reasoning to any other arm.
+- The historical Stage 1c FedAvg rows remain a disclosed property of the
+  v1-provisional bundle only. The replacement campaign has no early-row exception:
+  every reported cell follows the tag governing its stage.

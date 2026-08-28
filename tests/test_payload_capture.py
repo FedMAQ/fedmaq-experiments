@@ -25,6 +25,7 @@ from fedmaq.core.client import CompressionHook, GenericClient, LossHook
 from fedmaq.core.client_hooks.base import attach_payloads_if_enabled
 from fedmaq.core.models import SimpleCNN, get_model_parameters
 from fedmaq.core.strategy import TelemetryFedAvg
+from fedmaq.core.strategy_hooks.passthrough import PassthroughHook
 from fedmaq.core.telemetry import TelemetryManager
 
 # --- CompressionHook.last_payloads reproduces each hook's returned byte_size ---
@@ -56,6 +57,20 @@ def test_dadaquant_last_payloads_reproduce_byte_size():
     _assert_payloads_reproduce_byte_size(
         DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0)), deltas
     )
+
+
+def test_default_download_payloads_use_float32_and_shared_transport():
+    hook = PassthroughHook()
+    parameters = [
+        np.array([1.0, 2.0, 3.0], dtype=np.float64),
+        np.zeros((0,), dtype=np.float32),
+    ]
+
+    byte_size = hook.download_size_bytes(None, parameters)
+    expected_payload = parameters[0].astype(np.float32).tobytes()
+
+    assert hook.last_download_payloads == [expected_payload]
+    assert byte_size == measure_bytes(expected_payload)
 
 
 def test_fedmaq_postprocess_last_payloads_reproduce_byte_size():
@@ -265,6 +280,36 @@ def test_record_fit_round_persists_payloads_and_replays_the_original_total(tmp_p
     assert replayed_total == fit_res.metrics["bytes_uploaded"]
 
 
+def test_record_fit_round_persists_download_payloads_and_replays_logged_total(
+    tmp_path, monkeypatch
+):
+    strategy, tm = _make_strategy(tmp_path, monkeypatch, log_payloads=True)
+    upload_payloads = [b"client update"]
+    fit_res = _fit_res_with_payloads(upload_payloads)
+    aggregated = ndarrays_to_parameters(
+        [np.array([1.0, -2.0, 3.0], dtype=np.float32)]
+    )
+
+    _, round_total = tm.record_fit_round(
+        strategy,
+        server_round=1,
+        results=[(_FakeProxy("0"), fit_res)],
+        aggregated_parameters=aggregated,
+    )
+
+    path = tm.payloads_dir / "download_round_0001.pkl"
+    assert path.exists()
+    with open(path, "rb") as f:
+        persisted = pickle.load(f)
+
+    replayed_download_total = sum(
+        measure_bytes(payload)
+        for client_payloads in persisted.values()
+        for payload in client_payloads
+    )
+    assert replayed_download_total == round_total - fit_res.metrics["bytes_uploaded"]
+
+
 def test_record_fit_round_persisted_payloads_rescore_under_an_alternate_encoder(
     tmp_path, monkeypatch
 ):
@@ -297,7 +342,12 @@ def test_record_fit_round_writes_no_payloads_file_when_flag_disabled(tmp_path, m
     )
 
     tm.record_fit_round(
-        strategy, server_round=1, results=[(_FakeProxy("0"), fit_res)], aggregated_parameters=None
+        strategy,
+        server_round=1,
+        results=[(_FakeProxy("0"), fit_res)],
+        aggregated_parameters=ndarrays_to_parameters(
+            [np.array([1.0, -2.0, 3.0], dtype=np.float32)]
+        ),
     )
 
     assert not tm.payloads_dir.exists()

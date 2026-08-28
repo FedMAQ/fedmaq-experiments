@@ -3,6 +3,22 @@
 **Status**: Accepted · 2026-08-27
 **Related**: ADR-0006 (the golden-diff gate this required a re-capture against, DAdaQuant included); ADR-0018 (the `measure_bytes` seam this routes through unchanged)
 
+## 2026-08-28 correction — DAdaQuant also requires l2 normalization
+
+The original audit correctly repaired FedPAQ and FedMAQ but incorrectly treated
+DAdaQuant's normalization as out of scope and called its quantizer correct. Hönig
+et al. define Federated QSGD over the update divided by its Euclidean norm. The
+local hook used `max(abs(d))`, so its stochastic rounding was unbiased only for a
+different operator.
+
+`DAdaQuantCompressionHook._scale` now returns `np.linalg.norm(d)` for every
+adaptive level. A focused `[3,4]` regression distinguishes the required scale 5
+from the l-infinity scale 4. This changes DAdaQuant's reconstructed updates, code
+sparsity, primary bytes, and secondary 0-RLE/Elias-omega bytes; the replacement
+campaign must rerun its affected cells, and the prior GPU golden cannot certify
+the corrected hook. FedMAQ's error-feedback path remains the documented
+l-infinity exception below.
+
 ## Context
 
 `FedPAQCompressionHook`'s and `FedMAQPostProcessCompressionHook`'s `q>1` path rounded
@@ -11,7 +27,7 @@ deterministically (`np.round`) and normalized by l∞ (`max|d|`). Reisizadeh et 
 `Q_s(v_j) = ‖v‖₂ · sgn(v_j) · ξ_j(v,s)` both require `E[Q(x)] = x` under l2
 normalization — deterministic rounding is biased, and l∞ is not the normalization
 either source specifies. DAdaQuant's own quantizer (`_quantize_elem`) already rounded
-stochastically and correctly, but as an independent inline implementation, not shared
+stochastically, but as an independent inline implementation, not shared
 code — the same one-concept-two-implementations seam ADR-0018 closed for byte
 accounting (Issue #24, scoped originally to FedMAQ alone, corrected to cover FedPAQ on
 the same grounds since both run on `FedPAQCompressionHook`).
@@ -38,8 +54,8 @@ reaches its stochastic branch with `rng=None`, rather than defaulting.
 feeding it l2 scale would inflate every coordinate by `~√d` (since `‖d‖₂ ≈ √d·avg|d|`),
 not a subtle bias shift. This is a property of the sign-quantization *path*, not the
 call site, so it is unconditional regardless of which scale the `q>1` path uses.
-DAdaQuant keeps l∞ throughout, explicit at its own call site (`_scale`) rather than
-inherited — its own normalization is out of this ticket's scope.
+DAdaQuant now keeps its source-required l2 normalization explicit at its own call
+site (`_scale`) rather than inheriting FedPAQ's q-dependent sign branch.
 
 **`FedMAQPostProcessCompressionHook` (error feedback + diff-coding) is a deliberate
 exception: it keeps l∞ scale, switching only its rounding to stochastic.** The issue

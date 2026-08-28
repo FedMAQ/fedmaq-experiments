@@ -379,12 +379,10 @@ def test_dadaquant_compression_hook():
     deltas = [np.ones((100,), dtype=np.float32)]
     compressed_deltas, byte_size = hook.compress(deltas)
 
-    # Constant codes (uniform input) are highly compressible; pinned regression
-    # value from measure_bytes (#25), not the old analytic ceil(bits*size/8)+4.
-    # Unaffected by #24's rounding refactor: scaled = (1/1)*4 = 4 exactly, so
-    # the stochastic draw's round-up probability is 0 and the result is the
-    # same deterministic code as before, just via the shared rounding helper.
-    assert byte_size == 23
+    # With source-faithful l2 normalization, ||ones(100)||_2 = 10 and every
+    # scaled coordinate is 0.4. The pinned value therefore includes the fixed
+    # seed's stochastic 0/1 code pattern, measured through the shared encoder.
+    assert byte_size == 55
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
@@ -394,6 +392,17 @@ def test_dadaquant_compression_hook():
     mean_val = np.mean(decompressed[0])
 
     np.testing.assert_allclose(mean_val, 0.5, atol=0.03)
+
+
+def test_dadaquant_uses_source_faithful_l2_normalization():
+    """DAdaQuant normalizes each update tensor by its Euclidean norm."""
+    from fedmaq.baselines.quantization import DAdaQuantCompressionHook
+
+    delta = np.array([3.0, 4.0], dtype=np.float32)
+    hook = DAdaQuantCompressionHook(q=4, rng=np.random.default_rng(0))
+
+    assert hook._scale(delta) == 5.0
+    assert hook._scale(delta) != float(np.max(np.abs(delta)))
 
 
 def test_dadaquant_requires_rng_for_stochastic_rounding():

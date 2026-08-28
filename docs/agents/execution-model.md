@@ -68,140 +68,85 @@ Neither flag is proven to have caused any past abort ([ADR-0013](../adr/0013-exe
 records what was and was not established). Both are cheap, documented, and remove the
 two known ways this host starves a sweep.
 
-### Stage 1 — Exploration (gates everything downstream)
+### Gate 0 — Current-code correctness
 
-Runs at the held-out α = 0.3, absent from the confirmatory grid by design, so no
-mechanism is ever selected at a skew it is later reported on. Not counted among the
-reported runs.
+No allocation run precedes this gate.
 
-1. `--matrix pass2_explore` — screening, R=50, one seed.
-2. `--matrix pass2_factorial` — keep-or-drop, fully crossed 2³, three seeds; **the
-   unrefined reference cell carries five seeds, not three**, because its spread *is*
-   the margin every other cell is judged against and at n=3 that estimate is uncertain
-   by roughly a factor of twelve. Use `--run_timeout_seconds 2100`. Then
-   `scripts/analysis.py:exploration_noise_margin` writes
-   `scripts/analysis_output/exploration_margin.json`.
-   **It takes an `experiment_group` and refuses to pool stages.** It cannot produce a
-   margin from `pass2_explore` (one seed, by design).
-3. **Edit `pass3_freeze_confirm.yaml`** — replace the placeholder overrides in the
-   `fedmaq-surviving-set` arm with `surviving_refinement_set` from that JSON. The
-   values shipped there are defaults, not a prediction. That field is the smallest
-   *cell* that cleared the margin, never a union across cells.
-4. `--matrix pass3_freeze_confirm` — R=100. Use `--run_timeout_seconds 4200`.
-   **Skip this stage if the surviving set is empty** — both arms would be
-   config-identical to unrefined, so there is nothing to confirm. Go straight to
-   step 5's empty-freeze branch.
-5. **Freeze the refinement layer.** Write the surviving set into
-   `conf/algorithm/fedmaq.yaml` — **and only there.** The ablation arms inherit that
-   file via their Hydra defaults list and restate only their own removal, so one edit
-   reaches all of them. Then `./.venv/bin/python scripts/dump_frozen_configs.py`
-   to refresh `docs/freeze/resolved_configs.yaml`, and run
-   `./.venv/bin/python -m pytest tests/test_simulation.py`.
-   **Do not tag here.** §4.3.1 locks and tags three things together — mechanism set,
-   selected formulation, baseline hyperparameter table — and two of them do not exist
-   until step 9. The single tag is step 10.
-   **If nothing clears at R=100** the surviving set is empty: pre-registered, not a
-   judgement call. FedMAQ freezes unrefined, Configuration 8 drops from
-   `conf/matrix/ablation.yaml`, and the `chapter_6.tex` contribution bullet resting on
-   its contrast goes with it. **No subset retries, no tuning to rescue a mechanism.**
-   `test_configuration_8_exists_only_while_there_is_a_layer_to_remove` enforces it.
-   See [ADR-0008](../adr/0008-exploration-protocol-and-the-empty-refinement-layer.md)
-   and [ADR-0010](../adr/0010-freeze-machinery-and-pre-registration.md).
+1. Resolve the implementation and literature audits, run `just check`, and verify
+   each expected-run manifest with its generator. A method or accounting change
+   after a prior bit-exact capture makes that capture historical evidence, even when
+   the CSV schema is unchanged.
+2. On the GPU host, capture and compare the golden set for the exact commit that will
+   be tagged. This is a user-run gate; an agent prepares the commands and waits for
+   the returned evidence. Do not reuse a capture from before a quantizer or byte-axis
+   correction.
+3. Dry-run every matrix named below. Dry-run output is validation, not dispatch.
 
-### Stage 1b — Baseline matched-tuning
+### Stage A — Widened matched tuning (102 exploratory cells)
 
-Independent of everything above — no baseline shares configuration with FedMAQ — so
-it may run concurrently with Stage 1. Held-out α = 0.3, uncounted among the reported
-runs, and its verdict enters the same tag at step 10.
+4. `--matrix baseline_tuning_wide`, at held-out α = 0.3 and R=100. Each of the six
+   tunable algorithms contributes one five-seed shipped-reference cell and four
+   three-seed challengers. FedAvg is absent because it has no tunable communication
+   knob. FedMAQ varies `q_max ∈ {4, 6, 8, 16, 32}` while `c_unit=512` remains fixed.
+5. Run `baseline_tuning_margin`, retain every five-point table and seed-level curve,
+   and write only challengers that strictly clear `sqrt(2) * sigma` into the shipped
+   configs. A highest point that does not clear is not adopted. `paper_default_variant`
+   is provenance metadata and may be null; it is never substituted with the shipped
+   reference.
 
-6. `--matrix baseline_tuning_wide`. R=100: each of the six algorithms with a tunable
-   knob gets a five-seed reference cell plus four three-seed challengers. FedAvg
-   remains absent because it is the uncompressed control. Issue #27 is the live
-   source for the stage's run count.
-   FedMAQ is tuned on `q_max ∈ {4, 6, 8, 16, 32}` with `c_unit=512` fixed. Use
-   `--run_timeout_seconds 4200`. Then `scripts/analysis.py:baseline_tuning_margin`,
-   same √2σ rule as the factorial, and retain the generated per-algorithm tables
-   and HP-versus-accuracy curves as the manuscript-facing evidence path.
-   **Not `exploration_noise_margin`** — that one filters `algorithm == "fedmaq"` and
-   reports a completed Stage 1b as no runs at all.
-   **Write any challenger that clears into `conf/algorithm/<baseline>.yaml` and into
-   Table 4.1.** The expected outcome is that none clears and every baseline keeps its
-   published value — **that is a result, not a null sweep**, and §4.3.2 reports it as
-   one. FedAvg is absent by design: it is the uncompressed control and has no knob.
-   See [ADR-0011](../adr/0011-baseline-matched-tuning.md).
+These 102 cells are exploratory and are not part of the 243 reported replacement
+cells. They must finish before Stage 1a because their verdicts configure FedMAQ and
+the baseline arms.
 
-### Stage 1c — The grid's FedAvg reference rows (not net-new)
+### Gate 1 — `pre-registration-stage1a`
 
-The formulation study's accuracy floor is defined against the uncompressed FedAvg
-reference at the same dataset and skew, *"reusing the FedAvg runs already present in
-the benchmark grid"* (§4.3.6). Dispatched in file order those runs arrive at step 13
-— after the freeze they are supposed to decide. The dependency is circular unless
-FedAvg's rows are pulled forward, so they are.
+6. Freeze the audited code, corrected byte instrument, widened-tuning verdicts,
+   baseline table, `power_mean_design` matrix, expected 84-cell manifest, and Stage-1
+   selection rule. Re-run `just check`, the expected-run generator in check mode, and
+   the current-code golden compare, then tag that exact pushed commit
+   `pre-registration-stage1a`.
 
-7. `--matrix benchmark_grid --only fedavg`. CIFAR-10, α ∈ {0.1, 1.0}, 3 seeds.
-   **These are rows of Stage 4's own matrix, not additional runs**, dispatched early
-   under the same `experiment_group` and into the same directories; step 13's
-   `--skip_completed` passes over them. `--only` refuses an unrecognized label rather
-   than scheduling an empty sweep.
-   They are the one confirmatory cell that runs before the step-10 tag. That is
-   disclosed in §4.3.6 rather than finessed, and it is admissible because FedAvg is
-   invariant to all three artifacts the tag locks. **Nothing else may move across the
-   tag on this argument** — see [ADR-0009](../adr/0009-run-identity-and-analysis-scoping.md).
+No reported replacement cell may precede this tag. Earlier provisional tags do not
+authorize this campaign.
 
-### Stage 2 — Formulation study
+### Stage 1a — Power-mean degree and structural controls (84 reported cells)
 
-8. `--matrix formulation_study`. Must carry Stage 1's surviving layer: its
-   Formulation 1 cell is Ablation Configuration 4's parity anchor, and an anchor only
-   anchors if it carries the same refinement layer as the arm.
-9. **Resolve the verdict, then write the formulation.** `select_winner` returns one
-   verdict *per skew* — two, structurally, since the study runs both. Collapse them
-   with `scripts/analysis.py:resolve_frozen_formulation`, which implements the
-   pre-registered rule: skews agreeing freezes that formulation; skews diverging
-   freezes the α = 0.1 winner and reports the split as a finding; one skew
-   disqualifying its whole field defers to the other; both disqualifying falls back to
-   highest mean top-1 at α = 0.1 **and withdraws the contribution claim**. Write the
-   result to `conf/algorithm/fedmaq.yaml`.
-   **If the frozen formulation is not the incumbent**, the reserved recheck fires —
-   surviving layer vs. unrefined under the winning formulation at α = 0.3. It is a
-   **veto on that layer, never a second search**: the factorial is not re-opened and
-   no mechanism is reconsidered. It is degenerate if the layer is empty. Header of
-   `conf/matrix/formulation_study.yaml` has the full rule; see
-   [ADR-0012](../adr/0012-formulation-selection-and-the-iso-byte-amendment.md).
+7. `--matrix power_mean_design`. It contains the seven degree settings at
+   `omega=0.5`, the resource-only control, and six structural-rule settings across
+   two skews and three seeds.
+8. Run `scripts/select_power_mean.py`. It refuses an incomplete closure certificate
+   and resolves skew disagreement through the severe-skew rule. Record the selected
+   `p`; do not edit any Stage-1a row after observing the result.
 
-### Stage 2b — Tag the pre-registration
+### Stage 1b — Selected-p omega follow-up (12 reported cells)
 
-10. Re-run `scripts/dump_frozen_configs.py` and `pytest tests/test_simulation.py`,
-    then **git-tag once.** The tag carries all three of §4.3.1's locked artifacts:
-    the fixed mechanism set (step 5), the baseline hyperparameter table (step 6), and
-    the selected formulation (step 9). Manuscript §6.2 promises this tag.
-    **Nothing downstream of here may edit a frozen config**; an anomaly during
-    confirmation opens a new labelled exploration round instead.
+9. Materialize the canonical selected-`p` follow-up for `omega ∈ {0.25, 0.75}` at
+   both skews and three seeds. The already-run `omega=0.5` cells are reused, not
+   repeated. The matrix and expected manifest must be committed and dry-run before
+   dispatch; never hand-type twelve independent commands.
+10. Dispatch the 12 cells, apply the same minimum-common-byte and severe-skew rule,
+    and write the selected `(p, omega)` into the shipped FedMAQ configuration.
 
-### Stage 3 — Ablation
+### Gate 2 — selected formulation and downstream manifest
 
-11. **Before dispatch**, if Formulation 1 or 2 was frozen at step 9, revisit
-    `fedmaq_no_data` and `fedmaq_no_state` plus `ABLATION_ARM_DIFFS` — the data-removal
-    arm's removal becomes `gamma2=0`, and the state-removal arm drops its `formulation`
-    override and stops being the fallback arm. Each is a one-line change in a file
-    containing only its removal. Re-run `scripts/dump_frozen_configs.py` afterwards.
-12. `--matrix ablation`.
+11. Freeze the selected pair, resolved configs, ablation arm diffs, and the complete
+    147-cell downstream manifest. Run `just check`, manifest checks, and the golden
+    compare, then tag the exact pushed commit before any downstream cell runs.
+    A material change after this gate opens a new labelled exploration amendment; it
+    is not folded silently into the frozen campaign.
 
-### Stage 4 — Primary grid and control arm
+### Stage 2 — Downstream confirmation (147 reported cells)
 
-The six baselines here need Stage 1b's verdict, not Stage 1's; FedMAQ's own rows need
-the freeze.
+12. `--matrix benchmark_grid`, `--matrix benchmark_grid_cifar100`, and
+    `--matrix benchmark_grid_femnist`. The three files share one experiment group and
+    contribute 105 cells.
+13. `--matrix ablation`, contributing 36 net-new cells after the inherited FedAvg
+    rows and dropped empty-refinement Configuration 8 are accounted for.
+14. `--matrix uniform_memory_control`, contributing six cells.
 
-13. `--matrix benchmark_grid --skip_completed` (CIFAR-10),
-    `--matrix benchmark_grid_cifar100`, `--matrix benchmark_grid_femnist`. All three
-    share one `experiment_group`, so `analysis.py` reads them as the single primary
-    grid the manuscript describes.
-14. `--matrix uniform_memory_control`.
-
-The formulation study declares `phase: explore`, not `formal`: §4.3.1 makes it the
-culmination of the exploration phase, whose verdict is frozen and tagged, so it
-necessarily precedes the grid it configures. `test_primary_grid_files_dispatch_all_105_runs`
-asserts the primary-grid share of the run arithmetic — **that test, not this file, is
-where the count is pinned.**
+The full allocation workload is therefore 345 cells: 102 exploratory tuning cells,
+96 reported formulation cells, and 147 downstream confirmatory cells. The reported
+replacement bundle remains 243 cells, not 345.
 
 ---
 

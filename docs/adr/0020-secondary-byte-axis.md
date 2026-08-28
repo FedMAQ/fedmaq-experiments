@@ -3,6 +3,14 @@
 **Status**: Accepted · 2026-08-27
 **Related**: ADR-0018 (the primary `measure_bytes` seam this is deliberately *not* folded into); 2026-08-26 baseline-implementation audit (X1 finding, the source of the keep decision)
 
+## 2026-08-28 disclosure correction
+
+The methods chapter now reports this coder as an implemented DAdaQuant-only
+secondary axis rather than saying it was not reproduced. It also separates the
+paper's model-update delta transmission from FedMAQ's thesis-introduced temporal
+code differencing. The latter subtracts prior-round integer codes and is not
+attributed to Hönig et al.
+
 ## Context
 
 The primary byte seam (ADR-0018, #25) holds one encoder constant across every arm so the comparison isolates compression *policy*, not transport engineering. That is the correct primary axis, but it invites one specific, legitimate objection: DAdaQuant's own paper (Hönig et al. 2022) specifies 0-run-length encoding plus Elias omega coding as its transport stage, and measuring it under a generic zlib pass instead compares against a weaker DAdaQuant than the one actually published. The 2026-08-26 audit's X1 finding names this directly — DAdaQuant is the one baseline whose paper mandates entropy coding, and the implementation grants it none while granting FedMAQ its own real compressor. The objection runs in FedMAQ's favor, which is exactly the direction this project committed to not being casual about.

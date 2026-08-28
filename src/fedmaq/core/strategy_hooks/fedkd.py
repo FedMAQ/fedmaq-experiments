@@ -75,6 +75,7 @@ class FedKDHook(StrategyHook):
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         model_size_bytes = 0
         payload_bytes = 0
+        payloads: list[bytes] = []
         for arr, ref in zip(ndarrays, reference, strict=True):
             if arr.size == 0:
                 continue
@@ -83,7 +84,9 @@ class FedKDHook(StrategyHook):
             payload = svd_payload(compressed)
             model_size_bytes += measure_bytes(payload)
             payload_bytes += len(payload)
+            payloads.append(payload)
         self._last_download_payload_bytes = payload_bytes
+        self.last_download_payloads = payloads
         return model_size_bytes
 
     def compute_speed_scale(self) -> float:

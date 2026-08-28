@@ -9,7 +9,6 @@ Usage:
     uv run python scripts/run_matrix.py --matrix ci_test --dry_run
     uv run python scripts/run_matrix.py --matrix pass2_explore --start_at 3
     uv run python scripts/run_matrix.py --matrix benchmark_grid --skip_completed
-    uv run python scripts/run_matrix.py --matrix benchmark_grid --only fedavg
     uv run python scripts/run_matrix.py --matrix benchmark_grid \
         -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4 \
         --run_timeout_seconds 5400
@@ -146,11 +145,10 @@ def main() -> None:
             "rows keep the matrix's own phase, experiment_group, rounds and "
             "overrides, so they land in exactly the directories the full sweep "
             "would have written and a later full dispatch with --skip_completed "
-            "passes over them. This exists for one pre-registered case: the "
-            "formulation study's accuracy floor is defined against the benchmark "
-            "grid's uncompressed FedAvg rows, which must therefore be dispatched "
-            "before the study that the rest of the grid waits on (docs/agents/execution-model.md "
-            "Stage 1c). Do not use it to run a grid piecemeal for convenience."
+            "passes over them. The replacement campaign defines no early-row "
+            "exception: use this only for an explicitly authorized bounded recovery "
+            "or diagnostic, never to run the campaign piecemeal. It cannot be "
+            "combined with --shard."
         ),
     )
     parser.add_argument(

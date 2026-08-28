@@ -125,7 +125,7 @@ class TelemetryManager:
 
         self.jsonl_path = self.log_dir / "experiment_log.jsonl"
         self.csv_path = self.log_dir / "experiment_log.csv"
-        # Only created if a client ever attaches "payloads_framed" (opt-in via
+        # Only created when upload or download capture has content (opt-in via
         # experiment.telemetry.log_payloads; see record_fit_round).
         self.payloads_dir = self.log_dir / "payloads"
 
@@ -206,7 +206,10 @@ class TelemetryManager:
         see ``fedmaq.core.client_hooks.base.attach_payloads_if_enabled``), this
         method decodes and persists them to ``self.payloads_dir`` so a future
         encoder can be replayed against the exact original payloads, call
-        boundaries preserved, without re-running training.
+        boundaries preserved, without re-running training. The same opt-in
+        also persists the server broadcast payloads separately as
+        ``download_round_NNNN.pkl``; values are keyed by recipient partition
+        so replaying every call reproduces the aggregate download leg.
         """
         round_client_metrics: dict[str, float] = {}
         total_examples = sum(fit_res.num_examples for _, fit_res in results)
@@ -255,6 +258,13 @@ class TelemetryManager:
         round_payloads: dict[int, list[bytes]] = {}
 
         exp_config = strategy.config.get("experiment", strategy.config)
+        log_payloads = bool(exp_config.get("telemetry", {}).get("log_payloads", False))
+        download_payloads = (
+            list(getattr(strategy.hook, "last_download_payloads", []))
+            if aggregated_parameters is not None and log_payloads
+            else []
+        )
+        round_download_payloads: dict[int, list[bytes]] = {}
         epochs = exp_config.get("local_epochs", 5)
         public_epochs = int(strategy.config.get("algorithm", {}).get("public_epochs", 5))
         num_public = require_num_public_samples(strategy.config)
@@ -283,6 +293,12 @@ class TelemetryManager:
 
                 round_payloads[cid] = unpack_payloads(payloads_framed)
 
+            if download_payloads:
+                # Every sampled client receives the same server broadcast.
+                # Reusing the list lets pickle memoize the bytes while the
+                # per-recipient mapping preserves aggregate replay semantics.
+                round_download_payloads[cid] = download_payloads
+
             num_samples = fit_res.num_examples
             train_sample_count = strategy.hook.local_train_sample_count(
                 num_samples=num_samples,
@@ -307,6 +323,8 @@ class TelemetryManager:
 
         if round_payloads:
             self._write_round_payloads(server_round, round_payloads)
+        if round_download_payloads:
+            self._write_round_download_payloads(server_round, round_download_payloads)
 
         client_sim_time = max(round_delays) if round_delays else 0.0
 
@@ -462,6 +480,25 @@ class TelemetryManager:
                 pickle.dump(round_payloads, f)
         except Exception as exc:
             logger.warning(f"Failed to write round {server_round} payloads: {exc}")
+
+    def _write_round_download_payloads(
+        self, server_round: int, round_payloads: dict[int, list[bytes]]
+    ) -> None:
+        """Persist an opt-in round's server broadcast payloads by recipient.
+
+        A separate filename keeps the established upload-side
+        ``round_NNNN.pkl`` format unchanged. Replaying every payload in every
+        mapping value reproduces the aggregate download bytes charged to the
+        round, while pickle memoization avoids duplicating the shared broadcast
+        bytes on disk for each recipient.
+        """
+        try:
+            self.payloads_dir.mkdir(parents=True, exist_ok=True)
+            path = self.payloads_dir / f"download_round_{server_round:04d}.pkl"
+            with open(path, "wb") as f:
+                pickle.dump(round_payloads, f)
+        except Exception as exc:
+            logger.warning(f"Failed to write round {server_round} download payloads: {exc}")
 
     def finish(self) -> None:
         """Close the WandB run.
