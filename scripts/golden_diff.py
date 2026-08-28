@@ -67,6 +67,8 @@ PERSISTENCE_DIR = Path(".data_partitions/fedmd_models")
 def _run(algorithm: str, target_dir: Path) -> None:
     if PERSISTENCE_DIR.exists():
         shutil.rmtree(PERSISTENCE_DIR)
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
     kill_ray_processes()
     cmd = build_run_command(
         dataset="cifar10",
