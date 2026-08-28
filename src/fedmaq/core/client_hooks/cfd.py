@@ -189,6 +189,7 @@ class CFDFit(ClientFitStrategy):
             len(client.trainloader.dataset),
             {
                 "bytes_uploaded": nbytes,
+                "payload_bytes": nbytes,
                 "partition_id": int(client.cid),
                 "local_loss": avg_ce_loss,
                 "train_loss": avg_ce_loss,

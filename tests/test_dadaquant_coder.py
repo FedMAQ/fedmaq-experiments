@@ -252,7 +252,11 @@ def _make_strategy(tmp_path, monkeypatch) -> tuple[TelemetryFedAvg, TelemetryMan
 
 
 def _fit_res(cid: int, bytes_uploaded: int, secondary_bytes: int | None) -> FitRes:
-    metrics: dict = {"partition_id": cid, "bytes_uploaded": bytes_uploaded}
+    metrics: dict = {
+        "partition_id": cid,
+        "bytes_uploaded": bytes_uploaded,
+        "payload_bytes": bytes_uploaded,
+    }
     if secondary_bytes is not None:
         metrics["secondary_bytes_uploaded"] = secondary_bytes
     return FitRes(

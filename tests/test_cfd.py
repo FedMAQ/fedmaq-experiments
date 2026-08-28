@@ -226,6 +226,7 @@ def test_cfd_client_round1_private_only_no_server_labels():
     assert num_examples == 8
     assert isinstance(metrics["bytes_uploaded"], int)
     assert metrics["bytes_uploaded"] > 0
+    assert metrics["payload_bytes"] == metrics["bytes_uploaded"]
 
 
 def test_cfd_client_round2_engages_distill_branch():

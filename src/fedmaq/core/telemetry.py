@@ -277,10 +277,7 @@ class TelemetryManager:
 
             bytes_uploaded = int(fit_res.metrics.get("bytes_uploaded", model_size_bytes))
             client_bytes_uploaded.append(bytes_uploaded)
-            # Falls back to bytes_uploaded for hooks that don't report a
-            # separate pre-encoding payload (cfd/fedmd — dropped baselines
-            # with their own accounting, out of #25's scope).
-            round_payload_bytes += int(fit_res.metrics.get("payload_bytes", bytes_uploaded))
+            round_payload_bytes += int(fit_res.metrics["payload_bytes"])
 
             secondary_bytes = fit_res.metrics.get("secondary_bytes_uploaded")
             if secondary_bytes is not None:

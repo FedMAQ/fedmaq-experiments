@@ -210,6 +210,7 @@ class FedMDFit(ClientFitStrategy):
             len(client.trainloader.dataset),
             {
                 "bytes_uploaded": byte_size,
+                "payload_bytes": byte_size,
                 "partition_id": int(client.cid),
                 "local_loss": avg_train_loss,
                 "train_loss": avg_train_loss,
