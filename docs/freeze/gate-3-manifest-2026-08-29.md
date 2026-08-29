@@ -1,7 +1,8 @@
 # Gate 3 — Independent review: sanitized input manifest
 
 Envelope: `fedmaq-experiments:docs/freeze/assurance-envelope-2026-08-29.json`
-(#75). Gate: 3, **BLOCKED** pending a verifiable Terra High review.
+(#75). Gate: 3, **PASS** under the thesis-author amendment accepting an
+internal Luna High review.
 Producer: assurance orchestrator. Prepared: 2026-08-29T22:59:04+08:00.
 
 ## Review package
@@ -11,10 +12,12 @@ Producer: assurance orchestrator. Prepared: 2026-08-29T22:59:04+08:00.
   whose only post-candidate change is envelope/gate-evidence material.
 - Bound revisions: `fedmaq-literature@1be87e08d232b8d47ec9c71e80922d7c8235bb5a`;
   `fedmaq-manuscript@5cc82393d639321c240897dbd7eeb728dfc82a02`.
-- Review setting requested: **GPT-5.6 Terra High**, reasoning **high**. The
-  available subagent execution did not expose an attested model receipt, so
-  the setting is recorded as requested rather than falsely asserted as
-  verified.
+- Review setting: **GPT-5.6 Luna High** (`gpt-5.6-luna`), reasoning **high**.
+  On 2026-08-30, the thesis author amended Gate 3 to accept this independent
+  internal-review setting in place of Terra High. The platform does not expose
+  a provider-signed model receipt; this record identifies the configured slot
+  and author-accepted evidence standard, rather than making an external-service
+  provenance claim.
 - Lens: independent standards/spec review of the candidate assurance package;
   check source-to-implementation fidelity, configuration and protocol claims,
   telemetry/byte-accounting semantics, pass-3 lifecycle invariants, evidence
@@ -58,7 +61,7 @@ Rows are sorted by repository and path. Each file hash is SHA-256 over the
 exact Git blob at the revision shown in the row; the two prior gate evidence
 rows intentionally identify their producing commits. This package contains identifiers and
 hashes, not copied source contents; the thesis author should provide the
-listed files from the pinned checkouts to Terra High.
+listed files from the pinned checkouts to Luna High.
 
 Manifest hash: `c3593103abdbf1bf72057b2c3315793ef89497a52e3f22365a0620fbfeac7dc3`
 
@@ -116,6 +119,6 @@ Manifest hash: `c3593103abdbf1bf72057b2c3315793ef89497a52e3f22365a0620fbfeac7dc3
 
 The five orchestrator-owned gate-3 evidence items are prepared here:
 sanitized input manifest, manifest hash, stated exclusions, scope/lens, and
-model/reasoning setting. The available internal review and its disposition are
-recorded in `docs/freeze/gate-3-review-2026-08-29.md`; gate 3 remains BLOCKED
-because the model setting is not independently attested.
+model/reasoning setting. The available internal Luna High review and its
+disposition are recorded in `docs/freeze/gate-3-review-2026-08-29.md`; Gate 3
+is PASS under the 2026-08-30 thesis-author amendment.

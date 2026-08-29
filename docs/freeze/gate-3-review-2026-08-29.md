@@ -1,4 +1,4 @@
-# Gate 3 — Terra High independent review and disposition
+# Gate 3 — Luna High independent review and disposition
 
 Review artifact for `docs/freeze/gate-3-manifest-2026-08-29.md`.
 
@@ -10,10 +10,10 @@ Review artifact for `docs/freeze/gate-3-manifest-2026-08-29.md`.
 - Bound revision vector: `fedmaq-experiments@d804b7f2223fa92a8d2bcde803bec1501454faf5`,
   `fedmaq-literature@1be87e08d232b8d47ec9c71e80922d7c8235bb5a`,
   `fedmaq-manuscript@5cc82393d639321c240897dbd7eeb728dfc82a02`
-- Review model setting requested: `gpt-5.6-terra` (GPT-5.6 Terra), reasoning
-  `high`. The subagent platform did not expose an attested model receipt; no
-  external-service claim is made and the setting is not represented as
-  independently verified.
+- Review model setting: `gpt-5.6-luna` (GPT-5.6 Luna), reasoning `high`.
+  The thesis author amended Gate 3 on 2026-08-30 to accept this independent
+  internal-review setting in place of Terra High. The subagent platform did not
+  expose a provider-signed model receipt; no external-service claim is made.
 - Content digest: recorded in the envelope's `evidence_sha256` entry to avoid
   a self-referential digest field.
 
@@ -54,8 +54,8 @@ alter the pinned candidate or silently close the known documentation issue.
 
 ## Gate disposition
 
-The review output and disposition are recorded, but the model/reasoning
-setting is not independently attested. Gate 3 therefore remains **BLOCKED**
-under the envelope's fail-closed semantics until the thesis author supplies a
-verifiable Terra High review or explicitly amends the Gate 3 contract. This
-artifact does not declare pipeline, evidence, or results freeze.
+The review output, model/reasoning setting, and disposition are recorded. The
+thesis-author amendment accepts the independent Luna High review as the Gate 3
+evidence standard, so Gate 3 is **PASS** under the envelope's fail-closed
+semantics. This artifact does not declare pipeline, evidence, or results
+freeze.

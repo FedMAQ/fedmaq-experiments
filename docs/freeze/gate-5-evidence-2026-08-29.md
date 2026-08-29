@@ -21,7 +21,7 @@ The candidate producer declares the stable CSV fields in
 `src/fedmaq/core/telemetry.py:47-76` (`COMMON_CSV_FIELDNAMES`) and writes the
 same metric mapping to local CSV/JSONL in `:365-420`.
 
-Required analysis-facing fields and units:
+Producer field/semantics inventory:
 
 | Field | Unit/semantics |
 | --- | --- |
@@ -64,6 +64,7 @@ true exactly when all of the following hold:
 
 ```text
 required_manifest ⊆ keys(m)
+hydra_output and telemetry_path, when present, are relative to m
 required_csv ⊆ columns(c)
 columns(c) contain no duplicates
 all present *_bytes values are numeric and non-negative
@@ -72,6 +73,14 @@ present cumulative_mb = cumulative_bytes / 1024^2 within 1e-9
 round_secondary_bytes is either absent/blank or numeric and non-negative;
 for non-DAdaQuant manifests it must remain absent/blank
 ```
+
+The executable verifier requires the five fields the current consumer actually
+needs to read and compute rounds-to-target (`round`, `test/accuracy`,
+`communication/round_bytes`, `communication/cumulative_bytes`, and
+`communication/cumulative_mb`). The candidate's payload and optional-secondary
+fields are validated when present; their absence in the pre-candidate
+provisional records is compatible with the consumer and is not rewritten as a
+zero value.
 
 The predicate rejects renamed required fields, wrong byte/MB units, negative
 values, duplicate headers, missing run identity, and accidental conversion of
@@ -98,6 +107,7 @@ positive_current_record=yes
 negative_renamed_required_field=rejected
 negative_wrong_mb_unit=rejected
 negative_absent_secondary_to_zero=rejected
+negative_absolute_telemetry_path=rejected
 ```
 
 The positive check and all three negative cases were run from a temporary
@@ -108,6 +118,28 @@ existing provisional records, while the candidate producer's optional
 secondary field remains available for future DAdaQuant records. No result
 claim is made from this check.
 
+## Retained executable verifier
+
+`docs/freeze/verify_gate_5.py` is the retained, self-testing command artifact.
+It is deliberately outside the source-certificate scope: placing a new helper
+in `scripts/` or `tests/` would alter the candidate's frozen behavior surface
+and invalidate Gates 1–4. It reads only the consumer manifests and telemetry
+CSVs, requires the audited consumer revision, and creates its negative cases
+in a temporary directory.
+
+```text
+uv run python docs/freeze/verify_gate_5.py --analyses-root ..\\fedmaq-analyses \
+  --require-revision d68a3c44ebd7b9b9301b1f5912190bfdf7ea65fd --self-test
+
+checked_manifests=177
+secondary_column_present=0
+errors=0
+positive_current_record=yes
+negative_renamed_required_field=rejected
+negative_wrong_mb_unit=rejected
+negative_absent_secondary_to_zero=rejected
+```
+
 ## Disposition and invalidation owner
 
 The named invalidation owner is the assurance orchestrator: any producer field
@@ -116,7 +148,7 @@ manifest-path/identity contract change invalidates Gate 5 and any dependent
 evidence. A change to result-analysis logic alone is outside this narrow
 attestation and belongs to the later evidence/results workflow.
 
-Gate 5 remains **BLOCKED** pending persistence of this predicate as a
-reproducible verifier or equivalent retained command artifact. The observed
-positive and negative checks are retained as preparatory evidence and do not
-silently become a PASS.
+Gate 5 is **PASS**. The predicate is persisted as a reproducible, retained
+command artifact; the positive and negative checks above were rerun at the
+audited consumer revision. The attestation remains narrow and does not import
+result analysis into pipeline-readiness evidence.

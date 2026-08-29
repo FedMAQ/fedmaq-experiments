@@ -13,7 +13,7 @@
   "content_hash": {
     "algorithm": "sha256",
     "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
-    "value": "f2f5f231d9fd96fee64e8bf16ad038b59e584aac6a52ff2ec2f988c2a918368f"
+    "value": "ae6e730cf0869449761b4fb9e7176237c43e96014e18bcc0e3b748500e6f7d79"
   },
   "revision_vector": {
     "fedmaq-experiments": {
@@ -225,9 +225,9 @@
     },
     {
       "gate": 3,
-      "name": "Independent review (GPT-5.6 Terra High)",
-      "responsible_verifier": "thesis author (verifiable GPT-5.6 Terra High review required); manifest prepared by the orchestrator",
-      "state": "BLOCKED",
+      "name": "Independent review (GPT-5.6 Luna High)",
+      "responsible_verifier": "assurance orchestrator (independent GPT-5.6 Luna High review); accepted by thesis-author amendment 2026-08-30",
+      "state": "PASS",
       "mandatory_evidence": [
         "sanitized input manifest",
         "manifest hash",
@@ -242,10 +242,10 @@
         "docs/freeze/gate-3-review-2026-08-29.md"
       ],
       "evidence_sha256": {
-        "docs/freeze/gate-3-manifest-2026-08-29.md": "f939188391b679828f29793ad58768eba2efd42f89de743cb764ef527ddedef5",
-        "docs/freeze/gate-3-review-2026-08-29.md": "07e95a1b36e0504028723168fa75374477f26ed8fdc9623e52ab2d28971f75b7"
+        "docs/freeze/gate-3-manifest-2026-08-29.md": "0a7df33cc56e7bdc35f12695737d1141cd7cd157da5489f37f982fa27c2550b7",
+        "docs/freeze/gate-3-review-2026-08-29.md": "7263e43bd9c1c62b190ea26685f8243e2bea18b962fb7a42435d05066dfac87f"
       },
-      "notes": "The final 45-row manifest and review artifact are digest-bound here, and the review findings are recorded. The available subagent execution did not expose an attested GPT-5.6 Terra High model receipt, so Gate 3 remains BLOCKED under fail-closed semantics; the DAdaQuant glossary inconsistency is carried forward for post-freeze repair."
+      "notes": "The final 45-row manifest and review artifact are digest-bound here, and the review findings are recorded. The thesis-author amendment dated 2026-08-30 accepts the configured GPT-5.6 Luna High internal-review setting in place of Terra High; no external-service provenance claim is made. The DAdaQuant glossary inconsistency is carried forward for post-freeze repair."
     },
     {
       "gate": 4,
@@ -267,20 +267,23 @@
       "gate": 5,
       "name": "Telemetry producer-consumer compatibility attestation",
       "responsible_verifier": "assurance orchestrator",
-      "state": "BLOCKED",
+      "state": "PASS",
       "mandatory_evidence": [
         "producer schema",
         "consumer expectation",
         "compatibility predicate",
-        "named invalidation owner"
+        "named invalidation owner",
+        "retained executable verifier and recorded command"
       ],
       "evidence": [
-        "docs/freeze/gate-5-evidence-2026-08-29.md"
+        "docs/freeze/gate-5-evidence-2026-08-29.md",
+        "docs/freeze/verify_gate_5.py"
       ],
       "evidence_sha256": {
-        "docs/freeze/gate-5-evidence-2026-08-29.md": "9d49ab0764c586889db4855168172d6cab9cf2200a15fa899e00f5f1eec4da5f"
+        "docs/freeze/gate-5-evidence-2026-08-29.md": "3205dc430637b9719bbb4e298f96ea8537506bc424eb4380a306a4a6c62e6359",
+        "docs/freeze/verify_gate_5.py": "0e58ea219953cc11f6b528bd275ea2c35ef05601459db4da042c2f5dbee90bc0"
       },
-      "notes": "The narrow crossing into fedmaq-analyses has a positive check and three negative cases recorded, but the verifier is not persisted as an executable repository artifact. Gate 5 remains BLOCKED until that evidence is made reproducible; the attestation performs no result analysis."
+      "notes": "The narrow crossing into fedmaq-analyses has a retained, self-testing executable verifier. It passed its positive check and three negative cases at the pinned consumer revision; it remains a schema/semantic attestation and performs no result analysis."
     },
     {
       "gate": 6,
@@ -307,15 +310,18 @@
         "remaining blockers",
         "which of pipeline / evidence / results freeze is available",
         "the boundary the availability is stated against",
-        "demonstration of the invalidation matrix with representative deltas and exact gate invalidations"
+        "demonstration of the invalidation matrix with representative deltas and exact gate invalidations",
+        "retained executable invalidation demonstration and recorded output"
       ],
       "evidence": [
-        "docs/freeze/gate-7-evidence-2026-08-29.md"
+        "docs/freeze/gate-7-evidence-2026-08-29.md",
+        "docs/freeze/verify_gate_7.py"
       ],
       "evidence_sha256": {
-        "docs/freeze/gate-7-evidence-2026-08-29.md": "803b5e33ad8f5030faf3671433bb382ccd376500121a53b9511a0219140d7e2c"
+        "docs/freeze/gate-7-evidence-2026-08-29.md": "eda5524ff0fd7e7a927de7d2007b5c9216f7c9b19e2e9bc7837b45d8982be1c9",
+        "docs/freeze/verify_gate_7.py": "de4913ee8260fd1a05a35423981d703577f3852ef4833870cbe0e82653af8739"
       },
-      "notes": "Gate 7 owns the #75 acceptance requirement to demonstrate the invalidation matrix, not merely assert it. Its evidence must use disposable copies or an equivalent dry run to cover behavior, configuration, protocol claims, manuscript wording, harness rules, runtime provenance, evidence references, and scope-boundary changes, recording the exact gates each delta invalidates. Availability is not declaration. Only the thesis author declares a freeze."
+      "notes": "Gate 7 owns the #75 acceptance requirement to demonstrate the invalidation matrix, not merely assert it. Its retained executable demonstration uses disposable copies to cover behavior, configuration, protocol claims, manuscript wording, harness rules, runtime provenance, evidence references, the retained Gate 5 verifier, and scope-boundary changes, recording the exact gates each delta invalidates. All orchestrator-resolvable blockers are closed; availability is not declaration, and only the thesis author declares a freeze after Gate 6 evidence is present."
     }
   ],
   "gate_state_semantics": {
