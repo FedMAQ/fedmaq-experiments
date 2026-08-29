@@ -1,0 +1,4 @@
+---
+interface:
+  display_name: "JupyterHub Golden Gate"
+  short_description: "Guide exact-commit JupyterHub golden verification"
