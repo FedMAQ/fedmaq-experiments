@@ -13,7 +13,7 @@
   "content_hash": {
     "algorithm": "sha256",
     "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
-    "value": "df7696097fd7488e7c679c31be77a74ba8c64f3d6c7fff19d7012212f7a661ea"
+    "value": "e00ceeb88bef01c4af847cffc78e2708eb9ab1d6d4074fb332b92d1e22e39a84"
   },
   "revision_vector": {
     "fedmaq-experiments": {
@@ -196,14 +196,16 @@
       "gate": 1,
       "name": "Literature/protocol audit",
       "responsible_verifier": "assurance orchestrator (subagents permitted)",
-      "state": "BLOCKED",
+      "state": "PASS",
       "mandatory_evidence": [
         "source-grounded findings across the three bound repositories",
         "the scope boundary recorded verbatim",
         "the carried-forward verdict list with its basis",
         "no unresolved static mismatch inside the boundary"
       ],
-      "evidence": [],
+      "evidence": [
+        "docs/freeze/gate-1-evidence-2026-08-29.md"
+      ],
       "notes": "Framed as a delta audit, not a from-zero sweep, and the framing is recorded rather than left to omission. Anchor is 530f8ae (2026-08-26), the fedmaq-experiments state contemporaneous with the baseline implementation audit 7cb6154 in fedmaq-analyses. Delta 530f8ae..6783a30 is 46 commits, 32 of which touch behavior-bearing paths. The audit covers that delta plus re-verification of every prior verdict the delta could have disturbed: architecture passes #46/#53/#73 (pass 3 decomposed the simulation lifecycle), the #24/#25/#26 quantizer and byte-accounting seam, #34 power-mean reformulation, and the surfaces #11 pass 22 recorded as unreached. A prior verdict may be carried forward only if the gate 1 evidence names it and states the basis; silence is not carry-forward. A fresh #11 pass is the manuscript arm of this gate - #11 is Living/Recurring and is not closed here."
     },
     {
