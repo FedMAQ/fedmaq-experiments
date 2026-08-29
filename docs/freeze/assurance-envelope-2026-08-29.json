@@ -13,14 +13,15 @@
   "content_hash": {
     "algorithm": "sha256",
     "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
-    "value": "e00ceeb88bef01c4af847cffc78e2708eb9ab1d6d4074fb332b92d1e22e39a84"
+    "value": "784b7553593ba81c7b2bde6028838a1a3f00f3b263e9ab68415155707abaab39"
   },
   "revision_vector": {
     "fedmaq-experiments": {
       "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
-      "revision": "6783a3010e87a0a95232674cf585b70238d0011c",
+      "revision": "d804b7f2223fa92a8d2bcde803bec1501454faf5",
       "clean_tree": true,
-      "role": "pipeline implementation, configuration, dispatch, tests, golden harness"
+      "role": "pipeline implementation, configuration, dispatch, tests, golden harness",
+      "binding_note": "A binding, not an event log: this field tracks candidate.revision and moves with every re-pin. Contrast runtime_provenance.executed_revision and golden_harness.harness_revision, which are historical records of gate-0's execution and capture events and are not updated on re-pin."
     },
     "fedmaq-literature": {
       "canonical_identity": "https://github.com/FedMAQ/fedmaq-literature",
@@ -51,41 +52,34 @@
   },
   "candidate": {
     "repository": "fedmaq-experiments",
-    "revision": "6783a3010e87a0a95232674cf585b70238d0011c",
-    "short": "6783a30",
+    "revision": "d804b7f2223fa92a8d2bcde803bec1501454faf5",
+    "short": "d804b7f",
     "pinned_on": "2026-08-29",
     "pin_semantics": "A named commit, not a follow-the-branch relation. main advancing does not move the pin, and every gate runs at the pin.",
     "behavioral_content_commit": "5617bf06f0214887815bdc20bba91524a825e757",
     "re_pin_attestation": {
-      "delta": "5617bf0..6783a30",
+      "delta": "6783a30..d804b7f",
       "commits": [
         {
-          "revision": "3cfa444",
+          "revision": "667e5f5853547a139283057e59c49b8bad04f2f1",
           "paths": [
-            ".agents/skills/jupyterhub-golden-gate/**"
+            "docs/freeze/assurance-envelope-2026-08-29.json"
           ],
           "inside_scope_include": false
         },
         {
-          "revision": "b0b2c81",
+          "revision": "d804b7f2223fa92a8d2bcde803bec1501454faf5",
           "paths": [
-            "AGENTS.md",
-            "docs/agents/triage-labels.md"
-          ],
-          "inside_scope_include": false
-        },
-        {
-          "revision": "6783a30",
-          "paths": [
-            "CONTEXT.md"
+            "docs/freeze/assurance-envelope-2026-08-29.json",
+            "docs/freeze/gate-1-evidence-2026-08-29.md"
           ],
           "inside_scope_include": false
         }
       ],
       "clause": "#74 section 2 mechanical-repair clause",
       "attested": true,
-      "attestation": "No path in the 5617bf0..6783a30 delta falls inside docs/freeze/source_manifest.json scope.include. The delta changes no protocol and no claim. The one judgement call is 6783a30, which adds the Freeze States glossary entry to CONTEXT.md, a claims-bearing document: it is admitted because it introduces terminology this envelope itself requires, names no protocol, metric, result or configuration, and asserts nothing about pipeline behaviour. Recorded, not inferred from the diff being small.",
-      "not_licensed_by_this_attestation": "Reuse of any #73 evidence. Every gate below runs fresh at the candidate; neither #73 JupyterHub golden evidence nor its Terra High review is carried forward."
+      "attestation": "No path in the 6783a30..d804b7f delta falls inside docs/freeze/source_manifest.json scope.include. Both commits are envelope/gate-evidence artifacts only (gate 0's envelope creation, gate 1's PASS disposition and evidence file) - no protocol, configuration, source code or claims-bearing content changed. behavioral_content_commit is therefore unchanged from the prior pin. Recorded, not inferred from the diff being small. This is gate 2's final re-pin: the candidate-freeze window opens from here per invalidation_matrix.candidate_freeze_window.",
+      "not_licensed_by_this_attestation": "Reuse of any evidence from gate 3 onward as already produced. Every gate from here runs fresh against this pin; only gates 0 and 1 are carried forward, and only because this attestation says so explicitly."
     }
   },
   "baseline": {
@@ -99,7 +93,7 @@
     "path": "docs/freeze/source_manifest.json",
     "schema_version": 1,
     "state_at_candidate": "current",
-    "verified_by": "just freeze, user-run 2026-08-29",
+    "verified_by": "just freeze, user-run 2026-08-29 at 6783a30; currency at the d804b7f re-pin relies on scripts/check_freeze.py --check passing within the gate-2 just check run (assurance orchestrator, 2026-08-29), licensed because the 6783a30..d804b7f delta touches no scope.include path (gate-2 re-pin attestation).",
     "verified_output": "docs\\freeze\\source_manifest.json is current",
     "hashed_file_count": 146,
     "scope_include": [
@@ -212,14 +206,16 @@
       "gate": 2,
       "name": "Repair and bounded re-audit",
       "responsible_verifier": "assurance orchestrator",
-      "state": "BLOCKED",
+      "state": "PASS",
       "mandatory_evidence": [
         "disposition of every gate-1 finding",
         "confirmation that repairs altered no unapproved method contract",
         "final candidate re-pin"
       ],
-      "evidence": [],
-      "notes": "Routine repairs only, classified by effect. Method changes, source-fidelity trade-offs, frozen-configuration changes and result interpretation escalate to the thesis author. The candidate-freeze window opens at the final re-pin of this gate."
+      "evidence": [
+        "docs/freeze/gate-2-evidence-2026-08-29.md"
+      ],
+      "notes": "Routine repairs only, classified by effect. Method changes, source-fidelity trade-offs, frozen-configuration changes and result interpretation escalate to the thesis author. The candidate-freeze window opens at the final re-pin of this gate. Gate 1 left zero open findings requiring repair, so this gate's re-audit is a re-pin plus a documented disposition of the two already-dispositioned gate-1 findings, not a fresh repair pass. Candidate re-pinned to d804b7f; the candidate-freeze window is now open."
     },
     {
       "gate": 3,
@@ -247,7 +243,7 @@
         "full repository check output tied to the candidate revision"
       ],
       "evidence": [],
-      "notes": "just check at 6783a30."
+      "notes": "just check at 6783a30. Stale relative to the gate-2 re-pin: candidate.revision (d804b7f) is authoritative where this note disagrees. A future run of this gate must execute just check at the live candidate.revision, not at the revision named here."
     },
     {
       "gate": 5,
