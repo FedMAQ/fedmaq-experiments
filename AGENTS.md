@@ -8,7 +8,9 @@
 - Agents do not run experiments; emit paste-ready JupyterHub commands and await user-supplied results.
 - Do not edit configurations frozen downstream of the `pre-registration` tag.
 - Read `docs/adr/` for durable decisions and `docs/agents/` for task-specific reference.
-- GitHub Issues are the sole live-state record; do not create tracked handoffs, changelogs, or status files.
+- Use GitHub Issues as the sole live-state record for specifications and task state; read `docs/agents/issue-tracker.md` before issue work. Do not create tracked handoffs, changelogs, or status files.
+- Apply one canonical triage state to active request issues; read `docs/agents/triage-labels.md` when labeling or triaging.
+- Read `docs/agents/domain.md` when repository domain boundaries or shared authority need clarification.
 - When the user explicitly requests sync, wrap-up, push, or GitHub issue reconciliation, treat the named GitHub actions as authorized and proceed without redundant confirmation, subject to platform/tool permission gates.
 - Direct-to-`main`, no PRs (ADR-0017). Commit clean before pushing; run `just check` first.
 - Run `just check` before staging or committing changes.
