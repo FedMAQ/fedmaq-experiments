@@ -13,7 +13,7 @@
   "content_hash": {
     "algorithm": "sha256",
     "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
-    "value": "784b7553593ba81c7b2bde6028838a1a3f00f3b263e9ab68415155707abaab39"
+    "value": "1ff8c49b97b2805e4ea954b04cdd2f565065e4d844a88794e3b3e214e5ac99cf"
   },
   "revision_vector": {
     "fedmaq-experiments": {
@@ -231,19 +231,23 @@
         "reviewer output",
         "disposition"
       ],
-      "evidence": [],
-      "notes": "User-run: the orchestrator cannot invoke the external reviewer. Preparing the sanitized manifest, its hash and its exclusions is orchestrator work."
+      "evidence": [
+        "docs/freeze/gate-3-manifest-2026-08-29.md"
+      ],
+      "notes": "User-run: the orchestrator cannot invoke the external reviewer. The sanitized manifest, its hash, exclusions, scope/lens, and model/reasoning setting are prepared in the evidence file. Reviewer output and thesis-author disposition remain absent, so this gate stays BLOCKED."
     },
     {
       "gate": 4,
       "name": "Local verification at the candidate",
       "responsible_verifier": "assurance orchestrator",
-      "state": "BLOCKED",
+      "state": "PASS",
       "mandatory_evidence": [
         "full repository check output tied to the candidate revision"
       ],
-      "evidence": [],
-      "notes": "just check at 6783a30. Stale relative to the gate-2 re-pin: candidate.revision (d804b7f) is authoritative where this note disagrees. A future run of this gate must execute just check at the live candidate.revision, not at the revision named here."
+      "evidence": [
+        "docs/freeze/gate-4-evidence-2026-08-29.md"
+      ],
+      "notes": "just check executed at the immutable candidate d804b7f2223fa92a8d2bcde803bec1501454faf5 in a detached checkout on 2026-08-29. Freeze certificate and Ruff passed; pytest reported 415 passed and 1 warning in 247.48s."
     },
     {
       "gate": 5,
@@ -283,10 +287,11 @@
       "mandatory_evidence": [
         "remaining blockers",
         "which of pipeline / evidence / results freeze is available",
-        "the boundary the availability is stated against"
+        "the boundary the availability is stated against",
+        "demonstration of the invalidation matrix with representative deltas and exact gate invalidations"
       ],
       "evidence": [],
-      "notes": "Availability is not declaration. Only the thesis author declares a freeze."
+      "notes": "Gate 7 owns the #75 acceptance requirement to demonstrate the invalidation matrix, not merely assert it. Its evidence must use disposable copies or an equivalent dry run to cover behavior, configuration, protocol claims, manuscript wording, harness rules, runtime provenance, evidence references, and scope-boundary changes, recording the exact gates each delta invalidates. Availability is not declaration. Only the thesis author declares a freeze."
     }
   ],
   "gate_state_semantics": {
