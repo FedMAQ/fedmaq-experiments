@@ -13,7 +13,7 @@
   "content_hash": {
     "algorithm": "sha256",
     "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
-    "value": "1ff8c49b97b2805e4ea954b04cdd2f565065e4d844a88794e3b3e214e5ac99cf"
+    "value": "f2f5f231d9fd96fee64e8bf16ad038b59e584aac6a52ff2ec2f988c2a918368f"
   },
   "revision_vector": {
     "fedmaq-experiments": {
@@ -156,7 +156,7 @@
       {
         "surface": "fedmaq-experiments docs/agents/**, docs/audits/**, docs/experiments/**, docs/freeze/**",
         "owning_ticket": "FedMAQ/fedmaq-experiments#11",
-        "basis": "Not audited at all by pass 22. docs/freeze/** is gate input - its integrity is checked by the freeze certificate and the golden gate, not by prose audit."
+        "basis": "Not audited at all by pass 22. docs/freeze/** is gate input, but has no blanket source-certificate or golden-CSV coverage; individual formal evidence records are integrity-bound only where this envelope records an evidence digest."
       },
       {
         "surface": "fedmaq-analyses, fedmaq-presentations",
@@ -200,6 +200,9 @@
       "evidence": [
         "docs/freeze/gate-1-evidence-2026-08-29.md"
       ],
+      "evidence_sha256": {
+        "docs/freeze/gate-1-evidence-2026-08-29.md": "54627059e0f2eac653aac374187f08b7baf965cca7f5dc2e49a0cdd50fd3f808"
+      },
       "notes": "Framed as a delta audit, not a from-zero sweep, and the framing is recorded rather than left to omission. Anchor is 530f8ae (2026-08-26), the fedmaq-experiments state contemporaneous with the baseline implementation audit 7cb6154 in fedmaq-analyses. Delta 530f8ae..6783a30 is 46 commits, 32 of which touch behavior-bearing paths. The audit covers that delta plus re-verification of every prior verdict the delta could have disturbed: architecture passes #46/#53/#73 (pass 3 decomposed the simulation lifecycle), the #24/#25/#26 quantizer and byte-accounting seam, #34 power-mean reformulation, and the surfaces #11 pass 22 recorded as unreached. A prior verdict may be carried forward only if the gate 1 evidence names it and states the basis; silence is not carry-forward. A fresh #11 pass is the manuscript arm of this gate - #11 is Living/Recurring and is not closed here."
     },
     {
@@ -215,12 +218,15 @@
       "evidence": [
         "docs/freeze/gate-2-evidence-2026-08-29.md"
       ],
+      "evidence_sha256": {
+        "docs/freeze/gate-2-evidence-2026-08-29.md": "34979975f6e2f8a427be5eacb6946460939ae38d5f0dc5f936fc9b1599c861c8"
+      },
       "notes": "Routine repairs only, classified by effect. Method changes, source-fidelity trade-offs, frozen-configuration changes and result interpretation escalate to the thesis author. The candidate-freeze window opens at the final re-pin of this gate. Gate 1 left zero open findings requiring repair, so this gate's re-audit is a re-pin plus a documented disposition of the two already-dispositioned gate-1 findings, not a fresh repair pass. Candidate re-pinned to d804b7f; the candidate-freeze window is now open."
     },
     {
       "gate": 3,
       "name": "Independent review (GPT-5.6 Terra High)",
-      "responsible_verifier": "thesis author (external model); manifest prepared by the orchestrator",
+      "responsible_verifier": "thesis author (verifiable GPT-5.6 Terra High review required); manifest prepared by the orchestrator",
       "state": "BLOCKED",
       "mandatory_evidence": [
         "sanitized input manifest",
@@ -232,9 +238,14 @@
         "disposition"
       ],
       "evidence": [
-        "docs/freeze/gate-3-manifest-2026-08-29.md"
+        "docs/freeze/gate-3-manifest-2026-08-29.md",
+        "docs/freeze/gate-3-review-2026-08-29.md"
       ],
-      "notes": "User-run: the orchestrator cannot invoke the external reviewer. The sanitized manifest, its hash, exclusions, scope/lens, and model/reasoning setting are prepared in the evidence file. Reviewer output and thesis-author disposition remain absent, so this gate stays BLOCKED."
+      "evidence_sha256": {
+        "docs/freeze/gate-3-manifest-2026-08-29.md": "f939188391b679828f29793ad58768eba2efd42f89de743cb764ef527ddedef5",
+        "docs/freeze/gate-3-review-2026-08-29.md": "07e95a1b36e0504028723168fa75374477f26ed8fdc9623e52ab2d28971f75b7"
+      },
+      "notes": "The final 45-row manifest and review artifact are digest-bound here, and the review findings are recorded. The available subagent execution did not expose an attested GPT-5.6 Terra High model receipt, so Gate 3 remains BLOCKED under fail-closed semantics; the DAdaQuant glossary inconsistency is carried forward for post-freeze repair."
     },
     {
       "gate": 4,
@@ -247,6 +258,9 @@
       "evidence": [
         "docs/freeze/gate-4-evidence-2026-08-29.md"
       ],
+      "evidence_sha256": {
+        "docs/freeze/gate-4-evidence-2026-08-29.md": "9deb1da6406a44941c6aa2c439cadea88551d2611055ef6bf4b96f1831d85f7f"
+      },
       "notes": "just check executed at the immutable candidate d804b7f2223fa92a8d2bcde803bec1501454faf5 in a detached checkout on 2026-08-29. Freeze certificate and Ruff passed; pytest reported 415 passed and 1 warning in 247.48s."
     },
     {
@@ -260,8 +274,13 @@
         "compatibility predicate",
         "named invalidation owner"
       ],
-      "evidence": [],
-      "notes": "The one narrow crossing into fedmaq-analyses. Catches renamed fields, changed units and changed null/zero semantics without performing result analysis."
+      "evidence": [
+        "docs/freeze/gate-5-evidence-2026-08-29.md"
+      ],
+      "evidence_sha256": {
+        "docs/freeze/gate-5-evidence-2026-08-29.md": "9d49ab0764c586889db4855168172d6cab9cf2200a15fa899e00f5f1eec4da5f"
+      },
+      "notes": "The narrow crossing into fedmaq-analyses has a positive check and three negative cases recorded, but the verifier is not persisted as an executable repository artifact. Gate 5 remains BLOCKED until that evidence is made reproducible; the attestation performs no result analysis."
     },
     {
       "gate": 6,
@@ -290,7 +309,12 @@
         "the boundary the availability is stated against",
         "demonstration of the invalidation matrix with representative deltas and exact gate invalidations"
       ],
-      "evidence": [],
+      "evidence": [
+        "docs/freeze/gate-7-evidence-2026-08-29.md"
+      ],
+      "evidence_sha256": {
+        "docs/freeze/gate-7-evidence-2026-08-29.md": "803b5e33ad8f5030faf3671433bb382ccd376500121a53b9511a0219140d7e2c"
+      },
       "notes": "Gate 7 owns the #75 acceptance requirement to demonstrate the invalidation matrix, not merely assert it. Its evidence must use disposable copies or an equivalent dry run to cover behavior, configuration, protocol claims, manuscript wording, harness rules, runtime provenance, evidence references, and scope-boundary changes, recording the exact gates each delta invalidates. Availability is not declaration. Only the thesis author declares a freeze."
     }
   ],

@@ -4,6 +4,15 @@ Envelope: `docs/freeze/assurance-envelope-2026-08-29.json` (#75). Prior gate:
 gate 1, PASS, `docs/freeze/gate-1-evidence-2026-08-29.md`, candidate pin at
 the time `6783a30`.
 
+- Gate: 2
+- Producer: assurance orchestrator
+- Created: 2026-08-29
+- Bound revision vector at final re-pin: `fedmaq-experiments@d804b7f2223fa92a8d2bcde803bec1501454faf5`,
+  `fedmaq-literature@1be87e08d232b8d47ec9c71e80922d7c8235bb5a`,
+  `fedmaq-manuscript@5cc82393d639321c240897dbd7eeb728dfc82a02`
+- Content digest: recorded in the envelope's `evidence_sha256` entry for this
+  historical gate artifact.
+
 ## 1. Disposition of every gate-1 finding
 
 Gate 1's evidence (§1 and §4) names exactly two findings. Both already carry

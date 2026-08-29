@@ -6,6 +6,9 @@ Producer: assurance orchestrator. Run date: 2026-08-29 (Asia/Manila).
 ## Revision binding
 
 - Candidate pin: `d804b7f2223fa92a8d2bcde803bec1501454faf5`.
+- Bound revision vector: `fedmaq-experiments@d804b7f2223fa92a8d2bcde803bec1501454faf5`,
+  `fedmaq-literature@1be87e08d232b8d47ec9c71e80922d7c8235bb5a`,
+  `fedmaq-manuscript@5cc82393d639321c240897dbd7eeb728dfc82a02`.
 - Executed checkout: detached `d804b7f2223fa92a8d2bcde803bec1501454faf5`.
 - `main` was at `5d312d585313b8db56ef98ff2e93903d0e97eb97` when this gate was
   prepared; `git merge-base --is-ancestor d804b7f 5d312d5` returned success.
@@ -16,7 +19,7 @@ Producer: assurance orchestrator. Run date: 2026-08-29 (Asia/Manila).
   under `docs/freeze/`, outside `source_manifest.json`'s `scope.include`, and
   cannot affect the freeze check, Ruff, or pytest inputs.
 - Command: `just check`.
-- Evidence digest: `cc04d1563699d05ad112b13fac63c27bb328444e50b1f3effba392198e44aaac`.
+- Evidence digest: `3f1c20fa8c87fdaf03bcf628debe57c23425bac07283dd343f6cd8e7952f25b1`.
 
 The evidence digest is SHA-256 over this file's UTF-8 bytes with the complete
 - `Evidence digest: ...` line replaced by the literal text `- Evidence digest: <excluded>`. No

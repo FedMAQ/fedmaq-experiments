@@ -9,6 +9,12 @@ gate-0 envelope artifact — not a `scope.include` path, not claims-bearing
 content); fedmaq-literature `1be87e08d232b8d47ec9c71e80922d7c8235bb5a`;
 fedmaq-manuscript `5cc82393d639321c240897dbd7eeb728dfc82a02`.
 
+- Gate: 1
+- Producer: assurance orchestrator
+- Created: 2026-08-29
+- Content digest: recorded in the envelope's `evidence_sha256` entry for this
+  historical gate artifact.
+
 ## 1. Source-grounded findings
 
 ### fedmaq-experiments (the delta)
