@@ -321,6 +321,46 @@ _Avoid_: assuming a compressor_hook's `rng` set at `client_fn` construction time
 what compress() actually draws from — Flower rebuilds `client_fn` fresh every round,
 so only the per-round reseed matters.
 
+### Freeze States (`fedmaq-experiments`#74)
+
+Three distinct states, three distinct gates, three distinct owners of what may be
+claimed. They are reached in order and never collapse into one another; "frozen"
+unqualified is not a state this project has. Each is declared only by the thesis
+author, on evidence bound to one assurance envelope.
+
+**Assurance envelope**:
+The dated, content-hashed record that binds one candidate's revision vector
+(`fedmaq-experiments`, `fedmaq-literature`, `fedmaq-manuscript`), baseline and
+candidate commits, golden-harness and configuration identity, gate states, and
+evidence references under a single SHA-256. Gate states are PASS, FAIL, BLOCKED
+and INVALIDATED — a gate with missing, stale or conflicting evidence is never an
+implicit PASS. Evidence belongs to exactly one envelope; a behavior- or
+claim-affecting change creates a new one.
+_Avoid_: **the freeze certificate** (that is `docs/freeze/source_manifest.json`'s
+architecture hash over `conf/**`, `src/**`, `scripts/**`, `tests/**` and the
+build files — one input to one gate, not the envelope)
+
+**Pipeline freeze**:
+The code, configuration and protocol are defensible and may be run. Requires the
+static audit, repair and re-audit, independent review, local verification,
+telemetry compatibility attestation, and the exact-commit JupyterHub golden gate.
+It licenses dispatch; it licenses nothing about the runs' contents.
+_Avoid_: reading it as clearance for `#22` step 6 — the downstream cells have
+their own blocker in `#45`
+
+**Evidence freeze**:
+The prescribed campaign artifacts exist, are ingested, and carry hash provenance.
+Requires pipeline freeze plus the campaign's own manifests and integrity checks.
+It licenses analysis; it licenses no claim about what the analysis shows.
+_Avoid_: treating a completed dispatch as evidence freeze — completion is not
+provenance closure
+
+**Results freeze**:
+The manuscript's claims are supported by the frozen evidence. Requires evidence
+freeze plus claim-support review. This is the only state that licenses a
+scientific conclusion in prose.
+_Avoid_: **the results are frozen** as shorthand for "the runs finished"
+
 ### Server-KD Repair Study (Section 5.5–5.7)
 
 The v2 arc's terms. The protocol itself is
