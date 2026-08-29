@@ -73,9 +73,12 @@ two known ways this host starves a sweep.
 No allocation run precedes this gate.
 
 1. Resolve the implementation and literature audits, run `just check`, and verify
-   each expected-run manifest with its generator. A method or accounting change
-   after a prior bit-exact capture makes that capture historical evidence, even when
-   the CSV schema is unchanged.
+   each expected-run manifest with its generator. `scripts/check_freeze.py --check`
+   compares the machine-readable source certificate against the current tree and
+   reports changed, missing, or newly discovered campaign sources. A method or
+   accounting change after a prior bit-exact capture makes that capture historical
+   evidence, even when the CSV schema is unchanged; the source certificate does not
+   replace the GPU golden comparison.
 2. On the GPU host, capture and compare the golden set for the exact commit that will
    be tagged. This is a user-run gate; an agent prepares the commands and waits for
    the returned evidence. Do not reuse a capture from before a quantizer or byte-axis
@@ -160,7 +163,7 @@ replacement bundle remains 243 cells, not 345.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in
-  `tests/test_simulation.py`. See [ADR-0004](../adr/0004-confirmatory-grid-design.md).
+  `tests/test_config_and_dispatch.py`. See [ADR-0004](../adr/0004-confirmatory-grid-design.md).
 - **Prefer `--skip_completed` for recovery.** It re-dispatches only runs missing a
   final-round `final_global_model.pt`, so a sweep that lost tasks 57 and 91 is
   repaired by one re-invocation with no index arithmetic. `--start_at N` still exists

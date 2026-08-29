@@ -231,7 +231,7 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
     Scope-agnostic by contract: it expands whatever matrix it is handed, including
     ``ci_test`` and the smoke matrices. Any decision about which matrices are
     reportable belongs to the caller, so that narrowing one caller cannot narrow
-    ``tests/test_simulation.py``'s guard over *every* file in ``conf/matrix/``.
+    ``tests/test_config_and_dispatch.py``'s guard over *every* file in ``conf/matrix/``.
     """
     seeds = [int(s) for s in matrix.get("seeds", [0])]
     runs_spec = matrix.get("runs", []) or []

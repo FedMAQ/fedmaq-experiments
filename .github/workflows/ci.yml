@@ -1,13 +1,21 @@
 name: CI
 
-# Temporarily disabled - re-enable after addressing CI failures
-# on:
-#   push:
-#     branches: [main]
-#   pull_request:
-on: workflow_dispatch
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
+  freeze:
+    # The source certificate is dependency-free and catches scope escape before
+    # the slower project checks run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify architecture freeze certificate
+        run: python scripts/check_freeze.py --check
+
   lint:
     # Fast, deterministic gate: ruff needs no project dependencies, so it runs via
     # `uvx` without the CUDA-pinned torch install. This is the blocking check.

@@ -1,4 +1,4 @@
-"""Config-composition and in-process simulation smoke tests."""
+"""Configuration, matrix-dispatch, and run-provenance contract tests."""
 
 import json
 from pathlib import Path

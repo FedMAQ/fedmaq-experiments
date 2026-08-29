@@ -1049,7 +1049,7 @@ def _expand_matrix(name):
 def test_factorial_on_disk_reads_back_as_eight_distinct_cells(tmp_path):
     """The shipped pass2_factorial layout must survive a round trip to disk.
 
-    Asserting directory uniqueness (test_simulation.py) proves the runs do not
+    Asserting directory uniqueness (test_config_and_dispatch.py) proves the runs do not
     overwrite each other. It does not prove analysis.py can still *find* them:
     ``parse_run_directory`` keys on a path length of exactly 7 and reads the group
     from the canonical record, so the ``fedmaq__<variant>`` segment introduced by

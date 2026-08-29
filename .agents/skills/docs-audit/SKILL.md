@@ -23,7 +23,7 @@ Conventions enforced: `CONTEXT.md` § Working conventions, and
    overlap and say which should be canonical.
    - **Run counts are the known-recurring case.** No tracked file may carry one.
      Totals belong in the pinned dispatch Issue; per-stage arithmetic is pinned by
-     `tests/test_simulation.py`, not by prose. Any run count in `docs/` or
+     `tests/test_config_and_dispatch.py`, not by prose. Any run count in `docs/` or
    A legacy singular agent directory is a finding, even if currently correct.
 
 3. **Dangling references.** Relative links resolving to real files; `ADR-NNNN`

@@ -82,7 +82,7 @@ is compared against carry it.** The flag is overridden per matrix file, never se
 in an algorithm config. The control arm's partner is the primary grid, so it
 carries the pipeline; the formulation study and every ablation arm are contrasted
 within their own sets, so they do not. Both directions are enforced in
-`tests/test_simulation.py`.
+`tests/test_config_and_dispatch.py`.
 
 ### The uniform-memory control arm is the memory-blind condition
 

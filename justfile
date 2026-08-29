@@ -4,7 +4,10 @@ set windows-shell := ["pwsh", "-NoProfile", "-Command"]
 default: check
 
 # Run all standard verification checks
-check: lint test
+check: freeze lint test
+
+freeze:
+    uv run python scripts/check_freeze.py --check
 
 # Run pytest test suite
 test *args="":

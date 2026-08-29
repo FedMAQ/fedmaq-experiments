@@ -1,4 +1,4 @@
-"""Federated-learning environment tests."""
+"""Model, partitioning, algorithm-hook, and simulation contract tests."""
 
 import flwr as fl
 import numpy as np
