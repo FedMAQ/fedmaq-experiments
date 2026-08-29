@@ -35,6 +35,7 @@ from analysis import (
     iso_byte_scores,
     power_mean_stage_one,
     resolve_frozen_formulation,
+    resolve_metrics_frame,
     resolve_power_mean_degree,
     round_at_budget,
     round_completeness,
@@ -49,8 +50,71 @@ from common import get_canonical_output_dir
 from dump_expected_runs import POWER_MEAN_RECUT_MATRICES, expected_identities
 
 from fedmaq.core.run_identity import parse_run_directory
+from tests.run_fixtures import write_run
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_canonical_run_tree_carries_identity_and_provenance(canonical_run_tree, tmp_path):
+    run = canonical_run_tree.write_run(
+        "fedmaq",
+        2,
+        7,
+        _df([1, 100], [0.4, 0.8], [2.0, 20.0]),
+        group=FORMULATION_STUDY_GROUP,
+    )
+
+    parsed = parse_run_directory(run.job_dir, tmp_path)
+    manifest = json.loads((run.job_dir / "run_manifest.json").read_text(encoding="utf-8"))
+
+    assert parsed is not None
+    assert parsed.algorithm_path == "fedmaq"
+    assert parsed.variant == "f2"
+    assert manifest["run"]["algorithm_config"] == "fedmaq"
+    assert manifest["run"]["seed"] == 7
+    assert set(manifest["git"]) >= {"commit", "branch", "tag", "dirty"}
+    assert manifest["source_root"] == run.job_dir.resolve().as_posix()
+    assert len(manifest["config_sha256"]) == 64
+
+
+def test_selection_accepts_pre_resolved_metrics_frames(tmp_path, monkeypatch):
+    """Analysis can use an in-memory frame without reopening a CSV artifact."""
+    fedavg_path = tmp_path / "fedavg.csv"
+    fedmaq_path = tmp_path / "fedmaq.csv"
+    fedavg = RunRecord(
+        job_dir=tmp_path / "fedavg",
+        dataset="cifar10",
+        alpha=0.5,
+        algorithm="fedavg",
+        formulation=None,
+        seed=1,
+        csv_path=fedavg_path,
+        experiment_group=GRID_GROUP,
+    )
+    fedmaq = RunRecord(
+        job_dir=tmp_path / "fedmaq",
+        dataset="cifar10",
+        alpha=0.5,
+        algorithm="fedmaq",
+        formulation=0,
+        seed=1,
+        csv_path=fedmaq_path,
+        experiment_group=FORMULATION_STUDY_GROUP,
+    )
+    frames = {
+        fedavg_path: _df([1, 2], [0.5, 0.8], [5.0, 10.0]),
+        fedmaq_path: _df([1, 2], [0.5, 0.8], [4.0, 8.0]),
+    }
+
+    monkeypatch.setattr(
+        "analysis.load_round_metrics",
+        lambda _path: pytest.fail("the supplied metrics frames should be sufficient"),
+    )
+
+    assert resolve_metrics_frame(fedmaq, frames) is frames[fedmaq_path]
+    result = select_winner([fedavg, fedmaq], frames=frames)
+
+    assert result["cifar10_alpha_0.5"]["winner"] == 0
 
 
 def _df(rounds, accs, mbs):
@@ -85,8 +149,7 @@ def _write_run(
     dataset="cifar10",
     variant="",
 ):
-    """Write a fake job dir with an experiment_log.csv; return a RunRecord
-    pointing at it (dataset/alpha fixed to keep fixtures small).
+    """Write one canonical fixture run and return its ``RunRecord``.
 
     ``experiment_group`` is not decoration: ``select_winner`` reads formulation
     candidates from the study group alone and the accuracy floor from the grid's
@@ -94,20 +157,16 @@ def _write_run(
     testing a run that no matrix could have produced. FedMAQ therefore defaults
     to the study group and everything else to the grid.
     """
-    group = group or (FORMULATION_STUDY_GROUP if algorithm == "fedmaq" else GRID_GROUP)
-    job_dir = tmp_path / f"{dataset}_{group}_{algorithm}_{variant}_{formulation}_{seed}_{alpha}"
-    job_dir.mkdir()
-    csv_path = job_dir / "experiment_log.csv"
-    _df(list(range(1, len(accs) + 1)), accs, mbs).to_csv(csv_path, index=False)
-    return RunRecord(
-        job_dir=job_dir,
-        dataset=dataset,
+    return write_run(
+        tmp_path,
+        algorithm,
+        formulation,
+        seed,
+        accs,
+        mbs,
+        group=group,
         alpha=alpha,
-        algorithm=algorithm,
-        formulation=formulation,
-        seed=seed,
-        csv_path=csv_path,
-        experiment_group=group,
+        dataset=dataset,
         variant=variant,
     )
 
@@ -497,20 +556,18 @@ def _explore_run(tmp_path, label, seed, final_acc, refinements, alpha=0.3, group
     keep-or-drop calls. The screening sweep and the R=100 confirmation are
     separate groups and are never pooled with it.
     """
-    job_dir = tmp_path / f"{label}_{seed}"
-    job_dir.mkdir()
-    csv_path = job_dir / "experiment_log.csv"
-    _df([1, 2, 50], [0.3, 0.5, final_acc], [10, 20, 30]).to_csv(csv_path, index=False)
-    return RunRecord(
-        job_dir=job_dir,
-        dataset="cifar10",
+    return write_run(
+        tmp_path,
+        "fedmaq",
+        3,
+        seed,
+        [0.3, 0.5, final_acc],
+        [10, 20, 30],
+        rounds=[1, 2, 50],
+        group=group,
         alpha=alpha,
-        algorithm="fedmaq",
-        formulation=3,
-        seed=seed,
-        csv_path=csv_path,
+        variant=label,
         refinements=refinements,
-        experiment_group=group,
         phase="explore",
     )
 
@@ -738,23 +795,18 @@ def _ablation_run(
     exactly as the shipped configs declare it -- that collision is the thing the
     arm-identity plumbing has to survive."""
     algorithm = "fedmaq" if algorithm_config.startswith("fedmaq") else algorithm_config
-    job_dir = tmp_path / f"{group}_{algorithm_config}_f{formulation}_{alpha}_{seed}"
-    job_dir.mkdir()
-    csv_path = job_dir / "experiment_log.csv"
-    _df([1, 50, 100], [acc - 0.2, acc - 0.1, acc], [mb / 4, mb / 2, mb]).to_csv(
-        csv_path, index=False
-    )
-    return RunRecord(
-        job_dir=job_dir,
-        dataset="cifar10",
+    return write_run(
+        tmp_path,
+        algorithm,
+        formulation,
+        seed,
+        [acc - 0.2, acc - 0.1, acc],
+        [mb / 4, mb / 2, mb],
+        rounds=[1, 50, 100],
+        group=group,
         alpha=alpha,
-        algorithm=algorithm,
-        formulation=formulation,
-        seed=seed,
-        csv_path=csv_path,
-        refinements=refinements,
         algorithm_config=algorithm_config,
-        experiment_group=group,
+        refinements=refinements,
         post_process=post_process,
     )
 
@@ -963,40 +1015,27 @@ def test_exploration_margin_ignores_confirmatory_runs_entirely(tmp_path):
 # --------------------------------------------------------------------------
 # End-to-end readback: matrix file -> canonical path -> discover_runs -> margin.
 #
-# Every other fixture in this file constructs RunRecord directly, which skips
-# the path-composition and path-parsing seam entirely. That is exactly how three
-# exploration matrices shipped for months dispatching every cell of a stage into
-# one directory (Decision 76): nothing here ever built a path or read one back.
+# Most fixtures use the shared canonical writer through small domain-specific
+# helpers. The end-to-end case below still exercises path composition, parsing,
+# and discovery against a shipped matrix.
 # --------------------------------------------------------------------------
 
 
 def _write_discoverable_run(root, out_dir, *, seed, refinements, accuracy, alpha=0.3):
     """Write the artifacts discover_runs actually requires, at a real path."""
-    job_dir = root / out_dir
-    (job_dir / ".hydra").mkdir(parents=True, exist_ok=True)
-    OmegaConf.save(
-        OmegaConf.create(
-            {
-                "dataset": {"name": "cifar10"},
-                "heterogeneity": {"alpha": alpha},
-                "seed": seed,
-                "algorithm": {
-                    "name": "fedmaq",
-                    "soft_voting": refinements[0],
-                    "ema_student": refinements[1],
-                    "grad_norm_ema": refinements[2],
-                    "post_process": False,
-                },
-            }
-        ),
-        job_dir / ".hydra" / "config.yaml",
-    )
-    OmegaConf.save(
-        OmegaConf.create({"hydra": {"runtime": {"choices": {"algorithm": "fedmaq"}}}}),
-        job_dir / ".hydra" / "hydra.yaml",
-    )
-    _df([1, 25, 50], [0.1, 0.2, accuracy], [1.0, 2.0, 3.0]).to_csv(
-        job_dir / "experiment_log.csv", index=False
+    write_run(
+        root,
+        "fedmaq",
+        3,
+        seed,
+        [0.1, 0.2, accuracy],
+        [1.0, 2.0, 3.0],
+        rounds=[1, 25, 50],
+        group=Path(out_dir).parts[3],
+        alpha=alpha,
+        refinements=refinements,
+        phase="explore",
+        output_dir=Path(out_dir),
     )
 
 
@@ -1145,11 +1184,11 @@ def test_sustained_crossing_reports_the_start_of_the_first_qualifying_run():
 
 
 def test_round_completeness_keeps_one_entry_per_run_not_per_directory_name(tmp_path):
-    """The canonical output dir does not encode formulation, so every arm at one
-    (alpha, seed) shares a directory name. Keying the audit on that name
-    collapsed all 30 study runs onto 3 entries and reported ``all_complete``
-    for whichever arm happened to be written last -- an audit that passes by
-    discarding 90% of its input, which is worse than no audit at all."""
+    """Identity, rather than a directory name, keeps each arm independently visible.
+
+    The explicit directory override recreates the collision shape that a broken
+    output convention would leave behind, while the run identities remain distinct.
+    """
     runs = []
     for formulation, n_rounds in ((0, 100), (1, 100), (2, 84)):
         for seed in (1, 2):
@@ -1186,7 +1225,7 @@ def test_round_completeness_flags_a_run_that_died_before_the_budget(tmp_path):
 
     report = round_completeness([full, short], expected_round=100)
 
-    assert run_identity(full) == "cifar10|formulation_study|fedmaq||a0.5|f3|s1"
+    assert run_identity(full) == "cifar10|formulation_study|fedmaq|f3|a0.5|f3|s1"
     assert report["all_complete"] is False
     assert report["incomplete_runs"] == [run_identity(short)]
     assert report["runs"][run_identity(full)]["max_round"] == 100
@@ -1757,21 +1796,18 @@ def _tuning_run(
     """One Stage 1b run. The cells of a baseline's sweep differ in nothing the
     record holds *except* ``variant`` -- same algorithm, config name, group and
     skew -- which is why the field exists."""
-    job_dir = tmp_path / f"{algorithm}__{variant}_{seed}"
-    job_dir.mkdir()
-    csv_path = job_dir / "experiment_log.csv"
-    _df([1, 50, 100], [0.3, 0.5, final_acc], [10, 20, 30]).to_csv(csv_path, index=False)
-    return RunRecord(
-        job_dir=job_dir,
-        dataset="cifar10",
+    return write_run(
+        tmp_path,
+        algorithm,
+        None,
+        seed,
+        [0.3, 0.5, final_acc],
+        [10, 20, 30],
+        rounds=[1, 50, 100],
+        group=group,
         alpha=alpha,
-        algorithm=algorithm,
-        formulation=None,
-        seed=seed,
-        csv_path=csv_path,
-        experiment_group=group,
-        phase="explore",
         variant=variant,
+        phase="explore",
     )
 
 

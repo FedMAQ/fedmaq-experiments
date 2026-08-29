@@ -4,6 +4,13 @@ import pytest
 
 from fedmaq.core.partitioning import _load_dataset_cached
 from fedmaq.core.telemetry import TelemetryManager
+from tests.run_fixtures import CanonicalRunTree
+
+
+@pytest.fixture
+def canonical_run_tree(tmp_path):
+    """Provide one canonical run-tree adapter for fixture-based tests."""
+    return CanonicalRunTree(tmp_path)
 
 
 @pytest.fixture(autouse=True)

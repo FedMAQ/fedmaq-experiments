@@ -32,7 +32,7 @@ import math
 import statistics
 import sys
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -45,6 +45,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fedmaq.core.run_identity import parse_run_directory
 from scripts.common import identity_key
+
+MetricsFrames = Mapping[Path, pd.DataFrame]
 
 
 @dataclass
@@ -363,6 +365,7 @@ def exploration_noise_margin(
     runs: list[RunRecord],
     alpha: float = EXPLORATION_ALPHA,
     experiment_group: str = EXPLORATION_GROUP,
+    frames: MetricsFrames | None = None,
 ) -> dict:
     """Measure the exploration phase's noise margin and apply the keep-or-drop rule.
 
@@ -398,6 +401,7 @@ def exploration_noise_margin(
     the multiplicity accounting for the seven comparisons, so the write-up can
     quote both rather than the point estimate alone. Neither changes the rule.
     """
+    frame_for = _frame_resolver(frames)
     # Scope to the exploration phase before anything else. Every confirmatory
     # FedMAQ run -- benchmark grid, formulation study, six of the seven ablation
     # arms -- also declares ``name: fedmaq`` at alpha 0.1/1.0, so an
@@ -425,7 +429,7 @@ def exploration_noise_margin(
 
     by_cell: dict[tuple[bool, bool, bool], list[float]] = {}
     for r in candidates:
-        acc = accuracy_at_round(load_round_metrics(r.csv_path), 10**9)
+        acc = accuracy_at_round(frame_for(r), 10**9)
         by_cell.setdefault(r.refinements, []).append(acc)
 
     unrefined = by_cell.get((False, False, False), [])
@@ -581,6 +585,7 @@ def baseline_tuning_margin(
     alpha: float = EXPLORATION_ALPHA,
     experiment_group: str = BASELINE_TUNING_GROUP,
     reference_variants: dict[str, str] | None = None,
+    frames: MetricsFrames | None = None,
 ) -> dict:
     """Stage 1b's keep-or-drop verdicts, per baseline (§4.3.2, Decision 81).
 
@@ -608,6 +613,7 @@ def baseline_tuning_margin(
     else:
         refs = reference_variants
     specs = baseline_tuning_specs(experiment_group)
+    frame_for = _frame_resolver(frames)
     scoped = [
         r
         for r in runs
@@ -631,7 +637,7 @@ def baseline_tuning_margin(
         cells: dict[str, list[float]] = {}
         curves: dict[int, list[dict]] = {}
         for r in members:
-            df = load_round_metrics(r.csv_path)
+            df = frame_for(r)
             accuracy = accuracy_at_round(df, 100)
             cells.setdefault(r.variant, []).append(accuracy)
             curves.setdefault(r.seed, []).append(
@@ -812,7 +818,37 @@ def load_round_metrics(csv_path: Path) -> pd.DataFrame:
     return pd.read_csv(csv_path)
 
 
-def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> float:
+def resolve_metrics_frame(run: RunRecord, frames: MetricsFrames | None = None) -> pd.DataFrame:
+    """Resolve one run's metrics at the analysis seam.
+
+    With no ``frames`` mapping, the run's CSV is the authoritative artifact and
+    is loaded from ``run.csv_path``. When a mapping is supplied, it must contain
+    ``run.csv_path`` and is used as the in-memory adapter; missing entries raise
+    ``KeyError`` instead of silently reopening a disk artifact.
+    """
+    if frames is None:
+        return load_round_metrics(run.csv_path)
+    return frames[run.csv_path]
+
+
+def _frame_resolver(frames: MetricsFrames | None) -> Callable[[RunRecord], pd.DataFrame]:
+    """Build a cached resolver while keeping the public frame seam read-only."""
+    if frames is not None:
+        return lambda run: resolve_metrics_frame(run, frames)
+
+    cache: dict[Path, pd.DataFrame] = {}
+
+    def resolve(run: RunRecord) -> pd.DataFrame:
+        if run.csv_path not in cache:
+            cache[run.csv_path] = load_round_metrics(run.csv_path)
+        return cache[run.csv_path]
+
+    return resolve
+
+
+def compute_target_floor(
+    runs: list[RunRecord], dataset: str, alpha: float, frames: MetricsFrames | None = None
+) -> float:
     """Legacy v1 floor: 90% of mean final-round uncompressed FedAvg accuracy.
 
     The replacement power-mean selector does not use this floor; it ranks Stage 1a
@@ -835,7 +871,8 @@ def compute_target_floor(runs: list[RunRecord], dataset: str, alpha: float) -> f
             f"the grid's uncompressed control. This is a legacy-v1 analysis input, "
             f"not authorization to dispatch replacement-grid rows early."
         )
-    final_accs = [load_round_metrics(r.csv_path)["test/accuracy"].iloc[-1] for r in fedavg_runs]
+    frame_for = _frame_resolver(frames)
+    final_accs = [frame_for(r)["test/accuracy"].iloc[-1] for r in fedavg_runs]
     return 0.9 * (sum(final_accs) / len(final_accs))
 
 
@@ -927,7 +964,9 @@ def run_identity(r: RunRecord) -> str:
     )
 
 
-def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict:
+def round_completeness(
+    runs: list[RunRecord], expected_round: int = 100, frames: MetricsFrames | None = None
+) -> dict:
     """Per-run check that ``expected_round`` was actually logged.
 
     ``accuracy_at_round`` silently falls back to the last logged row when the
@@ -950,9 +989,10 @@ def round_completeness(runs: list[RunRecord], expected_round: int = 100) -> dict
     straight to ``report[key]`` -- which is the same defect one level up from the
     one this function exists to catch.
     """
+    frame_for = _frame_resolver(frames)
     discovered: dict[str, list[dict]] = {}
     for r in runs:
-        df = load_round_metrics(r.csv_path)
+        df = frame_for(r)
         discovered.setdefault(run_identity(r), []).append(
             {
                 "job_dir": str(r.job_dir),
@@ -1032,6 +1072,7 @@ def closure_certificate(
     manifest_groups: dict[str, dict],
     groups: list[str] | None = None,
     expected_round: int | None = None,
+    frames: MetricsFrames | None = None,
 ) -> dict:
     """Whether every run the design promises is present, once, and finished.
 
@@ -1087,7 +1128,7 @@ def closure_certificate(
         expected = set(body["runs"])
         members = [r for r in runs if r.experiment_group == name]
         observed = Counter(run_identity(r) for r in members)
-        completeness = round_completeness(members, expected_round=group_round)
+        completeness = round_completeness(members, expected_round=group_round, frames=frames)
         missing = sorted(expected - set(observed))
         unexpected = sorted(set(observed) - expected)
         duplicate = {key: count for key, count in sorted(observed.items()) if count > 1}
@@ -1113,7 +1154,7 @@ def closure_certificate(
 def iso_byte_scores(
     runs: list[RunRecord],
     group_of: Callable[[RunRecord], object | None],
-    frames: dict[Path, pd.DataFrame] | None = None,
+    frames: MetricsFrames | None = None,
 ) -> dict[str, dict]:
     """Decision 83's amended criterion, applied to an arbitrary set of arms.
 
@@ -1133,12 +1174,7 @@ def iso_byte_scores(
     rows and raises otherwise, and ``confirmatory_runs`` strips precisely the
     ablation group one caller needs.
     """
-    cache: dict[Path, pd.DataFrame] = frames if frames is not None else {}
-
-    def frame(r: RunRecord) -> pd.DataFrame:
-        if r.csv_path not in cache:
-            cache[r.csv_path] = load_round_metrics(r.csv_path)
-        return cache[r.csv_path]
+    frame = _frame_resolver(frames)
 
     scored = [(r, group_of(r)) for r in runs]
     scored = [(r, g) for r, g in scored if g is not None]
@@ -1218,7 +1254,9 @@ def iso_byte_scores(
     return result
 
 
-def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dict:
+def select_winner_iso_byte(
+    runs: list[RunRecord], k_consecutive: int = 5, frames: MetricsFrames | None = None
+) -> dict:
     """Amended primary selection: top-1 accuracy at the minimum common
     cumulative-MB budget across the compared arms (Decision 83, 2026-08-06).
 
@@ -1248,18 +1286,19 @@ def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dic
         and r.algorithm_config == "fedmaq"
         and r.formulation is not None
     ]
-    frames: dict[Path, pd.DataFrame] = {}
-    result = iso_byte_scores(fedmaq_runs, lambda r: r.formulation, frames=frames)
+    frame_cache = dict(frames) if frames is not None else None
+    frame_for = _frame_resolver(frame_cache)
+    result = iso_byte_scores(fedmaq_runs, lambda r: r.formulation, frames=frame_cache)
 
     by_seed = {(r.dataset, r.alpha, r.formulation, r.seed): r for r in fedmaq_runs}
     for cell in result.values():
         dataset, alpha = cell["dataset"], cell["alpha"]
-        floor = compute_target_floor(eligible, dataset, alpha)
+        floor = compute_target_floor(eligible, dataset, alpha, frames=frame_cache)
         detail = cell.pop("groups")
         for formulation, entry in detail.items():
             first_touch_ok, sustained_ok, final_gate_ok = True, True, True
             for seed, seed_entry in entry["seeds"].items():
-                df = frames[by_seed[(dataset, alpha, formulation, seed)].csv_path]
+                df = frame_for(by_seed[(dataset, alpha, formulation, seed)])
                 ft_round, ft_mb = first_crossing(df, floor)
                 sc_round, _ = sustained_crossing(df, floor, k_consecutive)
                 # bool(): ``floor`` comes back from pandas as a numpy scalar, so
@@ -1290,7 +1329,9 @@ def select_winner_iso_byte(runs: list[RunRecord], k_consecutive: int = 5) -> dic
     return result
 
 
-def select_power_mean_degree_iso_byte(runs: list[RunRecord]) -> dict:
+def select_power_mean_degree_iso_byte(
+    runs: list[RunRecord], frames: MetricsFrames | None = None
+) -> dict:
     """Select the Stage-1 compensation degree at the minimum common MB budget.
 
     The first re-cut stage selects only among the seven power-mean degrees. F0,
@@ -1326,7 +1367,7 @@ def select_power_mean_degree_iso_byte(runs: list[RunRecord]) -> dict:
                 f"power-mean Stage 1 is incomplete for {dataset} alpha={alpha}: "
                 f"missing variants={missing}, invalid seeds={bad_seeds}"
             )
-    return iso_byte_scores(candidates, lambda r: r.variant)
+    return iso_byte_scores(candidates, lambda r: r.variant, frames=frames)
 
 
 def resolve_power_mean_degree(winner_result: dict, dataset: str = "cifar10") -> dict:
@@ -1361,7 +1402,7 @@ def resolve_power_mean_degree(winner_result: dict, dataset: str = "cifar10") -> 
     }
 
 
-def select_winner(runs: list[RunRecord]) -> dict:
+def select_winner(runs: list[RunRecord], frames: MetricsFrames | None = None) -> dict:
     """Apply the pre-registered winner rule independently per (dataset, alpha).
 
     For each formulation (0-4), a formulation is disqualified if ANY of its 3 seeds
@@ -1380,6 +1421,7 @@ def select_winner(runs: list[RunRecord]) -> dict:
     written into ``conf/algorithm/fedmaq.yaml``, including the branches for a
     split verdict and for a field in which nothing qualified.
     """
+    frame_for = _frame_resolver(frames)
     result: dict = {}
     runs = confirmatory_runs(runs)
     # Three filters, each removing a different impostor:
@@ -1398,7 +1440,7 @@ def select_winner(runs: list[RunRecord]) -> dict:
     datasets_alphas = sorted({(r.dataset, r.alpha) for r in fedmaq_runs})
 
     for dataset, alpha in datasets_alphas:
-        floor = compute_target_floor(runs, dataset, alpha)
+        floor = compute_target_floor(runs, dataset, alpha, frames=frames)
         formulations = sorted(
             {r.formulation for r in fedmaq_runs if r.dataset == dataset and r.alpha == alpha}
         )
@@ -1415,7 +1457,7 @@ def select_winner(runs: list[RunRecord]) -> dict:
             crossing_mbs = []
             r100_accs = []
             for r in seed_runs:
-                run_df = load_round_metrics(r.csv_path)
+                run_df = frame_for(r)
                 round_num, cumulative_mb = first_crossing(run_df, floor)
                 seed_results[r.seed] = {
                     "round": round_num,
@@ -1637,7 +1679,9 @@ def resolve_frozen_formulation(
     return _verdict("divergence_severe_skew_breaks", severe_winner)  # Rule 2.
 
 
-def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
+def compare_to_baselines(
+    runs: list[RunRecord], winner_result: dict, frames: MetricsFrames | None = None
+) -> dict:
     """Headline baseline comparison (chapter_4.tex Section 4, statistical
     procedure + convergence-stability metric).
 
@@ -1659,6 +1703,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     ``winner_result`` is consulted only to check that the grid actually ran the
     frozen formulation. See Decision 71.
     """
+    frame_for = _frame_resolver(frames)
     result: dict = {}
     runs = [r for r in confirmatory_runs(runs) if r.experiment_group == GRID_GROUP]
     frozen = {
@@ -1668,7 +1713,7 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     }
     grid_targets = sorted({(r.dataset, r.alpha) for r in runs if r.algorithm_config == "fedmaq"})
     for dataset, alpha in grid_targets:
-        floor = compute_target_floor(runs, dataset, alpha)
+        floor = compute_target_floor(runs, dataset, alpha, frames=frames)
         fedmaq_by_seed = {
             r.seed: r
             for r in runs
@@ -1700,8 +1745,8 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
             per_seed: dict[int, dict] = {}
             deltas = []
             for seed in common_seeds:
-                fedmaq_df = load_round_metrics(fedmaq_by_seed[seed].csv_path)
-                baseline_df = load_round_metrics(baseline_by_seed[seed].csv_path)
+                fedmaq_df = frame_for(fedmaq_by_seed[seed])
+                baseline_df = frame_for(baseline_by_seed[seed])
                 fedmaq_acc = accuracy_at_round(fedmaq_df, 100)
                 baseline_acc = accuracy_at_round(baseline_df, 100)
                 delta = fedmaq_acc - baseline_acc
@@ -1734,7 +1779,9 @@ def compare_to_baselines(runs: list[RunRecord], winner_result: dict) -> dict:
     return result
 
 
-def compare_to_baselines_iso_byte(runs: list[RunRecord], frozen_formulation: int | None) -> dict:
+def compare_to_baselines_iso_byte(
+    runs: list[RunRecord], frozen_formulation: int | None, frames: MetricsFrames | None = None
+) -> dict:
     """The headline baseline comparison under Decision 83's criterion.
 
     Same pairing and same freeze check as :func:`compare_to_baselines`, which is
@@ -1759,7 +1806,6 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], frozen_formulation: int
     """
     result: dict = {}
     grid = [r for r in confirmatory_runs(runs) if r.experiment_group == GRID_GROUP]
-    frames: dict[Path, pd.DataFrame] = {}
     for dataset, alpha in sorted(
         {(r.dataset, r.alpha) for r in grid if r.algorithm_config == "fedmaq"}
     ):
@@ -1828,7 +1874,10 @@ def compare_to_baselines_iso_byte(runs: list[RunRecord], frozen_formulation: int
 
 
 def fedavg_at_fedmaq_budget(
-    runs: list[RunRecord], formulation: int, dataset: str = "cifar10"
+    runs: list[RunRecord],
+    formulation: int,
+    dataset: str = "cifar10",
+    frames: MetricsFrames | None = None,
 ) -> dict:
     """Legacy-v1 preview of FedAvg at a provisional FedMAQ byte budget.
 
@@ -1863,7 +1912,7 @@ def fedavg_at_fedmaq_budget(
             return f"fedmaq_formulation_{formulation}"
         return "fedavg" if r.csv_path in reference else None
 
-    scored = iso_byte_scores(runs, group_of)
+    scored = iso_byte_scores(runs, group_of, frames=frames)
     for cell in scored.values():
         groups = cell["groups"]
         fedmaq_mean = groups.get(f"fedmaq_formulation_{formulation}", {}).get(
@@ -1924,7 +1973,9 @@ def _ablation_arm_runs(
     ]
 
 
-def ablation_iso_byte(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
+def ablation_iso_byte(
+    runs: list[RunRecord], dataset: str = "cifar10", frames: MetricsFrames | None = None
+) -> dict:
     """The §4.3.7 arms scored under Decision 83's criterion.
 
     Equal-round scoring is not merely imprecise here, it is signed. Under the
@@ -1946,15 +1997,17 @@ def ablation_iso_byte(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
         for r in _ablation_arm_runs(runs, dataset, config_num, alg_config):
             config_of[r.csv_path] = config_num
             members.append(r)
-    completeness = round_completeness(members, expected_round=100)
+    completeness = round_completeness(members, expected_round=100, frames=frames)
     return {
         "all_complete": completeness["all_complete"],
         "incomplete_runs": completeness["incomplete_runs"],
-        "cells": iso_byte_scores(members, lambda r: config_of.get(r.csv_path)),
+        "cells": iso_byte_scores(members, lambda r: config_of.get(r.csv_path), frames=frames),
     }
 
 
-def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dict:
+def build_ablation_table(
+    runs: list[RunRecord], dataset: str = "cifar10", frames: MetricsFrames | None = None
+) -> dict:
     """Assemble the §4.3.7 / §5.4 ablation matrix from run telemetry.
 
     Emits, per configuration and skew, the final-round top-1 accuracy and
@@ -1968,6 +2021,7 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
     and the identical pipeline regime. A non-empty ``violations`` list means the
     contrasts are not attributable and the table must not be reported.
     """
+    frame_for = _frame_resolver(frames)
     by_config: dict[int, dict] = {}
     violations: list[str] = []
 
@@ -1980,7 +2034,7 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
             seed_runs = sorted((r for r in matched if r.alpha == alpha), key=lambda r: r.seed)
             accs, mbs = [], []
             for r in seed_runs:
-                df = load_round_metrics(r.csv_path)
+                df = frame_for(r)
                 accs.append(accuracy_at_round(df, 100))
                 mbs.append(float(df["communication/cumulative_mb"].iloc[-1]))
             cells[f"alpha_{alpha}"] = {
@@ -2081,7 +2135,7 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
                     f"rule leaves the arm without a parity anchor."
                 )
                 continue
-            accs = [accuracy_at_round(load_round_metrics(r.csv_path), 100) for r in anchor_runs]
+            accs = [accuracy_at_round(frame_for(r), 100) for r in anchor_runs]
             anchor_cells[alpha_key] = {
                 "seeds": [r.seed for r in anchor_runs],
                 "accuracy_r100": _mean_sd(accs),
@@ -2098,7 +2152,7 @@ def build_ablation_table(runs: list[RunRecord], dataset: str = "cifar10") -> dic
 
     # The reportable contrast (Decision 83). ``configurations`` above keeps the
     # equal-round figures beside it, as the superseded rule, never in place of it.
-    iso_byte = ablation_iso_byte(runs, dataset)
+    iso_byte = ablation_iso_byte(runs, dataset, frames=frames)
     if not iso_byte["all_complete"]:
         violations.append(
             f"{len(iso_byte['incomplete_runs'])} arm run(s) never logged round 100, so "
