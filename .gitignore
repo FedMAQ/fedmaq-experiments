@@ -233,6 +233,9 @@ __marimo__/
 # Claude Code worktree scratch
 /.claude/worktrees/
 
+# Claude Code personal/local settings
+/.claude/settings.local.json
+
 # Grid results: track the analysis inputs, drop the bulk
 #
 # scripts/common.get_canonical_output_dir writes every run under outputs/, and
