@@ -1,0 +1,315 @@
+{
+  "schema_version": 1,
+  "envelope_id": "fedmaq-pipeline-assurance-2026-08-29",
+  "created_at": "2026-08-29",
+  "created_by": "assurance orchestrator (Claude Code session), acting under FedMAQ/fedmaq-experiments#75",
+  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-08-29.json",
+  "purpose": "Immutable, content-hashed record binding one pipeline candidate across the experiment, literature and manuscript repositories, with fail-closed gate states. Specification is #74; execution is #75. This record is evidence of pipeline readiness only; it is not evidence freeze and it is not results freeze.",
+  "specification": {
+    "specification_issue": "FedMAQ/fedmaq-experiments#74",
+    "execution_issue": "FedMAQ/fedmaq-experiments#75",
+    "closure_receipt": "https://github.com/FedMAQ/fedmaq-experiments/issues/74#issuecomment-5462569771"
+  },
+  "content_hash": {
+    "algorithm": "sha256",
+    "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256, so the envelope and the run-identity digests share one convention rather than two that can disagree.",
+    "value": "df7696097fd7488e7c679c31be77a74ba8c64f3d6c7fff19d7012212f7a661ea"
+  },
+  "revision_vector": {
+    "fedmaq-experiments": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
+      "revision": "6783a3010e87a0a95232674cf585b70238d0011c",
+      "clean_tree": true,
+      "role": "pipeline implementation, configuration, dispatch, tests, golden harness"
+    },
+    "fedmaq-literature": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-literature",
+      "revision": "1be87e08d232b8d47ec9c71e80922d7c8235bb5a",
+      "clean_tree": true,
+      "role": "source-paper material against which paper-derived contracts are checked"
+    },
+    "fedmaq-manuscript": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-manuscript",
+      "revision": "5cc82393d639321c240897dbd7eeb728dfc82a02",
+      "clean_tree": true,
+      "role": "reported method, metric and claim surface"
+    }
+  },
+  "references": {
+    "note": "Referenced, not bound. #74 excludes fedmaq-analyses from pipeline-readiness evidence by declaration; its dated audit records are assurance-record references, and only the narrow producer-consumer compatibility attestation at gate 5 crosses the boundary. Listing it in revision_vector would imply a binding this envelope exists to deny.",
+    "fedmaq-analyses": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-analyses",
+      "revision": "d68a3c44ebd7b9b9301b1f5912190bfdf7ea65fd",
+      "clean_tree": true,
+      "audit_records": [
+        "docs/audits/2026-08-26-baseline-implementation-audit.md",
+        "docs/audits/2026-08-27-source-paper-setup-comparison.md",
+        "docs/audits/2026-08-28-final-readiness-audit.md",
+        "docs/audits/2026-08-28-literature-adherence-re-audit.md"
+      ]
+    }
+  },
+  "candidate": {
+    "repository": "fedmaq-experiments",
+    "revision": "6783a3010e87a0a95232674cf585b70238d0011c",
+    "short": "6783a30",
+    "pinned_on": "2026-08-29",
+    "pin_semantics": "A named commit, not a follow-the-branch relation. main advancing does not move the pin, and every gate runs at the pin.",
+    "behavioral_content_commit": "5617bf06f0214887815bdc20bba91524a825e757",
+    "re_pin_attestation": {
+      "delta": "5617bf0..6783a30",
+      "commits": [
+        {
+          "revision": "3cfa444",
+          "paths": [
+            ".agents/skills/jupyterhub-golden-gate/**"
+          ],
+          "inside_scope_include": false
+        },
+        {
+          "revision": "b0b2c81",
+          "paths": [
+            "AGENTS.md",
+            "docs/agents/triage-labels.md"
+          ],
+          "inside_scope_include": false
+        },
+        {
+          "revision": "6783a30",
+          "paths": [
+            "CONTEXT.md"
+          ],
+          "inside_scope_include": false
+        }
+      ],
+      "clause": "#74 section 2 mechanical-repair clause",
+      "attested": true,
+      "attestation": "No path in the 5617bf0..6783a30 delta falls inside docs/freeze/source_manifest.json scope.include. The delta changes no protocol and no claim. The one judgement call is 6783a30, which adds the Freeze States glossary entry to CONTEXT.md, a claims-bearing document: it is admitted because it introduces terminology this envelope itself requires, names no protocol, metric, result or configuration, and asserts nothing about pipeline behaviour. Recorded, not inferred from the diff being small.",
+      "not_licensed_by_this_attestation": "Reuse of any #73 evidence. Every gate below runs fresh at the candidate; neither #73 JupyterHub golden evidence nor its Terra High review is carried forward."
+    }
+  },
+  "baseline": {
+    "repository": "fedmaq-experiments",
+    "revision": "2f3a3c1b102c745efad97b38f305544ffe1aba62",
+    "short": "2f3a3c1",
+    "relation": "direct parent of the candidate behavioral content commit 5617bf0",
+    "purpose": "golden capture/compare baseline; recorded separately so the compare cannot become a self-comparison"
+  },
+  "freeze_certificate": {
+    "path": "docs/freeze/source_manifest.json",
+    "schema_version": 1,
+    "state_at_candidate": "current",
+    "verified_by": "just freeze, user-run 2026-08-29",
+    "verified_output": "docs\\freeze\\source_manifest.json is current",
+    "hashed_file_count": 146,
+    "scope_include": [
+      ".github/workflows/**/*.yaml",
+      ".github/workflows/**/*.yml",
+      ".python-version",
+      "conf/**/*.yaml",
+      "conf/*.yaml",
+      "justfile",
+      "pyproject.toml",
+      "scripts/**/*.py",
+      "src/**/*.py",
+      "tests/**/*.py",
+      "uv.lock"
+    ],
+    "scope_exclude": [],
+    "relation_to_envelope": "Distinct artifacts. The certificate is an architecture hash over scope.include paths and is one input to one gate. The envelope is this record."
+  },
+  "runtime_provenance": {
+    "executed_revision": "6783a3010e87a0a95232674cf585b70238d0011c",
+    "python_version_pin": "3.11",
+    "dependency_lock": {
+      "path": "uv.lock",
+      "sha256": "7b24c4cedcce2298a5756546bbf67d401d807635997d340f3cf2d20722c940c7",
+      "matches_freeze_certificate": true
+    },
+    "clean_tree": true,
+    "external_evidence_directory": "~/fedmaq-golden-73-EVIDENCE/ (prior, #73). Gate 6 writes a new directory pinned to this envelope; prior evidence is preserved, never overwritten.",
+    "bounded": "Per #74, provenance is bounded to executed revision, runtime version, dependency-lock identity, clean-tree result and evidence locations. Irrelevant host-package differences do not invalidate a gate."
+  },
+  "golden_harness": {
+    "comparator": "scripts/golden_diff.py",
+    "comparator_sha256": "99cfd4444317cdc0b14bd4aa05211a0b08785ea36383036922414e142de5aea3",
+    "procedure": ".agents/skills/jupyterhub-golden-gate/SKILL.md",
+    "harness_revision": "6783a3010e87a0a95232674cf585b70238d0011c",
+    "expected_algorithm_set": "pinned at gate 6 from docs/freeze/expected_runs.json; nine algorithms, as in the #73 capture",
+    "ignored_fields": "wall-clock columns only, predeclared; a changed ignore rule is itself a golden-gate invalidation",
+    "allowed_difference_rule": "none outside the predeclared ignored fields; the compare must end with the success marker",
+    "dispatch": "user-run on JupyterHub from paste-ready exact-commit commands; agents do not dispatch GPU experiments"
+  },
+  "scope_boundary": {
+    "source": "FedMAQ/fedmaq-experiments#74, amendment 2026-08-29 section 1",
+    "in_scope": "fedmaq-experiments, fedmaq-literature and fedmaq-manuscript, covering all compared algorithms plus FedMAQ, source fidelity, configuration/protocol, telemetry, provenance, manuscript claims, and simulation-lifecycle invariants affected by architecture pass 3.",
+    "out_of_scope_by_declaration": [
+      {
+        "surface": "fedmaq-manuscript chapter_3.tex sec:theo_bounds_quant - the eps = min(d/s^2, sqrt(d)/s) bound, the Tier-2 rationale, and the sum_k p_k^2 argument",
+        "owning_ticket": "FedMAQ/fedmaq-experiments#42",
+        "basis": "A formal re-derivation against the shipped l-infinity error-feedback operator is not a routine repair. ADR-0019 Consequences records it open with an explicit instruction not to infer a verdict. The gate reads PASS within a boundary that names what it did not check, instead of PASS over a known mismatch."
+      },
+      {
+        "surface": "fedmaq-journal-article paper.tex front matter and sections/**",
+        "owning_ticket": "FedMAQ/fedmaq-experiments#41",
+        "basis": "Outside pipeline-readiness evidence; #41 carries the site inventory and the author freeze-historically disposition."
+      },
+      {
+        "surface": "fedmaq-literature fedmaq-wiki/papers/*.md (~70 baseline/other-paper nodes)",
+        "owning_ticket": "FedMAQ/fedmaq-experiments#11",
+        "basis": "Swept but not read in full by pass 22. Living-log work, not a pipeline-readiness contract."
+      },
+      {
+        "surface": "fedmaq-experiments docs/agents/**, docs/audits/**, docs/experiments/**, docs/freeze/**",
+        "owning_ticket": "FedMAQ/fedmaq-experiments#11",
+        "basis": "Not audited at all by pass 22. docs/freeze/** is gate input - its integrity is checked by the freeze certificate and the golden gate, not by prose audit."
+      },
+      {
+        "surface": "fedmaq-analyses, fedmaq-presentations",
+        "owning_ticket": null,
+        "basis": "Already excluded as pipeline evidence by #74 Implementation Decisions; restated here so the boundary is one list."
+      }
+    ],
+    "boundary_is_invalidating": "A change to this boundary is itself a gate invalidation. Any gate reaching PASS must record this boundary verbatim in its evidence.",
+    "pipeline_freeze_proceeds_with_42_open": true
+  },
+  "gates": [
+    {
+      "gate": 0,
+      "name": "Envelope creation and candidate attestation",
+      "responsible_verifier": "assurance orchestrator",
+      "state": "PASS",
+      "mandatory_evidence": [
+        "revision vector",
+        "baseline and candidate",
+        "runtime provenance",
+        "freeze-certificate state",
+        "re-pin attestation",
+        "content hash"
+      ],
+      "evidence": [
+        "fedmaq-experiments:docs/freeze/assurance-envelope-2026-08-29.json (this file)"
+      ],
+      "notes": "This record is the gate 0 evidence."
+    },
+    {
+      "gate": 1,
+      "name": "Literature/protocol audit",
+      "responsible_verifier": "assurance orchestrator (subagents permitted)",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "source-grounded findings across the three bound repositories",
+        "the scope boundary recorded verbatim",
+        "the carried-forward verdict list with its basis",
+        "no unresolved static mismatch inside the boundary"
+      ],
+      "evidence": [],
+      "notes": "Framed as a delta audit, not a from-zero sweep, and the framing is recorded rather than left to omission. Anchor is 530f8ae (2026-08-26), the fedmaq-experiments state contemporaneous with the baseline implementation audit 7cb6154 in fedmaq-analyses. Delta 530f8ae..6783a30 is 46 commits, 32 of which touch behavior-bearing paths. The audit covers that delta plus re-verification of every prior verdict the delta could have disturbed: architecture passes #46/#53/#73 (pass 3 decomposed the simulation lifecycle), the #24/#25/#26 quantizer and byte-accounting seam, #34 power-mean reformulation, and the surfaces #11 pass 22 recorded as unreached. A prior verdict may be carried forward only if the gate 1 evidence names it and states the basis; silence is not carry-forward. A fresh #11 pass is the manuscript arm of this gate - #11 is Living/Recurring and is not closed here."
+    },
+    {
+      "gate": 2,
+      "name": "Repair and bounded re-audit",
+      "responsible_verifier": "assurance orchestrator",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "disposition of every gate-1 finding",
+        "confirmation that repairs altered no unapproved method contract",
+        "final candidate re-pin"
+      ],
+      "evidence": [],
+      "notes": "Routine repairs only, classified by effect. Method changes, source-fidelity trade-offs, frozen-configuration changes and result interpretation escalate to the thesis author. The candidate-freeze window opens at the final re-pin of this gate."
+    },
+    {
+      "gate": 3,
+      "name": "Independent review (GPT-5.6 Terra High)",
+      "responsible_verifier": "thesis author (external model); manifest prepared by the orchestrator",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "sanitized input manifest",
+        "manifest hash",
+        "stated exclusions",
+        "scope/lens",
+        "model and reasoning setting",
+        "reviewer output",
+        "disposition"
+      ],
+      "evidence": [],
+      "notes": "User-run: the orchestrator cannot invoke the external reviewer. Preparing the sanitized manifest, its hash and its exclusions is orchestrator work."
+    },
+    {
+      "gate": 4,
+      "name": "Local verification at the candidate",
+      "responsible_verifier": "assurance orchestrator",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "full repository check output tied to the candidate revision"
+      ],
+      "evidence": [],
+      "notes": "just check at 6783a30."
+    },
+    {
+      "gate": 5,
+      "name": "Telemetry producer-consumer compatibility attestation",
+      "responsible_verifier": "assurance orchestrator",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "producer schema",
+        "consumer expectation",
+        "compatibility predicate",
+        "named invalidation owner"
+      ],
+      "evidence": [],
+      "notes": "The one narrow crossing into fedmaq-analyses. Catches renamed fields, changed units and changed null/zero semantics without performing result analysis."
+    },
+    {
+      "gate": 6,
+      "name": "JupyterHub golden capture and compare at exact commits",
+      "responsible_verifier": "thesis author (GPU dispatch); commands prepared by the orchestrator",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "baseline and candidate hash records",
+        "complete capture and compare logs",
+        "exact harness/config identity",
+        "exact expected algorithm set",
+        "explicit allowed-difference rule",
+        "successful end marker"
+      ],
+      "evidence": [],
+      "notes": "User-run. Paste-ready exact-commit commands, external evidence directory outside the checkout, failed evidence preserved and never recaptured to erase a failure."
+    },
+    {
+      "gate": 7,
+      "name": "Blocker record and freeze availability",
+      "responsible_verifier": "assurance orchestrator; declaration by the thesis author",
+      "state": "BLOCKED",
+      "mandatory_evidence": [
+        "remaining blockers",
+        "which of pipeline / evidence / results freeze is available",
+        "the boundary the availability is stated against"
+      ],
+      "evidence": [],
+      "notes": "Availability is not declaration. Only the thesis author declares a freeze."
+    }
+  ],
+  "gate_state_semantics": {
+    "PASS": "all mandatory evidence for that gate is present, current, internally consistent, and bound to this envelope",
+    "FAIL": "a completed negative check",
+    "BLOCKED": "required evidence is missing or unavailable",
+    "INVALIDATED": "evidence made stale by a dependency change",
+    "fail_closed": "Missing, failed, conflicting, stale or provenance-incomplete evidence is never an implicit PASS.",
+    "transitions": "Only the responsible verifier may transition an individual gate. Only the thesis author may declare the pipeline frozen."
+  },
+  "invalidation_matrix": {
+    "source": "FedMAQ/fedmaq-experiments#74, Implementation Decisions, plus amendment 2026-08-29 sections 1 and 2",
+    "demonstration_required": "#75 acceptance requires the matrix be demonstrated, not asserted: representative changes to behavior, configuration, protocol claims, manuscript wording, harness rules, runtime provenance, evidence references and the scope boundary must each invalidate exactly the gates #74 names, with the demonstration recorded as envelope evidence.",
+    "candidate_freeze_window": "After the gate 2 final re-pin and before gate 7 completes: a commit inside scope.include, or touching claims-bearing content in fedmaq-literature or fedmaq-manuscript, INVALIDATES every gate already passed, and the mechanical-repair clause is unavailable. A commit whose entire content is envelope or gate-evidence artifacts does not invalidate - it is the output of the gates, not drift in what the gates examined."
+  },
+  "freeze_states": {
+    "reference": "fedmaq-experiments:CONTEXT.md, section Freeze States",
+    "pipeline_freeze": "requires gates 0-7. Licenses dispatch of #22 beginning at step 1. Not clearance for #22 step 6 while #45 is open.",
+    "evidence_freeze": "additionally requires the prescribed campaign artifacts with provenance and ingestion.",
+    "results_freeze": "additionally requires claim-support review.",
+    "declared_by": "the thesis author only, explicitly. Nothing in this envelope declares a freeze."
+  },
+  "evidence": []
+}
