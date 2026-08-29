@@ -14,6 +14,7 @@ from fedmaq.core.client_hooks.training_skeleton import (
     compress_and_reconstruct,
     run_epochs,
 )
+from fedmaq.core.config_defaults import resolve_algorithm_config, resolve_experiment_config
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 
 if TYPE_CHECKING:
@@ -82,12 +83,13 @@ class StandardFit(ClientFitStrategy):
         # the incoming global model before any local update.
         pretrain_loss = self._pretrain_local_loss(client)
 
-        exp_config = client.config.get("experiment", client.config)
+        exp_config = resolve_experiment_config(client.config)
+        alg_config = resolve_algorithm_config(client.config)
         lr = client._get_decayed_lr(config)
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         momentum = float(
-            exp_config.get("momentum", client.config.get("algorithm", {}).get("momentum", 0.9))
+            exp_config.get("momentum", alg_config.get("momentum", 0.9))
         )
 
         client.model.train()
@@ -100,11 +102,14 @@ class StandardFit(ClientFitStrategy):
         criterion = nn.CrossEntropyLoss()
 
         client.loss_hook.on_train_begin(client.model)
+        from fedmaq.core.client import read_training_metrics
 
-        # F14 instrumentation: only active for FedProx, negligible overhead otherwise.
-        from fedmaq.core.client import FedProxLossHook
+        initial_training_metrics = read_training_metrics(client.loss_hook)
+        instrument_training_metrics = {
+            "f14_ce_loss",
+            "f14_prox_penalty",
+        }.issubset(initial_training_metrics)
 
-        instrument_fedprox = isinstance(client.loss_hook, FedProxLossHook)
         grad_norm_sum = 0.0
         grad_norm_batches = 0
 
@@ -136,7 +141,7 @@ class StandardFit(ClientFitStrategy):
             epochs=epochs,
             step_fn=step_fn,
             device=client.device,
-            on_after_backward=on_after_backward if instrument_fedprox else None,
+            on_after_backward=on_after_backward if instrument_training_metrics else None,
         )
 
         updated_params = get_model_parameters(client.model)
@@ -158,7 +163,9 @@ class StandardFit(ClientFitStrategy):
         fit_metrics.update(self._extra_fit_metrics(report))
         attach_payloads_if_enabled(client, fit_metrics, report.payloads)
 
-        if instrument_fedprox:
+        training_metrics = read_training_metrics(client.loss_hook)
+        fit_metrics.update(training_metrics)
+        if instrument_training_metrics:
             gn_affine_norm = 0.0
             for module in client.model.modules():
                 if isinstance(module, nn.GroupNorm):
@@ -170,8 +177,6 @@ class StandardFit(ClientFitStrategy):
                 grad_norm_sum / grad_norm_batches if grad_norm_batches > 0 else 0.0
             )
             fit_metrics["f14_gn_affine_norm"] = gn_affine_norm**0.5
-            fit_metrics["f14_ce_loss"] = client.loss_hook.last_ce
-            fit_metrics["f14_prox_penalty"] = client.loss_hook.last_prox
 
         return (
             reconstructed_params,

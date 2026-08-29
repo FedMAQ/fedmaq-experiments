@@ -16,8 +16,8 @@ from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
     require_num_public_samples,
+    resolve_algorithm_config,
     resolve_run_context,
-    resolve_server_compute_speed,
 )
 from fedmaq.core.kd_utils import (
     apply_student_ema,
@@ -49,7 +49,7 @@ class FedAvgKDHook(StrategyHook):
         self.num_classes = self._run_context.num_classes
         self.batch_size = self._run_context.batch_size
         self.device = self._run_context.device
-        self.alg_cfg = self._run_context.alg_cfg
+        self.alg_cfg = resolve_algorithm_config(config)
         self._ema_params: list[Any] | None = None
         self._last_round_kd_metrics: dict[str, float] = {}
 
@@ -105,12 +105,14 @@ class FedAvgKDHook(StrategyHook):
     ) -> float:
         if aggregated_parameters is None:
             return 0.0
-        num_public = require_num_public_samples(self._config)
+        num_public = self._run_context.num_public_samples
+        if num_public is None:
+            num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(self.alg_cfg.get("kd_epochs", 1)),
             num_teachers=len(results),
-            server_compute_speed=resolve_server_compute_speed(self._config),
+            server_compute_speed=self._run_context.server_compute_speed,
         )
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import math
+from collections.abc import Mapping
+from numbers import Real
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import flwr as fl
 import numpy as np
@@ -11,10 +15,38 @@ import torch.nn as nn
 from flwr.common import Config
 
 from fedmaq.core.client_hooks import ClientFitStrategy, get_fit_strategy
+from fedmaq.core.config_defaults import resolve_algorithm_config
 from fedmaq.core.models import DEVICE
 
 if TYPE_CHECKING:
     from fedmaq.baselines.transport import UploadReport
+
+
+@runtime_checkable
+class TrainingMetricsCapability(Protocol):
+    """Read-only optional metrics exposed by a client loss hook."""
+
+    def training_metrics(self) -> Mapping[str, float] | None:
+        ...
+
+
+def read_training_metrics(loss_hook: object) -> Mapping[str, float]:
+    """Read and validate optional loss-hook metrics without knowing its type."""
+    if not isinstance(loss_hook, TrainingMetricsCapability):
+        return MappingProxyType({})
+    metrics = loss_hook.training_metrics()
+    if metrics is None or not isinstance(metrics, Mapping):
+        return MappingProxyType({})
+
+    validated: dict[str, float] = {}
+    for name, value in metrics.items():
+        if not isinstance(name, str) or isinstance(value, bool) or not isinstance(value, Real):
+            return MappingProxyType({})
+        value_float = float(value)
+        if not math.isfinite(value_float):
+            return MappingProxyType({})
+        validated[name] = value_float
+    return MappingProxyType(validated)
 
 
 class LossHook:
@@ -34,6 +66,10 @@ class LossHook:
     ) -> torch.Tensor:
         """Compute the local loss."""
         return criterion(outputs, targets)
+
+    def training_metrics(self) -> Mapping[str, float]:
+        """Return optional metrics after training, or an empty read-only view."""
+        return MappingProxyType({})
 
 
 class FedProxLossHook(LossHook):
@@ -72,6 +108,15 @@ class FedProxLossHook(LossHook):
         )
         return ce_loss + prox_penalty
 
+    def training_metrics(self) -> Mapping[str, float]:
+        """Expose F14 diagnostics without exposing mutable hook state."""
+        return MappingProxyType(
+            {
+                "f14_ce_loss": self.last_ce,
+                "f14_prox_penalty": self.last_prox,
+            }
+        )
+
 
 class CompressionHook:
     """Base class for compressing client model updates (deltas)."""
@@ -101,7 +146,7 @@ def get_loss_hook(alg_name: str, alg_cfg: dict[str, Any]) -> LossHook:
         if alg_cfg.get("client_kd_reg", False):
             from fedmaq.core.kd_loss_hook import ClientKDLossHook
 
-            return ClientKDLossHook(  # type: ignore[return-value]
+            return ClientKDLossHook(
                 alpha=float(alg_cfg.get("kd_reg_alpha", 0.5)),
                 temperature=float(alg_cfg.get("kd_reg_temp", 2.0)),
                 mu=float(alg_cfg.get("kd_prox_mu", 0.0)),
@@ -136,7 +181,8 @@ class GenericClient(fl.client.NumPyClient):
         self.device = torch.device(config.get("device") or DEVICE)
         self.model.to(self.device)
 
-        alg_name = config.get("algorithm", {}).get("name", "")
+        alg_cfg = resolve_algorithm_config(config)
+        alg_name = str(alg_cfg.get("name", ""))
         self.fit_strategy: ClientFitStrategy = get_fit_strategy(alg_name)
 
     def get_properties(self, config: Config) -> dict[str, Any]:

@@ -12,6 +12,11 @@ import torch.nn.functional as F
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, attach_payloads_if_enabled
 from fedmaq.core.client_hooks.training_skeleton import compress_and_reconstruct
+from fedmaq.core.config_defaults import (
+    resolve_algorithm_config,
+    resolve_experiment_config,
+    resolve_run_context,
+)
 from fedmaq.core.models import (
     get_kd_teacher_model,
     get_model_parameters,
@@ -35,15 +40,17 @@ class FedKDFit(ClientFitStrategy):
         parameters: list[np.ndarray],
         config: dict[str, Any],
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
-        persistence_dir = client.config.get("_persistence_dir") or client.config.get(
-            "experiment", {}
-        ).get("persistence_dir", ".data_partitions/fedkd_models")
+        exp_config = resolve_experiment_config(client.config)
+        persistence_dir = client.config.get("_persistence_dir") or exp_config.get(
+            "persistence_dir", ".data_partitions/fedkd_models"
+        )
         model_dir = Path(persistence_dir)
         model_dir.mkdir(parents=True, exist_ok=True)
         teacher_path = model_dir / f"teacher_{client.cid}.pth"
 
-        dataset_name = client.config.get("dataset", {}).get("name", "")
-        num_classes = int(client.config.get("dataset", {}).get("num_classes", 10))
+        context = resolve_run_context(client.config)
+        dataset_name = context.dataset_name
+        num_classes = context.num_classes
         teacher_model = get_kd_teacher_model(dataset_name, num_classes)
         teacher_model.to(client.device)
 
@@ -52,7 +59,6 @@ class FedKDFit(ClientFitStrategy):
 
         set_model_parameters(client.model, parameters)
 
-        exp_config = client.config.get("experiment", client.config)
         lr = client._get_decayed_lr(config)
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
@@ -64,7 +70,7 @@ class FedKDFit(ClientFitStrategy):
         )
         ce_criterion = nn.CrossEntropyLoss()
         kl_criterion = nn.KLDivLoss(reduction="batchmean")
-        temperature = float(client.config.get("algorithm", {}).get("temperature", 2.0))
+        temperature = float(resolve_algorithm_config(client.config).get("temperature", 2.0))
 
         client.model.train()
         teacher_model.train()

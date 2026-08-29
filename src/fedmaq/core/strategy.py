@@ -14,6 +14,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
+from fedmaq.core.config_defaults import resolve_experiment_config, resolve_run_context
 from fedmaq.core.quantization_planner import (
     compute_fedmaq_q_k_t,  # noqa: F401 — re-exported for backward compatibility
 )
@@ -74,8 +75,8 @@ class PhysicalCostModel:
         memory is either a fixed control-group value or heterogeneous
         ``U(2048, 16384)`` MB, seeded from ``config["seed"]`` for reproducibility.
         """
-        exp_config = config.get("experiment", config)
-        seed = config.get("seed", 42)
+        exp_config = resolve_experiment_config(config)
+        seed = resolve_run_context(config).seed
         rng = np.random.default_rng(seed)
 
         if "bandwidth_mbps" in exp_config:
@@ -178,9 +179,9 @@ class TelemetryFedAvg(FedAvg):
         self.proxy_cid_to_partition_id: dict[str, int] = {}
 
         # Simulation parameters
-        exp_config = config.get("experiment", config)
+        exp_config = resolve_experiment_config(config)
         self.num_clients = exp_config.get("num_clients", 10)
-        self.alg_name: str = config.get("algorithm", {}).get("name", "")
+        self.alg_name: str = resolve_run_context(config).algorithm_name
 
         self.cost_model = PhysicalCostModel.from_config(config, self.num_clients)
 

@@ -42,3 +42,69 @@ def test_require_num_public_samples_fails_loud_on_missing_key(cfg: dict) -> None
     # public-proxy pool size, since canonical |D_pub| is 3000.
     with pytest.raises(KeyError, match="num_public_samples"):
         cd.require_num_public_samples(cfg)
+
+
+def test_run_context_resolves_nested_configuration_without_algorithm_state() -> None:
+    context = cd.resolve_run_context(
+        {
+            "dataset": {"name": "cifar100", "num_classes": 100},
+            "experiment": {
+                "batch_size": 32,
+                "num_public_samples": 3000,
+                "server_compute_speed": 9000.0,
+            },
+            "device": "cpu",
+            "seed": 7,
+            "algorithm": {"name": "fedmaq", "q_min": 2},
+        }
+    )
+
+    assert context.dataset_name == "cifar100"
+    assert context.num_classes == 100
+    assert context.batch_size == 32
+    assert context.device.type == "cpu"
+    assert context.seed == 7
+    assert context.num_public_samples == 3000
+    assert context.server_compute_speed == 9000.0
+    assert context.algorithm_name == "fedmaq"
+    assert not hasattr(context, "alg_cfg")
+
+
+def test_run_context_accepts_flat_and_partially_specified_configuration() -> None:
+    flat = cd.resolve_run_context(
+        {
+            "dataset_name": "femnist",
+            "num_classes": 62,
+            "batch_size": 16,
+            "seed": 11,
+            "algorithm_name": "fedprox",
+        }
+    )
+    partial = cd.resolve_run_context({"dataset": {"name": "mnist"}})
+
+    assert (flat.dataset_name, flat.num_classes, flat.batch_size) == ("femnist", 62, 16)
+    assert flat.seed == 11
+    assert flat.num_public_samples is None
+    assert flat.algorithm_name == "fedprox"
+    assert flat.server_compute_speed == cd.SERVER_COMPUTE_SPEED
+    assert partial.dataset_name == "mnist"
+    assert partial.num_classes == cd.NUM_CLASSES
+    assert partial.batch_size == cd.BATCH_SIZE
+    assert partial.device.type
+
+
+def test_run_context_uses_explicit_defaults_for_missing_values() -> None:
+    context = cd.resolve_run_context({})
+
+    assert context.seed == 42
+    assert context.server_compute_speed == cd.SERVER_COMPUTE_SPEED
+    assert context.algorithm_name == ""
+    assert context.num_public_samples is None
+
+
+def test_algorithm_configuration_is_resolved_separately_from_run_context() -> None:
+    nested = cd.resolve_algorithm_config({"algorithm": {"name": "fedprox", "mu": 0.2}})
+    flat = cd.resolve_algorithm_config({"name": "fedprox", "mu": 0.3})
+
+    assert nested == {"name": "fedprox", "mu": 0.2}
+    assert flat == {"name": "fedprox", "mu": 0.3}

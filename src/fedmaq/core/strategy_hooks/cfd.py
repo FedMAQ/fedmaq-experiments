@@ -57,8 +57,8 @@ from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
     require_num_public_samples,
+    resolve_algorithm_config,
     resolve_run_context,
-    resolve_server_compute_speed,
 )
 from fedmaq.core.kd_utils import kd_server_sim_time
 from fedmaq.core.models import get_client_model, get_model_parameters
@@ -95,7 +95,7 @@ class CFDHook(StrategyHook):
         self.num_classes = ctx.num_classes
         self.batch_size = ctx.batch_size
 
-        alg_cfg = ctx.alg_cfg
+        alg_cfg = resolve_algorithm_config(config)
         self.b_up = int(alg_cfg.get("b_up", 1))
         self.b_down = int(alg_cfg.get("b_down", 1))
         self.distill_epochs = int(alg_cfg.get("distill_epochs", 1))
@@ -222,7 +222,7 @@ class CFDHook(StrategyHook):
         images_all = torch.cat([images for images, _ in public_loader], dim=0)
         targets_all = torch.tensor(targets, dtype=torch.float32)
 
-        alg_cfg = self._run_context.alg_cfg
+        alg_cfg = resolve_algorithm_config(self._config)
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
             lr=float(alg_cfg.get("server_kd_lr", 0.01)),
@@ -303,10 +303,12 @@ class CFDHook(StrategyHook):
     ) -> float:
         if self._pending_targets is None:
             return 0.0
-        num_public = require_num_public_samples(self._config)
+        num_public = self._run_context.num_public_samples
+        if num_public is None:
+            num_public = require_num_public_samples(self._config)
         return kd_server_sim_time(
             num_public=num_public,
             kd_epochs=self.server_distill_epochs,
             num_teachers=1,
-            server_compute_speed=resolve_server_compute_speed(self._config),
+            server_compute_speed=self._run_context.server_compute_speed,
         )

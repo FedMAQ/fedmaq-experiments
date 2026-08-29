@@ -10,6 +10,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
+from fedmaq.core.config_defaults import resolve_algorithm_config
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class FedMDHook(StrategyHook):
         base = num_public * public_epochs + num_samples * epochs
         if server_round != 1:
             return base
-        alg_cfg = self._config.get("algorithm", {})
+        alg_cfg = resolve_algorithm_config(self._config)
         pub_pretrain = int(alg_cfg.get("public_pretrain_epochs", 10))
         priv_pretrain = int(alg_cfg.get("private_pretrain_epochs", 10))
         return num_public * pub_pretrain + num_samples * priv_pretrain + base

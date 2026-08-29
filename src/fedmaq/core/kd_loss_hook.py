@@ -14,8 +14,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from fedmaq.core.client import LossHook
 
-class ClientKDLossHook:
+
+class ClientKDLossHook(LossHook):
     """Loss hook adding client-side KD regularization against the global model.
 
     On each training step the loss becomes::

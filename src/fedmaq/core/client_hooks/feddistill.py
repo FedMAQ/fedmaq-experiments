@@ -23,6 +23,11 @@ import torch.nn.functional as F
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, attach_payloads_if_enabled
 from fedmaq.core.client_hooks.training_skeleton import StepResult, run_epochs
+from fedmaq.core.config_defaults import (
+    resolve_algorithm_config,
+    resolve_experiment_config,
+    resolve_run_context,
+)
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 
 if TYPE_CHECKING:
@@ -94,8 +99,9 @@ class FedDistillFit(ClientFitStrategy):
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
         set_model_parameters(client.model, parameters)
 
-        num_classes = int(client.config.get("dataset", {}).get("num_classes", 10))
-        alg_cfg = client.config.get("algorithm", {})
+        context = resolve_run_context(client.config)
+        num_classes = context.num_classes
+        alg_cfg = resolve_algorithm_config(client.config)
         reg_alpha = float(alg_cfg.get("reg_alpha", 1.0))
 
         global_logits: torch.Tensor | None = None
@@ -105,7 +111,7 @@ class FedDistillFit(ClientFitStrategy):
                 bytes_to_logits(gl_bytes, num_classes), device=client.device
             )
 
-        exp_config = client.config.get("experiment", client.config)
+        exp_config = resolve_experiment_config(client.config)
         lr = client._get_decayed_lr(config)
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
         weight_decay = float(exp_config.get("weight_decay", 0.0))

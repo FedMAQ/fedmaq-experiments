@@ -17,8 +17,8 @@ from flwr.server.client_proxy import ClientProxy
 
 from fedmaq.core.config_defaults import (
     require_num_public_samples,
+    resolve_algorithm_config,
     resolve_run_context,
-    resolve_server_compute_speed,
 )
 from fedmaq.core.kd_utils import (
     apply_student_ema,
@@ -52,7 +52,7 @@ class FedMAQHook(StrategyHook):
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
         self._run_context = resolve_run_context(config)
-        alg_cfg = self._run_context.alg_cfg
+        alg_cfg = resolve_algorithm_config(config)
         self.dataset_name = self._run_context.dataset_name
         self.num_classes = self._run_context.num_classes
         self.batch_size = self._run_context.batch_size
@@ -83,8 +83,8 @@ class FedMAQHook(StrategyHook):
             strategy.client_indices_dict,
             strategy.cost_model.client_memory,
             ctx,
-            ctx.alg_cfg,
-            self._config.get("seed", 42),
+            self.alg_cfg,
+            ctx.seed,
             server_round,
         )
         return inject_client_q(client_instructions, self._current_plan.client_q)
@@ -204,8 +204,10 @@ class FedMAQHook(StrategyHook):
         if aggregated_parameters is None:
             return 0.0
         alg_cfg = self.alg_cfg
-        num_public = require_num_public_samples(self._config)
-        server_compute_speed = resolve_server_compute_speed(self._config)
+        num_public = self._run_context.num_public_samples
+        if num_public is None:
+            num_public = require_num_public_samples(self._config)
+        server_compute_speed = self._run_context.server_compute_speed
         kd_time = kd_server_sim_time(
             num_public=num_public,
             kd_epochs=int(alg_cfg.get("kd_epochs", 1)),

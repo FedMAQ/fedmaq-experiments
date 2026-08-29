@@ -22,6 +22,11 @@ from fedmaq.baselines.compression import (
     svd_payload,
 )
 from fedmaq.baselines.transport import UploadReport
+from fedmaq.core.config_defaults import (
+    resolve_algorithm_config,
+    resolve_experiment_config,
+    resolve_run_context,
+)
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -40,11 +45,12 @@ class FedKDHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        alg_cfg = config.get("algorithm", {})
+        self._run_context = resolve_run_context(config)
+        alg_cfg = resolve_algorithm_config(config)
         self._tmin = float(alg_cfg.get("tmin", 0.1))
         self._tmax = float(alg_cfg.get("tmax", 0.9))
         self._min_rank_frac = float(alg_cfg.get("min_rank_frac", 0.0))
-        self._total_rounds = int(config.get("experiment", {}).get("total_rounds", 10))
+        self._total_rounds = int(resolve_experiment_config(config).get("total_rounds", 10))
         # Dual-model (student+teacher) training slows effective client compute.
         self._compute_penalty = float(alg_cfg.get("compute_penalty", 1.3))
         # Cached energy for current round (set in pre_configure_fit, read in configure_fit)

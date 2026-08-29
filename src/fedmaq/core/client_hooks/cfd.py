@@ -19,6 +19,11 @@ from flwr.app import ArrayRecord
 
 from fedmaq.core.client_hooks.base import ClientFitStrategy, standard_evaluate
 from fedmaq.core.client_hooks.training_skeleton import StepResult, run_epochs
+from fedmaq.core.config_defaults import (
+    resolve_algorithm_config,
+    resolve_experiment_config,
+    resolve_run_context,
+)
 from fedmaq.core.models import set_model_parameters
 from fedmaq.core.softlabel_codec import (
     codes_from_bytes,
@@ -46,15 +51,15 @@ class CFDFit(ClientFitStrategy):
         parameters: list[np.ndarray],
         config: dict[str, Any],
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
-        alg_cfg = client.config.get("algorithm", {})
+        alg_cfg = resolve_algorithm_config(client.config)
         b_up = int(alg_cfg.get("b_up", 1))
         b_down = int(alg_cfg.get("b_down", 1))
         distill_epochs = int(alg_cfg.get("distill_epochs", 1))
         temperature = float(alg_cfg.get("temperature", 1.0))
         delta_coding = bool(alg_cfg.get("delta_coding", True))
-        num_classes = int(client.config.get("dataset", {}).get("num_classes", 10))
+        num_classes = resolve_run_context(client.config).num_classes
 
-        exp_config = client.config.get("experiment", client.config)
+        exp_config = resolve_experiment_config(client.config)
         lr = client._get_decayed_lr(config)
         weight_decay = float(exp_config.get("weight_decay", 0.0))
         momentum = float(exp_config.get("momentum", alg_cfg.get("momentum", 0.9)))

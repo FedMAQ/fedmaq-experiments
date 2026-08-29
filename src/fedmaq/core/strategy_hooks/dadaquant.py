@@ -11,7 +11,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
-from fedmaq.core.config_defaults import resolve_run_context
+from fedmaq.core.config_defaults import resolve_algorithm_config, resolve_run_context
 from fedmaq.core.quantization_planner import inject_client_q
 from fedmaq.core.strategy_hooks._partition import (
     partition_dataset_size,
@@ -87,7 +87,8 @@ class DAdaQuantHook(StrategyHook):
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
-        self.alg_cfg = resolve_run_context(config).alg_cfg
+        self._run_context = resolve_run_context(config)
+        self.alg_cfg = resolve_algorithm_config(config)
         self._q_min = int(self.alg_cfg.get("q_min", 1))
         self._q_max = int(self.alg_cfg.get("q_max", 8))
         self.q_t: int = self._q_min
