@@ -16,6 +16,7 @@ from scripts.analysis import (
     resolve_power_mean_degree,
     select_power_mean_degree_iso_byte,
 )
+from scripts.report_schema import write_report
 
 DEFAULT_EXPECTED_RUNS = Path("docs/recut/power_mean_expected_runs.json")
 
@@ -53,10 +54,12 @@ def main() -> int:
 
     selection = select_power_mean_degree_iso_byte(runs)
     resolution = resolve_power_mean_degree(selection)
-    documents = ((args.selection_output, selection), (args.resolution_output, resolution))
-    for path, document in documents:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    documents = (
+        (args.selection_output, "power_mean_degree_selection", selection),
+        (args.resolution_output, "power_mean_degree_resolution", resolution),
+    )
+    for path, report_type, document in documents:
+        write_report(path, report_type, document)
         print(f"wrote {path}")
     return 0
 

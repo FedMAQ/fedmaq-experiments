@@ -45,6 +45,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fedmaq.core.run_identity import parse_run_directory
 from scripts.common import identity_key
+from scripts.report_schema import (
+    load_report,
+    summary,
+    summary_from_mapping,
+    write_legacy_report,
+)
 
 MetricsFrames = Mapping[Path, pd.DataFrame]
 
@@ -472,6 +478,7 @@ def exploration_noise_margin(
         verdicts["+".join(active) or "none"] = {
             "active": active,
             "seeds": len(accs),
+            "accuracy": summary(accs),
             "mean_accuracy": statistics.fmean(accs),
             "delta_vs_unrefined": delta,
             "delta_standard_error": se_delta,
@@ -501,6 +508,7 @@ def exploration_noise_margin(
     return {
         "alpha": alpha,
         "experiment_group": experiment_group,
+        "unrefined_accuracy": summary(unrefined),
         "sigma_unrefined": sigma,
         "sigma_confidence_interval": sigma_confidence_interval(sigma, n_ref),
         "noise_margin": margin,
@@ -662,9 +670,7 @@ def baseline_tuning_margin(
                 {
                     "variant": variant,
                     "value": values_by_variant.get(variant),
-                    "mean": statistics.fmean(values) if values else None,
-                    "sigma": statistics.stdev(values) if len(values) >= 2 else None,
-                    "n": len(values),
+                    "summary": summary(values),
                     "seeds": _curve_seeds(curves, variant),
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
@@ -741,8 +747,7 @@ def baseline_tuning_margin(
             mean = statistics.fmean(cells[variant])
             delta = mean - ref_mean
             challengers[variant] = {
-                "mean": mean,
-                "n": len(cells[variant]),
+                "summary": summary(cells[variant]),
                 "seeds": _curve_seeds(curves, variant),
                 "delta": delta,
                 "clears_margin": delta > margin,
@@ -753,7 +758,7 @@ def baseline_tuning_margin(
         baselines[algorithm] = {
             **metadata,
             "reference_variant": ref_variant,
-            "reference": {"mean": ref_mean, "sigma": sigma, "n": len(ref_accs)},
+            "reference": summary(ref_accs),
             "margin": margin,
             "challengers": challengers,
             # None means the shipped value held. That is the stage's expected
@@ -771,19 +776,24 @@ def baseline_tuning_margin(
     }
 
 
-def write_baseline_tuning_plots(report: dict, output_dir: Path) -> list[Path]:
+def write_baseline_tuning_plots(report: dict | Path, output_dir: Path) -> list[Path]:
     """Write one same-axes, per-seed HP-versus-accuracy plot per algorithm."""
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    if isinstance(report, Path):
+        report = load_report(report, expected_type="baseline_tuning_margin")
     output_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for algorithm, cell in sorted(report["baselines"].items()):
         points_by_seed = cell.get("curves", [])
         if not points_by_seed:
             continue
+        for row in cell.get("table", []):
+            if "summary" in row:
+                summary_from_mapping(row["summary"], path=f"baselines.{algorithm}.table")
         figure, axis = plt.subplots(figsize=(8, 5), constrained_layout=True)
         for seed_curve in points_by_seed:
             points = [point for point in seed_curve["points"] if point["value"] is not None]
@@ -927,11 +937,7 @@ def round_at_budget(run_df: pd.DataFrame, budget_mb: float) -> int | None:
 
 
 def _mean_sd(values: list[float]) -> dict:
-    return {
-        "mean": statistics.fmean(values) if values else None,
-        "sd": statistics.stdev(values) if len(values) > 1 else None,
-        "n": len(values),
-    }
+    return summary(values)
 
 
 def sustained_crossing(
@@ -1474,6 +1480,8 @@ def select_winner(runs: list[RunRecord], frames: MetricsFrames | None = None) ->
             detail[formulation] = {
                 "seeds": seed_results,
                 "disqualified": disqualified,
+                "crossing_cumulative_mb": summary(crossing_mbs),
+                "accuracy_r100": summary(r100_accs),
                 "mean_cumulative_mb": mean_mb,
                 "crossing_mbs": crossing_mbs,
                 "mean_accuracy_r100": sum(r100_accs) / len(r100_accs),
@@ -1771,6 +1779,7 @@ def compare_to_baselines(
                 and not formulation_disagreement,
                 "baseline": baseline_algo,
                 "per_seed": per_seed,
+                "delta": summary(deltas),
                 "mean_delta": sum(deltas) / len(deltas),
                 "min_delta": min(deltas),
                 "max_delta": max(deltas),
@@ -2177,10 +2186,13 @@ def build_ablation_table(
 
 
 def _fmt_mean_sd(entry: dict | None) -> str:
-    if not entry or entry.get("mean") is None:
+    if not entry:
         return "n/a"
-    sd = "" if entry.get("sd") is None else f"+-{entry['sd']:.4f}"
-    return f"{entry['mean']:.4f}{sd} (n={entry['n']})"
+    stats = summary_from_mapping(entry)
+    if stats.mean is None:
+        return "n/a"
+    dispersion = "" if stats.dispersion is None else f"+-{stats.dispersion:.4f}"
+    return f"{stats.mean:.4f}{dispersion} (n={stats.n})"
 
 
 def main() -> None:
@@ -2275,9 +2287,7 @@ def main() -> None:
     runs = discover_runs(args.experiments_root)
     result = select_winner(runs)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2)
+    write_legacy_report(args.output, result)
     print(f"Wrote formulation-winner verdict to {args.output}")
 
     # Decision 83. Emitted next to the superseded verdict rather than replacing
@@ -2291,9 +2301,7 @@ def main() -> None:
         and r.formulation is not None
     ]
     completeness = round_completeness(study_runs, expected_round=100)
-    args.completeness_output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.completeness_output, "w", encoding="utf-8") as f:
-        json.dump(completeness, f, indent=2)
+    write_legacy_report(args.completeness_output, completeness)
     print(f"Wrote round-completeness audit to {args.completeness_output}")
     if not completeness["all_complete"]:
         print(
@@ -2308,8 +2316,7 @@ def main() -> None:
         with open(args.expected_runs, encoding="utf-8") as f:
             manifest_groups = json.load(f)["groups"]
         certificate = closure_certificate(runs, manifest_groups)
-        with open(args.closure_output, "w", encoding="utf-8") as f:
-            json.dump(certificate, f, indent=2)
+        write_legacy_report(args.closure_output, certificate)
         print(f"Wrote closure certificate to {args.closure_output}")
         for name, body in certificate["groups"].items():
             state = "closed" if body["closed"] else "OPEN"
@@ -2332,8 +2339,7 @@ def main() -> None:
         )
 
     iso_byte_result = select_winner_iso_byte(runs)
-    with open(args.iso_byte_output, "w", encoding="utf-8") as f:
-        json.dump(iso_byte_result, f, indent=2)
+    write_legacy_report(args.iso_byte_output, iso_byte_result)
     print(f"Wrote amended (iso-byte) formulation verdict to {args.iso_byte_output}")
     for key, cell in iso_byte_result.items():
         print(
@@ -2353,16 +2359,14 @@ def main() -> None:
         print(f"  Freeze unresolved: {exc}")
     else:
         frozen_formulation = freeze["frozen_formulation"]
-        with open(args.freeze_output, "w", encoding="utf-8") as f:
-            json.dump(freeze, f, indent=2)
+        write_legacy_report(args.freeze_output, freeze)
         print(f"Wrote freeze resolution to {args.freeze_output}")
         print(f"  rule={freeze['rule']}  frozen_formulation={frozen_formulation}")
 
     # Historical-v1 preview only; replacement reporting waits for the tagged grid.
     if frozen_formulation is not None:
         preview = fedavg_at_fedmaq_budget(runs, frozen_formulation)
-        with open(args.fedavg_budget_output, "w", encoding="utf-8") as f:
-            json.dump(preview, f, indent=2)
+        write_legacy_report(args.fedavg_budget_output, preview)
         print(f"Wrote FedAvg-at-FedMAQ-budget preview to {args.fedavg_budget_output}")
         for key, cell in preview.items():
             groups = cell["groups"]
@@ -2377,9 +2381,7 @@ def main() -> None:
             )
 
     baseline_result = compare_to_baselines(runs, result)
-    args.baseline_output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.baseline_output, "w", encoding="utf-8") as f:
-        json.dump(baseline_result, f, indent=2)
+    write_legacy_report(args.baseline_output, baseline_result)
     print(f"Wrote baseline-comparison report to {args.baseline_output}")
     drifted = sorted(
         {
@@ -2396,8 +2398,7 @@ def main() -> None:
         )
 
     iso_byte_baselines = compare_to_baselines_iso_byte(runs, frozen_formulation)
-    with open(args.iso_byte_baseline_output, "w", encoding="utf-8") as f:
-        json.dump(iso_byte_baselines, f, indent=2)
+    write_legacy_report(args.iso_byte_baseline_output, iso_byte_baselines)
     print(f"Wrote amended (iso-byte) baseline comparison to {args.iso_byte_baseline_output}")
     for key, row in iso_byte_baselines.items():
         drift = "" if row["formulation_matches_freeze"] else "  FREEZE DRIFT"
@@ -2409,9 +2410,7 @@ def main() -> None:
     # Exploration-phase margin and keep-or-drop verdicts (§4.3.1). Chapter 5 §5.1
     # reports sigma, the derived margin, and the surviving set from this file.
     exploration = exploration_noise_margin(runs)
-    args.exploration_output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.exploration_output, "w", encoding="utf-8") as f:
-        json.dump(exploration, f, indent=2)
+    write_legacy_report(args.exploration_output, exploration)
     print(f"Wrote exploration noise-margin verdict to {args.exploration_output}")
     if exploration.get("other_skews_present"):
         print(
@@ -2423,8 +2422,7 @@ def main() -> None:
     # Stage 1b (§4.3.2, Decision 81). Table 4.1's provenance: the tag freezes that
     # table, so it has to be reproducible from committed code.
     baseline_tuning = baseline_tuning_margin(runs, experiment_group=args.baseline_tuning_group)
-    with open(args.baseline_tuning_output, "w", encoding="utf-8") as f:
-        json.dump(baseline_tuning, f, indent=2)
+    write_legacy_report(args.baseline_tuning_output, baseline_tuning)
     print(f"Wrote baseline matched-tuning verdicts to {args.baseline_tuning_output}")
     plot_paths = write_baseline_tuning_plots(baseline_tuning, args.baseline_tuning_plot_dir)
     print(f"Wrote {len(plot_paths)} baseline HP curves to {args.baseline_tuning_plot_dir}")
@@ -2434,15 +2432,13 @@ def main() -> None:
             continue
         adopted = cell["adopted_variant"] or f"{cell['reference_variant']} (shipped, retained)"
         print(
-            f"  {algorithm}: sigma={cell['reference']['sigma']:.4f} "
+            f"  {algorithm}: dispersion={cell['reference']['dispersion']:.4f} "
             f"margin={cell['margin']:.4f} -> {adopted}"
         )
 
     # §4.3.7 / §5.4 ablation matrix.
     ablation = build_ablation_table(runs)
-    args.ablation_output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.ablation_output, "w", encoding="utf-8") as f:
-        json.dump(ablation, f, indent=2)
+    write_legacy_report(args.ablation_output, ablation)
     print(f"Wrote ablation matrix to {args.ablation_output}")
     for violation in ablation["parity"]["violations"]:
         print(f"  PARITY VIOLATION: {violation}")
