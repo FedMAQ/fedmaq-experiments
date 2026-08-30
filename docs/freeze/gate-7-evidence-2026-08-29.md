@@ -7,7 +7,7 @@
   `fedmaq-literature@1be87e08d232b8d47ec9c71e80922d7c8235bb5a`,
   `fedmaq-manuscript@5cc82393d639321c240897dbd7eeb728dfc82a02`
 - Producer: assurance orchestrator
-- Created: 2026-08-29
+- Created: 2026-08-30 (Gate 6 evidence ingestion)
 - Content digest: recorded in the envelope's `evidence_sha256` entry.
 
 ## Current blockers and availability
@@ -15,12 +15,15 @@
 - Gates 0, 1, 2, and 4: PASS within the declared assurance boundary.
 - Gates 3 and 5: PASS. Gate 3 uses the thesis-author-amended Luna High
   independent-review standard; Gate 5 has a retained, self-testing verifier.
-- Gate 6: BLOCKED. The exact-commit JupyterHub golden capture/compare remains
-  thesis-author-executed and has not been supplied.
-- Gate 7: BLOCKED. This record demonstrates the invalidation matrix, but the
-  pipeline cannot be declared frozen while Gate 6 evidence is absent, and only
-  the thesis author may declare a freeze.
-- Pipeline freeze: **not available**.
+- Gate 6: **PASS**. The thesis author supplied the complete external evidence
+  package listed below. The baseline and candidate records match the envelope;
+  all nine expected algorithms compare bit-exactly after excluding only the
+  predeclared wall-clock columns, and the compare ends with
+  `All golden diffs passed.`
+- Gate 7: **PASS as an assurance record**. The invalidation matrix is
+  demonstrated and the remaining blockers and freeze availability are
+  recorded below. This does not itself declare a freeze.
+- Pipeline freeze: **available for author declaration**, limited to #22 step 1.
 - Evidence freeze: **not available**; campaign artifacts and provenance are
   not complete.
 - Results freeze: **not available**; claim-support review is not complete.
@@ -28,6 +31,27 @@
 The availability statements are against the current envelope boundary,
 including the declared #42 theoretical residual and the exclusion of
 `fedmaq-analyses` except for Gate 5's narrow compatibility attestation.
+
+## Gate 6 evidence package
+
+The files remain outside the checkout at the paths supplied by the thesis
+author. Their SHA-256 digests are recorded here so the package is identifiable
+even though it is not copied into the repository.
+
+| Artifact | Producer / created | Exact reference | SHA-256 |
+| --- | --- | --- | --- |
+| baseline commit record | thesis author / 2026-08-30 | `C:\Users\Quirora\Downloads\00-baseline-commit.txt` — `2f3a3c1b102c745efad97b38f305544ffe1aba62` | `bd02b08a76038950877d59124fed171dc5052c371feb3c2a977ae1467f09e0f0` |
+| capture log | thesis author / 2026-08-30 | `C:\Users\Quirora\Downloads\01-capture.log` | `7330f62286543429aa4412771ed6474a4d8f00afe54accb034a6c9f6ace2535b` |
+| candidate commit record | thesis author / 2026-08-30 | `C:\Users\Quirora\Downloads\02-candidate-commit.txt` — `d804b7f2223fa92a8d2bcde803bec1501454faf5` | `308a20b85ac239e87fd75e95363f677704e1f69dd6f706a98abc1186ad801b46` |
+| compare log | thesis author / 2026-08-30 | `C:\Users\Quirora\Downloads\03-compare.log` | `65d938938bab87100d0d5f7115b9092319d08ee6e97b40f63d9ca9d72c859ad5` |
+
+The capture and compare were user-run at the exact baseline/candidate pair
+`2f3a3c1b102c745efad97b38f305544ffe1aba62` →
+`d804b7f2223fa92a8d2bcde803bec1501454faf5`. The expected algorithm set is
+`fedavg`, `fedprox`, `fedpaq`, `fedavg_kd`, `dadaquant`, `fedmaq`, `fedkd`,
+`feddistill`, and `cfd`; only wall-clock columns are excluded. Flower/Ray and
+missing aggregation-hook messages are retained non-fatal warnings, not
+compare failures or provenance failures.
 
 ## Invalidation-matrix demonstration
 
@@ -73,7 +97,9 @@ repository_files_modified=no
 
 ## Disposition
 
-All orchestrator-resolvable blockers are closed. Gate 7 remains **BLOCKED**
-only until Gate 6's user-run evidence is ingested and the thesis author records
-the desired freeze declaration. This artifact demonstrates availability and
-invalidation behavior; it does not itself declare any freeze.
+All orchestrator-resolvable blockers are closed. Issue #45 remains a hard
+precondition for the selected-formulation/second freeze and #22 step 6's full
+downstream campaign; it does not block Gate 6 or this limited step-1 pipeline
+freeze availability. The thesis author must still explicitly declare any
+freeze. This artifact records availability and invalidation behavior; it does
+not itself declare any freeze.
