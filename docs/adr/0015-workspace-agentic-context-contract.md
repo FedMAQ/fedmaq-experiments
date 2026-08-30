@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-08-09
-**Amended**: 2026-08-30
+**Scope**: Six FedMAQ repositories; current loader and ownership contract
 
 ## Context
 
@@ -68,14 +68,3 @@ The loader observations and their source records are maintained in the
   Journal ADR-0012 to be folded or deleted after consumer migration. This
   supersedes the former Journal ADR-0012 rule that superseded ADRs are never
   deleted.
-
-## Consequences
-
-- Codex receives a small native instruction core, while Claude receives the
-  same core through its thin wrapper.
-- Conditional guidance has one discoverable owner and does not become startup
-  context merely because another tool supports imports.
-- The workspace can audit references and dispositions without granting a
-  validator permission to mutate source, configuration, evidence, or claims.
-- The experiments repository remains the authority hub; spoke repositories can
-  evolve their local guidance without creating compatibility copies.

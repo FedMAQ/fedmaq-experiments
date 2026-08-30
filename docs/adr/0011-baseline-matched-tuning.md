@@ -3,48 +3,28 @@
 **Status**: Accepted · 2026-08-01, executed 2026-08-05, analyser committed 2026-08-06
 **Supersedes**: `docs/DECISIONS.md` Decisions 67, 73, 81, 87 (file deleted; see ADR-0014)
 
-## 2026-08-28 amendment — widened reporting stage before Stage 1a
+## Current amendment — widened reporting stage before Stage 1a
 
-The 55-run Stage 1b below is historical, provisional evidence. The replacement
-campaign adds `baseline_tuning_wide`: FedProx, FedPAQ, DAdaQuant, FedDistill,
-FedKD, and FedMAQ each contribute a five-seed shipped-reference cell plus four
-three-seed challengers, for 17 cells per algorithm and 102 total. FedMAQ varies
-`q_max` over `{4, 6, 8, 16, 32}`; the hardware-grounded `c_unit=512` is not a
-free tuning parameter.
+The current campaign uses `conf/matrix/baseline_tuning_wide.yaml`. Each tunable
+algorithm receives a shipped-reference cell and an equally specified challenger
+curve; FedMAQ varies `q_max` while the hardware-grounded `c_unit` remains fixed.
+The matrix is authoritative for the cell roster and metadata.
 
-The adoption rule remains a strict delta greater than `sqrt(2) * sigma` of the
-reference cell. All five points are reported whether or not any challenger
-clears; widening the curve does not license an argmax selection. The stage must
-complete before `pre-registration-stage1a`, because its verdicts configure both
-the formulation study and downstream benchmark. It adds 102 exploratory GPU
-cells outside the 243 reported replacement cells.
-
-Metadata distinguishes a shipped reference from a source-paper default.
-FedPAQ `q=8`, FedKD `tmax=0.95`, and FedMAQ `q_max=16` have no source-paper
-default and therefore carry `paper_default_variant: null` plus an explicit
-provenance note. The historical verdicts below remain the shipped references
-until the widened stage produces current evidence.
+Adoption remains a strict delta greater than `sqrt(2) * sigma` of the reference
+cell. Every challenger point is reported, and a highest point that does not clear
+the margin is not adopted. The stage completes before
+`pre-registration-stage1a`, because its verdicts configure the formulation study
+and downstream benchmark. Shipped-reference and source-paper-default metadata are
+kept distinct. Run state and evidence belong to the execution model and pinned
+Issues, not this ADR.
 
 ## Context
 
-ADR-0004 promises baseline parity through "matched light tuning," and the
-manuscript promises the baseline hyperparameter table is locked and tagged at the
-freeze. Nothing produced it. There was no matrix file, no stage in the runbook, and
-the word "tuning" appeared in the methods chapter only in the phrase "rather than a
-single unstructured tuning pass."
-
-**The gap is transfer, not provenance.** Every baseline constant *was* sourced
-carefully — FedProx's μ cited to the image benchmarks of its own paper's sweep,
-DAdaQuant's φ derived from a published rule instantiated at R = 100, FedPAQ's
-8 bits adopted from the precision another paper benchmarks it at (FedPAQ publishes
-levels rather than bit-widths), FedKD's SVD endpoints declared as ours rather than
-inherited. What no published value can establish is that it still holds **on
-MobileNetV2GN at α ∈ {0.1, 1.0}**, which is a different architecture and a
-different skew from any of the sources. FedMAQ meanwhile received a full
-exploration phase and a formulation study on exactly this configuration.
-
-*You verified yours on this grid and theirs on someone else's* is the surviving form
-of the attack, and it had no answer.
+ADR-0004's matched-light-tuning promise requires each baseline's own
+accuracy--communication knob to be checked on the thesis configuration. Published
+defaults do not establish transfer to this architecture and skew; this decision
+therefore treats tuning as a uniform, pre-declared comparison rather than an
+author-selected sensitivity search.
 
 ## Decision
 
@@ -56,13 +36,9 @@ reference cell at the shipped value plus two three-seed challengers. Run at the
 held-out α = 0.3, under FedMAQ's own √2σ rule (ADR-0008), and uncounted among the
 reported grid.
 
-**R=100, not the R=50 every other exploration stage screens at.** Baselines get no
-confirmation stage, so a truncated-horizon pick would ship into the reported grid
-uncorrected. That is most of the stage's GPU cost and it is the one place worth
-spending rather than economizing. Reference cells are deepened to five seeds by the
-same argument applied per baseline; standardizing to three would leave the
-baselines' margins estimated more coarsely than FedMAQ's own freeze gate, which is
-an indefensible ordering.
+The stage uses the horizon and reference depth declared by its matrix. Baselines
+get no later confirmation stage, so the reference must support the adoption margin
+before the reported grid is frozen.
 
 **The knob is the one governing each baseline's own accuracy–communication
 trade-off**, because that is the axis every claim rests on. This corrects an
@@ -71,46 +47,21 @@ temperature (its knob is `reg_alpha`), and FedKD's `temperature` governs
 client-side mutual KD while `tmax`, the SVD energy cutoff, governs the trade-off
 this grid compares on. Recorded rather than silently substituted.
 
-**The null result is the product.** The likely outcome is that no challenger clears
-and every baseline freezes at the value it would have had with no sweep — which
-converts an appeal to authority into a measurement. A cheaper selective sweep
-("tune only the knobs that look sensitive") was rejected for its *shape* rather
-than its cost: the person whose algorithm benefits would be deciding which of his
-competitors' knobs deserved tuning, which invites the exact suspicion the sweep
-exists to dispel. **Uniform treatment has no soft spot.**
+**The null result is the product.** If no challenger clears, each baseline retains
+its shipped value. Selective tuning is rejected because the author would choose
+which competitors' knobs deserve attention; uniform treatment has no soft spot.
 
 Stage 1b's placement is not an ordering constraint — it shares no configuration
 with FedMAQ, so it is unordered with respect to the refinement search. The only
 hard ordering the tag imposes is that it must finish before the tag.
 
-### DAdaQuant was capped at five bits by a constant of ours that read as eight
+### DAdaQuant's unit distinction
 
-`dadaquant.yaml` carried `q_max: 8` beside `fedpaq.yaml`'s `q: 8` and
-`fedmaq.yaml`'s `q_max: 16`, and **the three do not denominate the same quantity.**
-FedPAQ's `q` and FedMAQ's bounds are bit-widths; DAdaQuant's `q` counts
-quantization levels *per sign* — codes in [−q, q], so 2q+1 levels and
-⌈log₂(2q+1)⌉ bits per element. The hook's docstring states this plainly; nothing
-outside that docstring did. Eight levels per sign is five bits, so the baseline a
-reader would take to be matched to FedPAQ's 8-bit budget was running at roughly
-five-eighths of it.
-
-Two consequences, neither disclosed anywhere. The precision ceiling of a competitor
-on the exact frontier every claim is drawn on was set by a constant we chose,
-absent from the baseline table and not among the values the tuning stage tests. And
-worse for the baseline's own integrity: `q_t` starts at `q_min = 1` and doubles, so
-a ceiling of 8 is reached after three doublings — around round 30 of 100 — leaving
-DAdaQuant effectively static for the remaining seventy rounds. **Time-adaptive
-escalation is what DAdaQuant *is*; the cap suppressed most of it.**
-
-**Resolved: `q_max = 127`.** That is 255 codes, exactly eight bits, so DAdaQuant's
-ceiling equals FedPAQ's and the two pure-quantization baselines are separated by
-*adaptivity* rather than by budget. `q_min = 1` is left alone — it is published.
-Some upper bound is still required, so the change is which bound, not whether.
-
-**Direction of the correction.** It strengthens a competitor. That is deliberate:
-of the two available fixes — disclosing the 5-bit cap and leaving it, or matching
-the budget and disclosing that — only the second cannot be read as the author of
-FedMAQ choosing how much precision his competitors are allowed.
+DAdaQuant's `q` counts quantization levels per sign, whereas FedPAQ's `q` and
+FedMAQ's bounds are bit-widths. The durable correction is `q_max = 127`, giving
+255 codes and an eight-bit ceiling while leaving the published `q_min` unchanged.
+This strengthens the competitor and separates the pure-quantization baselines by
+adaptivity rather than by an author-chosen precision budget.
 
 ### Verdicts
 
@@ -128,29 +79,13 @@ FedKD's absolute level sits well below the other baselines. That is architectura
 its student is a width-0.5 MobileNetV2GN against a full-size teacher (ADR-0005) —
 **not a tuning failure. Do not read that row as a bug.**
 
-### The analyser had to exist in committed code before the tag
+### Reproducible analysis boundary
 
-`baseline_tuning.yaml`'s header named `scripts/analysis.py:exploration_noise_margin`
-as its decision rule. That function filters `phase == EXPLORATION_PHASE` and
-`algorithm == "fedmaq"` and keys cells on refinements, so it **structurally cannot
-read Stage 1b's runs** and reports a completed 55-run stage as no runs at all. The
-verdicts above were computed by an ad-hoc script pasted into an allocation session
-and existed nowhere in the repository.
-
-`baseline_tuning_margin()` now applies the same rule from committed code — σ from
-each baseline's shipped-value reference cell, margin √2σ, adoption only on a
-strictly clearing delta, tie-break by larger delta — writing to
-`scripts/analysis_output/baseline_tuning_margin.json`. `RunRecord` gained `variant`
-(ADR-0009) because Stage 1b's cells differ in nothing else the record holds: same
-algorithm, same config name, same group, same skew.
-
-Tests pin both outcomes reconstructed from the published statistics, including the
-FedPAQ case where **both challengers score higher and neither is adopted** — the
-retention case the rule exists for. A regression test pins the old defect directly.
-
-**Why this had to precede the tag.** The tag freezes the baseline table. Tagging a
-table whose values cannot be recomputed from the tagged tree is the weaker
-artifact, and the tag is the thing one does not want to cut twice (ADR-0010).
+`baseline_tuning_margin()` is the committed implementation of the margin rule;
+the matrix and analysis outputs are its execution/evidence owners. The analyser
+must exist before the pre-registration tag so the frozen baseline table can be
+recomputed from the tagged tree. The implementation details and regression checks
+remain in code and tests rather than being duplicated here.
 
 ## Consequences
 

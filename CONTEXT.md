@@ -2,14 +2,6 @@
 
 Multi-adaptive quantization and ensemble distillation for memory-constrained federated learning under non-IID data. Canonical glossary for terms shared across `fedmaq-experiments` (code) and `fedmaq-manuscript` (thesis) — resolves naming drift between the two.
 
-> **This file is deliberately a glossary**, which the workspace's reference layout
-> ([ADR-0015](docs/adr/0015-workspace-agentic-context-contract.md))
-> forbids for a `CONTEXT.md`. The exemption is explicit there: that repo avoids
-> being a glossary *because* "All shared vocabulary defers to
-> `fedmaq-experiments/CONTEXT.md`." This is the file that rule was written to
-> protect. Do not "fix" it toward pointer-only. See
-> [ADR-0014](docs/adr/0014-agentic-context-layout.md).
-
 ## Authority map
 
 Six-repo thesis workspace. `fedmaq-experiments` is the domain hub — sibling repos
@@ -38,16 +30,12 @@ construction.
 
 - **One canonical home per fact.** A number, status or decision lives in exactly
   one place; everything else points at it and never restates it.
-- **No archives.** Git history is the record — a superseded doc is deleted, not
-  parked in an `archive/` folder.
+- **No archives.** Git history is the record; superseded documents are not parked
+  in an `archive/` folder.
 - **Reference lives behind pointers.** Settled, rarely-touched material belongs in
   `docs/agents/`, out of the always-loaded rules.
-- **No committed handoff file.** Session-to-session orientation is a temporary
-  artifact of the `handoff` skill, never tracked here. A tracked `HANDOFF.md`
-  failed exactly once and predictably: it accreted durable operational content
-  that went stale while cited from three other docs. If you are about to write
-  next-session context into a tracked file, this is the rule that names the
-  mistake.
+- **No committed handoff file.** Session-to-session orientation is temporary and
+  belongs to the handoff procedure, not a tracked document.
 - **No section numbers in heading titles** (`## Important Context`, not
   `## 1. Important Context`) — avoids renumbering churn and broken anchors.
   Explicit IDs stay: `ADR-0007`, audit finding `F10`, manuscript `§4.1`.
@@ -64,38 +52,35 @@ _Avoid_: intermediate signal, blended score
 
 **Soft quality target**:
 The bit-width value $\hat q_k^{(t)}$ derived from the soft quality signal, before Tier-1 clamping. Code: `q_hat` in `fedmaq.py`.
-_Avoid_: soft quality function (former manuscript Ch3 wording; swept 2026-07-25, no occurrences remain)
+_Avoid_: soft quality function.
 
 **Formulation**:
-One of five candidates (0-4) defining how the soft quality signal and soft quality target are computed: 0 = Resource-Only Hard Cap, 1 = Normalized Linear Weighted Sum, **2 = Normalized Multiplicative Scaling — frozen and shipped** (`conf/algorithm/fedmaq.yaml: formulation: 2`, [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)), 3 = Gradient-Primary Data-Modulated, 4 = Threshold-Based Staged Rule. The replacement-rerun design that supersedes Formulations 1 and 2 is a live decision in [Issue #34](https://github.com/FedMAQ/fedmaq-experiments/issues/34), not a change to the frozen configuration.
-_Avoid_: "Alternative N" as a synonym for "Formulation N" (former manuscript Ch3 wording; swept 2026-07-25). _Avoid_: soft quality-target formulation (former Ch4 wording, redundant with "soft quality target"; swept 2026-07-25). _Avoid_: **"additive"** for Formulation 1 — the config spells it *linear* (`formulation1-linear-sum`); both spellings were live, and Ch2 §2.5 carried them in one paragraph (swept 2026-08-08, Ch2 fixed; **Ch6 consumed by pass 15's audit**, leaving Ch1/Ch3/Ch4 for the cross-chapter sweep). **Not every hit is a name.** `chapter_4.tex:406` uses "the additive Formulation 1" and "the additive form" contrastively against the multiplicative one inside a mathematical argument about what zeroing a weight does; that is a description of the operator, not a use of the label, and the sweep must re-derive each hit rather than replace on match. _Avoid_: **"non-adaptive control"** for Formulation 0 — it *is* adaptive at Tier 1, being memory-clamped like every other arm, and only Tier-2-blind; say **resource-only control** (repointed manuscript-wide 2026-08-08).
+The current recut uses the `power_mean` family plus structurally separate resource-only, gradient-primary, and threshold rules; [ADR-0021](docs/adr/0021-power-mean-formulation-family.md) and the matrix/config files own that design. The frozen v1 record uses numeric F0–F4 labels and `formulation: 2`; retain those labels when interpreting v1 configs and evidence, but do not present them as the current recut.
+_Avoid_: "Alternative N" for "Formulation N" and "soft quality-target formulation" for "soft quality target". "Linear" names F1 and "multiplicative" names F2. Do not call F0 a non-adaptive control: it is resource-only at Tier 2 while Tier 1 remains adaptive.
 
 **Power-mean family**:
-The two-signal aggregate $M_p(\tilde g,\tilde n;\omega) = (\omega\tilde g^p + (1-\omega)\tilde n^p)^{1/p}$ for finite nonzero $p$, where $p$ is the **compensation degree** and $\omega$ is the state-signal weight. Its named limiting forms are arithmetic ($p=1$), weighted geometric ($p\to0$), harmonic ($p=-1$), and minimum ($p\to-\infty$). The replacement-rerun ladder, limit, zero, and ablation semantics are live decisions in #34.
+The two-signal aggregate $M_p(\tilde g,\tilde n;\omega) = (\omega\tilde g^p + (1-\omega)\tilde n^p)^{1/p}$ for finite nonzero $p$, where $p$ is the **compensation degree** and $\omega$ is the state-signal weight. Its named limiting forms are arithmetic ($p=1$), weighted geometric ($p\to0$), harmonic ($p=-1$), and minimum ($p\to-\infty$). The design, limit, zero, and ablation semantics are [ADR-0021](docs/adr/0021-power-mean-formulation-family.md).
 _Avoid_: treating $p$ as a second formulation identifier.
 
 **Formulation constants**:
-The tunable constants inside Formulations 1-4. **The manuscript's Greek symbols are canonical**; the config keys were pending a rename tracked in [Issue #20](https://github.com/FedMAQ/fedmaq-experiments/issues/20):
+The current names are the manuscript's canonical Greek symbols and their aligned config keys:
 
 | Canonical | Config key | Role |
 |---|---|---|
 | $\kappa$ | `kappa` | Formulation 3 data modulator — renamed from `lambda_val` via #20 |
 | $\tau_g$, $\tau_n$ | `tau_g`, `tau_n` | Formulation 4 thresholds (already aligned) |
 
-Formulations 1 & 2's `gamma1`/`gamma2` no longer exist — #34 replaced them with the power-mean family's single `omega`, rather than renaming them to `omega1`/`omega2`; see the Power-mean family entry above.
-
-Values agree on both sides ($\kappa = 1.0$, $\tau_g = \tau_n = 0.5$); nothing is numerically different, only the name changed.
-
-Decided 2026-07-25 by collision-checking every candidate symbol against all 40 `fedmaq-literature/kg/papers/*.md` nodes. $\gamma$ was ruled out: it appears 29 times in the corpus, including as FedProx's inexactness parameter $\gamma_k^t$, and FedProx is one of this thesis's own baselines. $\lambda$ was ruled out at 18 occurrences (AdaDQ-KD's KD loss weight, AdaGQ's step sizes), which is also why the config key used to carry the awkward `_val` suffix. $\kappa$ has zero corpus occurrences; $\omega$ has two, neither in a compared method. **Do not "fix" the manuscript toward the old config keys** — that reintroduces the FedProx collision.
+The power-mean family uses `p` and one `omega`; the historical v1 `gamma1`/`gamma2` names remain only when describing that frozen record. Do not rename manuscript symbols toward retired config keys.
 
 **Bit-width**:
 A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32\}$ — never an arbitrary continuous integer.
 
 **Tier 1 / Tier 2**:
 FedMAQ's two-tier precision scaling design. Tier 1 is the hard feasibility constraint from client memory ($Q_k^{max}$), computed as a separate `min()` clamp in code, never blended into the soft quality signal. Tier 2 is the soft quality optimization (signal, target, formulation) layered on top and floored by Tier 1's cap.
-_Avoid_: "three coequal dimensions of awareness" (resource, data, state) — resource (Tier 1) is structurally a hard clamp, not a third soft signal alongside data/state (Tier 2's two signals). The Ch4 rewording this entry once asked for has landed: `chapter_4.tex:106` now organizes the execution loop around that asymmetry "rather than around three symmetric awareness dimensions", and the phrase appears nowhere in the manuscript.
+_Avoid_: "three coequal dimensions of awareness"; resource is a Tier-1 hard clamp,
+not a third Tier-2 signal.
 
-### Tier 1 Memory Ceiling Telemetry (`fedmaq-experiments`#28)
+### Tier 1 Memory Ceiling Telemetry
 
 Per-round evidence that the Tier 1 clamp binds rather than sitting inert.
 Implemented in `e547b50`; plotted by `scripts/memory_ceiling.py`.
@@ -112,109 +97,70 @@ without the Tier 1 clamp — i.e. where Tier 1, not Tier 2, is the active
 constraint. This is what separates "the clamp is binding on most clients" from
 "the clamp is inert and Tier 2 is doing all the work"; without it a realized
 `avg_q` is unreadable. Logged as `algorithm/fedmaq/tier1_binding_fraction`.
-_Not_ `q_k_max < q_hat` on the raw ceiling: both values are snapped onto the
-bit-width set before comparison, since a raw cap below `q_hat` can still snap
-to the same level `q_hat` would have snapped to on its own — that comparison
-over-reported binding until `fedmaq-experiments`#40.
+Compare snapped bit-widths, not the raw ceiling: equal snapping means the clamp
+did not change the assignment.
 
-**Host resource consumption is not this and was explicitly declined.** VRAM/RAM on
-the JupyterHub box is a property of the simulator and its co-tenants, not of the
-federated setting being modelled, and a reader cannot infer device feasibility
-from it. When the adviser's "resource and memory consumption per algo per round"
-is cited, it resolves to modelled client memory, never host memory (#28, #21 Out
-of scope).
+Host VRAM/RAM is simulator infrastructure, not modelled client memory, and is not
+evidence of device feasibility.
 
-### Ensemble Distillation (Section 3.5, Section 4.2)
+### Ensemble Distillation
 
 **Ensemble distillation**:
-The head term for **FedMAQ's own** server-side second aggregation stage — the one the thesis title names. `server-side`, `proxy-based` and `multi-teacher` are licensed *contrastive prefixes*, not drift: each earns its place against a different foil (client-side schemes such as AdaDQ-KD; data-free schemes such as FedGen; single-teacher schemes). Use whichever contrast the sentence is actually drawing, or none. Declared by two headings — `chapter_3.tex:242` *Proxy-Based Ensemble Distillation* and `chapter_4.tex:116` *Server-Side Ensemble Distillation*. Bare "distillation" is fine as short form after a qualified first mention (118 occurrences, all correct). **A licensed prefix may also carry bare "distillation" once the head term is established in context** — `server-side distillation` (7 sites) and `server-side multi-teacher distillation` (2) are **correct as written and are not sweep targets**; the prefix is doing the work and the head is understood. Do not "complete" them.
-_Avoid_: **any form putting "knowledge" on FedMAQ's own mechanism** — server-side knowledge distillation, server-side ensemble knowledge distillation, proxy-based ensemble knowledge distillation. Swept 2026-08-08 (pass 17), 19 sites. The title moved *off* "Knowledge" on 2026-08-08; this entry follows it.
+The head term for **FedMAQ's own** server-side second aggregation stage. `server-side`, `proxy-based`, and `multi-teacher` are contrastive prefixes for client-side, data-free, or single-teacher foils. Bare "distillation" is a valid short form after the mechanism is established.
+_Avoid_: attaching "knowledge" to FedMAQ's own mechanism. **Knowledge distillation** remains the general family and other methods' mechanism; **federated distillation** names the FedDistill/FD lineage; **data-free distillation** names others' work.
 
-**Knowledge distillation** — reserved, do **not** sweep:
-The general family, correct for others' work and for the client-side negation at `chapter_3.tex:240` ("clients do not perform any local function-space regularization or knowledge distillation" — the claim is about *all* KD, not FedMAQ's variant, and narrowing it would weaken it). Also correct for the baseline *category* (`chapter_1.tex:207`, the Gantt row), for Ch2's literature treatment, and for DynFed's mechanism at `chapter_2.tex:207`. "KD" is defined once at `chapter_2.tex:163` and stays the abbreviation. Likewise **federated distillation** = the FedDistill/FD lineage; **data-free distillation** = others' work.
+**Knowledge distillation** remains the general family and is correct for other
+methods and general client-side statements. "KD" remains the abbreviation.
 
-**What this rule governs.** Manuscript prose, `docs/adr/` written from 2026-08-08 onward, and the FedMAQ entries in `fedmaq-literature/kg/`. **Out of scope, permanently — do not re-open these as findings:**
+**What this rule governs.** Manuscript prose, current ADR prose, and the FedMAQ
+entries in `fedmaq-literature/kg/`. Code identifiers, frozen config names,
+extracted paper text, and author-owned alternate artifacts retain their own
+vocabulary and are not prose rename targets.
 
-| Surface | Why |
-| :-- | :-- |
-| `conf/` — e.g. `fedmaq.yaml:35`, `fedmaq_no_kd.yaml:1` | **Frozen behind `pre-registration`.** Read-only regardless of wording. |
-| Code identifiers and their docstrings — `kd_utils.py`, `fedavg_kd.py`, `no_kd`, `config5-no-kd` | The docstrings *explain the identifier*. Renaming the prose while `FedAvgKD` and `kd_utils` stand would make them harder to read, and the identifiers are pinned by frozen configs. |
-| ADR prose written before 2026-08-08 — e.g. `docs/adr/0004-confirmatory-grid-design.md:90` | ADRs record what was decided *then*. Outcomes are appended, never substituted. Not false, just pre-canonical. |
-| `fedmaq-presentations/updates/*` | Already-delivered artifacts, left as delivered. |
-| `fedmaq-literature/markdown/**` and `kg/papers/**` | Extracted text of and notes on **others'** papers. ~490 hits; none are FedMAQ's mechanism. |
-| `fedmaq-journal-article` keyword list (`paper.tex:76`) | ADR-0016 §2 — surfaces need not converge. Separate artifact, separate title. |
-
-**The abstract is resolved; the title page stays as the author set it.** `abstract_en.tex:20` read "ensemble knowledge distillation" and was left alone at first, because `abstract_fil.tex` mirrored the phrase and is the author's to write — changing only the English would have desynchronized a translation agents may not touch. **The author removed the Filipino abstract from the draft on 2026-08-08**, which dissolved the constraint, and the English now reads "ensemble distillation". `abstract_fil.tex` still exists and is still the author's; it is simply no longer built (`main.tex:9`, commented). `title_page.tex:12` is the author's own wording and is not swept — [ADR-0016](https://github.com/FedMAQ/fedmaq-journal-article/blob/main/docs/adr/0016-title-keywords-and-abstract-ordering.md) §2 holds that surfaces need not converge anyway.
-
-### Ablation Study (Section 4)
+### Ablation Study
 
 **State-only ablation**:
-Ablation Configuration **3** — state (gradient-norm) awareness only drives Tier-2 quantization; server-side distillation is retained (as in configs 2-4). Names WHAT the arm configures. Both entries here read "Configuration 4" until 2026-08-08 (pass 15), which is the arm that removes *state* awareness and is therefore data-only — the mirror image. `conf/matrix/ablation.yaml` (`config3-no-data`, `config4-no-state`) and `chapter_4.tex:394`/`:402` are unanimous on Configuration 3.
+Ablation Configuration **3** — state (gradient-norm) awareness only drives Tier-2 quantization; server-side distillation is retained. This names what the arm configures.
 _Avoid_: state-only-plus-distillation ablation, DynFed-core reference arm
 
 **DynFed-style reference point**:
-The role Ablation Configuration **3** plays in analysis (Ch4 §4, sec:ablation) — reproduces DynFed's core mechanism (gradient-norm-adaptive quantization, memory-capped, server-side multi-teacher distillation), absent DynFed's non-reproducible active teacher-selection. Explicitly framed as a comparison anchor, not a claimed win over DynFed itself (no public DynFed codebase exists to benchmark directly). Names WHY the arm exists.
-_Avoid_: DynFed-core reference arm, **DynFed-style reference *arm*** (both collapse the what/why split these two entries exist to keep; `chapter_6.tex:40` carried the second and was fixed 2026-08-08. The manuscript's wording is *point* — `chapter_4.tex:402`, `chapter_1.tex:156`.)
+The analytical role of Configuration **3** as a comparison point reproducing
+DynFed's core mechanism without its non-reproducible active teacher selection.
+It is not a claim of direct DynFed benchmarking.
+_Avoid_: DynFed-core reference arm, DynFed-style reference arm.
 
 ### Communication Comparison (Section 4, `sec:metrics_communication`)
 
-Three terms, one amendment. [ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)
-replaced the primary criterion; these name what replaced it and what was demoted.
-**A sentence that measures communication efficiency and leaves no slot for the first
-two is defective even when every word in it is accurate** — that is the shape found
-in Ch1 §1.3, Ch6 §6.1, Ch2 §2.2 and Ch3 §3.3.2, four passes running. **No sweep can
-find it.** It is a shape, not a keyword: Ch3 §3.3.2 called the product "the true
-communication cost" while the criterion sweep that covered Ch3 returned it as a
-non-hit. Only a full read of the surface catches this class — which is why a sweep's
-clean bill never licenses skipping it.
+The terms below distinguish the primary communication comparison from its scalar
+descriptor and from the v2 study's separate paired budget. The criterion decision is
+[ADR-0012](docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md).
 
 **Accuracy-vs-cumulative-MB curve**:
 The **primary** communication-efficiency comparison. Its MB axis is aggregate
 bidirectional client--server traffic: each round sums the model download and measured
 upload for every sampled client, then accumulates those totals across rounds. No free
-parameters. Mandated for every run by the evaluation-metrics rule, and the axis on
-which every selection verdict is read.
-_Avoid_: MB per client, uploaded MB (both name different quantities)
-_Avoid_: single-round compression ratio as a stand-in (measures a different thing)
+parameters. It is the axis on which selection verdicts are read.
+_Avoid_: MB per client, uploaded MB, or a single-round compression ratio as substitutes.
 
 **Minimum common cumulative-MB budget**:
 Where a scalar head-to-head is required: top-1 accuracy at $B = \min$ over the arms
 compared of each arm's final cumulative MB. The budget is read off the data, chosen by
-nobody — which is what keeps it free of the tunable parameter the $k$-consecutive rule
-was rejected for.
+nobody, so it introduces no tunable comparison parameter.
 
-**"Iso-byte" is also ADR-0016's own wording for the v2 study's budget, which is a
-different quantity.** Read the paired per-seed byte budget entry below before taking any
-passage that says "iso-byte" to mean this term.
-_Avoid_: iso-byte budget, matched-byte budget, equal-expenditure budget (all appear in
-pass notes as informal shorthand; none is the canonical term). Note that the $R = 100$
-round budget equalizes **training** expenditure, not bytes — do not conflate the two.
+“Iso-byte” is reserved for the paired per-seed v2 budget below; it is not a synonym for
+the minimum common cumulative-MB budget.
 
 **Bytes-to-target**:
 Cumulative aggregate bidirectional client--server megabytes required to reach a
-per-configuration target accuracy. **Demoted 2026-08-06 from primary criterion to
-descriptor**, reported beside the two above, never as the verdict. The target accuracy floor it rests on
-(0.9 x FedAvg-at-equal-rounds) is **superseded**; cite it as such.
-_Avoid_: **bits-to-target-accuracy**, **bits-to-accuracy**, **cumulative-MB-to-target**
-— three non-canonical spellings of this one quantity. **All three are clear as of
-2026-08-18**: swept across `fedmaq-manuscript` and the pinned pre-v6 worktree
-`manuscript-2026-08`, zero occurrences in either, with canonical `bytes-to-target`
-present and correct in Ch1, Ch4 and Ch5 (`fedmaq-manuscript#12`, reproduced
-independently under `#19`). The list stays because it is the rename target if a variant
-reappears, not because a variant is outstanding.
-
-Keep the lesson that produced it. A 2026-08-07 keyword sweep on `bytes-to-target` alone
-returned Ch2 clean while the chapter was carrying the demoted quantity as primary under
-the `bits-` spelling. **Sweep the whole variant set or the sweep proves nothing.**
+per-configuration target accuracy. It is a descriptor, never the primary verdict.
+_Avoid_: bits-to-target-accuracy, bits-to-accuracy, and cumulative-MB-to-target.
 
 **Rounds-to-target**:
-A **different** quantity — the rounds term of the bytes-to-target product, not a
-communication measure on its own. Pass 7 caught §5.2.4 reading it as a judgment on
-total bytes. Pair it with per-round payload or do not cite it.
-_Avoid_: **rounds-to-converge** (former Ch3 §3.3.2 wording, fixed 2026-08-07;
-`chapter_4.tex:280` is canonical)
+A different quantity: the rounds term of the bytes-to-target product, not a
+communication measure on its own. Pair it with per-round payload when interpreting it.
+_Avoid_: rounds-to-converge.
 
-### Run Identity (`fedmaq-experiments`#55)
+### Run Identity
 
 **Run identity**:
 A run is identified by the matrix and resolved configuration that produced it,
@@ -226,7 +172,7 @@ module rather than slicing path segments inline; a failed canonical-path parse
 is reported as a malformed run rather than silently assigned to a group.
 [ADR-0009](docs/adr/0009-run-identity-and-analysis-scoping.md)
 
-### Byte-Accounting Seam (`fedmaq-experiments`#25)
+### Byte-Accounting Seam
 
 The measurement layer the terms above are read off of. One canonical function
 replaced four independent per-arm implementations. [ADR-0018](docs/adr/0018-byte-accounting-seam.md)
@@ -259,17 +205,15 @@ telemetry supplies the one per-round record call and does not own the filesystem
 format or write policy.
 _Avoid_: payload logging (ambiguous with ordinary telemetry, which is always on)
 
-### Secondary Byte Axis (`fedmaq-experiments`#26)
+### Secondary Byte Axis
 
-A second, parallel measurement alongside the seam above, kept per the
-2026-08-27 `wayfinder` keep-or-drop decision. [ADR-0020](docs/adr/0020-secondary-byte-axis.md)
+A second, parallel measurement alongside the seam above. [ADR-0020](docs/adr/0020-secondary-byte-axis.md)
 
 **As-published coder**:
 An arm's transport encoding measured the way its own source paper specifies,
-rather than under the primary axis's held-constant zlib. Currently only
-DAdaQuant, whose paper mandates 0-run-length encoding plus Elias omega coding
-— the only baseline in the stack the 2026-08-26 audit found with a
-paper-specified transport stage (X1). Logged as `secondary_bytes_uploaded`
+rather than under the primary axis's held-constant zlib. DAdaQuant's paper
+mandates 0-run-length encoding plus Elias omega coding. Logged as
+`secondary_bytes_uploaded`
 per client, aggregated as `communication/round_secondary_bytes`; absent
 (not zero) on every other arm's rows.
 _Avoid_: secondary encoder (names the mechanism, not the measurement it
@@ -286,7 +230,7 @@ not a heuristic estimate.
 _Avoid_: entropy coding (the paper's broader category; this term names the
 specific scheme actually implemented)
 
-### Quantizer Unbiasedness (`fedmaq-experiments`#24)
+### Quantizer Unbiasedness
 
 The rounding/normalization operator applied once a bit-width is chosen — downstream of
 Precision Scaling above, which only picks the bit-width. One shared implementation
@@ -304,7 +248,7 @@ which is unaffected and stays exact)
 **l2 scale / l∞ scale**:
 The two normalization divisors a quantizer's `_scale(d)` can return: `‖d‖₂`
 (l2, `np.linalg.norm`) or `max|d|` (l∞). FedPAQ/FedMAQ's `q>1` path uses l2, matching
-`chapter_3.tex:84`'s `Q_s(v_j) = ‖v‖₂·sgn(v_j)·ξ_j`; their `q≤1` sign branch and
+the manuscript's `Q_s(v_j) = ‖v‖₂·sgn(v_j)·ξ_j`; their `q≤1` sign branch and
 DAdaQuant throughout stay l∞ — both unconditional per-path choices, not inherited
 defaults. `FedMAQPostProcessCompressionHook` (error feedback) is the one `q>1`
 exception that also keeps l∞: l2 diverges unboundedly there (ADR-0019).
@@ -321,7 +265,7 @@ _Avoid_: assuming a compressor_hook's `rng` set at `client_fn` construction time
 what compress() actually draws from — Flower rebuilds `client_fn` fresh every round,
 so only the per-round reseed matters.
 
-### Freeze States (`fedmaq-experiments`#74)
+### Freeze States
 
 Three distinct states, three distinct gates, three distinct owners of what may be
 claimed. They are reached in order and never collapse into one another; "frozen"
@@ -345,8 +289,7 @@ The code, configuration and protocol are defensible and may be run. Requires the
 static audit, repair and re-audit, independent review, local verification,
 telemetry compatibility attestation, and the exact-commit JupyterHub golden gate.
 It licenses dispatch; it licenses nothing about the runs' contents.
-_Avoid_: reading it as clearance for `#22` step 6 — the downstream cells have
-their own blocker in `#45`
+_Avoid_: treating pipeline freeze as evidence or results freeze.
 
 **Evidence freeze**:
 The prescribed campaign artifacts exist, are ingested, and carry hash provenance.
@@ -361,12 +304,11 @@ freeze plus claim-support review. This is the only state that licenses a
 scientific conclusion in prose.
 _Avoid_: **the results are frozen** as shorthand for "the runs finished"
 
-### Server-KD Repair Study (Section 5.5–5.7)
+### Server-KD Repair Study
 
-The v2 arc's terms. The protocol itself is
-[ADR-0016](docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md); this names only what
-things are called. **No run, qualifier or dispatch counts here** — per the authority map
-those live in Issues and are stale in a tracked file by construction.
+The v2 terminology is defined here; the protocol itself is
+[ADR-0016](docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md). Run state and results
+live in Issues and evidence owners.
 
 **FedMAQ-v2**:
 The separately versioned exploratory study that changes only server-side KD, every non-KD
@@ -384,13 +326,9 @@ _Avoid_: **the winning repair** before a freeze artifact records one
 **Candidate repair family**:
 The five are **this thesis's own exploration design**, not five families drawn from the
 literature — `no_kd` is one of them and no paper proposes it. Exactly one,
-**quality-weighted server ensemble distillation**, has corroborated prior art;
-`fedmaq-manuscript` §2.4 (*Ensemble Teacher Weighting*) is that survey's only home, and
-prose needing the weighting literature cites through that subsection rather than reaching
-for sources of its own. The two corroborated candidates are documented as OKF nodes in
-`fedmaq-literature/fedmaq-wiki/papers/` (`wang-2023-dafkd.md`, `jang-2025-fedgo.md`,
-indexed in that repo's `docs/agents/paper-catalog.md`); the exploration that ruled out the
-other four is closed history — `fedmaq-literature`#6 and PR #9.
+**quality-weighted server ensemble distillation**, has corroborated prior art; the
+manuscript's *Ensemble Teacher Weighting* subsection is its survey home. The other
+candidate dispositions are historical evidence, not a literature taxonomy.
 _Avoid_: **the five repair families in the literature** (four of them are not)
 
 **Paired per-seed byte budget** ($B^*_s$):
@@ -399,23 +337,16 @@ same-seed terminal cumulative-byte budgets, defined independently per pair; both
 scored there by linear interpolation within each curve's own observed inclusive range, never
 extrapolated. **v2-only.**
 
-**Not the minimum common cumulative-MB budget above.** That term is canonical and correct in its
-own place; this is the confusable sibling, and the two measure different things — one budget
-across the arms compared, read discretely off the data, against a per-pair per-seed budget read
-by interpolation. Prose that sets a number from one against a number from the other asserts a
-comparison ADR-0016 forbids, and nothing in the build will catch it.
-_Avoid_: **iso-byte budget** (ADR-0016's internal wording; non-canonical in prose)
+**Not the minimum common cumulative-MB budget above.** The two are distinct: one
+is read across compared arms, while this v2-only budget is read per pair and seed
+by interpolation. Do not substitute one for the other.
+_Avoid_: iso-byte budget in general prose.
 
 **Study 1 / Study 2**:
-Planning labels only, used in `fedmaq-manuscript`'s chapter-skeleton ADR (its ADR-0005, not
-this repo's, which is the baseline stack) and the wayfinder tickets. They do **not** enter
-manuscript prose: Study 1 already contains something called the formulation study, so
-"Study 1" on the page invites a reader to hunt for a boundary the chapter never draws. In
-prose use the existing part-names for v1 and **the FedMAQ-v2 server-KD repair study** for v2.
+Planning labels only. They do **not** enter manuscript prose; use the existing v1
+part-names and **the FedMAQ-v2 server-KD repair study** for v2.
 
 **FedDistill vs. the v2 literature's "FedKD"**:
-This project's baseline table names **Jeong et al. as FedDistill**. Part of the v2 candidate
-literature (Qi et al. 2025) calls that same work **FedKD** — which collides with this
-project's **FedKD baseline (Wu et al., 2022)** and again with the v2 candidate **FedKT (Mao
-et al., 2025)**. Three distinct works, overlapping names. Cite by author and year whenever
-the surrounding text is drawn from the v2 literature.
+This project's baseline table names **Jeong et al. as FedDistill**. A v2 source calls
+that work **FedKD**, colliding with this project's **FedKD baseline** and the v2
+candidate **FedKT**. Cite by author and year whenever the v2 literature is intended.

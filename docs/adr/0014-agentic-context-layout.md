@@ -4,81 +4,52 @@
 **Supersedes**: `docs/DECISIONS.md` Decisions 14–17, 63, 69 (file deleted)
 **Adopts**: [`../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md`](../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md)
 
-## Context
+## Historical scope
 
-This repo's agentic context had grown to roughly three times the size of the
-workspace's reference layout, and the growth was structural rather than incidental:
-
-- **`docs/DECISIONS.md`** — 1718 lines, 88 entries, two heading conventions, entries
-  numbered out of append order. Append-only logs record supersession by pointing
-  *forward* from a live entry, so a dead decision sits there looking current. An ADR
-  says "superseded" in place.
-- **`docs/STATUS.md`** — 254 lines mixing durable reference with state that changed
-  every session. It had gone internally inconsistent: one block asserted nothing in
-  the grid had been executed while a later block in the same file corrected it.
-- **`.claude/rules/`** — six files, several of which existed to describe other files.
-- **`.claude/project/`** — a stale changelog, a workspace map, and a baseline registry
-  living apart from the rules that govern baselines.
-- **Two `archive/` subtrees** — 3343 lines nothing cited for a verdict.
-
-The workspace already had a designed answer. `fedmaq-journal-article`'s ADR-0012 is the
-reference structure and states that the siblings are pending migration to it. **This
-is that migration, for this repo.**
+This record documents the experiments repository's context migration. It retains the
+old Decision identifiers needed by frozen comments and historical evidence; Git
+history carries the superseded files and chronology. Recovery archaeology for the
+removed mutable-status surface remains discoverable at
+`75df164^:docs/STATUS.md`; that status was superseded by Issue #10 and the live
+Issues, not retained as a second authority here.
 
 ## Decision
 
-Adopt ADR-0012's layout — `CLAUDE.md` as entry point, `CONTEXT.md` as orientation,
-`.claude/rules/` for always-loaded rules, `docs/agents/` for consult-on-demand
-reference, `docs/adr/` as the sole decision record, and GitHub Issues for live state.
-Read that ADR for the reasoning; it is not restated here.
+The migration adopted `CLAUDE.md` as entry point, `CONTEXT.md` as orientation,
+`docs/agents/` for consult-on-demand reference, `docs/adr/` as the sole decision
+record, and GitHub Issues for live state. The current `.agents/rules/` loader
+contract supersedes the historical tool-specific layout in [ADR-0015](0015-workspace-agentic-context-contract.md).
 
-### Deltas from ADR-0012, and why
+### Local decisions
 
-**1. Superseded ADRs may be deleted or folded. This overrides ADR-0012's policy.**
+**1. Superseded ADRs may be deleted or folded.**
 
-ADR-0012 says "superseding one means editing the old file's `Status` line to point
-forward, never deleting it." **That policy does not apply in this repo.** Leanness is
-prioritized over the receipt trail: 88 entries collapsed into ten thematic ADRs
-rather than 88 files, and two entries got no ADR at all. Git history is the receipt.
-A future reader should not assume ADR-0012's default governs here.
+ADR-0012's former retention rule does not apply in this repo. Superseded decisions
+may be folded into current authorities; Git history is the receipt. Identifiers
+remain permanent gaps and are never reused.
 
-**2. `CONTEXT.md` remains a glossary. This is deliberate, and ADR-0012 agrees.**
+**2. `CONTEXT.md` remains the shared glossary.**
 
-ADR-0012 says a `CONTEXT.md` is "NOT a glossary" — but its own reasoning names the
-exception: the journal-article's copy avoids being one *because* "All shared vocabulary
-defers to `fedmaq-experiments/CONTEXT.md`." **This is the file that rule was written
-to protect.** It is the canonical vocabulary for the code/manuscript boundary and
-resolves real naming drift between them. Do not "fix" it toward pointer-only. It
-gains the authority map and working conventions on top of the glossary.
+The experiments `CONTEXT.md` is the canonical vocabulary for the code/manuscript
+boundary and carries the authority map and working conventions. Spoke contexts point
+to it rather than copying shared domain content.
 
-**3. Live state moves to Issues, split by update cadence.** Dispatch state and
-manuscript sync are separate pinned Issues — different cadences, different audiences.
-Both are edited in place, not appended as comments.
+**3. Live state moves to Issues, split by update cadence.**
 
-**4. No new skill.** `docs-audit` is rescoped in place; `run-benchmark` and
-`run-minitest` are untouched.
+**4. Existing project skills are revised in place where their branches differ.**
 
-**5. Scope is this repo only.** `fedmaq-literature` and `fedmaq-analyses` received
-pointer fixes where they named files this migration renamed. `fedmaq-manuscript` and
-`fedmaq-presentations` were untouched. The siblings remain pending migration, as
-ADR-0012 already states for the workspace generally.
+**5. Scope is this repository.** Cross-repository pointers name their owning
+repository; sibling migrations have their own tickets.
 
-### The rule the whole layout serves
+### Governing rule
 
-**One canonical home per fact.** A number, a status or a decision lives in exactly one
-place and everything else points at it. The concrete corollaries — no archives,
-reference behind pointers, no committed handoff file, no second registry — are in
-`CONTEXT.md` § Working conventions, which is where an agent will actually be reading.
+**One canonical home per fact.** A number, status, or decision lives in one place and
+other documents point to it. The concrete corollaries are in `CONTEXT.md`.
 
 ## Crosswalk: old `Decision N` → new record
 
-**This table is required, not decorative.** Thirteen files under `conf/` are frozen
-downstream of the `pre-registration` tag and cite `Decision N` in comments; they
-cannot be edited. Citations in `src/`, `tests/` and `scripts/` are also left alone
-deliberately — they are comments and docstrings, and a reviewer who checks out the tag
-gets a tree where `docs/DECISIONS.md` still exists and those numbers still resolve.
-Renumbering at HEAD would leave the tagged artifact speaking a vocabulary nothing at
-HEAD defines. **This table is the bridge in both directions.**
+**This table is the bridge in both directions.** Frozen configs and code comments
+retain historical `Decision N` references; the identifiers are not renumbered.
 
 Full text of any entry: `git show 47fca68:docs/DECISIONS.md`.
 
@@ -102,18 +73,13 @@ Full text of any entry: `git show 47fca68:docs/DECISIONS.md`.
 | 77, 78 | [ADR-0013](0013-execution-infrastructure-failures.md) — `client_gpus`, partition-ID retry, Ray teardown |
 | 86 | *no ADR* — a measured **result**, not a decision. Pinned dispatch-state Issue. |
 
-**Results are not decisions.** Decision 86 (FedMAQ vs. the uncompressed control at
-equal bytes) and the raw per-cell numbers behind the exploration and tuning verdicts
-went to Issues. An ADR directory carrying live findings reads as settled policy to a
-future agent, and goes stale the moment the confirmatory grid lands.
+**Results are not decisions.** Measured outcomes and raw per-cell numbers belong to
+the pinned Issues and evidence owners, not this ADR directory.
 
 ## Consequences
 
-- **New decisions get a new numbered ADR**, not an entry appended to a log.
-- **Nothing in `docs/` carries a run count.** If you find one, it is a bug.
-- The `docs-audit` skill audits the full context surface against this layout.
-- **Recovery SHAs, named because `git log --follow` traverses none of these**
-  (a wholesale directory delete, and a move-plus-rewrite in one commit):
-  - `47fca68:docs/DECISIONS.md` — all 88 entries in full
-  - `f7a095d^:docs/audits/archive/`, `f7a095d^:docs/experiments/archive/`
-  - `75df164^:docs/RUNBOOK.md`, `75df164^:docs/STATUS.md`
+- New decisions get a new numbered ADR, not an appended log entry.
+- Run counts and mutable state belong to Issues, not `docs/`.
+- The `docs-audit` skill validates this context surface.
+- Git history remains the recovery record for deleted decision, audit, experiment,
+  runbook, and status files.
