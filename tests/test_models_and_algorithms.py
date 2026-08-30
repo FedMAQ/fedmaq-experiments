@@ -1473,9 +1473,9 @@ def test_ablation_leave_one_out_arms():
 
     # Sanity: with the data term restored (kappa=1) those same two clients diverge,
     # confirming the equality above is the removal and not a degenerate setup.
-    assert compute_fedmaq_q_k_t(
-        n_k=10, formulation=3, kappa=1.0, **kw
-    ) != compute_fedmaq_q_k_t(n_k=200, formulation=3, kappa=1.0, **kw)
+    assert compute_fedmaq_q_k_t(n_k=10, formulation=3, kappa=1.0, **kw) != compute_fedmaq_q_k_t(
+        n_k=200, formulation=3, kappa=1.0, **kw
+    )
 
 
 def test_formulation_2_expresses_both_single_signal_removals_symmetrically():

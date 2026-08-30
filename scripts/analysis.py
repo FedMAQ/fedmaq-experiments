@@ -1123,9 +1123,7 @@ def closure_certificate(
         )
 
     certified: dict[str, dict] = {}
-    non_canonical = sorted(
-        str(r.job_dir) for r in runs if _noncanonical_output_dir(r.job_dir)
-    )
+    non_canonical = sorted(str(r.job_dir) for r in runs if _noncanonical_output_dir(r.job_dir))
     for name in names:
         body = manifest_groups[name]
         # Not ``expected_round or ...``: the override is documented as an override,

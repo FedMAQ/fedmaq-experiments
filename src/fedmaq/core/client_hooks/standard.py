@@ -88,9 +88,7 @@ class StandardFit(ClientFitStrategy):
         lr = client._get_decayed_lr(config)
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
         weight_decay = float(exp_config.get("weight_decay", 0.0))
-        momentum = float(
-            exp_config.get("momentum", alg_config.get("momentum", 0.9))
-        )
+        momentum = float(exp_config.get("momentum", alg_config.get("momentum", 0.9)))
 
         client.model.train()
         optimizer = torch.optim.SGD(

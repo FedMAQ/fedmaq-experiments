@@ -115,9 +115,7 @@ class MatrixExecutor:
                     {
                         "index": self.plan.shard[0],
                         "count": self.plan.shard[1],
-                        "canonical_indices": [
-                            task.canonical_index for task in self.plan.tasks
-                        ],
+                        "canonical_indices": [task.canonical_index for task in self.plan.tasks],
                     }
                     if self.plan.shard is not None
                     else None
@@ -135,9 +133,7 @@ class MatrixExecutor:
             document = payload(state)
             try:
                 self.plan.status_path.parent.mkdir(parents=True, exist_ok=True)
-                self.plan.status_path.write_text(
-                    json.dumps(document, indent=2), encoding="utf-8"
-                )
+                self.plan.status_path.write_text(json.dumps(document, indent=2), encoding="utf-8")
             except OSError as exc:
                 logger.error("Could not write sweep status to %s: %s", self.plan.status_path, exc)
             return document

@@ -114,9 +114,7 @@ def _verify_csv(csv_path: Path, manifest: Mapping[str, Any]) -> bool:
             round_value = _finite_nonnegative(row["round"], f"row {line_number} round")
             if not round_value.is_integer():
                 raise ValueError(f"row {line_number} round must be an integer")
-            accuracy = _finite_nonnegative(
-                row["test/accuracy"], f"row {line_number} test/accuracy"
-            )
+            accuracy = _finite_nonnegative(row["test/accuracy"], f"row {line_number} test/accuracy")
             if accuracy > 1:
                 raise ValueError(f"row {line_number} test/accuracy must be within [0, 1]")
 

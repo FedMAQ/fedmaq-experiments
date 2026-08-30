@@ -912,9 +912,7 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     assert "algorithm=fedavg" in dispatched[0]
 
 
-def test_shard_dispatches_only_canonical_members_and_writes_host_status(
-    tmp_path, monkeypatch
-):
+def test_shard_dispatches_only_canonical_members_and_writes_host_status(tmp_path, monkeypatch):
     import socket
     import subprocess
     import sys
@@ -923,9 +921,7 @@ def test_shard_dispatches_only_canonical_members_and_writes_host_status(
     import scripts.run_matrix as run_matrix
     from scripts.common import sharded_sweep_status_filename
 
-    group_dir = _write_probe_matrix(
-        tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"]
-    )
+    group_dir = _write_probe_matrix(tmp_path, ["fedavg", "fedprox", "fedpaq", "fedmaq", "qsgd"])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: None)
     monkeypatch.setattr(run_matrix.time, "sleep", lambda _seconds: None)

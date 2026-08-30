@@ -124,7 +124,8 @@ def resolve_algorithm_config(config: Mapping[str, Any]) -> dict[str, Any]:
         algorithm_cfg = {
             key: value
             for key, value in config.items()
-            if key not in {
+            if key
+            not in {
                 "algorithm_name",
                 "dataset",
                 "dataset_name",

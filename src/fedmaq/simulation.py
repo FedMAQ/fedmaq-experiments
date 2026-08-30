@@ -455,9 +455,7 @@ class SimulationBuilder:
             alpha=self.cfg.heterogeneity.alpha,
             num_public_samples=self.cfg.experiment.num_public_samples,
             seed=self.cfg.seed,
-            partition=OmegaConf.select(
-                self.cfg, "heterogeneity.partition", default="dirichlet"
-            ),
+            partition=OmegaConf.select(self.cfg, "heterogeneity.partition", default="dirichlet"),
         )
 
         self.telemetry = TelemetryManager(self.cfg_dict)

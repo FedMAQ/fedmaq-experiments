@@ -26,8 +26,7 @@ if TYPE_CHECKING:
 class TrainingMetricsCapability(Protocol):
     """Read-only optional metrics exposed by a client loss hook."""
 
-    def training_metrics(self) -> Mapping[str, float] | None:
-        ...
+    def training_metrics(self) -> Mapping[str, float] | None: ...
 
 
 def read_training_metrics(loss_hook: object) -> Mapping[str, float]:

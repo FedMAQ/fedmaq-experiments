@@ -63,16 +63,15 @@ class MatrixPlan:
             if self.shard is not None
             else "sweep_status.json"
         )
-        return get_sweep_group_dir(
-            self.phase, self.dataset, self.model, self.experiment_group
-        ) / filename
+        return (
+            get_sweep_group_dir(self.phase, self.dataset, self.model, self.experiment_group)
+            / filename
+        )
 
 
 def _resolved_mapping(matrix: Mapping[str, Any] | DictConfig) -> dict[str, Any]:
     resolved = (
-        OmegaConf.to_container(matrix, resolve=True)
-        if isinstance(matrix, DictConfig)
-        else matrix
+        OmegaConf.to_container(matrix, resolve=True) if isinstance(matrix, DictConfig) else matrix
     )
     return dict(resolved)
 

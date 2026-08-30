@@ -38,9 +38,7 @@ class PayloadArchive:
             for cid, framed in framed_uploads.items()
             if isinstance(framed, bytes) and framed
         }
-        download_payloads = {
-            cid: payloads for cid, payloads in downloads.items() if payloads
-        }
+        download_payloads = {cid: payloads for cid, payloads in downloads.items() if payloads}
         if upload_payloads:
             self._write(
                 server_round,

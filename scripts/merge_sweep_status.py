@@ -101,12 +101,15 @@ def merge_statuses(statuses: list[dict[str, Any]]) -> dict[str, Any]:
         raise ValueError("shard union is incomplete: one or more shard files are missing")
 
     runs = [by_index[index] for index in sorted(by_index)]
-    counts = {state: sum(record.get("state") == state for record in runs) for state in (
-        "completed",
-        "failed",
-        "skipped",
-        "pending",
-    )}
+    counts = {
+        state: sum(record.get("state") == state for record in runs)
+        for state in (
+            "completed",
+            "failed",
+            "skipped",
+            "pending",
+        )
+    }
     if counts["pending"]:
         state = "running"
     elif any(item["state"] == "aborted" for item in shard_records):

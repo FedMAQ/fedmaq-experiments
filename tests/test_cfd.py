@@ -33,8 +33,6 @@ def _softmax_rows(rng: np.random.Generator, n: int, k: int) -> np.ndarray:
     return (exp / exp.sum(axis=1, keepdims=True)).astype(np.float32)
 
 
-
-
 def test_constrained_quantize_one_hot_at_b1():
     """b=1 must reduce exactly to argmax one-hot (CFD paper eq. 11)."""
     rng = np.random.default_rng(0)
@@ -101,8 +99,6 @@ def test_codes_bytes_round_trip_and_mismatch_raises():
 
     with pytest.raises(ValueError, match="num_classes"):
         codes_from_bytes(buf, 5)
-
-
 
 
 def _public_loader(n: int = 8, batch_size: int = 4) -> DataLoader:
@@ -186,8 +182,6 @@ def test_cfd_hook_downstream_broadcast_skips_round1():
     assert round2_report.measured_bytes > 0
     assert round2_report.payload_bytes == round2_report.measured_bytes
     assert round2_report.payloads == ()
-
-
 
 
 def _make_client(state: RecordDict | None = None) -> GenericClient:

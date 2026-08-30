@@ -99,9 +99,7 @@ class _QuantParams:
             kappa=constant("kappa", 1.0),
             tau_g=constant("tau_g", 0.5),
             tau_n=constant("tau_n", 0.5),
-            p=_parse_power_mean_degree(
-                alg_cfg["p"] if "p" in required else alg_cfg.get("p", 0.0)
-            ),
+            p=_parse_power_mean_degree(alg_cfg["p"] if "p" in required else alg_cfg.get("p", 0.0)),
             omega=_parse_power_mean_weight(
                 alg_cfg["omega"] if "omega" in required else alg_cfg.get("omega", 0.5)
             ),
@@ -166,9 +164,7 @@ def _parse_power_mean_weight(value: Any) -> float:
     return weight
 
 
-def _weighted_power_mean(
-    tilde_g: float, tilde_n: float, p: PowerMeanDegree, omega: float
-) -> float:
+def _weighted_power_mean(tilde_g: float, tilde_n: float, p: PowerMeanDegree, omega: float) -> float:
     """Evaluate the chosen power-mean degree with exact named limits."""
     if omega == 0.0:
         return tilde_n

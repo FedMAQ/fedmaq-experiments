@@ -69,9 +69,7 @@ class Summary:
         if len(aliases) > 1:
             values = {value[key] for key in aliases}
             if len(values) > 1:
-                raise ReportSchemaError(
-                    f"{path} contains conflicting dispersion fields: {aliases}"
-                )
+                raise ReportSchemaError(f"{path} contains conflicting dispersion fields: {aliases}")
         dispersion_key = aliases[0] if aliases else None
         mean = _number_or_none(value["mean"], f"{path}.mean")
         dispersion = (
@@ -145,9 +143,7 @@ def validate_report_document(
     if not isinstance(report_type, str) or not report_type:
         raise ReportSchemaError("canonical report requires a non-empty report_type")
     if expected_type is not None and report_type != expected_type:
-        raise ReportSchemaError(
-            f"expected report_type {expected_type!r}, got {report_type!r}"
-        )
+        raise ReportSchemaError(f"expected report_type {expected_type!r}, got {report_type!r}")
     payload = document.get("data")
     if not isinstance(payload, Mapping) or not payload:
         raise ReportSchemaError("canonical report requires a non-empty data mapping")
@@ -171,13 +167,11 @@ def _normalize_payload(value: Any, *, path: str = "data") -> Any:
         if is_summary or (is_named_summary and "mean" in value and "n" in value):
             return summary_from_mapping(value, path=path).to_dict()
         return {
-            str(key): _normalize_payload(item, path=f"{path}.{key}")
-            for key, item in value.items()
+            str(key): _normalize_payload(item, path=f"{path}.{key}") for key, item in value.items()
         }
     if isinstance(value, list):
         return [
-            _normalize_payload(item, path=f"{path}[{index}]")
-            for index, item in enumerate(value)
+            _normalize_payload(item, path=f"{path}[{index}]") for index, item in enumerate(value)
         ]
     return value
 

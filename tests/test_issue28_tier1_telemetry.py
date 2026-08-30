@@ -34,17 +34,20 @@ def test_planner_details_report_raw_ceiling_soft_target_and_final_q():
     assert details.q_k_max == pytest.approx(8.0)
     assert details.q_hat == pytest.approx(16.0)
     assert details.q == 8
-    assert compute_fedmaq_q_k_t(
-        c_k=4096.0,
-        c_unit=512.0,
-        g_k=1.0,
-        g_max=1.0,
-        n_k=100,
-        n_max=100,
-        formulation=0,
-        q_min=1,
-        q_max=16,
-    ) == details.q
+    assert (
+        compute_fedmaq_q_k_t(
+            c_k=4096.0,
+            c_unit=512.0,
+            g_k=1.0,
+            g_max=1.0,
+            n_k=100,
+            n_max=100,
+            formulation=0,
+            q_min=1,
+            q_max=16,
+        )
+        == details.q
+    )
 
 
 def test_planner_propagates_ceiling_details_without_changing_assignments(monkeypatch):
@@ -227,8 +230,7 @@ def test_memory_ceiling_analysis_returns_plot_ready_long_frame(tmp_path):
         "tier1_binding_fraction",
     ]
     uniform_run = (
-        "formal/cifar10_mobilenetv2/uniform_memory_control/fedmaq/"
-        "dirichlet_alpha_0.1/seed_0"
+        "formal/cifar10_mobilenetv2/uniform_memory_control/fedmaq/dirichlet_alpha_0.1/seed_0"
     )
     assert frame.loc[frame["run"] == uniform_run, "tier1_ceiling_q"].tolist() == [16.0, 16.0]
 
@@ -240,8 +242,6 @@ def test_memory_ceiling_analysis_returns_plot_ready_long_frame(tmp_path):
 
 def test_memory_ceiling_analysis_skips_non_resource_aware_logs(tmp_path):
     csv_path = tmp_path / "fedmaq_no_resource.csv"
-    pd.DataFrame({"round": [1], "algorithm/fedmaq/avg_q": [8.0]}).to_csv(
-        csv_path, index=False
-    )
+    pd.DataFrame({"round": [1], "algorithm/fedmaq/avg_q": [8.0]}).to_csv(csv_path, index=False)
 
     assert build_tier1_ceiling_frame([csv_path]).empty

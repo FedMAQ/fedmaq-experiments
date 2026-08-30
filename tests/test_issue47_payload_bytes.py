@@ -92,9 +92,7 @@ def _strategy(algorithm: str, monkeypatch) -> TelemetryFedAvg:
 @pytest.mark.parametrize("algorithm", ["fedmd", "cfd"])
 def test_round_payload_bytes_preserve_special_arm_upload_totals(algorithm, monkeypatch):
     strategy = _strategy(algorithm, monkeypatch)
-    fit_res = _fit_res(
-        {"partition_id": 0, "bytes_uploaded": 123, "payload_bytes": 123}
-    )
+    fit_res = _fit_res({"partition_id": 0, "bytes_uploaded": 123, "payload_bytes": 123})
 
     strategy.telemetry_manager.record_fit_round(
         strategy, server_round=1, results=[(_Proxy(), fit_res)], aggregated_parameters=None
