@@ -2,7 +2,10 @@
 
 **Status**: Superseded for workspace-wide layout by [ADR-0015](0015-workspace-agentic-context-contract.md); retained as this repository's historical migration record
 **Supersedes**: `docs/DECISIONS.md` Decisions 14–17, 63, 69 (file deleted)
-**Adopts**: [`../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md`](../../../fedmaq-journal-article/docs/adr/0012-agentic-context-layout.md)
+**Historical source**: Journal ADR-0012 supplied the precursor layout; it was
+folded and deleted under the thesis-author authorization recorded by ADR-0015.
+Recover it from `fedmaq-journal-article` with
+`git show fc3fc399283850d6d1c55abb9aad8341c7ce327d:docs/adr/0012-agentic-context-layout.md`.
 
 ## Historical scope
 
