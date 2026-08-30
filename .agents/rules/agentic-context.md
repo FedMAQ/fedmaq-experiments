@@ -1,6 +1,6 @@
 # Agentic Context
 
-- Keep shared instructions in `AGENTS.md` and `.agents/rules/`; `CLAUDE.md` imports `AGENTS.md`.
-- Create each shared skill only at `.agents/skills/<name>/SKILL.md`.
-- Reserve `.claude/` for genuinely Claude-specific extensions; never copy a shared skill there.
-- After changing skill locations, run `pytest tests/test_agent_context.py`.
+- Keep the universal core in `AGENTS.md`; route activity-specific guidance through plain pointers to on-demand rules and skills.
+- Keep `AGENTS.md` free of `@` imports; `CLAUDE.md` remains the thin `@AGENTS.md` wrapper.
+- Give each shared skill one owner at `.agents/skills/<name>/SKILL.md`; reserve `.claude/` for Claude-specific extensions.
+- After changing skill locations or names, run `pytest tests/test_agent_context.py` and update active references.

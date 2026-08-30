@@ -30,7 +30,7 @@ ask for the relevant matrix's `sweep_status.json`. Do not add status here.
   Do not infer which stages have run from the local filesystem.
 - **Experiments are not blocked on hardware.** The allocation exists and is in use.
   What gates the remaining stages is dispatch order, not availability.
-- **The local Windows rig is for smoke tests only** — `run-minitest`, `--dry_run`,
+- **The local Windows rig is for smoke tests only** — matrix-runner `--dry_run`,
   pre-dispatch validation, config-composition checks. It is the validated fallback of
   §4.3.4, not where the grid runs. The Ray crash mitigations in
   `.agents/rules/engineering.md` are scoped to it and apply nowhere else.

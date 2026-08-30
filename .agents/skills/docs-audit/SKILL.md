@@ -1,16 +1,15 @@
 ---
 name: docs-audit
 description: >-
-  Run the read-only structural validator for the six FedMAQ repositories and
-  report broken references, missing dispositions, topology drift, exact
-  duplicate documents, explicit exclusions, and semantic authority candidates.
-  Use when auditing agent context or after a context migration; it never edits.
+  Run the read-only six-repository context validator after an agent-context
+  migration and report structural drift plus semantic candidates; it never edits.
 ---
 
 # Docs Audit
 
-Invocation: model-invoked for an agent-context audit or post-migration check;
-the maintainer runs the deterministic command and reviews semantic candidates.
+Use this model-invoked skill for an agent-context audit or post-migration check.
+It routes to the read-only validator established by #77; semantic candidates
+remain for human disposition.
 
 The authoritative inventory and boundary are
 [the inventory](../../../docs/agents/context-modernization-inventory.json). The
@@ -40,9 +39,9 @@ is removed.
 - Semantic authority candidates are reported separately for human disposition;
   grep never decides ownership, meaning, or a successor.
 
-The validator has no write path. It has no auto-fix mode and does not authorize
-edits to method, behavior, configuration, protocol, evidence, scope, or claims.
+The validator has no write path or auto-fix mode. It does not authorize edits to
+method, behavior, configuration, protocol, evidence, scope, or claims.
 
-Done when the deterministic command returns PASS, its output is retained as
-issue evidence, and every semantic candidate has an explicit human disposition
-in the inventory before downstream migration proceeds.
+Done when the deterministic command and self-test return PASS, the output is
+available for issue evidence, and every semantic candidate has an explicit human
+disposition in the inventory before downstream migration proceeds.
