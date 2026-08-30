@@ -261,7 +261,11 @@ def validate(root: Path, inventory_path: Path, *, enforce_git: bool = True) -> d
             item = records.get((repo_name, path))
             if not item:
                 continue
-            if not item.get("owner") or not item.get("disposition"):
+            if (
+                not item.get("owner")
+                or not item.get("disposition")
+                or not item.get("successor")
+            ):
                 failures.append(f"incomplete disposition: {repo_name}/{path}")
             if item.get("unresolved") is not False:
                 failures.append(f"unresolved disposition: {repo_name}/{path}")
@@ -404,7 +408,7 @@ def _self_test(script: Path) -> int:
                     "paths": ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"],
                     "owner": repo,
                     "disposition": "retain",
-                    "successor": None,
+                    "successor": "same path",
                     "inbound_refs": ["<validator-derived>"],
                     "unresolved": False,
                 }
@@ -469,6 +473,15 @@ def _self_test(script: Path) -> int:
             for item in result["failures"]
         ):
             print("FAIL: inline-agent-path negative fixture did not fail as expected")
+            return 1
+        (root / REPOSITORIES[0] / "AGENTS.md").write_text("# entry\n", encoding="utf-8")
+        del inventory["records"][0]["successor"]
+        inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
+        result = validate(root, inventory_path, enforce_git=False)
+        if result["status"] != "FAIL" or not any(
+            "incomplete disposition" in item for item in result["failures"]
+        ):
+            print("FAIL: missing-successor negative fixture did not fail as expected")
             return 1
     print("PASS: negative fixtures detected; temporary workspace removed")
     return 0

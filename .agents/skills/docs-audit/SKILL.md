@@ -33,7 +33,8 @@ is removed.
 - Inventory coverage for all tracked entrypoints, rules, project skills,
   contexts, ADRs, and docs/agents references in exactly six repositories.
 - Required owner, disposition, successor field, and unresolved: false for
-  every record; explicit out-of-scope exclusions and scoped exceptions.
+  every record; missing or empty values fail. Out-of-scope exclusions and
+  scoped exceptions remain explicit.
 - Relative Markdown links and inline agent-rule/skill paths resolve to current
   files; exact duplicate document bytes fail; AGENTS imports fail after the
   baseline-only exception expires.
