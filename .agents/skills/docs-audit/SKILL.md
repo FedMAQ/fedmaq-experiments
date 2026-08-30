@@ -34,10 +34,15 @@ is removed.
   contexts, ADRs, and docs/agents references in exactly six repositories.
 - Required owner, disposition, successor field, and unresolved: false for
   every record; explicit out-of-scope exclusions and scoped exceptions.
-- Relative Markdown links resolve to current files; exact duplicate document
-  bytes fail; AGENTS imports fail after the baseline-only exception expires.
-- Semantic authority candidates are reported separately for human disposition;
-  grep never decides ownership, meaning, or a successor.
+- Relative Markdown links and inline agent-rule/skill paths resolve to current
+  files; exact duplicate document bytes fail; AGENTS imports fail after the
+  baseline-only exception expires.
+- Each semantic authority candidate is mapped to its human-approved inventory
+  owner and disposition; grep never decides ownership, meaning, or a successor.
+- Every declared conditional branch is expanded, must match a current file, and
+  every match must have an inventory disposition.
+- Baseline Git blobs, current loader bytes/lines, aggregate totals, and recorded
+  reduction percentages must reproduce exactly.
 
 The validator has no write path or auto-fix mode. It does not authorize edits to
 method, behavior, configuration, protocol, evidence, scope, or claims.

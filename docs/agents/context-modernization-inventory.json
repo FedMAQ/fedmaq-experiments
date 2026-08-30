@@ -40,13 +40,30 @@
     "policy": "The six repository CLAUDE.md files remain thin AGENTS.md imports. AGENTS.md contains the Codex-native universal core; task-specific material is linked by activity and read on demand."
   },
   "context_budget_baseline": {
-    "measurement": "UTF-8 bytes and LF-separated line count measured 2026-08-30 before this ticket's edits. Codex is AGENTS.md only; Claude is CLAUDE.md plus its direct @AGENTS.md expansion. Conditional targets are the project-owned rule and skill paths available to a task branch.",
-    "fedmaq-experiments": {"codex": {"bytes": 1373, "lines": 18}, "claude_expanded": {"bytes": 1423, "lines": 22}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md", "docs/adr/*.md"]},
-    "fedmaq-literature": {"codex": {"bytes": 967, "lines": 13}, "claude_expanded": {"bytes": 1016, "lines": 17}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
-    "fedmaq-analyses": {"codex": {"bytes": 1035, "lines": 13}, "claude_expanded": {"bytes": 1082, "lines": 17}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
-    "fedmaq-manuscript": {"codex": {"bytes": 1156, "lines": 14}, "claude_expanded": {"bytes": 1205, "lines": 18}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
-    "fedmaq-journal-article": {"codex": {"bytes": 846, "lines": 10}, "claude_expanded": {"bytes": 900, "lines": 14}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
-    "fedmaq-presentations": {"codex": {"bytes": 919, "lines": 12}, "claude_expanded": {"bytes": 971, "lines": 16}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md"]}
+    "measurement": "Exact Git blob bytes and logical text lines measured at the listed pre-initiative anchors. Codex is AGENTS.md only; Claude is the concatenated CLAUDE.md and direct @AGENTS.md blobs. Conditional targets are the project-owned rule, skill, ADR, and agent-reference branches available for on-demand loading.",
+    "anchors": {"fedmaq-experiments":"caa257ba4d092a655402ac58f7603226c48f9c4b","fedmaq-literature":"1be87e08d232b8d47ec9c71e80922d7c8235bb5a","fedmaq-analyses":"d68a3c44ebd7b9b9301b1f5912190bfdf7ea65fd","fedmaq-manuscript":"5cc82393d639321c240897dbd7eeb728dfc82a02","fedmaq-journal-article":"fc3fc399283850d6d1c55abb9aad8341c7ce327d","fedmaq-presentations":"d1dd7c8"},
+    "fedmaq-experiments": {"codex": {"bytes": 1373, "lines": 17}, "claude_expanded": {"bytes": 1422, "lines": 20}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-literature": {"codex": {"bytes": 958, "lines": 12}, "claude_expanded": {"bytes": 1006, "lines": 15}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-analyses": {"codex": {"bytes": 1035, "lines": 12}, "claude_expanded": {"bytes": 1081, "lines": 15}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-manuscript": {"codex": {"bytes": 1146, "lines": 13}, "claude_expanded": {"bytes": 1194, "lines": 16}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-journal-article": {"codex": {"bytes": 839, "lines": 9}, "claude_expanded": {"bytes": 892, "lines": 12}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-presentations": {"codex": {"bytes": 919, "lines": 11}, "claude_expanded": {"bytes": 970, "lines": 14}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md"]}
+  },
+  "context_budget_final": {
+    "measurement": "Working-tree UTF-8 bytes and logical text lines measured 2026-08-30 after #77-#83 and the #80 byte-budget correction. Codex is AGENTS.md only; Claude is the concatenated CLAUDE.md and direct @AGENTS.md files. The validator expands every declared conditional glob, requires at least one match, and requires every match to have an inventory disposition.",
+    "totals": {"codex": {"before_bytes": 6270, "after_bytes": 5586, "before_lines": 74, "after_lines": 60, "byte_reduction_percent": 10.91, "line_reduction_percent": 18.92}, "claude_expanded": {"before_bytes": 6565, "after_bytes": 5881, "before_lines": 92, "after_lines": 78, "byte_reduction_percent": 10.42, "line_reduction_percent": 15.22}},
+    "fedmaq-experiments": {"codex": {"bytes": 1262, "lines": 14}, "claude_expanded": {"bytes": 1311, "lines": 17}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-literature": {"codex": {"bytes": 840, "lines": 8}, "claude_expanded": {"bytes": 888, "lines": 11}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-analyses": {"codex": {"bytes": 938, "lines": 9}, "claude_expanded": {"bytes": 984, "lines": 12}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-manuscript": {"codex": {"bytes": 967, "lines": 9}, "claude_expanded": {"bytes": 1015, "lines": 12}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-journal-article": {"codex": {"bytes": 738, "lines": 9}, "claude_expanded": {"bytes": 791, "lines": 12}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-presentations": {"codex": {"bytes": 841, "lines": 11}, "claude_expanded": {"bytes": 892, "lines": 14}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md"]}
+  },
+  "semantic_authority_review": {
+    "reviewed": true,
+    "reviewed_on": "2026-08-30",
+    "authority": "Human-approved #77-#83 dispositions",
+    "contract": "Every mechanically detected authority candidate must resolve to records[].owner, records[].disposition, and unresolved:false. The validator reports that mapping and fails closed if the review marker or mapping is absent; keyword detection does not choose the disposition."
   },
   "records_note": "Each record expands paths to individual inventory entries. <validator-derived> is an explicit computed inbound-reference set: the deterministic validator resolves every current Markdown link and prints the resolved set, avoiding a second hand-maintained registry. No record has an unresolved authority decision.",
   "records": [

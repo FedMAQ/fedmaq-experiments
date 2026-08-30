@@ -144,5 +144,5 @@ paper's qualitative claim, not merely its absolute numbers.
 - FedMD and CFD code paths are parked, not maintained. A refactor that touches
   shared seams should keep them compiling and bit-exact (ADR-0006) but need not
   optimize or extend them.
-- The baseline status table lives in `.claude/rules/experiment-design.md`, which
+- The baseline status table lives in `.agents/rules/experiment-design.md`, which
   is where an agent adding or porting a baseline updates status.
