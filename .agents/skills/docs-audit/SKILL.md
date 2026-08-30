@@ -1,55 +1,48 @@
 ---
 name: docs-audit
 description: >-
-  Full sweep of the tracked context surface (AGENTS.md, CLAUDE.md, CONTEXT.md,
-  .agents/rules/, .agents/skills/, docs/adr/, docs/agents/, docs/experiments/, docs/audits/)
-  for staleness, duplicated facts, dangling references, and drift from the
-  layout in ADR-0015. Auto-fixes mechanical issues, flags judgment calls.
-  Use when asked to audit the docs system, or after a batch of doc edits.
+  Run the read-only structural validator for the six FedMAQ repositories and
+  report broken references, missing dispositions, topology drift, exact
+  duplicate documents, explicit exclusions, and semantic authority candidates.
+  Use when auditing agent context or after a context migration; it never edits.
 ---
 
 # Docs Audit
 
-Conventions enforced: `CONTEXT.md` § Working conventions, and
-[ADR-0015](../../../docs/adr/0015-workspace-agentic-context-contract.md) for the layout.
+Invocation: model-invoked for an agent-context audit or post-migration check;
+the maintainer runs the deterministic command and reviews semantic candidates.
 
-1. **Inventory.** `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `.agents/rules/*.md`,
-   `.agents/skills/**/SKILL.md`, `docs/**/*.md`.
-   A tracked `HANDOFF.md` — or any committed next-session file — is itself a finding.
-   Flag it; do not audit its contents.
+The authoritative inventory and boundary are
+[the inventory](../../../docs/agents/context-modernization-inventory.json). The
+[validator](scripts/validate_workspace.py) is documentation governance, outside the
+experimental pipeline and source_manifest.json scope.
 
-2. **One canonical home per fact.** The core check. Grep for the same number, status
-   or decision stated in two tracked files. Flag; do not auto-merge — report the
-   overlap and say which should be canonical.
-   - **Run counts are the known-recurring case.** No tracked file may carry one.
-     Totals belong in the pinned dispatch Issue; per-stage arithmetic is pinned by
-     `tests/test_config_and_dispatch.py`, not by prose. Any run count in `docs/` or
-   A legacy singular agent directory is a finding, even if currently correct.
+## Run
 
-3. **Dangling references.** Relative links resolving to real files; `ADR-NNNN`
-   citations resolving to a file in `docs/adr/`; skill names in prose resolving to a
-   real skill. Auto-fix obvious renames, flag ambiguous ones.
-   - `Decision N` citations in `conf/`, `src/`, `tests/` and `scripts/` are **not**
-     findings. They are deliberate — see ADR-0014's crosswalk. Do not "fix" them.
+From the workspace parent, run this deterministic command:
 
-4. **No archives.** An `archive/` subdirectory anywhere under `docs/` is a finding.
-   Superseded material is deleted; git history is the record.
+    uv run --project fedmaq-experiments python fedmaq-experiments/.agents/skills/docs-audit/scripts/validate_workspace.py --workspace . --inventory fedmaq-experiments/docs/agents/context-modernization-inventory.json
 
-5. **Layout drift.** Compare against ADR-0015. Flag: always-loaded rules growing past
-   a screen or two; reference material in `.agents/rules/` that belongs in
-   `docs/agents/`; shared skills outside `.agents/skills/`; a second registry; live
-   state accumulating in a tracked file.
+The command reads the six repository checkouts and the declared JSON inventory,
+then prints PASS or FAIL. --json emits machine-readable counts and lists.
+--self-test exercises the checked-in broken-link and nested-import negative
+fixtures in a temporary workspace and must print PASS; the temporary workspace
+is removed.
 
-6. **Superseded-but-live content.** A doc describing a mechanism, pick or count that a
-   later ADR overturned, without saying so. The soft-voting and MobileNetV2GN-smoke
-   experiment pages carry supersession banners for this reason — check that pattern
-   still holds wherever an experiment record predates a freeze.
+## Checks
 
-7. **Staleness.** For any doc with a "Last updated" header, check its body against
-   cross-linked docs. Auto-fix: bump the date. Prefer deleting a stale date header
-   over maintaining one.
+- Inventory coverage for all tracked entrypoints, rules, project skills,
+  contexts, ADRs, and docs/agents references in exactly six repositories.
+- Required owner, disposition, successor field, and unresolved: false for
+  every record; explicit out-of-scope exclusions and scoped exceptions.
+- Relative Markdown links resolve to current files; exact duplicate document
+  bytes fail; AGENTS imports fail after the baseline-only exception expires.
+- Semantic authority candidates are reported separately for human disposition;
+  grep never decides ownership, meaning, or a successor.
 
-8. **Report** what was auto-fixed, then what needs a human decision, in that order.
+The validator has no write path. It has no auto-fix mode and does not authorize
+edits to method, behavior, configuration, protocol, evidence, scope, or claims.
 
-**Done when** every finding is either fixed or listed with a recommendation, and the
-inventory in step 1 has no file that step 5 would say does not belong.
+Done when the deterministic command returns PASS, its output is retained as
+issue evidence, and every semantic candidate has an explicit human disposition
+in the inventory before downstream migration proceeds.

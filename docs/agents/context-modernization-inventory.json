@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "inventory_id": "fedmaq-context-modernization-2026-08-30",
+  "purpose": "Authoritative starting inventory for #77. It is a governance record outside the assurance candidate and does not authorize changes to source, configuration, protocol, evidence, or claims.",
+  "boundary": {
+    "classification": "post-assurance governance revision",
+    "specification_issue": "FedMAQ/fedmaq-experiments#76",
+    "execution_issue": "FedMAQ/fedmaq-experiments#77",
+    "assurance_issue": "FedMAQ/fedmaq-experiments#75",
+    "envelope_id": "fedmaq-pipeline-assurance-2026-08-29",
+    "envelope_sha256": "2fe2c985fad836e072026085a9da14d160f5a84d504cf05815783e95a576ddb6",
+    "candidate": "d804b7f2223fa92a8d2bcde803bec1501454faf5",
+    "baseline": "2f3a3c1b102c745efad97b38f305544ffe1aba62",
+    "gate_6_7_receipt": "https://github.com/FedMAQ/fedmaq-experiments/issues/75#issuecomment-5466510692",
+    "post_assurance_rule": "The envelope and Gate 6/7 receipt are historical bindings. Governance edits are outside the candidate; any methodology, behavior, configuration, protocol, scope, evidence, or claim delta blocks and requires a new assurance-impact decision before editing.",
+    "freeze_state": "No pipeline, evidence, or results freeze is declared; limited pipeline-freeze availability is recorded only in #75 and remains author-owned."
+  },
+  "repositories": [
+    "fedmaq-experiments",
+    "fedmaq-literature",
+    "fedmaq-analyses",
+    "fedmaq-manuscript",
+    "fedmaq-journal-article",
+    "fedmaq-presentations"
+  ],
+  "loader_research": {
+    "access_date": "2026-08-30",
+    "codex": {
+      "client_version": "codex-cli 0.147.0",
+      "primary_source": "https://openai.com/index/unrolling-the-codex-agent-loop/",
+      "observed_contract": "Codex aggregates AGENTS.override.md and AGENTS.md from the project root toward cwd, with a default 32 KiB project-document budget. Repository AGENTS.md is native discovery; @ lines are not a Codex import contract. Conditional guidance must therefore be reached by explicit pointers and agent exploration.",
+      "evidence": "OpenAI source section 'The agent loop', accessed 2026-08-30; the source describes project-root-to-cwd AGENTS discovery and the 32 KiB default."
+    },
+    "claude": {
+      "client_version": "2.1.248 (Claude Code)",
+      "primary_source": "https://code.claude.com/docs/en/memory",
+      "observed_contract": "Claude loads CLAUDE.md files from ancestor directories at startup, discovers nested files when it reads their subtree, and expands @ imports recursively at startup (maximum four hops in the current documentation). Claude reads AGENTS.md only when CLAUDE.md imports it; imported content is startup context, not a conditional pointer.",
+      "evidence": "Anthropic Claude Code memory documentation, sections 'AGENTS.md', 'How CLAUDE.md files are loaded', and 'Import other files', accessed 2026-08-30."
+    },
+    "policy": "The six repository CLAUDE.md files remain thin AGENTS.md imports. AGENTS.md contains the Codex-native universal core; task-specific material is linked by activity and read on demand."
+  },
+  "context_budget_baseline": {
+    "measurement": "UTF-8 bytes and LF-separated line count measured 2026-08-30 before this ticket's edits. Codex is AGENTS.md only; Claude is CLAUDE.md plus its direct @AGENTS.md expansion. Conditional targets are the project-owned rule and skill paths available to a task branch.",
+    "fedmaq-experiments": {"codex": {"bytes": 1373, "lines": 18}, "claude_expanded": {"bytes": 1423, "lines": 22}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-literature": {"codex": {"bytes": 967, "lines": 13}, "claude_expanded": {"bytes": 1016, "lines": 17}, "conditional_targets": [".agents/rules/*.md", ".agents/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-analyses": {"codex": {"bytes": 1035, "lines": 13}, "claude_expanded": {"bytes": 1082, "lines": 17}, "conditional_targets": [".agents/rules/*.md", ".claude/skills/*/SKILL.md", "docs/agents/*.md"]},
+    "fedmaq-manuscript": {"codex": {"bytes": 1156, "lines": 14}, "claude_expanded": {"bytes": 1205, "lines": 18}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-journal-article": {"codex": {"bytes": 846, "lines": 10}, "claude_expanded": {"bytes": 900, "lines": 14}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md", "docs/adr/*.md"]},
+    "fedmaq-presentations": {"codex": {"bytes": 919, "lines": 12}, "claude_expanded": {"bytes": 971, "lines": 16}, "conditional_targets": [".agents/rules/*.md", "docs/agents/*.md"]}
+  },
+  "records_note": "Each record expands paths to individual inventory entries. <validator-derived> is an explicit computed inbound-reference set: the deterministic validator resolves every current Markdown link and prints the resolved set, avoiding a second hand-maintained registry. No record has an unresolved authority decision.",
+  "records": [
+    {"repo":"fedmaq-experiments","paths":["AGENTS.md"],"kind":"entrypoint","owner":"experiments workspace contract (#77/#78)","disposition":"revise","successor":"same path; lean universal core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"experiments workspace contract (#78)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":["CONTEXT.md"],"kind":"context","owner":"experiments workspace contract (#79)","disposition":"revise","successor":"same path; shared glossary and authority hub","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":[".agents/rules/agentic-context.md",".agents/rules/comment-hygiene.md",".agents/rules/engineering.md",".agents/rules/experiment-design.md"],"kind":"rule","owner":"experiments repository","disposition":"revise","successor":"same path or disclosed task rule","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":[".agents/skills/comment-hygiene/SKILL.md",".agents/skills/jupyterhub-golden-gate/SKILL.md",".agents/skills/sweep-recovery/SKILL.md"],"kind":"skill","owner":"experiments repository","disposition":"revise","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":[".agents/skills/docs-audit/SKILL.md"],"kind":"skill","owner":"experiments workspace contract (#77)","disposition":"revise","successor":"same path plus scripts/validate_workspace.py","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":[".agents/skills/run-benchmark/SKILL.md",".agents/skills/run-minitest/SKILL.md"],"kind":"skill","owner":"experiments project skills (#78)","disposition":"delete","successor":".agents/skills/user-run-matrix/SKILL.md","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":["docs/adr/0011-baseline-matched-tuning.md","docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md","docs/adr/0013-execution-infrastructure-failures.md","docs/adr/0014-agentic-context-layout.md","docs/adr/0015-workspace-agentic-context-contract.md","docs/adr/0021-power-mean-formulation-family.md"],"kind":"adr","owner":"experiments repository decisions (#79)","disposition":"revise","successor":"same identifier; unique durable decision and explicit current or historical scope","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":["docs/adr/0001-client-kd-teacher-deepcopy-is-structural.md","docs/adr/0002-hardware-telemetry-grounding.md","docs/adr/0003-training-skeleton-seam.md","docs/adr/0004-confirmatory-grid-design.md","docs/adr/0005-baseline-stack-membership.md","docs/adr/0006-determinism-and-the-golden-diff-gate.md","docs/adr/0007-architecture-deepening-seams.md","docs/adr/0008-exploration-protocol-and-the-empty-refinement-layer.md","docs/adr/0009-run-identity-and-analysis-scoping.md","docs/adr/0010-freeze-machinery-and-pre-registration.md","docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md","docs/adr/0017-direct-to-main-workspace-wide.md","docs/adr/0018-byte-accounting-seam.md","docs/adr/0019-quantizer-unbiasedness-and-the-l-infinity-exception.md","docs/adr/0020-secondary-byte-axis.md"],"kind":"adr","owner":"experiments repository decisions (#79)","disposition":"retain","successor":"same identifier","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-experiments","paths":["docs/agents/domain.md","docs/agents/execution-model.md","docs/agents/issue-tracker.md","docs/agents/triage-labels.md"],"kind":"agent-reference","owner":"experiments repository","disposition":"retain","successor":"same path or canonical owner named by #78/#79","inbound_refs":["<validator-derived>"],"unresolved":false},
+
+    {"repo":"fedmaq-literature","paths":["AGENTS.md"],"kind":"entrypoint","owner":"literature spoke (#83)","disposition":"revise","successor":"same path; lean universal core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"literature spoke (#83)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":["CONTEXT.md"],"kind":"context","owner":"literature spoke (#83)","disposition":"revise","successor":"same path; local orientation only","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":[".agents/rules/kg-conventions.md",".agents/rules/naming-conventions.md"],"kind":"rule","owner":"literature repository (#83)","disposition":"revise","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":[".agents/skills/author-node/SKILL.md",".agents/skills/convert-paper/SKILL.md",".agents/skills/okf-concept-template/SKILL.md",".agents/skills/okf-finding-template/SKILL.md",".agents/skills/okf-method-template/SKILL.md",".agents/skills/okf-paper-template/SKILL.md"],"kind":"skill","owner":"literature repository (#83)","disposition":"revise","successor":"same path; distinct schema branches retained","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":["docs/agents/domain.md","docs/agents/paper-catalog.md"],"kind":"agent-reference","owner":"literature repository","disposition":"retain","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-literature","paths":["docs/agents/issue-tracker.md","docs/agents/triage-labels.md"],"kind":"agent-reference","owner":"fedmaq-experiments workspace contract (#83)","disposition":"migrate","successor":"fedmaq-experiments/docs/agents/issue-tracker.md and fedmaq-experiments/docs/agents/triage-labels.md","inbound_refs":["<validator-derived>"],"unresolved":false},
+
+    {"repo":"fedmaq-analyses","paths":["AGENTS.md"],"kind":"entrypoint","owner":"analyses spoke (#83)","disposition":"revise","successor":"same path; lean universal core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"analyses spoke (#83)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":["CONTEXT.md"],"kind":"context","owner":"analyses spoke (#83)","disposition":"revise","successor":"same path; local orientation only","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":[".agents/rules/data-provenance.md",".agents/rules/notebook-hygiene.md",".agents/rules/plotting-standards.md"],"kind":"rule","owner":"analyses repository (#83)","disposition":"revise","successor":"same path or tool-neutral disclosed rule","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":[".claude/skills/build-thesis-figure/SKILL.md",".claude/skills/ingest-hydra-output/SKILL.md",".claude/skills/ingest-wandb-run/SKILL.md"],"kind":"skill","owner":"analyses repository (#83)","disposition":"migrate","successor":".agents/skills/build-thesis-figure and .agents/skills/ingest-experiment-run","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":["docs/agents/domain.md"],"kind":"agent-reference","owner":"analyses repository","disposition":"retain","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-analyses","paths":["docs/agents/issue-tracker.md","docs/agents/triage-labels.md"],"kind":"agent-reference","owner":"fedmaq-experiments workspace contract (#83)","disposition":"migrate","successor":"fedmaq-experiments/docs/agents/issue-tracker.md and fedmaq-experiments/docs/agents/triage-labels.md","inbound_refs":["<validator-derived>"],"unresolved":false},
+
+    {"repo":"fedmaq-manuscript","paths":["AGENTS.md"],"kind":"entrypoint","owner":"manuscript spoke (#81)","disposition":"revise","successor":"same path; author safeguards and lean core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"manuscript spoke (#81)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":["CONTEXT.md"],"kind":"context","owner":"manuscript spoke (#81)","disposition":"revise","successor":"same path; local orientation only","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":[".agents/rules/author-owned-sources.md",".agents/rules/writing-style.md"],"kind":"rule","owner":"manuscript repository (#81)","disposition":"revise","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":["docs/adr/0003-rq-objectives-hypothesis-reframe.md","docs/adr/0005-chapter-and-section-skeleton.md"],"kind":"adr","owner":"manuscript repository (#81)","disposition":"revise","successor":"same identifier; live rationale or canonical skeleton only","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":["docs/adr/0001-generated-build-output.md","docs/adr/0002-root-level-authored-source.md","docs/adr/0004-issue-tracker-and-repo-visibility.md","docs/adr/0006-metric-defence-and-direction-of-merit.md"],"kind":"adr","owner":"manuscript repository (#81)","disposition":"retain","successor":"same identifier","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-manuscript","paths":["docs/agents/domain.md","docs/agents/issue-tracker.md","docs/agents/triage-labels.md"],"kind":"agent-reference","owner":"manuscript repository","disposition":"retain","successor":"same path or canonical owner named by #81","inbound_refs":["<validator-derived>"],"unresolved":false},
+
+    {"repo":"fedmaq-journal-article","paths":["AGENTS.md"],"kind":"entrypoint","owner":"journal spoke (#82)","disposition":"revise","successor":"same path; article safeguards and lean core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"journal spoke (#82)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["CONTEXT.md"],"kind":"context","owner":"journal spoke (#82)","disposition":"revise","successor":"same path; article vocabulary and local authority","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":[".agents/rules/writing-style.md"],"kind":"rule","owner":"journal repository (#82)","disposition":"revise","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["docs/adr/0009-six-section-outline.md","docs/adr/0013-chapter-4-method-protocol-boundary.md"],"kind":"adr","owner":"journal repository (#82)","disposition":"revise","successor":"same identifier; current structural or method/protocol boundary decision","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["docs/adr/0004-five-section-outline.md"],"kind":"adr","owner":"journal repository (#82)","disposition":"delete","successor":"docs/adr/0009-six-section-outline.md after rationale and references migrate","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["docs/adr/0012-agentic-context-layout.md"],"kind":"adr","owner":"journal repository (#82)","disposition":"delete","successor":"fedmaq-experiments/docs/adr/0015-workspace-agentic-context-contract.md plus current journal entrypoints and CONTEXT.md","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["docs/adr/0001-ieee-access-venue-template-and-build.md","docs/adr/0002-manuscript-type-research-article.md","docs/adr/0003-authorship-and-affiliations.md","docs/adr/0005-modular-section-files.md","docs/adr/0006-bibliography-wiring.md","docs/adr/0007-contribution-framing.md","docs/adr/0008-target-length-and-page-budget.md","docs/adr/0010-preamble-packages-and-cleveref.md","docs/adr/0011-prose-conventions-and-venue-precedence.md","docs/adr/0014-section-ii-compression.md","docs/adr/0015-bibliography-scope-and-conversion.md","docs/adr/0016-title-keywords-and-abstract-ordering.md","docs/adr/0017-ai-disclosure-statement.md","docs/adr/0018-refinement-layer-frozen-unrefined.md","docs/adr/0019-section-ii-roster-table-cells-and-budget.md","docs/adr/0020-root-level-submission-surface.md"],"kind":"adr","owner":"journal repository (#82)","disposition":"retain","successor":"same identifier","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-journal-article","paths":["docs/agents/domain.md","docs/agents/issue-tracker.md","docs/agents/latex-mechanics.md"],"kind":"agent-reference","owner":"journal repository","disposition":"retain","successor":"same path or canonical owner named by #82","inbound_refs":["<validator-derived>"],"unresolved":false},
+
+    {"repo":"fedmaq-presentations","paths":["AGENTS.md"],"kind":"entrypoint","owner":"presentation spoke (#83)","disposition":"revise","successor":"same path; lean universal core","inbound_refs":["CLAUDE.md","<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-presentations","paths":["CLAUDE.md"],"kind":"entrypoint","owner":"presentation spoke (#83)","disposition":"retain","successor":"same path; thin AGENTS.md import","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-presentations","paths":["CONTEXT.md"],"kind":"context","owner":"presentation spoke (#83)","disposition":"revise","successor":"same path; local orientation only","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-presentations","paths":[".agents/rules/beamer-rules.md",".agents/rules/latex-rules.md",".agents/rules/tikz-rules.md"],"kind":"rule","owner":"presentation repository (#83)","disposition":"revise","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-presentations","paths":["docs/agents/domain.md","docs/agents/slide-catalog.md"],"kind":"agent-reference","owner":"presentation repository","disposition":"retain","successor":"same path","inbound_refs":["<validator-derived>"],"unresolved":false},
+    {"repo":"fedmaq-presentations","paths":["docs/agents/issue-tracker.md","docs/agents/triage-labels.md"],"kind":"agent-reference","owner":"fedmaq-experiments workspace contract (#83)","disposition":"migrate","successor":"fedmaq-experiments/docs/agents/issue-tracker.md and fedmaq-experiments/docs/agents/triage-labels.md","inbound_refs":["<validator-derived>"],"unresolved":false}
+  ],
+  "exclusions": [
+    "Installed/shared skills outside the six FedMAQ repositories, including user-level .codex/skills and .agents/skills, are out of scope and untouched.",
+    "The workspace-root CONTEXT.md is a non-versioned convenience pointer and is excluded from ticket acceptance and repository evidence.",
+    "fedmaq-analyses pre-existing dirty state is preserved exactly: R notebooks/02_ablations/.gitkeep -> notebooks/.gitkeep; D notebooks/01_ingest/sample_manifest_load.ipynb; D notebooks/03_thesis_figures/.gitkeep; D notebooks/03_thesis_figures/v1_advisor_brief.ipynb. It is not task-owned and is never staged."
+  ],
+  "intentional_exceptions": [
+    {"id":"baseline-nested-agents-imports","status":"baseline-only","owner":"FedMAQ/fedmaq-experiments#78","expires_after":"#78 completion","reason":"Existing AGENTS.md @rule lines are measured baseline defects. #78 removes nested AGENTS imports while preserving the six-repository boundary; this exception expires when #78 is complete.","paths":[{"repo":"fedmaq-experiments","path":"AGENTS.md"},{"repo":"fedmaq-literature","path":"AGENTS.md"},{"repo":"fedmaq-manuscript","path":"AGENTS.md"},{"repo":"fedmaq-journal-article","path":"AGENTS.md"}]},
+    {"id":"exact-duplicate-shared-procedure","status":"baseline-only","owner":"FedMAQ/fedmaq-experiments#83","expires_after":"#83 spoke migration and reference verification","reason":"These identical issue-tracker and triage-label files are baseline duplicates, not permanent compatibility copies. Experiments retains the canonical procedures; spoke consumers migrate to those successors, and #83 removes this exception after migration and reference verification.","paths":[{"repo":"fedmaq-literature","path":"docs/agents/issue-tracker.md"},{"repo":"fedmaq-analyses","path":"docs/agents/issue-tracker.md"},{"repo":"fedmaq-presentations","path":"docs/agents/issue-tracker.md"},{"repo":"fedmaq-experiments","path":"docs/agents/triage-labels.md"},{"repo":"fedmaq-literature","path":"docs/agents/triage-labels.md"},{"repo":"fedmaq-analyses","path":"docs/agents/triage-labels.md"},{"repo":"fedmaq-presentations","path":"docs/agents/triage-labels.md"}]}
+  ],
+  "negative_fixtures": [
+    {"path":".agents/skills/docs-audit/fixtures/negative/broken-link.md","expected":"FAIL: broken current link"},
+    {"path":".agents/skills/docs-audit/fixtures/negative/broken-agents-import.md","expected":"FAIL: nested AGENTS import"}
+  ],
+  "acceptance": "A clean validation run reports PASS for structural invariants, explicit warnings for exclusions, and semantic candidates separately. A failure is fail-closed; semantic candidates never become dispositions by grep alone."
+}
