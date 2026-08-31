@@ -18,7 +18,7 @@
     "exclude": []
   },
   "files": {
-    ".github/workflows/ci.yml": "4986a1b78233b34622af40138cb3d9372d8a4c8705d089052698015b34840658",
+    ".github/workflows/ci.yml": "fc3f86434a502ff7f023d2ce406488fc1362c3c0c98f5b89e9877e4b0ea3d2f3",
     ".python-version": "49a506dd32096b010d75205acf3430c9ae6c40351888129499e5a5e487126c93",
     "conf/algorithm/_power_mean_base.yaml": "34fab0ed870243f8514138588454c7d2a6bd64b9847bb19c64a9223a8ee228d7",
     "conf/algorithm/cfd.yaml": "87c3e646735e2d3224c218835b6a83f7b825fa8d873527b5d3e426a508121510",
@@ -87,7 +87,7 @@
     "src/fedmaq/baselines/__init__.py": "1068af822bbefbc305361f59f7d6af11bb7872dcaea490bedd7deb618ce92e74",
     "src/fedmaq/baselines/compression.py": "47452fbc27fdfed5ba01eac3a4e5522a8d6d3b2fe29c0cd3aef095d0147ce153",
     "src/fedmaq/baselines/dadaquant_coder.py": "e68e19d052c09d9465b8d5f6c7aa8684ae6ce0a95c271cc90df6f428045c068f",
-    "src/fedmaq/baselines/postprocess.py": "a2bc68213727797e13bd3569b4ca7ba534b6c8b5d86dd4e4650f0e97d453396a",
+    "src/fedmaq/baselines/postprocess.py": "85bd07daaee6e1dc472ab870b30843511706232f080a7420f8cd43c2d9238fe2",
     "src/fedmaq/baselines/quantization.py": "e257cc3caec1da1c9ce0f7d9e14d977071e30032424a7de57eb80bd89dfcbdff",
     "src/fedmaq/baselines/transport.py": "d83ba14be69fe280ec3bcdcb3b9db204a94bbf8c3cda68fbededc619e0bbfa9e",
     "src/fedmaq/cli.py": "535efe9f2fbdf6cd7e2f90113a4bb2d3fc82fe80581eac1bd9c61b8c5c73e353",
