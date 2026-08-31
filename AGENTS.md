@@ -12,3 +12,4 @@
 - For agent-context work, read `.agents/rules/agentic-context.md` and `.agents/skills/docs-audit/SKILL.md`; keep AGENTS import-free.
 - Use `docs/adr/` for durable rationale and `docs/agents/` for reference.
 - Do not change frozen config, freeze artifacts, evidence, or scientific claims without explicit authorization.
+- When a Windows Python launcher fails, read `docs/agents/windows-python-tooling.md` for the module-execution and targeted-repair procedure.

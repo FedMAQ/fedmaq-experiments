@@ -1,5 +1,5 @@
 # Pre-commit hooks for fedmaq-experiments.
-# Install once with:  uv run pre-commit install   (or: pipx run pre-commit install)
+# Install once with:  uv run --with pre-commit python -m pre_commit install   (or: pipx run pre-commit install)
 # Gate mirrors CI: ruff lint must pass. Type-checking (mypy) is run locally/CI as a
 # non-blocking step while the codebase's type-annotation debt is paid down.
 repos:

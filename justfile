@@ -15,12 +15,12 @@ test *args="":
 
 # Run linter
 lint:
-    uv run ruff check .
+    uv run python -m ruff check .
 
 # Fix formatting and auto-fixable lint violations
 fix:
-    uv run ruff format .
-    -uv run ruff check --fix .
+    uv run python -m ruff format .
+    -uv run python -m ruff check --fix .
 
 # Run static type checking
 typecheck:
