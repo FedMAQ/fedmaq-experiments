@@ -19,7 +19,7 @@ jobs:
     # the slower project checks run.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify architecture freeze certificate
         run: python scripts/check_freeze.py --check
 
@@ -28,7 +28,7 @@ jobs:
     # `uvx` without the CUDA-pinned torch install. This is the blocking check.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Ruff lint
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Mypy (informational)
