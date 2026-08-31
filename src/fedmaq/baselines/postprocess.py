@@ -101,10 +101,11 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
             # step (‖d_fb‖₂/levels) stays fixed at a small `levels`, breaking the
             # contraction property error feedback needs -- verified empirically
             # (residual/delta ratio diverges >1e6x over 40 rounds on a
-            # 2M-parameter tensor at FedMAQ's actual q range). l∞ keeps this
-            # path's quantization step bounded by the tensor's own peak
-            # magnitude regardless of dimension, so it stays stable. Extending
-            # l2 here needs its own ticket with a redesigned feedback scheme.
+            # 2M-parameter tensor at FedMAQ's actual q range). l∞ bounds the
+            # decoded coordinate magnitudes by the feedback-adjusted tensor's
+            # peak magnitude, without an explicit dimension factor. This is an
+            # operational magnitude-control choice, not a stability,
+            # contraction, or convergence guarantee over the adaptive q range.
             scale = float(np.max(np.abs(d_fb)))
             if scale == 0.0:
                 zero_codes = np.zeros_like(d_fb, dtype=np.int64)
