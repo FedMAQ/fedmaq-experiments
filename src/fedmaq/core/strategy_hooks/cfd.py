@@ -250,13 +250,13 @@ class CFDHook(StrategyHook):
         if self._public_labels is None:
             return
         self.server_model.eval()
-        preds = []
+        pred_batches: list[np.ndarray] = []
         with torch.no_grad():
             for images, _ in public_loader:
                 images = images.to(self.device)
                 logits = self.server_model(images)
-                preds.append(logits.argmax(dim=1).cpu().numpy())
-        preds = np.concatenate(preds, axis=0)
+                pred_batches.append(logits.argmax(dim=1).cpu().numpy())
+        preds = np.concatenate(pred_batches, axis=0)
         acc = float((preds == self._public_labels).mean())
         logger.info(
             "CFD round=%d targets_acc=%.4f server_on_public_acc=%.4f",

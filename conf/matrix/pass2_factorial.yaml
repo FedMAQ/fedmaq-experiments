@@ -50,6 +50,10 @@
 # All eight cell means are reported, not only the surviving one. Reporting the
 # winner alone is what would make the seven comparisons unauditable.
 phase: explore
+stage: historical
+protocol_stage: historical
+split: val
+ledger: historical
 experiment_group: pass2_factorial
 dataset: cifar10
 model: mobilenetv2

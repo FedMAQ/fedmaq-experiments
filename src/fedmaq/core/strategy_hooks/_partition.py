@@ -8,7 +8,8 @@ logic in one place.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, cast
 
 from flwr.common.typing import GetPropertiesIns
 from flwr.server.client_proxy import ClientProxy
@@ -46,10 +47,7 @@ def resolve_partition_id(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            try:
-                res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0, group_id=0)
-            except TypeError:
-                res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0)
+            res = client.get_properties(GetPropertiesIns(config={}), timeout=5.0, group_id=0)
             pid = int(res.properties["cid"])
             strategy.proxy_cid_to_partition_id[cid_str] = pid
             logger.info(f"Queried partition ID {pid} for Client Proxy {cid_str}")
@@ -71,6 +69,7 @@ def resolve_partition_id(
                     "Verify that GenericClient.get_properties exposes 'cid'."
                 )
                 return pid
+    raise RuntimeError(f"could not resolve partition ID for client {cid_str}")
 
 
 def partition_dataset_size(
@@ -87,10 +86,11 @@ def partition_dataset_size(
     if client_indices_dict is None:
         return default
     key_str, key_int = str(pid), int(pid)
-    if key_str in client_indices_dict:
-        return len(client_indices_dict[key_str])
-    if key_int in client_indices_dict:
-        return len(client_indices_dict[key_int])
+    mapping = cast(Mapping[Any, list[int]], client_indices_dict)
+    if key_str in mapping:
+        return len(mapping[key_str])
+    if key_int in mapping:
+        return len(mapping[key_int])
     logger.warning(
         f"Partition ID {pid} not found in client_indices_dict. Defaulting size to {default}."
     )

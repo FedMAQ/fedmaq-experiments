@@ -10,6 +10,7 @@ FEMNIST benchmarking grid, not the Ablation Study — gated per-algorithm-yaml v
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import numpy as np
 from flwr.app import ArrayRecord, ConfigRecord, RecordDict
@@ -85,7 +86,8 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
         prev_q_record = self._state.get(_PREV_Q_KEY)
         prev_q: int | None = None
         if isinstance(prev_q_record, ConfigRecord):
-            prev_q = int(prev_q_record.get("q", -1))
+            prev_q_value = prev_q_record.get("q", -1)
+            prev_q = int(cast(str | int | float, prev_q_value))
         elif isinstance(prev_q_record, ArrayRecord):
             prev_q_arr = prev_q_record.to_numpy_ndarrays()
             if prev_q_arr and prev_q_arr[0].size > 0:

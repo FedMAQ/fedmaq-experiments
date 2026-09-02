@@ -1,6 +1,10 @@
 # Stage 1 of the re-cut formulation design. The selected-p omega follow-up is
 # deliberately created only after this matrix establishes the selected p.
 phase: explore
+stage: stage_1a
+protocol_stage: stage_1a
+split: val
+ledger: scientific
 experiment_group: power_mean_design
 dataset: cifar10
 model: mobilenetv2

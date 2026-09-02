@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
 
@@ -156,3 +157,49 @@ def write_run(
         phase=phase,
         output_dir=output_dir,
     )
+
+
+def run_fedmaq_q_transition_fixture(output_dir: Path) -> dict[str, object]:
+    """Exercise a real FedMAQ post-process q transition and persist its record."""
+    from flwr.app import RecordDict
+
+    from fedmaq.baselines.postprocess import FedMAQPostProcessCompressionHook
+    from fedmaq.core.wire_codec import unpack_quantized_tensor
+
+    state = RecordDict()
+    records: list[dict[str, object]] = []
+    for round_number, q in enumerate((8, 8, 4), start=1):
+        hook = FedMAQPostProcessCompressionHook(
+            q=q,
+            state=state,
+            rng=np.random.default_rng(100 + round_number),
+        )
+        _, report = hook.compress([np.array([0.25, -0.5, 0.75], dtype=np.float32)])
+        wire = unpack_quantized_tensor(report.payloads[0])
+        records.append(
+            {
+                "round": round_number,
+                "q": q,
+                "is_diff": wire.is_diff,
+                "bit_width": wire.bit_width,
+                "payload_bytes": report.payload_bytes,
+                "measured_bytes": report.measured_bytes,
+            }
+        )
+
+    if [record["q"] for record in records] != [8, 8, 4]:
+        raise AssertionError("fixture did not execute the requested q schedule")
+    if not any(record["is_diff"] is True for record in records) or records[-1]["is_diff"]:
+        raise AssertionError("fixture did not record a real q transition")
+
+    fixture = {
+        "schema_version": 1,
+        "fixture": "fedmaq_q_transition",
+        "ledger": "assurance",
+        "records": records,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "fedmaq_q_transition.json").write_text(
+        json.dumps(fixture, indent=2) + "\n", encoding="utf-8"
+    )
+    return fixture

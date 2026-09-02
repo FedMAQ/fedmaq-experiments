@@ -310,9 +310,9 @@ def _default_probe(model: nn.Module, images: torch.Tensor, labels: torch.Tensor)
     outputs = model(images)
     loss = criterion(outputs, labels)
     loss.backward()
-    return torch.sqrt(
-        sum(p.grad.detach().pow(2).sum() for p in model.parameters() if p.grad is not None)
-    ).item()
+    squared_norms = [p.grad.detach().pow(2).sum() for p in model.parameters() if p.grad is not None]
+    squared_norm = torch.stack(squared_norms).sum() if squared_norms else torch.tensor(0.0)
+    return float(torch.sqrt(squared_norm).item())
 
 
 class QuantizationPlanner:
@@ -340,8 +340,8 @@ class QuantizationPlanner:
         parameters: Parameters,
         client_pids: list[int],
         client_cids: list[str],
-        client_indices_dict: dict[int, list[int]],
-        client_memory: dict[int, float] | list[float],
+        client_indices_dict: dict[str, list[int]] | dict[int, list[int]] | None,
+        client_memory: dict[int, float] | list[float] | np.ndarray | None,
         ctx: RunContext,
         qp_cfg: dict[str, Any],
         seed_base: int,
@@ -383,7 +383,7 @@ class QuantizationPlanner:
         temp_model: nn.Module,
         client_pids: list[int],
         ctx: RunContext,
-        client_indices_dict: dict[int, list[int]],
+        client_indices_dict: dict[str, list[int]] | dict[int, list[int]] | None,
         seed_base: int,
         server_round: int,
     ) -> tuple[list[float], list[int]]:
@@ -394,6 +394,8 @@ class QuantizationPlanner:
         """
         from fedmaq.core.strategy_hooks._partition import partition_dataset_size
 
+        if client_indices_dict is None and client_pids:
+            raise ValueError("gradient-norm probing requires client partition indices")
         grad_norms: list[float] = []
         dataset_sizes: list[int] = []
         for pid in client_pids:
@@ -403,7 +405,9 @@ class QuantizationPlanner:
             loader = get_client_loader(
                 dataset_name=ctx.dataset_name,
                 client_id=pid,
-                client_indices_dict=client_indices_dict,
+                client_indices_dict={
+                    str(key): value for key, value in (client_indices_dict or {}).items()
+                },
                 batch_size=ctx.batch_size,
                 train=True,
                 seed=seed_base + pid * 100_000 + server_round,
@@ -455,7 +459,7 @@ class QuantizationPlanner:
         client_pids: list[int],
         grad_norms: list[float],
         dataset_sizes: list[int],
-        client_memory: dict[int, float] | list[float],
+        client_memory: dict[int, float] | list[float] | np.ndarray | None,
         qp: _QuantParams,
     ) -> tuple[dict[str, int], dict[str, float], dict[str, float]]:
         """Normalize the signals and compute each client's bit-width ``q``."""
@@ -468,7 +472,7 @@ class QuantizationPlanner:
         for cid, pid, g_k, n_k in zip(
             client_cids, client_pids, grad_norms, dataset_sizes, strict=True
         ):
-            c_k = float(client_memory[pid])
+            c_k = float(client_memory[pid]) if client_memory is not None else 0.0
             decision = compute_fedmaq_q_k_t_details(
                 c_k=c_k,
                 c_unit=qp.c_unit,

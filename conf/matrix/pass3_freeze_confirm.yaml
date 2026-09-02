@@ -49,6 +49,10 @@
 #
 # Not counted among the 177 confirmatory runs.
 phase: explore
+stage: historical
+protocol_stage: historical
+split: val
+ledger: historical
 experiment_group: pass3_freeze_confirm
 dataset: cifar10
 model: mobilenetv2

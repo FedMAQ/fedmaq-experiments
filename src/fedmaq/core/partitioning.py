@@ -20,8 +20,10 @@ Supported partition modes:
 import json
 import os
 import random
+from collections.abc import Sized
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -200,7 +202,7 @@ def get_dataset_labels(dataset: Dataset) -> np.ndarray:
         targets = dataset.labels
     else:
         # Fallback loop (slow, but safe for generic wrappers)
-        targets = [dataset[i][1] for i in range(len(dataset))]
+        targets = [dataset[i][1] for i in range(len(cast(Sized, dataset)))]
 
     if isinstance(targets, torch.Tensor):
         return targets.cpu().numpy()

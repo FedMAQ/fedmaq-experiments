@@ -274,6 +274,10 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
                         "seed": seed,
                         "label": run_item.get("label", alg),
                         "overrides": list(run_item.get("overrides", []) or []),
+                        "stage": matrix.get("stage", matrix.get("protocol_stage", "unregistered")),
+                        "protocol_stage": matrix.get("protocol_stage", "unregistered"),
+                        "split": matrix.get("split", "val"),
+                        "ledger": matrix.get("ledger", "unregistered"),
                     }
                 )
     return tasks

@@ -1,5 +1,9 @@
 # Matrix specification for CI / quick sanity checks (2 rounds)
 phase: ci
+stage: assurance
+protocol_stage: assurance
+split: none
+ledger: assurance
 experiment_group: ci_test
 dataset: cifar10
 model: mobilenetv2

@@ -1,70 +1,49 @@
-"""Golden-output harness for architecture-deepening Step 2 (ADR-0003).
+"""Capture and classify assurance outputs for the replacement pipeline.
 
-Captures pre-refactor ``experiment_log.csv`` output for a fixed set of configs,
-then — after the ``TrainingSkeleton`` migration — re-runs the same configs and
-diffs column-by-column. Per Decision 40, the gate is literal bit-exact equality
-on every column except the two real-wall-clock columns.
-
-Usage:
-    uv run python scripts/golden_diff.py capture   # run BEFORE touching client_hooks code
-    uv run python scripts/golden_diff.py compare   # run AFTER each migration step
-
-The golden set covers one config per ``standard.py`` branch (S2a) plus ``fedkd``,
-``feddistill``, and ``cfd`` (S2b). See ADR-0003: a plain-FedAvg-only diff would
-never exercise FedProx's post-backward instrumentation or the KD/DAdaQuant/FedMAQ
-loss-hook paths.
-
-``fedmd`` is deliberately excluded from this default set (Decision 45): it was
-already dropped from the formal baseline stack (Decision 25) and its disk-persisted
-multi-phase training (pub/priv pretrain + digest + revisit, up to 4x ``run_epochs``
-per round) makes it by far the slowest config here (~9 min for 2 rounds on this
-machine) for a baseline unlikely to reappear in future experiments. Its hook code
-is untouched by candidate work to date; re-add it to ``GOLDEN_SET`` only for a
-refactor that actually touches ``fedmd.py``/``kd_utils.py``'s FedMD path.
+The old-output comparison is a transition diagnostic: it records what changed
+between two candidates, but it is never a release gate.  The release gate is
+the repeatability check, which compares two independent captures of the same
+clean candidate and requires matching provenance as well as bit-exact output.
 """
 
+from __future__ import annotations
+
 import csv
+import io
+import json
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.common import build_run_command, kill_ray_processes
 
-# One config per branch this step's migration touches. Extend as S2b adds
-# feddistill/cfd/fedmd.
 GOLDEN_SET: list[str] = [
-    "fedavg",  # StandardFit, no instrumentation
-    "fedprox",  # StandardFit + on_after_backward grad-norm instrumentation + prox loss hook
-    "fedpaq",  # StandardFit + real quantizing compressor_hook
-    "fedavg_kd",  # StandardFit + ClientKDLossHook
-    "dadaquant",  # DAdaQuantFit._pretrain_local_loss + dynamic q
-    "fedmaq",  # FedMAQFit._reported_local_loss (last_loss, not mean)
-    "fedkd",  # joint student+teacher loop, compress_and_reconstruct only
-    "feddistill",  # run_epochs x1 + LogitTracker side-channel, no compression
-    "cfd",  # run_epochs x2 (distill phase + CE phase), no compress/reconstruct tail
-    # "fedmd" intentionally excluded — see Decision 45 in the module docstring.
+    "fedavg",
+    "fedprox",
+    "fedpaq",
+    "fedavg_kd",
+    "dadaquant",
+    "fedmaq",
+    "fedkd",
+    "feddistill",
+    "cfd",
 ]
 
-# Real-wall-clock columns excluded from the bit-exact comparison (Decision 40).
 IGNORED_COLUMNS = {"system/wall_time_sec", "system/cumulative_wall_time_sec"}
-
 GOLDEN_ROOT = Path("outputs/golden/step2")
-COMPARE_ROOT = Path("outputs/golden/step2_compare")
+TRANSITION_ROOT = Path("outputs/golden/step2_transition")
+REPEATABILITY_ROOT = Path("outputs/golden/step2_repeatability")
 SEED = 42
 SSD = "dirichlet_alpha_0.1"
-
-# fedkd/fedmd persist client/teacher state on disk across rounds by design
-# (baselines.md), keyed only by cid -- not by run/output-dir. Left uncleared,
-# a later run silently inherits an earlier run's trained weights instead of
-# starting cold, which looks like a code regression but isn't one. Must be
-# wiped before every capture/compare run so each is a true independent trial.
 PERSISTENCE_DIR = Path(".data_partitions/fedmd_models")
 
 
-def _run(algorithm: str, target_dir: Path) -> None:
+def _run(algorithm: str, target_dir: Path, *, client_gpus: float = 1.0) -> None:
     if PERSISTENCE_DIR.exists():
         shutil.rmtree(PERSISTENCE_DIR)
     if target_dir.exists():
@@ -76,89 +55,240 @@ def _run(algorithm: str, target_dir: Path) -> None:
         algorithm=algorithm,
         total_rounds=2,
         seed=SEED,
-        client_gpus=1.0,
+        client_gpus=client_gpus,
         target_dir=target_dir,
-        overrides=["experiment=ci"],
+        overrides=["experiment=ci", "protocol_stage=assurance", "split=none"],
     )
     print(f"$ {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="") as f:
-        return list(csv.DictReader(f))
+    with path.open(newline="") as stream:
+        return list(csv.DictReader(stream))
+
+
+def _semantic_csv_bytes(path: Path) -> bytes:
+    """Canonicalize only the explicitly non-semantic wall-clock columns."""
+    with path.open(newline="") as stream:
+        reader = csv.DictReader(stream)
+        columns = [column for column in reader.fieldnames or [] if column not in IGNORED_COLUMNS]
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows({column: row.get(column, "") for column in columns} for row in reader)
+    return output.getvalue().encode("utf-8")
 
 
 def _diff(
-    golden_rows: list[dict[str, str]], compare_rows: list[dict[str, str]], label: str
+    expected_rows: list[dict[str, str]], actual_rows: list[dict[str, str]], label: str
 ) -> list[str]:
+    """Return human-readable semantic differences, excluding wall-clock fields."""
     problems: list[str] = []
-    if len(golden_rows) != len(compare_rows):
+    if len(expected_rows) != len(actual_rows):
         problems.append(
-            f"[{label}] row count differs: golden={len(golden_rows)} compare={len(compare_rows)}"
+            f"[{label}] row count differs: expected={len(expected_rows)} actual={len(actual_rows)}"
         )
         return problems
 
-    golden_cols = set(golden_rows[0].keys()) if golden_rows else set()
-    compare_cols = set(compare_rows[0].keys()) if compare_rows else set()
-    if golden_cols != compare_cols:
+    expected_cols = set(expected_rows[0].keys()) if expected_rows else set()
+    actual_cols = set(actual_rows[0].keys()) if actual_rows else set()
+    if expected_cols != actual_cols:
         problems.append(
-            f"[{label}] column set differs: only-in-golden={golden_cols - compare_cols} "
-            f"only-in-compare={compare_cols - golden_cols}"
+            f"[{label}] column set differs: only-in-expected={expected_cols - actual_cols} "
+            f"only-in-actual={actual_cols - expected_cols}"
         )
 
-    for i, (g_row, c_row) in enumerate(zip(golden_rows, compare_rows, strict=False)):
-        for col in golden_cols & compare_cols:
-            if col in IGNORED_COLUMNS:
+    for index, (expected, actual) in enumerate(zip(expected_rows, actual_rows, strict=False)):
+        for column in expected_cols & actual_cols:
+            if column in IGNORED_COLUMNS:
                 continue
-            if g_row.get(col) != c_row.get(col):
+            if expected.get(column) != actual.get(column):
                 problems.append(
-                    f"[{label}] row {i} column {col!r}: "
-                    f"golden={g_row.get(col)!r} compare={c_row.get(col)!r}"
+                    f"[{label}] row {index} column {column!r}: "
+                    f"expected={expected.get(column)!r} actual={actual.get(column)!r}"
                 )
     return problems
 
 
+def _classified_diff(
+    expected_rows: list[dict[str, str]], actual_rows: list[dict[str, str]]
+) -> dict[str, Any]:
+    """Classify output changes so a transition cannot masquerade as a pass."""
+    result: dict[str, Any] = {
+        "row_count": {"expected": len(expected_rows), "actual": len(actual_rows)},
+        "column_added": [],
+        "column_removed": [],
+        "semantic_value_changes": [],
+        "ignored_runtime_changes": [],
+    }
+    expected_cols = set(expected_rows[0].keys()) if expected_rows else set()
+    actual_cols = set(actual_rows[0].keys()) if actual_rows else set()
+    result["column_added"] = sorted(actual_cols - expected_cols)
+    result["column_removed"] = sorted(expected_cols - actual_cols)
+    for index, (expected, actual) in enumerate(zip(expected_rows, actual_rows, strict=False)):
+        for column in sorted(expected_cols & actual_cols):
+            if expected.get(column) == actual.get(column):
+                continue
+            change = {
+                "row": index,
+                "column": column,
+                "expected": expected.get(column),
+                "actual": actual.get(column),
+            }
+            if column in IGNORED_COLUMNS:
+                result["ignored_runtime_changes"].append(change)
+            else:
+                result["semantic_value_changes"].append(change)
+    return result
+
+
+def _metadata(directory: Path) -> dict[str, Any]:
+    path = directory / "run_manifest.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"missing provenance manifest: {path}")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, Mapping):
+        raise ValueError(f"invalid provenance manifest: {path}")
+    git = value.get("git")
+    environment = value.get("environment")
+    if not isinstance(git, Mapping) or not isinstance(environment, Mapping):
+        raise ValueError(f"manifest lacks git/environment records: {path}")
+    return {
+        "commit": git.get("commit"),
+        "dirty": git.get("dirty"),
+        "config_sha256": value.get("config_sha256"),
+        "environment": dict(environment),
+    }
+
+
+def _capture(directory: Path) -> dict[str, Any]:
+    csv_path = directory / "experiment_log.csv"
+    return {"metadata": _metadata(directory), "rows": _read_csv(csv_path)}
+
+
+def transition_diagnostic(old_directory: Path, new_directory: Path, label: str) -> dict[str, Any]:
+    """Record a classified old-to-new differential; this result is not pass-eligible."""
+    old = _capture(old_directory)
+    new = _capture(new_directory)
+    return {
+        "schema_version": 1,
+        "operation": "old_to_new_transition_diagnostic",
+        "candidate": label,
+        "ledger": "assurance",
+        "status": "RECORDED",
+        "pass": False,
+        "pass_eligible": False,
+        "old": old["metadata"],
+        "new": new["metadata"],
+        "old_output": str(old_directory),
+        "new_output": str(new_directory),
+        "classified_differential": _classified_diff(old["rows"], new["rows"]),
+    }
+
+
+def repeatability_report(
+    first_directory: Path, second_directory: Path, label: str
+) -> dict[str, Any]:
+    """Gate two independent captures of one clean candidate on exact equality."""
+    if first_directory.resolve() == second_directory.resolve():
+        return {
+            "schema_version": 1,
+            "operation": "same_candidate_repeatability",
+            "candidate": label,
+            "ledger": "assurance",
+            "status": "FAIL",
+            "pass": False,
+            "reasons": ["repeatability captures must use independent directories"],
+        }
+    first = _capture(first_directory)
+    second = _capture(second_directory)
+    first_meta = first["metadata"]
+    second_meta = second["metadata"]
+    reasons: list[str] = []
+    if first_meta["dirty"] is not False or second_meta["dirty"] is not False:
+        reasons.append("both captures must record a clean working tree")
+    for field in ("commit", "config_sha256"):
+        if not first_meta[field] or first_meta[field] != second_meta[field]:
+            reasons.append(f"{field} differs or is missing")
+    if first_meta["environment"] != second_meta["environment"]:
+        reasons.append("environment records differ")
+    differential = _classified_diff(first["rows"], second["rows"])
+    if (
+        differential["row_count"]["expected"] != differential["row_count"]["actual"]
+        or differential["column_added"]
+        or differential["column_removed"]
+        or differential["semantic_value_changes"]
+    ):
+        reasons.append("semantic output is not bit-exact")
+    if _semantic_csv_bytes(first_directory / "experiment_log.csv") != _semantic_csv_bytes(
+        second_directory / "experiment_log.csv"
+    ):
+        reasons.append("canonical output bytes differ")
+    return {
+        "schema_version": 1,
+        "operation": "same_candidate_repeatability",
+        "candidate": label,
+        "ledger": "assurance",
+        "status": "PASS" if not reasons else "FAIL",
+        "pass": not reasons,
+        "reasons": reasons,
+        "first": first_meta,
+        "second": second_meta,
+        "first_output": str(first_directory),
+        "second_output": str(second_directory),
+        "classified_differential": differential,
+    }
+
+
+def _write_report(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
 def capture() -> None:
     for algorithm in GOLDEN_SET:
-        target = GOLDEN_ROOT / algorithm
-        _run(algorithm, target)
+        _run(algorithm, GOLDEN_ROOT / algorithm)
     print(f"\nGolden output captured under {GOLDEN_ROOT}/")
 
 
-def compare() -> None:
-    all_problems: list[str] = []
+def transition() -> None:
     for algorithm in GOLDEN_SET:
-        golden_csv = GOLDEN_ROOT / algorithm / "experiment_log.csv"
-        if not golden_csv.exists():
-            all_problems.append(
-                f"[{algorithm}] no golden output found at {golden_csv} — run `capture` first"
-            )
-            continue
+        old_directory = GOLDEN_ROOT / algorithm
+        if not old_directory.exists():
+            raise FileNotFoundError(f"run capture first: {old_directory}")
+        new_directory = TRANSITION_ROOT / algorithm
+        _run(algorithm, new_directory)
+        report = transition_diagnostic(old_directory, new_directory, algorithm)
+        _write_report(TRANSITION_ROOT / f"{algorithm}.json", report)
+        print(f"[{algorithm}] transition diagnostic recorded")
 
-        target = COMPARE_ROOT / algorithm
-        _run(algorithm, target)
-        compare_csv = target / "experiment_log.csv"
 
-        problems = _diff(_read_csv(golden_csv), _read_csv(compare_csv), algorithm)
-        if problems:
-            all_problems.extend(problems)
-        else:
-            print(f"[{algorithm}] OK — bit-exact match (excluding wall-clock columns)")
-
-    if all_problems:
-        print("\nGOLDEN DIFF FAILED:")
-        for p in all_problems:
-            print(f"  {p}")
-        sys.exit(1)
-    print("\nAll golden diffs passed.")
+def repeatability() -> None:
+    for algorithm in GOLDEN_SET:
+        first_directory = REPEATABILITY_ROOT / algorithm / "capture_a"
+        second_directory = REPEATABILITY_ROOT / algorithm / "capture_b"
+        _run(algorithm, first_directory, client_gpus=0.5)
+        _run(algorithm, second_directory, client_gpus=0.5)
+        report = repeatability_report(first_directory, second_directory, algorithm)
+        _write_report(REPEATABILITY_ROOT / f"{algorithm}.json", report)
+        if not report["pass"]:
+            print(f"[{algorithm}] repeatability failed: {report['reasons']}")
+            raise SystemExit(1)
+        print(f"[{algorithm}] PASS — independent captures are bit-exact")
 
 
 def main() -> None:
-    if len(sys.argv) != 2 or sys.argv[1] not in ("capture", "compare"):
-        print(__doc__)
-        sys.exit(1)
-    {"capture": capture, "compare": compare}[sys.argv[1]]()
+    operations = {
+        "capture": capture,
+        "compare": transition,
+        "transition": transition,
+        "repeatability": repeatability,
+    }
+    if len(sys.argv) != 2 or sys.argv[1] not in operations:
+        print(f"Usage: {Path(sys.argv[0]).name} [{', '.join(operations)}]")
+        raise SystemExit(1)
+    operations[sys.argv[1]]()
 
 
 if __name__ == "__main__":

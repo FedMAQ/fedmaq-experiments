@@ -1,6 +1,10 @@
 # Memory sensitivity matrix: sweeps c_unit in {256, 1024} (12 net-new cells).
 # The c_unit=512 cells are the standard benchmark grid FedMAQ runs, joined in analysis.
 phase: explore
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: memory_sensitivity
 dataset: cifar10
 model: mobilenetv2

@@ -2,6 +2,10 @@
 # Isolates the coding pipeline (error feedback + diff coding + lossless zlib) treatment
 # while inheriting all other factors from ordinary FedPAQ.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: fedpaq_pipeline
 dataset: cifar100
 model: mobilenetv2

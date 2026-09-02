@@ -54,6 +54,10 @@
 # search, so it cannot re-populate the layer these arms inherit. This ablation is
 # therefore not gated on it and cannot be invalidated by it.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: ablation
 dataset: cifar10
 model: mobilenetv2

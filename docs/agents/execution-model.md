@@ -85,21 +85,21 @@ No allocation run precedes this gate.
    correction.
 3. Dry-run every matrix named below. Dry-run output is validation, not dispatch.
 
-### Stage A — Widened matched tuning (102 exploratory cells)
+### Stage A — Widened matched tuning (145 validation cells)
 
 4. `--matrix baseline_tuning_wide`, at held-out α = 0.3 and R=100. Each of the six
-   tunable algorithms contributes one five-seed shipped-reference cell and four
-   three-seed challengers. FedAvg is absent because it has no tunable communication
-   knob. FedMAQ varies `q_max ∈ {4, 6, 8, 16, 32}` while `c_unit=512` remains fixed.
+   tunable algorithms contributes five registered validation seeds per arm. FedAvg
+   is absent because it has no tunable communication knob. FedMAQ varies
+   `q_max ∈ {4, 6, 8, 16}` while `c_unit=512` remains fixed.
 5. Run `baseline_tuning_margin`, retain every five-point table and seed-level curve,
    and write only challengers that strictly clear `sqrt(2) * sigma` into the shipped
    configs. A highest point that does not clear is not adopted. `paper_default_variant`
    is provenance metadata and may be null; it is never substituted with the shipped
    reference.
 
-These 102 cells are exploratory and are not part of the 243 reported replacement
-cells. They must finish before Stage 1a because their verdicts configure FedMAQ and
-the baseline arms.
+These 145 cells are the replacement pipeline's matched-tuning stage. They must
+finish before Stage 1a because their verdicts configure FedMAQ and the baseline
+arms.
 
 ### Gate 1 — `pre-registration-stage1a`
 
@@ -133,7 +133,7 @@ authorize this campaign.
 ### Gate 2 — selected formulation and downstream manifest
 
 11. Freeze the selected pair, resolved configs, ablation arm diffs, and the complete
-    147-cell downstream manifest. Run `just check`, manifest checks, and the golden
+    174-cell downstream manifest. Run `just check`, manifest checks, and the golden
     compare, then tag the exact pushed commit before any downstream cell runs.
     A material change after this gate opens a new labelled exploration amendment; it
     is not folded silently into the frozen campaign.
@@ -145,11 +145,12 @@ authorize this campaign.
     contribute 105 cells.
 13. `--matrix ablation`, contributing 36 net-new cells after the inherited FedAvg
     rows and dropped empty-refinement Configuration 8 are accounted for.
-14. `--matrix uniform_memory_control`, contributing six cells.
+14. `--matrix uniform_memory_control`, contributing six cells, plus the registered
+    FedPAQ pipeline and memory-sensitivity matrices.
 
-The full allocation workload is therefore 345 cells: 102 exploratory tuning cells,
-96 reported formulation cells, and 147 downstream confirmatory cells. The reported
-replacement bundle remains 243 cells, not 345.
+The full scientific workload is therefore 415 cells: 145 matched-tuning cells,
+96 formulation cells, and 174 downstream confirmation cells. Assurance executions
+are recorded separately and are not part of this scientific total.
 
 ---
 

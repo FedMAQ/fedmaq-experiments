@@ -26,6 +26,10 @@
 # post_process=true on FedMAQ, matching both CIFAR halves. See the header of
 # benchmark_grid_cifar100.yaml. tests/test_simulation.py enforces it.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: benchmark_grid
 dataset: femnist
 model: simplecnn

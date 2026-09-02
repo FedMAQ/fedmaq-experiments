@@ -92,6 +92,7 @@ def _print_plan(plan: MatrixPlan, args: argparse.Namespace) -> None:
     print("=" * 70)
     print(f"FedMAQ Matrix Sweep: {plan.experiment_group.upper()}")
     print(f"Phase: {plan.phase} | Dataset: {plan.dataset} | Model: {plan.model}")
+    print(f"Stage: {plan.stage} | Split: {plan.split} | Ledger: {plan.ledger}")
     if plan.experiment:
         print(f"Experiment group: {plan.experiment}")
     print(f"Total Rounds: {plan.total_rounds} | Client GPUs: {plan.client_gpus}")

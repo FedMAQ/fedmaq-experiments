@@ -168,6 +168,8 @@ def _dispatch_provenance() -> dict[str, Any] | None:
     if index is None and count is None:
         return None
     try:
+        if index is None or count is None:
+            raise ValueError("both shard index and count are required")
         shard = {"index": int(index), "count": int(count)}
     except (TypeError, ValueError):
         # Keep the run manifest useful even if a manually supplied environment is

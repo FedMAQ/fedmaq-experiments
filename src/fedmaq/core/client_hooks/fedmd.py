@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sized
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -37,7 +38,7 @@ class FedMDFit(ClientFitStrategy):
         model_dir.mkdir(parents=True, exist_ok=True)
         model_path = model_dir / f"client_{client.cid}.pth"
 
-        loss_sum = 0.0
+        loss_sum: float = 0.0
         correct = 0
         total_samples = 0
         batches = 0
@@ -89,11 +90,11 @@ class FedMDFit(ClientFitStrategy):
                 nonlocal loss_sum, batches, correct, total_samples
                 outputs = client.model(images)
                 loss = criterion(outputs, labels)
-                loss_sum += loss.item()
+                loss_sum += float(loss.item())
                 batches += 1
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                correct += int((predicted == labels).sum().item())
                 return StepResult(loss=loss)
 
             run_epochs(
@@ -167,11 +168,11 @@ class FedMDFit(ClientFitStrategy):
                 nonlocal loss_sum, batches, correct, total_samples
                 outputs = client.model(images)
                 loss = ce_criterion(outputs, labels)
-                loss_sum += loss.item()
+                loss_sum += float(loss.item())
                 batches += 1
                 _, predicted = torch.max(outputs.data, 1)
                 total_samples += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                correct += int((predicted == labels).sum().item())
                 return StepResult(loss=loss)
 
             run_epochs(
@@ -188,15 +189,15 @@ class FedMDFit(ClientFitStrategy):
             torch.save(client.model.state_dict(), model_path)
 
         # 3. Compute predictions on public dataset to send back to server
-        predictions = []
+        prediction_batches: list[np.ndarray] = []
         if client.public_loader is not None:
             client.model.eval()
             with torch.no_grad():
                 for images, _ in client.public_loader:
                     images = images.to(client.device)
                     outputs = client.model(images)
-                    predictions.append(outputs.cpu().numpy())
-            predictions = np.concatenate(predictions, axis=0)
+                    prediction_batches.append(outputs.cpu().numpy())
+            predictions = np.concatenate(prediction_batches, axis=0)
         else:
             num_classes = client.config.get("dataset", {}).get("num_classes", 10)
             predictions = np.zeros((1, num_classes), dtype=np.float32)
@@ -216,7 +217,7 @@ class FedMDFit(ClientFitStrategy):
 
         return (
             [predictions],
-            len(client.trainloader.dataset),
+            len(cast(Sized, client.trainloader.dataset)),
             {
                 "bytes_uploaded": report.measured_bytes,
                 "payload_bytes": report.payload_bytes,

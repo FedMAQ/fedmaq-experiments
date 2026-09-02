@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sized
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -174,6 +175,6 @@ class FedKDFit(ClientFitStrategy):
 
         return (
             reconstructed_params,
-            len(client.trainloader.dataset),
+            len(cast(Sized, client.trainloader.dataset)),
             fit_metrics,
         )

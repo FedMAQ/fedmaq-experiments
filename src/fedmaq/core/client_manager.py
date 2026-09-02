@@ -103,16 +103,11 @@ class SeededPartitionClientManager(SimpleClientManager):
         last_exc: Exception | None = None
         for attempt in range(1, _PARTITION_QUERY_MAX_ATTEMPTS + 1):
             try:
-                try:
-                    res = proxy.get_properties(
-                        GetPropertiesIns(config={}),
-                        timeout=_PARTITION_QUERY_TIMEOUT,
-                        group_id=0,
-                    )
-                except TypeError:  # older Flower signature without group_id
-                    res = proxy.get_properties(
-                        GetPropertiesIns(config={}), timeout=_PARTITION_QUERY_TIMEOUT
-                    )
+                res = proxy.get_properties(
+                    GetPropertiesIns(config={}),
+                    timeout=_PARTITION_QUERY_TIMEOUT,
+                    group_id=0,
+                )
                 pid = int(res.properties["cid"])
             except Exception as exc:  # noqa: BLE001 — retried, then re-raised as fatal
                 last_exc = exc

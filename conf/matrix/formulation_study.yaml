@@ -81,6 +81,10 @@
 # dataset, not skew (chapter_4.tex:155): the formulation is chosen on CIFAR-10
 # and tested by CIFAR-100 and FEMNIST in the main grid.
 phase: explore
+stage: historical
+protocol_stage: historical
+split: val
+ledger: historical
 experiment_group: formulation_study
 dataset: cifar10
 model: mobilenetv2

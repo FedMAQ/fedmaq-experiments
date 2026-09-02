@@ -1,11 +1,16 @@
 # Adviser-requested widened matched-tuning stage, manuscript §4.3.2.
 #
-# This is a new evidence stage. The historical 55-run baseline_tuning matrix and
-# its freeze manifest remain unchanged. Each algorithm with a tunable knob gets a
-# five-seed reference plus four three-seed challengers: 17 runs each, 102 total.
+# This is the replacement Stage-A evidence stage. The historical 55-run
+# baseline_tuning matrix and its freeze manifest remain unchanged. Each
+# algorithm with a tunable knob gets five registered validation seeds per arm:
+# 29 arms x 5 seeds = 145 cells.
 # FedAvg remains absent because it is the uncompressed control. FedMAQ uses q_max;
 # c_unit=512 remains fixed by ADR-0002.
 phase: explore
+stage: matched_tuning
+protocol_stage: matched_tuning
+split: val
+ledger: scientific
 experiment_group: baseline_tuning_wide
 dataset: cifar10
 model: mobilenetv2
@@ -14,6 +19,9 @@ client_gpus: 0.5
 seeds: [0, 42, 123, 7, 21]
 heterogeneities:
   - dirichlet_alpha_0.3
+identity:
+  alpha: 0.3
+  fedmaq_formulation: 2
 
 # Reporting metadata consumed by scripts/analysis.py. Keeping the value ladder
 # beside the dispatch matrix makes Hydra/configuration the canonical home for all

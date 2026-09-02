@@ -2,6 +2,10 @@
 # Sweeps omega in {0.25, 0.75} (2 net-new variants x 2 skews x 3 seeds = 12 cells).
 # The omega=0.5 cells at the selected p are reused from Stage 1a (power_mean_design).
 phase: explore
+stage: stage_1b
+protocol_stage: stage_1b
+split: val
+ledger: scientific
 experiment_group: power_mean_omega
 dataset: cifar10
 model: mobilenetv2

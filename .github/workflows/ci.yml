@@ -34,18 +34,56 @@ jobs:
       - name: Ruff lint
         run: uvx ruff@0.15.19 check .
 
-  typecheck:
-    # Non-blocking while the type-annotation debt is paid down through the refactor.
-    # Flip `continue-on-error` to false (or remove it) once `mypy src` is clean.
+  format:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v5
-      - name: Mypy (informational)
+      - name: Ruff format
+        run: uvx ruff@0.15.19 format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Mypy
         run: uvx mypy@1.13 src/fedmaq --ignore-missing-imports --python-version 3.11
 
-  # NOTE: the pytest suite is intentionally not run in CI. The project pins
-  # torch==2.12.1+cu132 from a custom CUDA index and targets a dedicated GPU
-  # workstation (chapter_4.tex), so the full suite is run locally with `uv run pytest`.
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Verify generated certificates and manifests
+        run: |
+          uv run python scripts/dump_frozen_configs.py --check
+          uv run python scripts/dump_expected_runs.py --check
+          uv run python scripts/generate_schema_fixture.py --check
+          uv run python scripts/stage_manifest.py --check
+          uv run python scripts/stage_ledgers.py --check
+
+  cpu-test:
+    runs-on: ubuntu-latest
+    env:
+      CUDA_VISIBLE_DEVICES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: CPU pytest
+        run: uv run python -m pytest
+
+  assurance:
+    runs-on: ubuntu-latest
+    env:
+      CUDA_VISIBLE_DEVICES: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Deterministic analysis and transition fixture
+        run: uv run python scripts/run_assurance_fixtures.py

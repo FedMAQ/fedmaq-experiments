@@ -22,6 +22,10 @@
 # Keep-or-drop calls are decided afterward by a fully crossed factorial at three
 # seeds, against the measured noise margin.
 phase: explore
+stage: historical
+protocol_stage: historical
+split: val
+ledger: historical
 experiment_group: pass2_exploration
 dataset: cifar10
 model: mobilenetv2

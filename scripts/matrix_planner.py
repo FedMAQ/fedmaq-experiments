@@ -19,6 +19,8 @@ from scripts.common import (
     validate_unique_output_dirs,
 )
 
+REPO_MATRIX_DIR = (Path(__file__).resolve().parents[1] / "conf" / "matrix").resolve()
+
 
 @dataclass(frozen=True)
 class MatrixTask:
@@ -55,6 +57,9 @@ class MatrixPlan:
     canonical_tasks: tuple[MatrixTask, ...]
     tasks: tuple[MatrixTask, ...]
     shard: tuple[int, int] | None
+    stage: str = "downstream"
+    split: str = "val"
+    ledger: str = "scientific"
 
     @property
     def status_path(self) -> Path:
@@ -95,6 +100,9 @@ def plan_matrix(
         raise ValueError("--only cannot be combined with --shard; shard the full matrix")
 
     resolved = _resolved_mapping(matrix)
+    ledger = str(resolved.get("ledger", "unregistered"))
+    if ledger == "unregistered" and matrix_path.resolve().parent == REPO_MATRIX_DIR:
+        raise ValueError(f"{matrix_path.name} is not registered to an execution ledger")
     runs_spec = list(resolved.get("runs", []) or [])
     if only_labels:
         available = [str(item.get("label", item.get("alg"))) for item in runs_spec]
@@ -139,7 +147,12 @@ def plan_matrix(
             target_dir=output_dir,
             # Host overrides precede matrix overrides so a row's declared regime
             # cannot be displaced by a command-line convenience flag.
-            overrides=[*overrides, *spec["overrides"]],
+            overrides=[
+                *overrides,
+                f"protocol_stage={spec['protocol_stage']}",
+                f"split={spec['split']}",
+                *spec["overrides"],
+            ],
             experiment=experiment,
         )
         task_dicts.append(
@@ -196,6 +209,9 @@ def plan_matrix(
         total_rounds=total_rounds,
         client_gpus=client_gpus,
         experiment=str(experiment) if experiment is not None else None,
+        stage=str(resolved.get("stage", resolved.get("protocol_stage", "downstream"))),
+        split=str(resolved.get("split", "val")),
+        ledger=ledger,
         seeds=seeds,
         heterogeneities=heterogeneities,
         canonical_tasks=canonical_tasks,

@@ -187,7 +187,9 @@ class DAdaQuantHook(StrategyHook):
                 self.running_average_loss = (
                     self.psi * self.running_average_loss + (1.0 - self.psi) * weighted_loss_sum
                 )
-            self.moving_average_history.append(self.running_average_loss)
+            moving_average_loss = self.running_average_loss
+            assert moving_average_loss is not None
+            self.moving_average_history.append(moving_average_loss)
             logger.info(
                 f"Round {server_round} - DAdaQuant estimated global loss: "
                 f"{weighted_loss_sum:.4f}, moving average: "

@@ -14,7 +14,8 @@ logit matrix is a function of this round's global weights and local data.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Sized
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -140,8 +141,8 @@ class FedDistillFit(ClientFitStrategy):
             _, predicted = torch.max(logits.data, 1)
             return StepResult(
                 loss=loss,
-                correct=(predicted == labels).sum().item(),
-                total=labels.size(0),
+                correct=int((predicted == labels).sum().item()),
+                total=int(labels.size(0)),
                 extra_sums={"task_loss": loss_ce.item(), "distill_loss": loss_reg.item()},
             )
 
@@ -192,6 +193,6 @@ class FedDistillFit(ClientFitStrategy):
 
         return (
             updated_params,
-            len(client.trainloader.dataset),
+            len(cast(Sized, client.trainloader.dataset)),
             fit_metrics,
         )

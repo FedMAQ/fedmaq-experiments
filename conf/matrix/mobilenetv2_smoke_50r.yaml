@@ -1,5 +1,9 @@
 # Matrix specification for MobileNetV2GN 50-round smoke tests
 phase: smoke
+stage: assurance
+protocol_stage: assurance
+split: none
+ledger: assurance
 experiment_group: mobilenetv2_smoke_50r
 dataset: cifar10
 model: mobilenetv2

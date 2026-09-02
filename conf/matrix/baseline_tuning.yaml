@@ -98,6 +98,10 @@
 # because that is the axis of every claim the grid supports. Recorded as a
 # decision superseding Decision 31's knob list rather than silently substituted.
 phase: explore
+stage: historical
+protocol_stage: historical
+split: val
+ledger: historical
 experiment_group: baseline_tuning
 dataset: cifar10
 model: mobilenetv2

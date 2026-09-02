@@ -1,0 +1,3151 @@
+{
+  "schema_version": 1,
+  "stage": "matched_tuning",
+  "ledger": "scientific",
+  "split": "val",
+  "matrix": "conf/matrix/baseline_tuning_wide.yaml",
+  "registered_seeds": [
+    0,
+    42,
+    123,
+    7,
+    21
+  ],
+  "registered_algorithms": [
+    "dadaquant",
+    "feddistill",
+    "fedkd",
+    "fedmaq",
+    "fedpaq",
+    "fedprox"
+  ],
+  "registered_hyperparameters": {
+    "dadaquant": {
+      "knob": "phi",
+      "values": {
+        "phi1": 1,
+        "phi5": 5,
+        "phi10": 10,
+        "phi20": 20,
+        "phi40": 40
+      }
+    },
+    "feddistill": {
+      "knob": "reg_alpha",
+      "values": {
+        "a0p1": 0.1,
+        "a0p5": 0.5,
+        "a1p0": 1.0,
+        "a2p0": 2.0,
+        "a4p0": 4.0
+      }
+    },
+    "fedkd": {
+      "knob": "tmax",
+      "values": {
+        "t0p75": 0.75,
+        "t0p85": 0.85,
+        "t0p95": 0.95,
+        "t0p99": 0.99,
+        "t1p0": 1.0
+      }
+    },
+    "fedmaq": {
+      "knob": "q_max",
+      "values": {
+        "qmax4": 4,
+        "qmax6": 6,
+        "qmax8": 8,
+        "qmax16": 16
+      }
+    },
+    "fedpaq": {
+      "knob": "q",
+      "values": {
+        "q2": 2,
+        "q4": 4,
+        "q8": 8,
+        "q16": 16,
+        "q32": 32
+      }
+    },
+    "fedprox": {
+      "knob": "mu",
+      "values": {
+        "mu0p001": 0.001,
+        "mu0p01": 0.01,
+        "mu0p1": 0.1,
+        "mu1p0": 1.0,
+        "mu10p0": 10.0
+      }
+    }
+  },
+  "cell_count": 145,
+  "cells": [
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 1,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu1p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.mu=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p001|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 2,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p001",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p001",
+        "value": 0.001
+      },
+      "overrides": [
+        "algorithm.mu=0.001"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p01|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 3,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p01",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p01",
+        "value": 0.01
+      },
+      "overrides": [
+        "algorithm.mu=0.01"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p1|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 4,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p1",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.mu=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu10p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 5,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu10p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu10p0",
+        "value": 10.0
+      },
+      "overrides": [
+        "algorithm.mu=10.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q8|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 6,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q8",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q=8"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q2|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 7,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q2",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q2",
+        "value": 2
+      },
+      "overrides": [
+        "algorithm.q=2"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q4|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 8,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q4",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q=4"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q16|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 9,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q16",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q=16"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q32|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 10,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q32",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q32",
+        "value": 32
+      },
+      "overrides": [
+        "algorithm.q=32"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi10|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 11,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi10",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi10",
+        "value": 10
+      },
+      "overrides": [
+        "algorithm.phi=10"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi1|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 12,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi1",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi1",
+        "value": 1
+      },
+      "overrides": [
+        "algorithm.phi=1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi5|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 13,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi5",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi5",
+        "value": 5
+      },
+      "overrides": [
+        "algorithm.phi=5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi20|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 14,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi20",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi20",
+        "value": 20
+      },
+      "overrides": [
+        "algorithm.phi=20"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi40|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 15,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi40",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi40",
+        "value": 40
+      },
+      "overrides": [
+        "algorithm.phi=40"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a1p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 16,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a1p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p1|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 17,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p1",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p5|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 18,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p5",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p5",
+        "value": 0.5
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a2p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 19,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a2p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a2p0",
+        "value": 2.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=2.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a4p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 20,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a4p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a4p0",
+        "value": 4.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=4.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p95|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 21,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p95",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p95",
+        "value": 0.95
+      },
+      "overrides": [
+        "algorithm.tmax=0.95"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p75|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 22,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p75",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p75",
+        "value": 0.75
+      },
+      "overrides": [
+        "algorithm.tmax=0.75"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p85|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 23,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p85",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p85",
+        "value": 0.85
+      },
+      "overrides": [
+        "algorithm.tmax=0.85"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p99|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 24,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p99",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p99",
+        "value": 0.99
+      },
+      "overrides": [
+        "algorithm.tmax=0.99"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t1p0|a0.3|fnone|s0|stage=matched_tuning|split=val",
+      "canonical_index": 25,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t1p0",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.tmax=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s0|stage=matched_tuning|split=val",
+      "canonical_index": 26,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax16",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q_max=16",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s0|stage=matched_tuning|split=val",
+      "canonical_index": 27,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax4",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q_max=4",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax6|a0.3|f2|s0|stage=matched_tuning|split=val",
+      "canonical_index": 28,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax6",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax6",
+        "value": 6
+      },
+      "overrides": [
+        "algorithm.q_max=6",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax8|a0.3|f2|s0|stage=matched_tuning|split=val",
+      "canonical_index": 29,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax8",
+      "seed": 0,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q_max=8",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 30,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu1p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.mu=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p001|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 31,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p001",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p001",
+        "value": 0.001
+      },
+      "overrides": [
+        "algorithm.mu=0.001"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p01|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 32,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p01",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p01",
+        "value": 0.01
+      },
+      "overrides": [
+        "algorithm.mu=0.01"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p1|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 33,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p1",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.mu=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu10p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 34,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu10p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu10p0",
+        "value": 10.0
+      },
+      "overrides": [
+        "algorithm.mu=10.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q8|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 35,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q8",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q=8"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q2|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 36,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q2",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q2",
+        "value": 2
+      },
+      "overrides": [
+        "algorithm.q=2"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q4|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 37,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q4",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q=4"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q16|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 38,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q16",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q=16"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q32|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 39,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q32",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q32",
+        "value": 32
+      },
+      "overrides": [
+        "algorithm.q=32"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi10|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 40,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi10",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi10",
+        "value": 10
+      },
+      "overrides": [
+        "algorithm.phi=10"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi1|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 41,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi1",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi1",
+        "value": 1
+      },
+      "overrides": [
+        "algorithm.phi=1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi5|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 42,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi5",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi5",
+        "value": 5
+      },
+      "overrides": [
+        "algorithm.phi=5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi20|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 43,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi20",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi20",
+        "value": 20
+      },
+      "overrides": [
+        "algorithm.phi=20"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi40|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 44,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi40",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi40",
+        "value": 40
+      },
+      "overrides": [
+        "algorithm.phi=40"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a1p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 45,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a1p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p1|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 46,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p1",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p5|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 47,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p5",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p5",
+        "value": 0.5
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a2p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 48,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a2p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a2p0",
+        "value": 2.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=2.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a4p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 49,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a4p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a4p0",
+        "value": 4.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=4.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p95|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 50,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p95",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p95",
+        "value": 0.95
+      },
+      "overrides": [
+        "algorithm.tmax=0.95"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p75|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 51,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p75",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p75",
+        "value": 0.75
+      },
+      "overrides": [
+        "algorithm.tmax=0.75"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p85|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 52,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p85",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p85",
+        "value": 0.85
+      },
+      "overrides": [
+        "algorithm.tmax=0.85"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p99|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 53,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p99",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p99",
+        "value": 0.99
+      },
+      "overrides": [
+        "algorithm.tmax=0.99"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t1p0|a0.3|fnone|s42|stage=matched_tuning|split=val",
+      "canonical_index": 54,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t1p0",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.tmax=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s42|stage=matched_tuning|split=val",
+      "canonical_index": 55,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax16",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q_max=16",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s42|stage=matched_tuning|split=val",
+      "canonical_index": 56,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax4",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q_max=4",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax6|a0.3|f2|s42|stage=matched_tuning|split=val",
+      "canonical_index": 57,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax6",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax6",
+        "value": 6
+      },
+      "overrides": [
+        "algorithm.q_max=6",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax8|a0.3|f2|s42|stage=matched_tuning|split=val",
+      "canonical_index": 58,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax8",
+      "seed": 42,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q_max=8",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 59,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu1p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.mu=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p001|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 60,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p001",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p001",
+        "value": 0.001
+      },
+      "overrides": [
+        "algorithm.mu=0.001"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p01|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 61,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p01",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p01",
+        "value": 0.01
+      },
+      "overrides": [
+        "algorithm.mu=0.01"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p1|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 62,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p1",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.mu=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu10p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 63,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu10p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu10p0",
+        "value": 10.0
+      },
+      "overrides": [
+        "algorithm.mu=10.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q8|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 64,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q8",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q=8"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q2|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 65,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q2",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q2",
+        "value": 2
+      },
+      "overrides": [
+        "algorithm.q=2"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q4|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 66,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q4",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q=4"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q16|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 67,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q16",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q=16"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q32|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 68,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q32",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q32",
+        "value": 32
+      },
+      "overrides": [
+        "algorithm.q=32"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi10|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 69,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi10",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi10",
+        "value": 10
+      },
+      "overrides": [
+        "algorithm.phi=10"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi1|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 70,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi1",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi1",
+        "value": 1
+      },
+      "overrides": [
+        "algorithm.phi=1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi5|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 71,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi5",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi5",
+        "value": 5
+      },
+      "overrides": [
+        "algorithm.phi=5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi20|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 72,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi20",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi20",
+        "value": 20
+      },
+      "overrides": [
+        "algorithm.phi=20"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi40|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 73,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi40",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi40",
+        "value": 40
+      },
+      "overrides": [
+        "algorithm.phi=40"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a1p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 74,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a1p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p1|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 75,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p1",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p5|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 76,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p5",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p5",
+        "value": 0.5
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a2p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 77,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a2p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a2p0",
+        "value": 2.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=2.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a4p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 78,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a4p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a4p0",
+        "value": 4.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=4.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p95|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 79,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p95",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p95",
+        "value": 0.95
+      },
+      "overrides": [
+        "algorithm.tmax=0.95"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p75|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 80,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p75",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p75",
+        "value": 0.75
+      },
+      "overrides": [
+        "algorithm.tmax=0.75"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p85|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 81,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p85",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p85",
+        "value": 0.85
+      },
+      "overrides": [
+        "algorithm.tmax=0.85"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p99|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 82,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p99",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p99",
+        "value": 0.99
+      },
+      "overrides": [
+        "algorithm.tmax=0.99"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t1p0|a0.3|fnone|s123|stage=matched_tuning|split=val",
+      "canonical_index": 83,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t1p0",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.tmax=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s123|stage=matched_tuning|split=val",
+      "canonical_index": 84,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax16",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q_max=16",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s123|stage=matched_tuning|split=val",
+      "canonical_index": 85,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax4",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q_max=4",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax6|a0.3|f2|s123|stage=matched_tuning|split=val",
+      "canonical_index": 86,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax6",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax6",
+        "value": 6
+      },
+      "overrides": [
+        "algorithm.q_max=6",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax8|a0.3|f2|s123|stage=matched_tuning|split=val",
+      "canonical_index": 87,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax8",
+      "seed": 123,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q_max=8",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 88,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu1p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.mu=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p001|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 89,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p001",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p001",
+        "value": 0.001
+      },
+      "overrides": [
+        "algorithm.mu=0.001"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p01|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 90,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p01",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p01",
+        "value": 0.01
+      },
+      "overrides": [
+        "algorithm.mu=0.01"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p1|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 91,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p1",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.mu=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu10p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 92,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu10p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu10p0",
+        "value": 10.0
+      },
+      "overrides": [
+        "algorithm.mu=10.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q8|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 93,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q8",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q=8"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q2|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 94,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q2",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q2",
+        "value": 2
+      },
+      "overrides": [
+        "algorithm.q=2"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q4|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 95,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q4",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q=4"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q16|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 96,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q16",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q=16"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q32|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 97,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q32",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q32",
+        "value": 32
+      },
+      "overrides": [
+        "algorithm.q=32"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi10|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 98,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi10",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi10",
+        "value": 10
+      },
+      "overrides": [
+        "algorithm.phi=10"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi1|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 99,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi1",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi1",
+        "value": 1
+      },
+      "overrides": [
+        "algorithm.phi=1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi5|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 100,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi5",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi5",
+        "value": 5
+      },
+      "overrides": [
+        "algorithm.phi=5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi20|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 101,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi20",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi20",
+        "value": 20
+      },
+      "overrides": [
+        "algorithm.phi=20"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi40|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 102,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi40",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi40",
+        "value": 40
+      },
+      "overrides": [
+        "algorithm.phi=40"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a1p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 103,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a1p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p1|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 104,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p1",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p5|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 105,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p5",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p5",
+        "value": 0.5
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a2p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 106,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a2p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a2p0",
+        "value": 2.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=2.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a4p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 107,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a4p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a4p0",
+        "value": 4.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=4.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p95|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 108,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p95",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p95",
+        "value": 0.95
+      },
+      "overrides": [
+        "algorithm.tmax=0.95"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p75|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 109,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p75",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p75",
+        "value": 0.75
+      },
+      "overrides": [
+        "algorithm.tmax=0.75"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p85|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 110,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p85",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p85",
+        "value": 0.85
+      },
+      "overrides": [
+        "algorithm.tmax=0.85"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p99|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 111,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p99",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p99",
+        "value": 0.99
+      },
+      "overrides": [
+        "algorithm.tmax=0.99"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t1p0|a0.3|fnone|s7|stage=matched_tuning|split=val",
+      "canonical_index": 112,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t1p0",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.tmax=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s7|stage=matched_tuning|split=val",
+      "canonical_index": 113,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax16",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q_max=16",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s7|stage=matched_tuning|split=val",
+      "canonical_index": 114,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax4",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q_max=4",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax6|a0.3|f2|s7|stage=matched_tuning|split=val",
+      "canonical_index": 115,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax6",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax6",
+        "value": 6
+      },
+      "overrides": [
+        "algorithm.q_max=6",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax8|a0.3|f2|s7|stage=matched_tuning|split=val",
+      "canonical_index": 116,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax8",
+      "seed": 7,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q_max=8",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 117,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu1p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.mu=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p001|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 118,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p001",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p001",
+        "value": 0.001
+      },
+      "overrides": [
+        "algorithm.mu=0.001"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p01|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 119,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p01",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p01",
+        "value": 0.01
+      },
+      "overrides": [
+        "algorithm.mu=0.01"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu0p1|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 120,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu0p1",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.mu=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedprox|mu10p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 121,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedprox",
+      "variant": "mu10p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "mu",
+        "variant": "mu10p0",
+        "value": 10.0
+      },
+      "overrides": [
+        "algorithm.mu=10.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q8|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 122,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q8",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q=8"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q2|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 123,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q2",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q2",
+        "value": 2
+      },
+      "overrides": [
+        "algorithm.q=2"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q4|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 124,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q4",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q=4"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q16|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 125,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q16",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q=16"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedpaq|q32|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 126,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedpaq",
+      "variant": "q32",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q",
+        "variant": "q32",
+        "value": 32
+      },
+      "overrides": [
+        "algorithm.q=32"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi10|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 127,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi10",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi10",
+        "value": 10
+      },
+      "overrides": [
+        "algorithm.phi=10"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi1|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 128,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi1",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi1",
+        "value": 1
+      },
+      "overrides": [
+        "algorithm.phi=1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi5|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 129,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi5",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi5",
+        "value": 5
+      },
+      "overrides": [
+        "algorithm.phi=5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi20|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 130,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi20",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi20",
+        "value": 20
+      },
+      "overrides": [
+        "algorithm.phi=20"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|dadaquant|phi40|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 131,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "dadaquant",
+      "variant": "phi40",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "phi",
+        "variant": "phi40",
+        "value": 40
+      },
+      "overrides": [
+        "algorithm.phi=40"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a1p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 132,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a1p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p1|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 133,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p1",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p1",
+        "value": 0.1
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.1"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a0p5|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 134,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a0p5",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a0p5",
+        "value": 0.5
+      },
+      "overrides": [
+        "algorithm.reg_alpha=0.5"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a2p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 135,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a2p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a2p0",
+        "value": 2.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=2.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|feddistill|a4p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 136,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "feddistill",
+      "variant": "a4p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "reg_alpha",
+        "variant": "a4p0",
+        "value": 4.0
+      },
+      "overrides": [
+        "algorithm.reg_alpha=4.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p95|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 137,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p95",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p95",
+        "value": 0.95
+      },
+      "overrides": [
+        "algorithm.tmax=0.95"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p75|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 138,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p75",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p75",
+        "value": 0.75
+      },
+      "overrides": [
+        "algorithm.tmax=0.75"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p85|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 139,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p85",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p85",
+        "value": 0.85
+      },
+      "overrides": [
+        "algorithm.tmax=0.85"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t0p99|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 140,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t0p99",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t0p99",
+        "value": 0.99
+      },
+      "overrides": [
+        "algorithm.tmax=0.99"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedkd|t1p0|a0.3|fnone|s21|stage=matched_tuning|split=val",
+      "canonical_index": 141,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedkd",
+      "variant": "t1p0",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "tmax",
+        "variant": "t1p0",
+        "value": 1.0
+      },
+      "overrides": [
+        "algorithm.tmax=1.0"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s21|stage=matched_tuning|split=val",
+      "canonical_index": 142,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax16",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax16",
+        "value": 16
+      },
+      "overrides": [
+        "algorithm.q_max=16",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s21|stage=matched_tuning|split=val",
+      "canonical_index": 143,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax4",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax4",
+        "value": 4
+      },
+      "overrides": [
+        "algorithm.q_max=4",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax6|a0.3|f2|s21|stage=matched_tuning|split=val",
+      "canonical_index": 144,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax6",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax6",
+        "value": 6
+      },
+      "overrides": [
+        "algorithm.q_max=6",
+        "algorithm.post_process=true"
+      ]
+    },
+    {
+      "cell_id": "cifar10|baseline_tuning_wide|fedmaq|qmax8|a0.3|f2|s21|stage=matched_tuning|split=val",
+      "canonical_index": 145,
+      "stage": "matched_tuning",
+      "ledger": "scientific",
+      "split": "val",
+      "dataset": "cifar10",
+      "model": "mobilenetv2",
+      "heterogeneity": "dirichlet_alpha_0.3",
+      "algorithm": "fedmaq",
+      "variant": "qmax8",
+      "seed": 21,
+      "hyperparameter": {
+        "name": "q_max",
+        "variant": "qmax8",
+        "value": 8
+      },
+      "overrides": [
+        "algorithm.q_max=8",
+        "algorithm.post_process=true"
+      ]
+    }
+  ]
+}

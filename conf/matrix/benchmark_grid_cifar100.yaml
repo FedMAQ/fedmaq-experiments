@@ -21,6 +21,10 @@
 # same table measured under two different regimes. tests/test_simulation.py
 # enforces the flag on every primary-grid file.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: benchmark_grid
 dataset: cifar100
 model: mobilenetv2

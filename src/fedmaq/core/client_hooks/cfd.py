@@ -9,7 +9,8 @@ paper's design); only the tiny upstream delta-reference codes persist, via
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Sized
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -145,8 +146,8 @@ class CFDFit(ClientFitStrategy):
             _, predicted = torch.max(outputs.data, 1)
             return StepResult(
                 loss=loss,
-                correct=(predicted == labels).sum().item(),
-                total=labels.size(0),
+                correct=int((predicted == labels).sum().item()),
+                total=int(labels.size(0)),
             )
 
         ce_result = run_epochs(
@@ -202,7 +203,7 @@ class CFDFit(ClientFitStrategy):
 
         return (
             [codes.astype(np.int64)],
-            len(client.trainloader.dataset),
+            len(cast(Sized, client.trainloader.dataset)),
             {
                 "bytes_uploaded": report.measured_bytes,
                 "payload_bytes": report.payload_bytes,

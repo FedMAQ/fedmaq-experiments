@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Sized
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -122,8 +123,8 @@ class StandardFit(ClientFitStrategy):
             _, predicted = torch.max(outputs.data, 1)
             return StepResult(
                 loss=loss,
-                correct=(predicted == labels).sum().item(),
-                total=labels.size(0),
+                correct=int((predicted == labels).sum().item()),
+                total=int(labels.size(0)),
             )
 
         def on_after_backward() -> None:
@@ -181,7 +182,7 @@ class StandardFit(ClientFitStrategy):
 
         return (
             reconstructed_params,
-            len(client.trainloader.dataset),
+            len(cast(Sized, client.trainloader.dataset)),
             fit_metrics,
         )
 

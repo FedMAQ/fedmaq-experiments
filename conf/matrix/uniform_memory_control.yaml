@@ -36,6 +36,10 @@
 # whatever the run is compared against. Primary-grid partner means the pipeline
 # is on; ablation or formulation-study partner means it is off.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: uniform_memory_control
 dataset: cifar10
 model: mobilenetv2

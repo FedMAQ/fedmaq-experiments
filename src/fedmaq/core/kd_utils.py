@@ -189,7 +189,7 @@ def distill_ensemble_into_global(
     set_model_parameters(student_model, parameters_to_ndarrays(aggregated_parameters))
 
     teachers: list[nn.Module] = []
-    actual_bit_widths: list[int] = [] if teacher_bit_widths is not None else None
+    actual_bit_widths: list[int] | None = [] if teacher_bit_widths is not None else None
     dropped_teachers = 0
     for i, (_, fit_res) in enumerate(results):
         try:
@@ -199,6 +199,7 @@ def distill_ensemble_into_global(
             teacher.to(device)
             teachers.append(teacher)
             if actual_bit_widths is not None:
+                assert teacher_bit_widths is not None
                 actual_bit_widths.append(teacher_bit_widths[i])
         except (ValueError, RuntimeError):
             # F6: an arch/shape mismatch (what set_model_parameters' strict checks

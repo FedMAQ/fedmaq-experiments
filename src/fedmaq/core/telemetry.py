@@ -107,7 +107,7 @@ class TelemetryManager:
         self.enabled = exp_config.get("telemetry", {}).get("wandb_enabled", True)
         self.project = exp_config.get("telemetry", {}).get("project", "fedmaq-experiments")
         self.run_name = exp_config.get("telemetry", {}).get("run_name", None)
-        self.run = None
+        self.run: Any | None = None
 
         self.cumulative_bytes: int = 0
         self.cumulative_upload_bytes: int = 0
@@ -481,7 +481,7 @@ class TelemetryManager:
                 logger.warning(f"WandB finish failed: {exc}. Local logs are complete.")
 
     def _flatten_dict(
-        self, d: dict[str, Any], parent_key: str = "", sep: str = "."
+        self, d: Mapping[str, Any], parent_key: str = "", sep: str = "."
     ) -> dict[str, Any]:
         """Helper to flatten nested dictionaries (such as Hydra Omegaconf)."""
         items: dict[str, Any] = {}

@@ -19,6 +19,10 @@
 # pulled FedAvg forward for a superseded accuracy-floor selector; do not reproduce
 # that order with `--only fedavg`. See docs/agents/execution-model.md.
 phase: formal
+stage: downstream
+protocol_stage: downstream
+split: test
+ledger: scientific
 experiment_group: benchmark_grid
 dataset: cifar10
 model: mobilenetv2

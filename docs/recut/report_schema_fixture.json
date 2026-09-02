@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "report_type": "ci_schema_fixture",
+  "data": {
+    "accuracy_at_budget": {
+      "mean": 0.6,
+      "dispersion": 0.09999999999999998,
+      "n": 3
+    },
+    "cumulative_mb": {
+      "mean": 20.0,
+      "dispersion": 10.0,
+      "n": 3
+    }
+  }
+}
