@@ -45,9 +45,12 @@ COMMON_CSV_FIELDNAMES: list[str] = [
     "test/f1",
     "communication/round_bytes",
     "communication/round_payload_bytes",
+    "communication/round_upload_bytes",
     "communication/round_secondary_bytes",
     "communication/cumulative_bytes",
     "communication/cumulative_mb",
+    "communication/cumulative_upload_bytes",
+    "communication/cumulative_upload_mb",
     "system/round_time_sec",
     "system/cumulative_time_sec",
     "system/client_sim_time_sec",
@@ -78,6 +81,8 @@ class RoundSnapshot:
 
     round_bytes: int = 0
     round_payload_bytes: int = 0
+    round_upload_bytes: int = 0
+    round_download_bytes: int = 0
     #: DAdaQuant's as-published secondary total (#26), summed across clients
     #: that reported one. ``None`` when no client in the round reported it
     #: (every arm except DAdaQuant) -- distinct from a measured 0.
@@ -102,6 +107,7 @@ class TelemetryManager:
         self.run = None
 
         self.cumulative_bytes: int = 0
+        self.cumulative_upload_bytes: int = 0
         self.cumulative_time: float = 0.0
         self.cumulative_client_time: float = 0.0
         self.cumulative_server_time: float = 0.0
@@ -315,6 +321,8 @@ class TelemetryManager:
         self._last_snapshot = RoundSnapshot(
             round_bytes=round_total_bytes,
             round_payload_bytes=round_payload_bytes,
+            round_upload_bytes=round_bytes_uploaded,
+            round_download_bytes=round_bytes_downloaded,
             round_secondary_bytes=round_secondary_bytes if has_secondary_bytes else None,
             round_time=round_time,
             client_time=client_sim_time,
@@ -351,6 +359,15 @@ class TelemetryManager:
             metrics["communication/cumulative_bytes"] = self.cumulative_bytes
         if "communication/cumulative_mb" not in metrics:
             metrics["communication/cumulative_mb"] = cumulative_mb
+
+        round_upload_bytes = metrics.get("communication/round_upload_bytes", 0)
+        self.cumulative_upload_bytes += round_upload_bytes
+        cumulative_upload_mb = (self.cumulative_upload_bytes / 1024.0) / 1024.0
+
+        if "communication/cumulative_upload_bytes" not in metrics:
+            metrics["communication/cumulative_upload_bytes"] = self.cumulative_upload_bytes
+        if "communication/cumulative_upload_mb" not in metrics:
+            metrics["communication/cumulative_upload_mb"] = cumulative_upload_mb
 
         round_time = metrics.get("system/round_time_sec", 0.0)
         self.cumulative_time += round_time

@@ -12,22 +12,23 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-from flwr.app import ArrayRecord, RecordDict
+from flwr.app import ArrayRecord, ConfigRecord, RecordDict
 
 from fedmaq.baselines.quantization import (
     _codes_to_float,
     _require_rng,
-    _serialize_codes,
     _stochastic_round,
     symmetric_levels,
 )
 from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook
+from fedmaq.core.wire_codec import pack_quantized_tensor
 
 logger = logging.getLogger(__name__)
 
 _RESIDUAL_KEY = "fedmaq_postprocess_residual"
 _PREV_CODES_KEY = "fedmaq_postprocess_prev_codes"
+_PREV_Q_KEY = "fedmaq_postprocess_prev_q"
 
 
 class FedMAQPostProcessCompressionHook(CompressionHook):
@@ -70,11 +71,27 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Apply error feedback and diff coding, then return the upload report."""
         residual_record = self._state.get(_RESIDUAL_KEY)
-        residuals = residual_record.to_numpy_ndarrays() if residual_record is not None else None
+        residuals = (
+            residual_record.to_numpy_ndarrays()
+            if isinstance(residual_record, ArrayRecord)
+            else None
+        )
         prev_codes_record = self._state.get(_PREV_CODES_KEY)
         prev_codes_list = (
-            prev_codes_record.to_numpy_ndarrays() if prev_codes_record is not None else None
+            prev_codes_record.to_numpy_ndarrays()
+            if isinstance(prev_codes_record, ArrayRecord)
+            else None
         )
+        prev_q_record = self._state.get(_PREV_Q_KEY)
+        prev_q: int | None = None
+        if isinstance(prev_q_record, ConfigRecord):
+            prev_q = int(prev_q_record.get("q", -1))
+        elif isinstance(prev_q_record, ArrayRecord):
+            prev_q_arr = prev_q_record.to_numpy_ndarrays()
+            if prev_q_arr and prev_q_arr[0].size > 0:
+                prev_q = int(prev_q_arr[0].flat[0])
+
+        q_changed = prev_q is not None and prev_q != self.q
 
         out_deltas: list[np.ndarray] = []
         new_residuals: list[np.ndarray] = []
@@ -112,7 +129,7 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 out_deltas.append(d_fb.astype(np.float32))
                 new_residuals.append(np.zeros_like(d_fb, dtype=np.float32))
                 new_codes.append(zero_codes)
-                zero_payload = _serialize_codes(zero_codes, scale)
+                zero_payload = pack_quantized_tensor(zero_codes, scale=0.0, q=self.q, is_diff=False)
                 payloads.append(zero_payload)
                 continue
 
@@ -135,10 +152,11 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                 if prev_codes_list is not None and i < len(prev_codes_list)
                 else None
             )
-            if prev_codes is not None and prev_codes.shape == codes.shape:
+            if not q_changed and prev_codes is not None and prev_codes.shape == codes.shape:
                 diffed = codes - prev_codes
+                is_diff = True
             else:
-                if prev_codes is not None and not self._logged_shape_mismatch:
+                if prev_codes is not None and not q_changed and not self._logged_shape_mismatch:
                     logger.warning(
                         "FedMAQPostProcessCompressionHook: prev_codes shape %s != "
                         "codes shape %s for tensor %d; falling back to raw codes "
@@ -149,11 +167,13 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
                     )
                     self._logged_shape_mismatch = True
                 diffed = codes
+                is_diff = False
 
-            payload = _serialize_codes(diffed, scale)
+            payload = pack_quantized_tensor(diffed, scale, q=self.q, is_diff=is_diff)
             payloads.append(payload)
 
         self._state[_RESIDUAL_KEY] = ArrayRecord(numpy_ndarrays=new_residuals)
         self._state[_PREV_CODES_KEY] = ArrayRecord(numpy_ndarrays=new_codes)
+        self._state[_PREV_Q_KEY] = ConfigRecord({"q": int(self.q)})
 
         return out_deltas, UploadReport.from_payloads(payloads)

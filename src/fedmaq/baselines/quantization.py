@@ -7,6 +7,8 @@ import numpy as np
 from fedmaq.baselines.dadaquant_coder import dadaquant_pack
 from fedmaq.baselines.transport import UploadReport
 from fedmaq.core.client import CompressionHook
+from fedmaq.core.wire_codec import pack_quantized_tensor
+from fedmaq.core.wire_codec import symmetric_levels as _wire_symmetric_levels
 
 
 def _stochastic_round(scaled: np.ndarray, rng: np.random.Generator) -> np.ndarray:
@@ -36,35 +38,24 @@ def _codes_to_float(codes: np.ndarray, scale: float, levels: int) -> np.ndarray:
 
 def symmetric_levels(q: int) -> int:
     """Return the positive levels for a symmetric ``q``-bit quantizer."""
-    return max(1, (1 << (q - 1)) - 1)
+    return _wire_symmetric_levels(q)
 
 
-def _serialize_codes(codes: np.ndarray, scale: float) -> bytes:
-    """Pack integer codes plus their float32 scale into one transmittable payload.
+def _serialize_codes(
+    codes: np.ndarray,
+    scale: float,
+    q: int | None = None,
+    levels: int | None = None,
+    is_diff: bool = False,
+) -> bytes:
+    """Pack integer codes plus their float32 scale into one transmittable wire payload (#88).
 
-    The scale travels *inside* the payload handed to ``measure_bytes`` rather
-    than as a separate additive convention (see ``transport.py``).
-
-    Codes are stored at a fixed int64 width regardless of the quantizer's
-    nominal bit-width — a deliberate deferral (#25). Narrowing to the nominal
-    width (e.g. int8 for q<=8) would itself lower every quantized arm's total,
-    confounding *this* seam's accounting change with a wire-format change; the
-    fixed width instead means the same "wasted precision" is charged uniformly
-    to every quantized arm, so a comparison between them still isolates the
-    encoder's real entropy-coding effect.
-
-    Consequence, verified empirically, not merely assumed: at low bit-widths
-    (few, highly-skewed code values) zlib recovers well below the int64 padding
-    and measured bytes drop sharply below the old analytic formula. At high
-    bit-widths approaching the tensor's real information content (FedPAQ's
-    configured q=8 among them) zlib cannot fully reclaim the 8x padding, and
-    measured bytes can come out *above* the old formula instead. Both are
-    legitimate outcomes of the same held-constant transport — the seam's job is
-    uniform accounting, not a guaranteed drop — but which one shows up for a
-    given arm/config is data-dependent and must be checked per #25 AC 3, not
-    assumed from this docstring or from synthetic test data.
+    Uses the versioned packed wire codec (see ``fedmaq.core.wire_codec``).
     """
-    return codes.astype(np.int64).tobytes() + np.float32(scale).tobytes()
+    if q is None and levels is None:
+        max_abs = int(np.max(np.abs(codes))) if codes.size > 0 else 1
+        levels = max(1, max_abs)
+    return pack_quantized_tensor(codes, scale, q=q, levels=levels, is_diff=is_diff)
 
 
 def _quantize_deltas(
@@ -72,6 +63,7 @@ def _quantize_deltas(
     scale_fn: Callable[[np.ndarray], float],
     quantize_elem: Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray]],
     on_codes: Callable[[np.ndarray, float], None] | None = None,
+    serialize_elem: Callable[[np.ndarray, float], bytes] | None = None,
 ) -> tuple[list[np.ndarray], list[bytes]]:
     """Shared quantize-and-account skeleton for uniform quantization hooks.
 
@@ -112,7 +104,10 @@ def _quantize_deltas(
         if on_codes is not None:
             on_codes(codes, scale)
 
-        payload = _serialize_codes(codes, scale)
+        if serialize_elem is not None:
+            payload = serialize_elem(codes, scale)
+        else:
+            payload = _serialize_codes(codes, scale)
         payloads.append(payload)
 
     return quantized_deltas, payloads
@@ -174,7 +169,14 @@ class FedPAQCompressionHook(CompressionHook):
 
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Quantize ``deltas`` and return the complete upload-byte report."""
-        quantized_deltas, payloads = _quantize_deltas(deltas, self._scale, self._quantize_elem)
+        quantized_deltas, payloads = _quantize_deltas(
+            deltas,
+            self._scale,
+            self._quantize_elem,
+            serialize_elem=lambda codes, scale: pack_quantized_tensor(
+                codes, scale, q=self.q, is_diff=False
+            ),
+        )
         return quantized_deltas, UploadReport.from_payloads(payloads)
 
 
@@ -238,7 +240,13 @@ class DAdaQuantCompressionHook(CompressionHook):
             secondary_total += len(dadaquant_pack(codes)) + 4
 
         quantized_deltas, payloads = _quantize_deltas(
-            deltas, self._scale, self._quantize_elem, on_codes=_accumulate_secondary
+            deltas,
+            self._scale,
+            self._quantize_elem,
+            on_codes=_accumulate_secondary,
+            serialize_elem=lambda codes, scale: pack_quantized_tensor(
+                codes, scale, levels=self.q, is_diff=False
+            ),
         )
         return quantized_deltas, UploadReport.from_payloads(
             payloads, secondary_bytes=secondary_total

@@ -20,7 +20,7 @@ from fedmaq.core.partitioning import get_client_loader
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BIT_WIDTHS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 16, 32)
+DEFAULT_BIT_WIDTHS: tuple[int, ...] = (2, 3, 4, 5, 6, 7, 8, 16)
 
 GradNormProbe = Callable[[nn.Module, torch.Tensor, torch.Tensor], float]
 

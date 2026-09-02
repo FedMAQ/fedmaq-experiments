@@ -382,7 +382,7 @@ def test_dadaquant_compression_hook():
     # With source-faithful l2 normalization, ||ones(100)||_2 = 10 and every
     # scaled coordinate is 0.4. The pinned value therefore includes the fixed
     # seed's stochastic 0/1 code pattern, measured through the shared encoder.
-    assert report.measured_bytes == 55
+    assert report.measured_bytes == 54
     assert len(compressed_deltas) == 1
     assert compressed_deltas[0].shape == (100,)
 
@@ -930,7 +930,8 @@ def test_fedpaq_compression_hook():
     deltas = [np.array([-2.0, 0.0, 2.0], dtype=np.float32)]
     compressed, report = hook.compress(deltas)
 
-    assert report.measured_bytes == 21
+    assert report.measured_bytes == 27
+    assert report.payload_bytes == 19
     assert len(compressed) == 1
     np.testing.assert_allclose(
         compressed[0], np.array([-2.0043972, 0.0, 2.0043972], dtype=np.float32)
@@ -1153,8 +1154,8 @@ def test_fedmaq_strategy_allocation():
     assert len(instructions) == 2
     q_dict = {inst.cid: fit_ins.config["q"] for inst, fit_ins in instructions}
 
-    assert q_dict["0"] == 1
-    assert q_dict["1"] >= 1
+    assert q_dict["0"] == 2
+    assert q_dict["1"] >= 2
 
 
 def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
@@ -1777,11 +1778,11 @@ def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
     assert q == 16
     assert q in DEFAULT_BIT_WIDTHS
 
-    # A generous memory/c_unit ratio should be able to reach the 32-bit escape tier
+    # A generous memory/c_unit ratio should reach the maximum 16-bit tier
     # once snapped down to the nearest permissible value <= the raw capacity ratio.
     q_capped = compute_fedmaq_q_k_t(
         c_k=40.0,
-        c_unit=1.0,  # raw ratio = 40 -> nearest permissible value <= 40 is 32
+        c_unit=1.0,  # raw ratio = 40 -> nearest permissible value <= 40 is 16
         g_k=0.5,
         g_max=1.0,
         n_k=100,
@@ -1790,7 +1791,7 @@ def test_fedmaq_q_k_t_snaps_to_permissible_bit_widths():
         q_min=1,
         q_max=32,
     )
-    assert q_capped == 32
+    assert q_capped == 16
 
     for formulation in range(5):
         result = compute_fedmaq_q_k_t(

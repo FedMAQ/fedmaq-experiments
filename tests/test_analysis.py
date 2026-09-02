@@ -1931,7 +1931,6 @@ def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
         ("qmax6", 0.52),
         ("qmax8", 0.53),
         ("qmax16", 0.54),
-        ("qmax32", 0.55),
     ):
         seeds = (0, 42, 123, 7, 21) if variant == "qmax16" else (0, 42, 123)
         runs.extend(
@@ -1948,13 +1947,13 @@ def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
 
     report = baseline_tuning_margin(runs, experiment_group=BASELINE_TUNING_WIDE_GROUP)
     cell = report["baselines"]["fedmaq"]
-
     assert cell["knob"] == "q_max"
     assert cell["paper_default_variant"] is None
     assert "no source-paper default" in cell["paper_default_note"]
     assert cell["shipped_adopted_variant"] == "qmax16"
-    assert cell["adopted_variant"] == "qmax32"
-    assert [entry["value"] for entry in cell["table"]] == [4, 6, 8, 16, 32]
+    assert cell["adopted_variant"] is None
+    assert cell["retained_shipped_value"] is True
+    assert [entry["value"] for entry in cell["table"]] == [4, 6, 8, 16]
     assert sum(entry["is_adopted"] for entry in cell["table"]) == 1
     assert len(cell["curves"]) == 5
 
@@ -1996,7 +1995,7 @@ def test_wide_baseline_tuning_report_withholds_partial_verdict(tmp_path):
 
     assert "error" in cell
     assert "adopted_variant" not in cell
-    assert cell["missing_variants"] == ["qmax6", "qmax8", "qmax32"]
+    assert cell["missing_variants"] == ["qmax6", "qmax8"]
 
 
 def test_run_directory_parser_round_trips_the_variant(tmp_path):

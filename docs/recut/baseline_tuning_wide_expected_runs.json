@@ -130,9 +130,6 @@
         "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s21",
         "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s42",
         "cifar10|baseline_tuning_wide|fedmaq|qmax16|a0.3|f2|s7",
-        "cifar10|baseline_tuning_wide|fedmaq|qmax32|a0.3|f2|s0",
-        "cifar10|baseline_tuning_wide|fedmaq|qmax32|a0.3|f2|s123",
-        "cifar10|baseline_tuning_wide|fedmaq|qmax32|a0.3|f2|s42",
         "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s0",
         "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s123",
         "cifar10|baseline_tuning_wide|fedmaq|qmax4|a0.3|f2|s42",
@@ -177,7 +174,7 @@
         "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s42",
         "cifar10|baseline_tuning_wide|fedprox|mu1p0|a0.3|fnone|s7"
       ],
-      "count": 102
+      "count": 99
     }
   }
 }

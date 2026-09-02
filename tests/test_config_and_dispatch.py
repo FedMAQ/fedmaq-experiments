@@ -640,10 +640,11 @@ def test_wide_baseline_tuning_adds_fedmaq_and_four_challengers():
         "fedkd",
         "fedmaq",
     }
-    assert all(len(runs) == 5 for runs in by_alg.values())
+    assert all(len(runs) == 5 for alg, runs in by_alg.items() if alg != "fedmaq")
+    assert len(by_alg["fedmaq"]) == 4
     assert (
         sum(len(run.get("seeds") or matrix["seeds"]) for runs in by_alg.values() for run in runs)
-        == 102
+        == 99
     )
 
     for algorithm, runs in by_alg.items():
@@ -655,13 +656,12 @@ def test_wide_baseline_tuning_adds_fedmaq_and_four_challengers():
         )
         post_process = _post_process_overrides({"runs": runs})
         if algorithm == "fedmaq":
-            assert len(post_process) == 5
+            assert len(post_process) == 4
             assert {
                 "algorithm.q_max=4",
                 "algorithm.q_max=6",
                 "algorithm.q_max=8",
                 "algorithm.q_max=16",
-                "algorithm.q_max=32",
             } <= {
                 override
                 for run in runs

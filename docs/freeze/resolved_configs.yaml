@@ -11,9 +11,8 @@
 # arm, not the run.
 
 fedmaq:
-  config_sha256: 36c6c914d00cacba411ed75bb5a66843f8f730fab7ad88a01a96de859ec2d405
+  config_sha256: 2fa4746021381397eaed9f4c2c73868a4fb0392091635134a5aa5dd1a6bf8852
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -22,7 +21,6 @@ fedmaq:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -42,7 +40,7 @@ fedmaq:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: true
   server_compute_speed: 5000.0
   server_kd_lr: 0.01
@@ -53,9 +51,8 @@ fedmaq:
   temperature: 1.0
 
 fedmaq_no_data:
-  config_sha256: 1a6acd3d10eca9c604719828c2e26f6994c5ea638e110af2658b19416d4061ff
+  config_sha256: 4b4314e39323c4b817cc1f2fead97cc3130fbcaadc8b9c362414b6ce91389c1c
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -64,7 +61,6 @@ fedmaq_no_data:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -84,7 +80,7 @@ fedmaq_no_data:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: true
   server_compute_speed: 5000.0
   server_kd_lr: 0.01
@@ -95,9 +91,8 @@ fedmaq_no_data:
   temperature: 1.0
 
 fedmaq_no_kd:
-  config_sha256: 8ba5375c8c18c49f00863f4c9fbccced9bcfc3c7525b790946e15b352265d284
+  config_sha256: e0b33407202ba15d800db52138c7e37d32cda162fdd9399d38cbc03118447cc8
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -106,7 +101,6 @@ fedmaq_no_kd:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -126,7 +120,7 @@ fedmaq_no_kd:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: true
   server_compute_speed: 5000.0
   server_kd_lr: 0.01
@@ -137,9 +131,8 @@ fedmaq_no_kd:
   temperature: 1.0
 
 fedmaq_no_refinements:
-  config_sha256: 36c6c914d00cacba411ed75bb5a66843f8f730fab7ad88a01a96de859ec2d405
+  config_sha256: 2fa4746021381397eaed9f4c2c73868a4fb0392091635134a5aa5dd1a6bf8852
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -148,7 +141,6 @@ fedmaq_no_refinements:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -168,7 +160,7 @@ fedmaq_no_refinements:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: true
   server_compute_speed: 5000.0
   server_kd_lr: 0.01
@@ -179,9 +171,8 @@ fedmaq_no_refinements:
   temperature: 1.0
 
 fedmaq_no_resource:
-  config_sha256: ad46f50645169cf2cba3ebef3812801fc12c74ff2f84471b69ab59ab35d30ad8
+  config_sha256: 9d61439ca0d63979943bbdac732acfd0521c0015b3ba2c9a7fcba958f8296118
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -190,7 +181,6 @@ fedmaq_no_resource:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -210,7 +200,7 @@ fedmaq_no_resource:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: false
   server_compute_speed: 5000.0
   server_kd_lr: 0.01
@@ -221,9 +211,8 @@ fedmaq_no_resource:
   temperature: 1.0
 
 fedmaq_no_state:
-  config_sha256: 6ae5c2de22201f7e22c5ebf9e0f6cdcf3144f2e4eb1f136aff9dcbc79e3e2c1c
+  config_sha256: 5e14d9b0abec00e8a1916951680e29603ed3e26abaf99b5281d06a2fe1f86375
   bit_widths:
-  - 1
   - 2
   - 3
   - 4
@@ -232,7 +221,6 @@ fedmaq_no_state:
   - 7
   - 8
   - 16
-  - 32
   c_unit: 512.0
   client_kd_reg: false
   ema_decay: 0.7
@@ -252,7 +240,7 @@ fedmaq_no_state:
   post_process: false
   precision_weight: 1.0
   q_max: 16
-  q_min: 1
+  q_min: 2
   resource_aware: true
   server_compute_speed: 5000.0
   server_kd_lr: 0.01

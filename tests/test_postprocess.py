@@ -5,7 +5,7 @@ import pytest
 from flwr.app import RecordDict
 
 from fedmaq.baselines import FedMAQPostProcessCompressionHook, get_compressor_hook
-from fedmaq.baselines.quantization import FedPAQCompressionHook, _serialize_codes
+from fedmaq.baselines.quantization import FedPAQCompressionHook
 from fedmaq.baselines.transport import measure_bytes
 
 
@@ -67,7 +67,7 @@ def test_state_persists_and_diffing_engages_on_second_call():
     state = RecordDict()
     hook = FedMAQPostProcessCompressionHook(q=8, state=state, rng=np.random.default_rng(1))
     rng = np.random.default_rng(1)
-    delta = rng.normal(size=(16,)).astype(np.float32)
+    delta = rng.normal(size=(256,)).astype(np.float32)
 
     assert state.get("fedmaq_postprocess_residual") is None
     hook.compress([delta.copy()])
@@ -123,6 +123,8 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
 
     from flwr.app import ArrayRecord
 
+    from fedmaq.core.wire_codec import pack_quantized_tensor
+
     seeded_state = RecordDict()
     seeded_state["fedmaq_postprocess_prev_codes"] = ArrayRecord(numpy_ndarrays=[raw_codes.copy()])
     seeded_hook = FedMAQPostProcessCompressionHook(
@@ -132,7 +134,9 @@ def test_diff_coding_reflects_codes_minus_prev_codes():
 
     scale = float(np.max(np.abs(delta)))
     all_zero_codes = np.zeros_like(raw_codes)
-    assert report_diffed.measured_bytes == measure_bytes(_serialize_codes(all_zero_codes, scale))
+    assert report_diffed.measured_bytes == measure_bytes(
+        pack_quantized_tensor(all_zero_codes, scale, q=8, is_diff=True)
+    )
     assert report_diffed.measured_bytes < report_raw.measured_bytes
 
 
@@ -184,6 +188,8 @@ def test_empty_and_all_zero_tensor_pass_through():
 
     Neither branch reaches the stochastic-rounding path, so no rng is needed.
     """
+    from fedmaq.core.wire_codec import pack_quantized_tensor
+
     hook = FedMAQPostProcessCompressionHook(q=8)
 
     empty = np.zeros((0,), dtype=np.float32)
@@ -192,9 +198,9 @@ def test_empty_and_all_zero_tensor_pass_through():
 
     assert out[0].shape == (0,)
     np.testing.assert_allclose(out[1], zero)
-    # Only the all-zero tensor contributes (empty is free); its codes+scale
-    # payload is still routed through measure_bytes, not a flat constant (#25).
-    expected = measure_bytes(_serialize_codes(np.zeros(5, dtype=np.int64), 0.0))
+    expected = measure_bytes(
+        pack_quantized_tensor(np.zeros(5, dtype=np.int64), 0.0, q=8, is_diff=False)
+    )
     assert report.measured_bytes == expected
 
 
