@@ -94,10 +94,7 @@ def test_control_messages_non_finite_fields_raise() -> None:
         )
 
     with pytest.raises(ValueError, match="non-negative"):
-        ClientPreflightMessage(
-            partition_id=0, grad_norm=-1.0, dataset_size=10, capacity_mb=2048.0
-        )
+        ClientPreflightMessage(partition_id=0, grad_norm=-1.0, dataset_size=10, capacity_mb=2048.0)
 
     with pytest.raises(ValueError, match="assigned_q"):
         ServerQuantAssignmentMessage(partition_id=0, assigned_q=0)
-

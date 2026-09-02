@@ -11,7 +11,7 @@ dataset: cifar10
 model: mobilenetv2
 total_rounds: 100
 client_gpus: 0.5
-seeds: [0, 42, 123]
+seeds: [0, 42, 123, 7, 21]
 heterogeneities:
   - dirichlet_alpha_0.3
 
@@ -57,7 +57,6 @@ runs:
   - alg: fedprox
     label: fedprox-mu1.0-ref
     variant: mu1p0
-    seeds: [0, 42, 123, 7, 21]
     overrides: [algorithm.mu=1.0]
   - alg: fedprox
     label: fedprox-mu0.001
@@ -79,7 +78,6 @@ runs:
   - alg: fedpaq
     label: fedpaq-q8-ref
     variant: q8
-    seeds: [0, 42, 123, 7, 21]
     overrides: [algorithm.q=8]
   - alg: fedpaq
     label: fedpaq-q2
@@ -101,7 +99,6 @@ runs:
   - alg: dadaquant
     label: dadaquant-phi10-ref
     variant: phi10
-    seeds: [0, 42, 123, 7, 21]
     overrides: [algorithm.phi=10]
   - alg: dadaquant
     label: dadaquant-phi1
@@ -123,7 +120,6 @@ runs:
   - alg: feddistill
     label: feddistill-alpha1.0-ref
     variant: a1p0
-    seeds: [0, 42, 123, 7, 21]
     overrides: [algorithm.reg_alpha=1.0]
   - alg: feddistill
     label: feddistill-alpha0.1
@@ -145,7 +141,6 @@ runs:
   - alg: fedkd
     label: fedkd-tmax0.95-ref
     variant: t0p95
-    seeds: [0, 42, 123, 7, 21]
     overrides: [algorithm.tmax=0.95]
   - alg: fedkd
     label: fedkd-tmax0.75
@@ -167,7 +162,6 @@ runs:
   - alg: fedmaq
     label: fedmaq-qmax16-ref
     variant: qmax16
-    seeds: [0, 42, 123, 7, 21]
     overrides:
       - algorithm.q_max=16
       - algorithm.post_process=true

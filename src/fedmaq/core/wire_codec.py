@@ -183,38 +183,27 @@ def pack_quantized_tensor(
     if is_custom:
         flags |= FLAG_CUSTOM_LEVELS
 
-    if not is_diff:
-        max_val = 2 * L
-        bit_width = (
-            nominal_q if (nominal_q >= 2 and not is_custom) else required_bit_width(max_val)
-        )
-        if num_elements > 0:
-            min_code = int(np.min(codes_flat))
-            max_code = int(np.max(codes_flat))
-            if min_code < -L or max_code > L:
-                raise ValueError(
-                    f"Code values [{min_code}, {max_code}] exceed alphabet bound "
-                    f"[-{L}, {L}] for symmetric quantization (L={L})."
-                )
-            unsigned_codes = (codes_flat + L).astype(np.int64)
-        else:
-            unsigned_codes = np.zeros(0, dtype=np.int64)
+    multiplier = 2 if is_diff else 1
+    bound = multiplier * L
+    max_val = 2 * bound
+    if nominal_q >= 2 and not is_custom:
+        bit_width = (nominal_q + 1) if is_diff else nominal_q
     else:
-        max_val = 4 * L
-        bit_width = (
-            (nominal_q + 1) if (nominal_q >= 2 and not is_custom) else required_bit_width(max_val)
-        )
-        if num_elements > 0:
-            min_code = int(np.min(codes_flat))
-            max_code = int(np.max(codes_flat))
-            if min_code < -2 * L or max_code > 2 * L:
-                raise ValueError(
-                    f"Differential code values [{min_code}, {max_code}] exceed alphabet bound "
-                    f"[-{2 * L}, {2 * L}] (L={L})."
-                )
-            unsigned_codes = (codes_flat + 2 * L).astype(np.int64)
-        else:
-            unsigned_codes = np.zeros(0, dtype=np.int64)
+        bit_width = required_bit_width(max_val)
+
+    if num_elements > 0:
+        min_code = int(np.min(codes_flat))
+        max_code = int(np.max(codes_flat))
+        if min_code < -bound or max_code > bound:
+            prefix = "Differential code" if is_diff else "Code"
+            suffix = f" for symmetric quantization (L={L})." if not is_diff else f" (L={L})."
+            raise ValueError(
+                f"{prefix} values [{min_code}, {max_code}] exceed alphabet bound "
+                f"[-{bound}, {bound}]{suffix}"
+            )
+        unsigned_codes = (codes_flat + bound).astype(np.int64)
+    else:
+        unsigned_codes = np.zeros(0, dtype=np.int64)
 
     header = HEADER_STRUCT.pack(
         WIRE_MAGIC,
@@ -292,20 +281,12 @@ def unpack_quantized_tensor(buf: bytes) -> WireTensor:
 
     unsigned_codes = unpack_bits(buf[HEADER_SIZE:], num_elements, bit_width)
 
-    if not is_diff:
-        codes = unsigned_codes - L
-        if nominal_q > 0:
-            if np.any(unsigned_codes > 2 * L):
-                raise ValueError(
-                    f"Decoded unsigned code exceeds alphabet limit {2 * L} for q={nominal_q}"
-                )
-    else:
-        codes = unsigned_codes - 2 * L
-        if nominal_q > 0:
-            if np.any(unsigned_codes > 4 * L):
-                raise ValueError(
-                    f"Decoded differential code exceeds alphabet limit {4 * L} for q={nominal_q}"
-                )
+    multiplier = 2 if is_diff else 1
+    bound = multiplier * L
+    codes = unsigned_codes - bound
+    if nominal_q > 0 and np.any(unsigned_codes > 2 * bound):
+        kind = "differential code" if is_diff else "unsigned code"
+        raise ValueError(f"Decoded {kind} exceeds alphabet limit {2 * bound} for q={nominal_q}")
 
     return WireTensor(
         codes=codes,

@@ -644,15 +644,15 @@ def test_wide_baseline_tuning_adds_fedmaq_and_four_challengers():
     assert len(by_alg["fedmaq"]) == 4
     assert (
         sum(len(run.get("seeds") or matrix["seeds"]) for runs in by_alg.values() for run in runs)
-        == 99
+        == 145
     )
 
     for algorithm, runs in by_alg.items():
         references = [run for run in runs if run["label"].endswith("-ref")]
         assert len(references) == 1
-        assert len(references[0]["seeds"]) == 5
+        assert len(references[0].get("seeds") or matrix["seeds"]) == 5
         assert all(
-            len(run.get("seeds") or matrix["seeds"]) == 3 for run in runs if run not in references
+            len(run.get("seeds") or matrix["seeds"]) == 5 for run in runs if run not in references
         )
         post_process = _post_process_overrides({"runs": runs})
         if algorithm == "fedmaq":
@@ -823,8 +823,12 @@ def test_run_completion_keys_on_the_final_round_checkpoint(tmp_path):
 
     assert not is_run_complete(tmp_path)
     # Written before round 1, so it must not read as completion.
-    (tmp_path / MANIFEST_FILENAME).write_text("{}", encoding="utf-8")
-    (tmp_path / "experiment_log.csv").write_text("round\n", encoding="utf-8")
+    (tmp_path / MANIFEST_FILENAME).write_text(
+        json.dumps({"run": {"total_rounds": 1}}), encoding="utf-8"
+    )
+    (tmp_path / "experiment_log.csv").write_text(
+        "round,train/loss,communication/cumulative_mb\n1,0.5,1.0\n", encoding="utf-8"
+    )
     assert not is_run_complete(tmp_path)
 
     import torch
@@ -862,6 +866,7 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     sys.path.insert(0, str(Path(CONF_DIR).parent))
     import scripts.run_matrix as run_matrix
     from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
+    from fedmaq.core.manifest import MANIFEST_FILENAME
     from scripts.common import SWEEP_STATUS_FILENAME
 
     matrix_dir = tmp_path / "conf" / "matrix"
@@ -908,6 +913,24 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     done = group_dir / "fedprox" / "dirichlet_alpha_0.1" / "seed_0"
     done.mkdir(parents=True, exist_ok=True)
     torch.save({"weight": torch.ones(1)}, done / FINAL_MODEL_FILENAME)
+    (done / MANIFEST_FILENAME).write_text(
+        json.dumps(
+            {
+                "run": {
+                    "dataset": "cifar10",
+                    "algorithm": "fedprox",
+                    "alpha": 0.1,
+                    "seed": 0,
+                    "total_rounds": 1,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (done / "experiment_log.csv").write_text(
+        "round,train/loss,communication/cumulative_mb\n1,0.5,1.0\n",
+        encoding="utf-8",
+    )
 
     dispatched.clear()
     monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "probe", "--skip_completed"])

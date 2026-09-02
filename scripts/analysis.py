@@ -95,6 +95,10 @@ class RunRecord:
     # default keeps hand-built historical fixtures usable; discovery derives the
     # value from the manifest's explicit protocol registration.
     promotable: bool = False
+    # Versioned split identity: selection stages require "val" / "validation";
+    # test split is strictly forbidden from entering selection functions.
+    split: str = "val"
+    wire_protocol: str = "packed_wire_v1"
 
     def __post_init__(self) -> None:
         # A record built without an explicit config name (a hand-constructed
@@ -156,6 +160,16 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
             manifest = {}
         algorithm = cfg["algorithm"]["name"]
         parsed_path = parse_run_directory(job_dir, experiments_root)
+        split = (
+            manifest.get("run", {}).get("split")
+            or manifest.get("protocol", {}).get("split")
+            or cfg.get("split", "val")
+        )
+        wire_protocol = (
+            manifest.get("run", {}).get("wire_protocol")
+            or manifest.get("protocol", {}).get("wire_protocol")
+            or "packed_wire_v1"
+        )
         runs.append(
             RunRecord(
                 job_dir=job_dir,
@@ -176,6 +190,8 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 post_process=bool(cfg["algorithm"].get("post_process", False)),
                 variant=parsed_path.variant if parsed_path else "",
                 promotable=is_promotable_manifest(manifest),
+                split=split,
+                wire_protocol=wire_protocol,
             )
         )
     return runs
@@ -189,7 +205,6 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
 ABLATION_GROUP = "ablation"
 
 # The two groups the formulation study reads across. Both are required, and they
-# are not interchangeable: §4.3.6 evaluates the five candidate formulations
 # pipeline-free (``formulation_study``) against an accuracy floor defined from the
 # uncompressed FedAvg rows of the confirmatory grid (``benchmark_grid``).
 #
@@ -629,6 +644,7 @@ def baseline_tuning_margin(
     repository that the pre-registration tag freezes.
     """
     runs = promotable_runs(runs)
+    _check_validation_split_only(runs, "baseline_tuning_margin")
     if reference_variants is None:
         refs = (
             BASELINE_TUNING_WIDE_REFERENCE_VARIANTS
@@ -657,8 +673,38 @@ def baseline_tuning_margin(
     )
 
     baselines: dict[str, dict] = {}
+    is_wide = experiment_group == BASELINE_TUNING_WIDE_GROUP
+
     for algorithm, ref_variant in sorted(refs.items()):
         members = [r for r in scoped if r.algorithm == algorithm]
+        spec = specs.get(algorithm, {})
+        values_by_variant = spec.get("values", {})
+        expected_variants = list(values_by_variant)
+        paper_variant = spec.get("paper_default_variant")
+        adopted_variant = spec.get("adopted_variant")
+
+        runs_by_variant: dict[str, list[RunRecord]] = {}
+        for r in members:
+            runs_by_variant.setdefault(r.variant, []).append(r)
+
+        variants = expected_variants + sorted(set(runs_by_variant) - set(expected_variants))
+
+        if is_wide and expected_variants:
+            expected_counts = {variant: 5 for variant in expected_variants}
+        elif expected_variants:
+            expected_counts = {
+                variant: (5 if variant == ref_variant else 3) for variant in expected_variants
+            }
+        else:
+            expected_counts = {}
+
+        invalid_counts = {
+            variant: len(runs_by_variant.get(variant, []))
+            for variant, expected_count in expected_counts.items()
+            if len(runs_by_variant.get(variant, [])) != expected_count
+        }
+
+        # Collect raw accuracy and curve points
         cells: dict[str, list[float]] = {}
         curves: dict[int, list[dict]] = {}
         for r in members:
@@ -668,30 +714,8 @@ def baseline_tuning_margin(
             curves.setdefault(r.seed, []).append(
                 {
                     "variant": r.variant,
-                    "value": specs.get(algorithm, {}).get("values", {}).get(r.variant),
+                    "value": values_by_variant.get(r.variant),
                     "accuracy_r100": accuracy,
-                }
-            )
-
-        spec = specs.get(algorithm, {})
-        values_by_variant = spec.get("values", {})
-        expected_variants = list(values_by_variant)
-        variants = expected_variants + sorted(set(cells) - set(expected_variants))
-        paper_variant = spec.get("paper_default_variant")
-        adopted_variant = spec.get("adopted_variant")
-
-        table = []
-        for variant in variants:
-            values = cells.get(variant, [])
-            table.append(
-                {
-                    "variant": variant,
-                    "value": values_by_variant.get(variant),
-                    "summary": summary(values),
-                    "seeds": _curve_seeds(curves, variant),
-                    "is_reference": variant == ref_variant,
-                    "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant == adopted_variant,
                 }
             )
 
@@ -703,8 +727,9 @@ def baseline_tuning_margin(
             "shipped_adopted_variant": adopted_variant,
             "adopted_value": values_by_variant.get(adopted_variant),
             "expected_variants": expected_variants,
-            "missing_variants": [variant for variant in expected_variants if variant not in cells],
-            "table": table,
+            "missing_variants": [
+                variant for variant in expected_variants if variant not in runs_by_variant
+            ],
             "curves": [
                 {
                     "seed": seed,
@@ -720,74 +745,241 @@ def baseline_tuning_margin(
             ],
         }
 
-        if expected_variants:
-            expected_counts = {
-                variant: (5 if variant == ref_variant else 3) for variant in expected_variants
+        if invalid_counts:
+            error_msg = (
+                f"incomplete widened tuning cells; expected all variants to have n=5 paired "
+                f"seeds, got {invalid_counts}. No verdict is issued."
+                if is_wide
+                else (
+                    "incomplete widened tuning cells; expected reference n=5 and challenger "
+                    f"n=3, got {invalid_counts}. No verdict is issued."
+                )
+            )
+            table = [
+                {
+                    "variant": variant,
+                    "value": values_by_variant.get(variant),
+                    "summary": summary(cells.get(variant, [])),
+                    "seeds": _curve_seeds(curves, variant),
+                    "is_reference": variant == ref_variant,
+                    "is_paper_default": variant == paper_variant,
+                    "is_adopted": variant == adopted_variant,
+                }
+                for variant in variants
+            ]
+            baselines[algorithm] = {
+                **metadata,
+                "table": table,
+                "reference_variant": ref_variant,
+                "error": error_msg,
             }
-            invalid_counts = {
-                variant: len(cells.get(variant, []))
-                for variant, expected_count in expected_counts.items()
-                if len(cells.get(variant, [])) != expected_count
+            continue
+
+        ref_runs = runs_by_variant.get(ref_variant, [])
+        if len(ref_runs) < 3:
+            table = [
+                {
+                    "variant": variant,
+                    "value": values_by_variant.get(variant),
+                    "summary": summary(cells.get(variant, [])),
+                    "seeds": _curve_seeds(curves, variant),
+                    "is_reference": variant == ref_variant,
+                    "is_paper_default": variant == paper_variant,
+                    "is_adopted": variant == adopted_variant,
+                }
+                for variant in variants
+            ]
+            baselines[algorithm] = {
+                **metadata,
+                "table": table,
+                "reference_variant": ref_variant,
+                "error": (
+                    f"reference cell '{ref_variant}' has {len(ref_runs)} run(s); "
+                    "sigma needs at least 3. No verdict is issued -- a margin "
+                    "estimated from fewer runs would decide two adoptions."
+                ),
+                "variants_present": sorted(runs_by_variant),
             }
-            if invalid_counts:
+            continue
+
+        if is_wide:
+            # Common in-support observed-byte budget scoring per paired seed (§4.3.2, N26/N30)
+            variant_by_seed: dict[str, dict[int, RunRecord]] = {
+                v: {r.seed: r for r in v_runs} for v, v_runs in runs_by_variant.items()
+            }
+            common_seeds = sorted(
+                set.intersection(*(set(by_s.keys()) for by_s in variant_by_seed.values()))
+            )
+
+            scored_by_variant: dict[str, list[float]] = {v: [] for v in variants}
+            terminal_mb_by_variant: dict[str, list[float]] = {v: [] for v in variants}
+            budget_by_seed: dict[int, float] = {}
+            unscorable: bool = False
+
+            for seed in common_seeds:
+                terminal_mbs = {
+                    v: float(
+                        frame_for(variant_by_seed[v][seed])["communication/cumulative_mb"].iloc[-1]
+                    )
+                    for v in variants
+                }
+                b_star = min(terminal_mbs.values())
+                budget_by_seed[seed] = b_star
+
+                for v in variants:
+                    run_v = variant_by_seed[v][seed]
+                    df_v = frame_for(run_v)
+                    terminal_mb_by_variant[v].append(terminal_mbs[v])
+                    acc_interpolated = interpolate_accuracy_at_budget(df_v, b_star)
+                    if acc_interpolated is None:
+                        unscorable = True
+                        break
+                    scored_by_variant[v].append(acc_interpolated)
+                if unscorable:
+                    break
+
+            if unscorable:
+                table = [
+                    {
+                        "variant": variant,
+                        "value": values_by_variant.get(variant),
+                        "summary": summary(cells.get(variant, [])),
+                        "seeds": _curve_seeds(curves, variant),
+                        "is_reference": variant == ref_variant,
+                        "is_paper_default": variant == paper_variant,
+                        "is_adopted": variant == adopted_variant,
+                    }
+                    for variant in variants
+                ]
                 baselines[algorithm] = {
                     **metadata,
+                    "table": table,
                     "reference_variant": ref_variant,
                     "error": (
-                        "incomplete widened tuning cells; expected reference n=5 and "
-                        f"challenger n=3, got {invalid_counts}. No verdict is issued."
+                        "out of support during linear interpolation across paired seeds; "
+                        "no extrapolation is permitted under §4.3.2. No verdict is issued."
                     ),
                 }
                 continue
 
-        ref_accs = cells.get(ref_variant, [])
-        if len(ref_accs) < 3:
+            ref_scores = scored_by_variant[ref_variant]
+            ref_mean = statistics.fmean(ref_scores)
+            sigma = statistics.stdev(ref_scores)
+            margin = math.sqrt(2.0) * sigma
+
+            challengers: dict[str, dict] = {}
+            for variant in variants:
+                if variant == ref_variant:
+                    continue
+                v_scores = scored_by_variant[variant]
+                c_mean = statistics.fmean(v_scores)
+                delta = c_mean - ref_mean
+                challengers[variant] = {
+                    "summary": summary(v_scores),
+                    "seeds": common_seeds,
+                    "delta": delta,
+                    "clears_margin": delta > margin,
+                    "mean_terminal_mb": statistics.fmean(terminal_mb_by_variant[variant]),
+                }
+
+            clearing = [v for v, c in challengers.items() if c["clears_margin"]]
+            adopted = (
+                max(
+                    clearing,
+                    key=lambda v: (
+                        challengers[v]["delta"],
+                        -challengers[v].get("mean_terminal_mb", 0.0),
+                        v,
+                    ),
+                )
+                if clearing
+                else None
+            )
+
+            table = [
+                {
+                    "variant": variant,
+                    "value": values_by_variant.get(variant),
+                    "summary": summary(scored_by_variant[variant]),
+                    "seeds": common_seeds,
+                    "is_reference": variant == ref_variant,
+                    "is_paper_default": variant == paper_variant,
+                    "is_adopted": variant
+                    == (
+                        adopted
+                        if adopted is not None
+                        else (ref_variant if variant == ref_variant else False)
+                    ),
+                }
+                for variant in variants
+            ]
+
             baselines[algorithm] = {
                 **metadata,
+                "table": table,
                 "reference_variant": ref_variant,
-                "error": (
-                    f"reference cell '{ref_variant}' has {len(ref_accs)} run(s); "
-                    "sigma needs at least 3. No verdict is issued -- a margin "
-                    "estimated from fewer runs would decide two adoptions."
-                ),
-                "variants_present": sorted(cells),
+                "reference": summary(ref_scores),
+                "margin": margin,
+                "common_budgets_mb": budget_by_seed,
+                "challengers": challengers,
+                "adopted_variant": adopted,
+                "retained_shipped_value": adopted is None,
             }
-            continue
+        else:
+            # Historical R=100 scoring
+            ref_accs = cells.get(ref_variant, [])
+            ref_mean = statistics.fmean(ref_accs)
+            sigma = statistics.stdev(ref_accs)
+            margin = math.sqrt(2.0) * sigma
+            challengers = {}
+            for variant in sorted(cells):
+                if variant == ref_variant:
+                    continue
+                mean = statistics.fmean(cells[variant])
+                delta = mean - ref_mean
+                challengers[variant] = {
+                    "summary": summary(cells[variant]),
+                    "seeds": _curve_seeds(curves, variant),
+                    "delta": delta,
+                    "clears_margin": delta > margin,
+                }
 
-        ref_mean = statistics.fmean(ref_accs)
-        sigma = statistics.stdev(ref_accs)
-        margin = math.sqrt(2.0) * sigma
-        challengers: dict[str, dict] = {}
-        for variant in sorted(cells):
-            if variant == ref_variant:
-                continue
-            mean = statistics.fmean(cells[variant])
-            delta = mean - ref_mean
-            challengers[variant] = {
-                "summary": summary(cells[variant]),
-                "seeds": _curve_seeds(curves, variant),
-                "delta": delta,
-                "clears_margin": delta > margin,
+            clearing = [v for v, c in challengers.items() if c["clears_margin"]]
+            adopted = max(clearing, key=lambda v: challengers[v]["delta"]) if clearing else None
+
+            table = [
+                {
+                    "variant": variant,
+                    "value": values_by_variant.get(variant),
+                    "summary": summary(cells.get(variant, [])),
+                    "seeds": _curve_seeds(curves, variant),
+                    "is_reference": variant == ref_variant,
+                    "is_paper_default": variant == paper_variant,
+                    "is_adopted": variant == adopted_variant,
+                }
+                for variant in variants
+            ]
+
+            baselines[algorithm] = {
+                **metadata,
+                "table": table,
+                "reference_variant": ref_variant,
+                "reference": summary(ref_accs),
+                "margin": margin,
+                "challengers": challengers,
+                "adopted_variant": adopted,
+                "retained_shipped_value": adopted is None,
             }
-
-        clearing = [v for v, c in challengers.items() if c["clears_margin"]]
-        adopted = max(clearing, key=lambda v: challengers[v]["delta"]) if clearing else None
-        baselines[algorithm] = {
-            **metadata,
-            "reference_variant": ref_variant,
-            "reference": summary(ref_accs),
-            "margin": margin,
-            "challengers": challengers,
-            # None means the shipped value held. That is the stage's expected
-            # product, not a null sweep -- see the matrix header.
-            "adopted_variant": adopted,
-            "retained_shipped_value": adopted is None,
-        }
 
     return {
         "alpha": alpha,
         "experiment_group": experiment_group,
-        "rule": "delta > sqrt(2) * sigma(reference cell); ties by larger delta",
+        "rule": (
+            "common in-support observed-byte budget; delta > sqrt(2) * sigma(reference cell); "
+            "ties by larger delta"
+            if is_wide
+            else "delta > sqrt(2) * sigma(reference cell); ties by larger delta"
+        ),
         "baselines": baselines,
         "other_skews_present": contaminated,
     }
@@ -951,6 +1143,73 @@ def round_at_budget(run_df: pd.DataFrame, budget_mb: float) -> int | None:
     """
     row = _last_row_within_budget(run_df, budget_mb)
     return None if row is None else int(row["round"])
+
+
+def interpolate_accuracy_at_budget(
+    run_df: pd.DataFrame,
+    budget_mb: float,
+    accuracy_col: str | None = None,
+) -> float | None:
+    """Linearly interpolate accuracy at ``budget_mb`` without extrapolation.
+
+    Returns ``None`` if ``budget_mb`` lies strictly outside the observed communication
+    support [min(cumulative_mb), max(cumulative_mb)].
+    """
+    if "communication/cumulative_mb" not in run_df.columns:
+        return None
+
+    if accuracy_col and accuracy_col in run_df.columns:
+        acc_col = accuracy_col
+    elif "val/accuracy" in run_df.columns:
+        acc_col = "val/accuracy"
+    elif "test/accuracy" in run_df.columns:
+        acc_col = "test/accuracy"
+    elif "train/accuracy" in run_df.columns:
+        acc_col = "train/accuracy"
+    else:
+        return None
+
+    df_clean = run_df[["communication/cumulative_mb", acc_col]].dropna()
+    if df_clean.empty:
+        return None
+
+    x = df_clean["communication/cumulative_mb"].to_numpy(dtype=float)
+    y = df_clean[acc_col].to_numpy(dtype=float)
+
+    if len(x) == 0:
+        return None
+
+    x_min = float(x[0])
+    x_max = float(x[-1])
+
+    # In-support check (no extrapolation permitted under ADR-0016 / §4.3.2)
+    if budget_mb < x_min - 1e-9 or budget_mb > x_max + 1e-9:
+        return None
+
+    if budget_mb <= x_min + 1e-9:
+        return float(y[0])
+    if budget_mb >= x_max - 1e-9:
+        return float(y[-1])
+
+    for i in range(len(x) - 1):
+        x0, x1 = float(x[i]), float(x[i + 1])
+        if (x0 <= budget_mb <= x1) or (x1 <= budget_mb <= x0):
+            if abs(x1 - x0) < 1e-9:
+                return float(y[i + 1])
+            t = (budget_mb - x0) / (x1 - x0)
+            return float(y[i] + t * (y[i + 1] - y[i]))
+
+    return None
+
+
+def _check_validation_split_only(runs: list[RunRecord], stage_name: str) -> None:
+    """Enforce that selection inputs carry validation split only."""
+    for r in runs:
+        if r.split not in ("val", "validation"):
+            raise ValueError(
+                f"Selection stage {stage_name!r} requires validation-split inputs; "
+                f"received test-split run: {r.job_dir} (split={r.split!r})"
+            )
 
 
 def _mean_sd(values: list[float]) -> dict:
@@ -1153,6 +1412,7 @@ def closure_certificate(
         missing = sorted(expected - set(observed))
         unexpected = sorted(set(observed) - expected)
         duplicate = {key: count for key, count in sorted(observed.items()) if count > 1}
+        unpromotable = sorted(run_identity(r) for r in members if not r.promotable)
         certified[name] = {
             "expected_round": group_round,
             "expected": len(expected),
@@ -1160,10 +1420,11 @@ def closure_certificate(
             "missing": missing,
             "unexpected": unexpected,
             "duplicate": duplicate,
+            "unpromotable": unpromotable,
             "non_canonical": non_canonical,
             "incomplete_runs": completeness["incomplete_runs"],
             "all_complete": completeness["all_complete"],
-            "closed": not (missing or unexpected or duplicate or non_canonical)
+            "closed": not (missing or unexpected or duplicate or non_canonical or unpromotable)
             and completeness["all_complete"],
         }
     return {
@@ -1307,6 +1568,7 @@ def select_winner_iso_byte(
         and r.algorithm_config == "fedmaq"
         and r.formulation is not None
     ]
+    _check_validation_split_only(fedmaq_runs, "select_winner_iso_byte")
     frame_cache = dict(frames) if frames is not None else None
     frame_for = _frame_resolver(frame_cache)
     result = iso_byte_scores(fedmaq_runs, lambda r: r.formulation, frames=frame_cache)
@@ -1353,6 +1615,8 @@ def select_winner_iso_byte(
 def select_power_mean_degree_iso_byte(
     runs: list[RunRecord], frames: MetricsFrames | None = None
 ) -> dict:
+    runs = promotable_runs(runs)
+    _check_validation_split_only(runs, "select_power_mean_degree_iso_byte")
     """Select the Stage-1 compensation degree at the minimum common MB budget.
 
     The first re-cut stage selects only among the seven power-mean degrees. F0,
@@ -1445,6 +1709,7 @@ def select_winner(runs: list[RunRecord], frames: MetricsFrames | None = None) ->
     frame_for = _frame_resolver(frames)
     result: dict = {}
     runs = confirmatory_runs(runs)
+    _check_validation_split_only(runs, "select_winner")
     # Three filters, each removing a different impostor:
     #   experiment_group -- the exploration factorial, the R=100 confirmation and
     #     the grid all dispatch ``algorithm=fedmaq`` at ``formulation: 3``;

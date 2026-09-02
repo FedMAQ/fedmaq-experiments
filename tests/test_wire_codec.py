@@ -253,5 +253,3 @@ def test_unsupported_q_less_than_1_raises_on_pack() -> None:
     """Quantizer requires q >= 1."""
     with pytest.raises(ValueError, match="must be >= 1"):
         pack_quantized_tensor(np.array([0, 1], dtype=np.int64), scale=1.0, q=0)
-
-

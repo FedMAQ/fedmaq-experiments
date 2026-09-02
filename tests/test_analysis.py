@@ -1932,7 +1932,7 @@ def test_wide_baseline_tuning_report_marks_values_and_writes_curves(tmp_path):
         ("qmax8", 0.53),
         ("qmax16", 0.54),
     ):
-        seeds = (0, 42, 123, 7, 21) if variant == "qmax16" else (0, 42, 123)
+        seeds = (0, 42, 123, 7, 21)
         runs.extend(
             _tuning_run(
                 tmp_path,

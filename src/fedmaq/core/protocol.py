@@ -51,6 +51,8 @@ def preregistration_contract(stage: str) -> dict[str, Any]:
         raise ValueError(f"protocol stage {stage!r} must be a mapping")
     selection_data = stage_config.get("selection_data")
     reserved_test = stage_config.get("reserved_test")
+    split = stage_config.get("split", "val" if selection_data == "validation_only" else "test")
+    wire_protocol = document.get("wire_protocol", "packed_wire_v1")
     if not isinstance(selection_data, str) or not isinstance(reserved_test, bool):
         raise ValueError(f"protocol stage {stage!r} is malformed")
     return {
@@ -59,9 +61,9 @@ def preregistration_contract(stage: str) -> dict[str, Any]:
         "stage": stage,
         "selection_data": selection_data,
         "reserved_test": reserved_test,
-        "historical_artifacts_promotable": document.get(
-            "historical_artifacts_promotable", False
-        ),
+        "split": split,
+        "wire_protocol": wire_protocol,
+        "historical_artifacts_promotable": document.get("historical_artifacts_promotable", False),
     }
 
 
@@ -75,12 +77,16 @@ class ProtocolRegistration:
     assurance_envelope: dict[str, Any]
     promotable: bool
     historical: bool
+    split: str = "val"
+    wire_protocol: str = "packed_wire_v1"
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "schema_version": PROTOCOL_SCHEMA_VERSION,
             "name": self.name,
             "stage": self.stage,
+            "split": self.split,
+            "wire_protocol": self.wire_protocol,
             "preregistration_sha256": self.preregistration_sha256,
             "assurance_envelope": self.assurance_envelope,
             "promotable": self.promotable,
@@ -99,12 +105,16 @@ def register_protocol(config: dict[str, Any], git: dict[str, Any]) -> ProtocolRe
             assurance_envelope={},
             promotable=False,
             historical=True,
+            split="historical",
+            wire_protocol="legacy",
         )
     if name != REPLACEMENT_PROTOCOL:
         raise ValueError(f"unsupported protocol {name!r}")
 
     stage = str(config.get("protocol_stage", "downstream"))
     contract = preregistration_contract(stage)
+    split = str(config.get("split", contract["split"]))
+    wire_protocol = str(config.get("wire_protocol", contract["wire_protocol"]))
     preregistration_sha256 = _sha256(contract)
     envelope_body = {
         "schema_version": PROTOCOL_SCHEMA_VERSION,
@@ -123,6 +133,8 @@ def register_protocol(config: dict[str, Any], git: dict[str, Any]) -> ProtocolRe
         assurance_envelope=envelope,
         promotable=promotable,
         historical=False,
+        split=split,
+        wire_protocol=wire_protocol,
     )
 
 

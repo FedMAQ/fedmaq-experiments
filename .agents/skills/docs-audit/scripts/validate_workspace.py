@@ -237,9 +237,7 @@ def validate(root: Path, inventory_path: Path, *, enforce_git: bool = True) -> d
                 }
                 for loader, measured in measured_baseline.items():
                     if baseline_budget.get(repo_name, {}).get(loader) != measured:
-                        failures.append(
-                            f"context-budget baseline mismatch: {repo_name}/{loader}"
-                        )
+                        failures.append(f"context-budget baseline mismatch: {repo_name}/{loader}")
             current_agent = (repo / "AGENTS.md").read_bytes()
             current_claude = (repo / "CLAUDE.md").read_bytes()
             measured_final = {
@@ -261,11 +259,7 @@ def validate(root: Path, inventory_path: Path, *, enforce_git: bool = True) -> d
             item = records.get((repo_name, path))
             if not item:
                 continue
-            if (
-                not item.get("owner")
-                or not item.get("disposition")
-                or not item.get("successor")
-            ):
+            if not item.get("owner") or not item.get("disposition") or not item.get("successor"):
                 failures.append(f"incomplete disposition: {repo_name}/{path}")
             if item.get("unresolved") is not False:
                 failures.append(f"unresolved disposition: {repo_name}/{path}")
@@ -440,9 +434,7 @@ def _self_test(script: Path) -> int:
         ):
             print("FAIL: broken-agents-import negative fixture did not fail as expected")
             return 1
-        inventory["context_budget_final"][REPOSITORIES[0]]["conditional_targets"] = [
-            "missing/*.md"
-        ]
+        inventory["context_budget_final"][REPOSITORIES[0]]["conditional_targets"] = ["missing/*.md"]
         inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
         (root / REPOSITORIES[0] / "AGENTS.md").write_text("# entry\n", encoding="utf-8")
         result = validate(root, inventory_path, enforce_git=False)
@@ -451,9 +443,7 @@ def _self_test(script: Path) -> int:
         ):
             print("FAIL: conditional-target negative fixture did not fail as expected")
             return 1
-        inventory["context_budget_final"][REPOSITORIES[0]]["conditional_targets"] = [
-            "CONTEXT.md"
-        ]
+        inventory["context_budget_final"][REPOSITORIES[0]]["conditional_targets"] = ["CONTEXT.md"]
         inventory["semantic_authority_review"]["reviewed"] = False
         inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
         result = validate(root, inventory_path, enforce_git=False)

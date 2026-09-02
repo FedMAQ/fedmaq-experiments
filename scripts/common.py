@@ -5,19 +5,23 @@ and subprocess execution helpers used by ``scripts/run_matrix.py``.
 """
 
 import logging
-import pickle
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-import torch
-
-from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
 from fedmaq.core.run_identity import NO_GROUP, get_canonical_output_dir, identity_key
+from fedmaq.core.validation import is_run_evidence_complete, validate_run_evidence
 
-__all__ = ["NO_GROUP", "get_canonical_output_dir", "identity_key"]
+__all__ = [
+    "NO_GROUP",
+    "get_canonical_output_dir",
+    "identity_key",
+    "is_run_complete",
+    "is_run_evidence_complete",
+    "validate_run_evidence",
+]
 
 logger = logging.getLogger("fedmaq.runner")
 
@@ -150,27 +154,15 @@ def get_sweep_group_dir(phase: str, dataset: str, model: str, exp_group: str) ->
 
 
 def is_run_complete(output_dir: Path) -> bool:
-    """Report whether ``output_dir`` holds a run that reached its final round.
+    """Report whether ``output_dir`` holds a run that reached its final round with valid evidence.
 
-    ``final_global_model.pt`` is the only artifact written exclusively on the
-    last round. ``run_manifest.json`` is written before round 1 and the
-    telemetry CSV/JSONL are opened just as early, so a run killed at round 3 is
-    indistinguishable from a finished one by their presence alone.
-
-    One asymmetry is deliberate: ``write_final_global_model`` logs and swallows
-    disk errors, so a run that trained fully but failed to save its checkpoint
-    reads as incomplete here and would be redone. Redoing a finished run costs
-    wall-clock; skipping an unfinished one leaves a hole that only surfaces at
-    analysis time, so the bias points the safe way.
+    Requires:
+    1. A valid final checkpoint (``final_global_model.pt``).
+    2. A valid run manifest (``run_manifest.json``) with matching identity.
+    3. Contiguous unique finite telemetry for rounds 1 through R with monotonically
+       non-decreasing cumulative communication metrics.
     """
-    checkpoint = output_dir / FINAL_MODEL_FILENAME
-    if not checkpoint.is_file() or checkpoint.stat().st_size == 0:
-        return False
-    try:
-        state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    except (OSError, RuntimeError, EOFError, ValueError, pickle.UnpicklingError):
-        return False
-    return isinstance(state_dict, dict) and bool(state_dict)
+    return is_run_evidence_complete(output_dir)
 
 
 def build_run_command(

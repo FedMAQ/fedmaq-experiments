@@ -6,16 +6,22 @@ stages:
   matched_tuning:
     selection_data: validation_only
     reserved_test: true
+    split: val
   stage_1a:
     selection_data: validation_only
     reserved_test: true
+    split: val
   stage_1b:
     selection_data: validation_only
     reserved_test: true
+    split: val
   downstream:
     selection_data: frozen_validation_verdicts
     reserved_test: true
+    split: test
   assurance:
     selection_data: none
     reserved_test: false
+    split: none
+wire_protocol: packed_wire_v1
 historical_artifacts_promotable: false

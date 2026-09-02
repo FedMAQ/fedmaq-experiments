@@ -142,6 +142,8 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
             "seed": cfg_dict.get("seed"),
             "total_rounds": experiment.get("total_rounds"),
             "num_clients": experiment.get("num_clients"),
+            "split": protocol.split,
+            "wire_protocol": protocol.wire_protocol,
         },
         "git": git,
         "protocol": protocol.as_dict(),

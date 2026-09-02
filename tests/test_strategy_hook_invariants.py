@@ -208,9 +208,9 @@ def test_compression_stream_varies_by_round_and_replays_by_identity() -> None:
     round_two, _ = FedPAQCompressionHook(
         q=4, rng=derive_numpy_rng("compression", 42, 3, 2)
     ).compress([delta])
-    replay, _ = FedPAQCompressionHook(
-        q=4, rng=derive_numpy_rng("compression", 42, 3, 1)
-    ).compress([delta])
+    replay, _ = FedPAQCompressionHook(q=4, rng=derive_numpy_rng("compression", 42, 3, 1)).compress(
+        [delta]
+    )
 
     assert not np.array_equal(round_one[0], round_two[0])
     np.testing.assert_array_equal(round_one[0], replay[0])
