@@ -1,7 +1,7 @@
 # Uniform-memory control arm, manuscript §4.1 and §4.3. 6 runs.
 #
-# Every client gets the same 8192 MB capacity. Read the consequence exactly:
-# floor(8192 / c_unit=512) = 16 = fedmaq.yaml's q_max, and the Tier-2 target is
+# Every client gets the same 16384 MB capacity. Read the consequence exactly:
+# floor(16384 / c_unit=1024) = 16 = fedmaq.yaml's q_max, and the Tier-2 target is
 # itself clamped to q_max, so min(Q_k^max, q_hat) = q_hat for every client. The
 # Tier-1 ceiling does not merely stop varying here -- it never binds at all. This
 # arm is the MEMORY-BLIND condition, and its contrast against FedMAQ's
@@ -11,7 +11,7 @@
 # sides of the contrast, so the contrast cannot price it; that is Configuration 5
 # (fedmaq_no_kd) in conf/matrix/ablation.yaml. The header said otherwise until
 # Decision 75, as did manuscript §4.1, while §3.3.3 had already proved the arm
-# memory-blind ("every client holding at least 8192 MB is functionally identical
+# memory-blind ("every client holding at least 16384 MB is functionally identical
 # in achievable precision").
 #
 # Nor is this arm redundant with ablation Configuration 2, which lifts Tier-1 and
@@ -22,7 +22,7 @@
 # condition in both coding regimes. Agreement transfers the ablation's verdict to
 # the regime the headline claims live in; disagreement localizes to the pipeline.
 #
-# Do not "fix" 8192 downward to make Tier-1 bind. Over half the sampled
+# Do not "fix" 16384 downward to make Tier-1 bind. Over half the sampled
 # population (U(2048,16384)) already sits above the binding threshold, so any
 # binding uniform value is below the population's central tendency and confounds
 # uniform capacity with less capacity.

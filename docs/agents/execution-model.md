@@ -90,7 +90,8 @@ No allocation run precedes this gate.
 4. `--matrix baseline_tuning_wide`, at held-out α = 0.3 and R=100. Each of the six
    tunable algorithms contributes five registered validation seeds per arm. FedAvg
    is absent because it has no tunable communication knob. FedMAQ varies
-   `q_max ∈ {4, 6, 8, 16}` while `c_unit=512` remains fixed.
+   `q_max ∈ {4, 6, 8, 16}` while `c_unit=1024` remains fixed.
+
 5. Run `baseline_tuning_margin`, retain every five-point table and seed-level curve,
    and write only challengers that strictly clear `sqrt(2) * sigma` into the shipped
    configs. A highest point that does not clear is not adopted. `paper_default_variant`

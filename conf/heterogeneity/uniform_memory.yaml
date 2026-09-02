@@ -1,5 +1,5 @@
-# Control group: uniform memory 8192 MB per client (§4.1)
-# At c_unit=512 this is a Tier-1 ceiling of 16 = fedmaq.yaml's q_max, so the ceiling
+# Control group: uniform memory 16384 MB per client (§4.1)
+# At c_unit=1024 this is a Tier-1 ceiling of 16 = fedmaq.yaml's q_max, so the ceiling
 # never binds: this is the memory-blind condition, and it prices the memory ceiling,
 # not server-side KD (Decision 75). System heterogeneity off.
 # Usage: uv run python scripts/run.py heterogeneity=uniform_memory
@@ -12,4 +12,5 @@
 # the same output directory, since the harness keys those on the config name.
 partition: dirichlet
 alpha: 1.0          # Moderate data skew; combine with other alpha configs as needed
-uniform_memory_mb: 8192  # Fixed memory capacity for all clients (control group)
+uniform_memory_mb: 16384  # Fixed memory capacity for all clients (control group)
+

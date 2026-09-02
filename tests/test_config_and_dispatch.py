@@ -68,10 +68,13 @@ def _frozen_refinements():
 
 def _ablation_arm_diffs():
     frozen = _frozen_refinements()
+    # Dual-formulation compatibility bridge: fedmaq_no_data and fedmaq_no_state
+    # express signal removal for both Formulation 2 (gamma2/gamma1) and the power-mean
+    # family (omega per ADR-0021 D4), so the removal holds under both formulations.
     return {
         "fedmaq_no_resource": {"resource_aware"},
-        "fedmaq_no_data": {"gamma2"},
-        "fedmaq_no_state": {"gamma1"},
+        "fedmaq_no_data": {"gamma2", "omega"},
+        "fedmaq_no_state": {"gamma1", "omega"},
         "fedmaq_no_kd": {"kd_epochs"} | ({"soft_voting"} & frozen),
         "fedmaq_no_refinements": set(frozen),
     }
@@ -1550,5 +1553,111 @@ def test_memory_sensitivity_matrix_expands_to_twelve_net_new_cells():
     )
     tasks = expand_matrix(matrix, "memory_sensitivity")
     assert len(tasks) == 12
-    assert {t["variant"] for t in tasks} == {"cunit256", "cunit1024"}
+    assert {t["variant"] for t in tasks} == {"cunit512", "cunit2048"}
     assert {t["seed"] for t in tasks} == {0, 42, 123}
+
+
+def _evaluate_arm_decisions(arm: str, formulation: int | str) -> list[tuple[float, int]]:
+    """Evaluate decision-details over a 3D signal and capacity grid."""
+    from fedmaq.core.quantization_planner import _QuantParams, compute_fedmaq_q_k_t_details
+
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=[f"algorithm={arm}", f"algorithm.formulation={formulation}"],
+        )
+    alg_dict = OmegaConf.to_container(cfg.algorithm, resolve=True)
+    qp = _QuantParams.from_cfg(alg_dict)
+
+    g_signals = [0.1, 0.3, 0.5, 0.7, 0.9]
+    n_signals = [10, 30, 50, 70, 90]
+    capacities = [2048.0, 16384.0]
+
+    decisions = []
+    for c_k in capacities:
+        for g in g_signals:
+            for n in n_signals:
+                d = compute_fedmaq_q_k_t_details(
+                    c_k=c_k,
+                    c_unit=qp.c_unit,
+                    g_k=g,
+                    g_max=1.0,
+                    n_k=n,
+                    n_max=100,
+                    formulation=qp.formulation,
+                    q_min=qp.q_min,
+                    q_max=qp.q_max,
+                    gamma1=qp.gamma1,
+                    gamma2=qp.gamma2,
+                    kappa=qp.kappa,
+                    tau_g=qp.tau_g,
+                    tau_n=qp.tau_n,
+                    p=qp.p,
+                    omega=qp.omega,
+                    bit_widths=qp.bit_widths,
+                    resource_aware=qp.resource_aware,
+                )
+                decisions.append((d.q_hat, d.q))
+    return decisions
+
+
+@pytest.mark.parametrize("formulation", [2, "power_mean"])
+@pytest.mark.parametrize("arm", ["fedmaq_no_data", "fedmaq_no_state", "fedmaq_no_resource"])
+def test_ablation_arm_decision_vector_differs_from_full_fedmaq(arm, formulation):
+    """Under both formulation=2 and formulation=power_mean, each ablation arm must
+    differ from full FedMAQ.
+
+    Guards against the latent collapse where power_mean ignores gamma1/gamma2,
+    making fedmaq_no_data and fedmaq_no_state byte-identical to full FedMAQ.
+    """
+    full_vector = _evaluate_arm_decisions("fedmaq", formulation)
+    arm_vector = _evaluate_arm_decisions(arm, formulation)
+    assert arm_vector != full_vector, (
+        f"Ablation arm {arm} produced a decision vector identical to full FedMAQ "
+        f"under formulation={formulation!r}. Check that overrides are defined."
+    )
+
+
+@pytest.mark.parametrize("arm", ["fedmaq_no_kd", "fedmaq_no_refinements"])
+def test_downstream_ablation_arms_preserve_identical_quantizer_decisions(arm):
+    """Confirm §4.3.7 server-side KD and refinement arms do not alter quantizer decisions."""
+    for formulation in (2, "power_mean"):
+        full_vector = _evaluate_arm_decisions("fedmaq", formulation)
+        arm_vector = _evaluate_arm_decisions(arm, formulation)
+        assert arm_vector == full_vector, (
+            f"Downstream ablation arm {arm} unexpectedly altered quantizer decisions "
+            f"under formulation={formulation!r}."
+        )
+
+
+def test_power_mean_base_and_fedmaq_configs_agree_on_shared_keys():
+    """Assert _power_mean_base.yaml and fedmaq.yaml agree on all shared keys.
+
+    Key sets must differ only by formulation and the two exponents (gamma1, gamma2),
+    and all shared values must be equal. Must fail if either file's memory unit is changed alone.
+    """
+    fedmaq_cfg = OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR) / "algorithm" / "fedmaq.yaml"), resolve=True
+    )
+    power_mean_base_cfg = OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR) / "algorithm" / "_power_mean_base.yaml"), resolve=True
+    )
+
+    fedmaq_keys = set(fedmaq_cfg.keys())
+    base_keys = set(power_mean_base_cfg.keys())
+
+    # Key sets must differ ONLY by formulation and the two exponents
+    assert fedmaq_keys - base_keys == {"formulation", "gamma1", "gamma2"}, (
+        f"fedmaq.yaml has unexpected keys not in _power_mean_base.yaml: "
+        f"{fedmaq_keys - base_keys - {'formulation', 'gamma1', 'gamma2'}}"
+    )
+    assert base_keys - fedmaq_keys == set(), (
+        f"_power_mean_base.yaml has keys not in fedmaq.yaml: {base_keys - fedmaq_keys}"
+    )
+
+    # All shared keys must have equal values
+    for k in base_keys:
+        assert fedmaq_cfg[k] == power_mean_base_cfg[k], (
+            f"Config discrepancy on shared key {k!r}: "
+            f"fedmaq.yaml={fedmaq_cfg[k]!r} vs _power_mean_base.yaml={power_mean_base_cfg[k]!r}"
+        )

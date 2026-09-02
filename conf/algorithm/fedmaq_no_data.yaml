@@ -4,7 +4,9 @@
 #
 # Under the frozen Formulation 2 the soft target is (g~^gamma1)*(n~^gamma2), so
 # gamma2 = 0 sends the data term to n~^0 = 1 and leaves
-# q_hat = q_min + (q_max - q_min)*g~^gamma1. The removal is exact, and costs one key.
+# q_hat = q_min + (q_max - q_min)*g~^gamma1. Across both Formulation 2 (gamma2=0)
+# and the power-mean family (omega=1, ADR-0021 D4), the removal is exact.
+
 #
 # NO RENORMALIZATION, and that is the point. Under Formulation 1 this same removal
 # leaves gamma1*g~ capped at 0.5, so the surviving signal cannot reach q_max and
@@ -22,4 +24,6 @@ defaults:
   - fedmaq
   - _self_
 
-gamma2: 0.0                # <-- the single removal defining this arm
+gamma2: 0.0                # <-- Formulation 2 removal: n~^0 = 1 (removes data signal)
+omega: 1.0                 # <-- Power-mean removal (ADR-0021 D4): weights state signal, removes data signal
+

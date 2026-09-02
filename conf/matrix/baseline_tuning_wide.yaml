@@ -5,7 +5,7 @@
 # algorithm with a tunable knob gets five registered validation seeds per arm:
 # 29 arms x 5 seeds = 145 cells.
 # FedAvg remains absent because it is the uncompressed control. FedMAQ uses q_max;
-# c_unit=512 remains fixed by ADR-0002.
+# c_unit=1024 remains fixed by ADR-0002.
 phase: explore
 stage: matched_tuning
 protocol_stage: matched_tuning

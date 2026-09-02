@@ -1,6 +1,6 @@
 # Uniform-memory control arm at moderate data skew (§4.1, §4.3).
 #
-# Same 8192 MB capacity for every client. At c_unit=512 that is a Tier-1 ceiling
+# Same 16384 MB capacity for every client. At c_unit=1024 that is a Tier-1 ceiling
 # of 16, equal to fedmaq.yaml's q_max, so the ceiling never binds and this is the
 # memory-blind condition; the arm's contrast against FedMAQ's variable-memory
 # rows prices the memory ceiling, NOT server-side KD (Decision 75 -- KD is on and
@@ -13,4 +13,5 @@
 # post-processing flag this arm needs for parity with its comparison partner.
 partition: dirichlet
 alpha: 1.0
-uniform_memory_mb: 8192
+uniform_memory_mb: 16384
+
