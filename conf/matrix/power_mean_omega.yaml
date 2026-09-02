@@ -21,9 +21,11 @@ runs:
     label: power-mean-omega-0.25
     variant: omega0.25
     overrides:
+      # PLACEHOLDER: algorithm.p=<selected_p> (resolved from stage 1a verdict before dispatch)
       - algorithm.omega=0.25
   - alg: power_mean
     label: power-mean-omega-0.75
     variant: omega0.75
     overrides:
+      # PLACEHOLDER: algorithm.p=<selected_p> (resolved from stage 1a verdict before dispatch)
       - algorithm.omega=0.75

@@ -367,6 +367,17 @@ def test_telemetry_histogram_columns_survive_evidence_validation(tmp_path):
         csv_data[f"algorithm/fedmaq/q_count_{b}"] = [0, 1]
         csv_data[f"algorithm/fedmaq/q_hat_count_{b}"] = [1, 0]
     pd.DataFrame(csv_data).to_csv(output_dir / "experiment_log.csv", index=False)
+    with (output_dir / "experiment_log.jsonl").open("w", encoding="utf-8") as handle:
+        for round_number in (1, 2):
+            handle.write(
+                json.dumps(
+                    {
+                        "round": round_number,
+                        "communication/cumulative_mb": 10.0 * round_number,
+                    }
+                )
+                + "\n"
+            )
 
     result = validate_run_evidence(output_dir)
     assert result.errors == ()

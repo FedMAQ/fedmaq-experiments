@@ -25,6 +25,7 @@ from fedmaq.core.run_identity import parse_run_directory
 logger = logging.getLogger("fedmaq.validation")
 
 TELEMETRY_CSV_FILENAME = "experiment_log.csv"
+TELEMETRY_JSONL_FILENAME = "experiment_log.jsonl"
 REQUIRED_METRIC_COLUMNS = ("round", "communication/cumulative_mb")
 
 
@@ -67,9 +68,10 @@ def validate_run_evidence(
     1. Checkpoint: ``final_global_model.pt`` exists, non-empty, and loads a valid state_dict.
     2. Manifest: ``run_manifest.json`` exists, valid JSON, matching parsed directory identity.
     3. Telemetry: ``experiment_log.csv`` exists, non-empty, with required metric columns.
-    4. Rounds: Contiguous unique sequence 1..R (no missing, duplicate, or truncated rounds).
-    5. Finiteness: All required metric values are finite (no NaN, Inf, -Inf).
-    6. Monotonicity: Cumulative metrics (e.g. cumulative MB) are non-decreasing across rounds.
+    4. Rounds: Contiguous unique sequence 1..R, optionally prefixed by round 0.
+    5. Finiteness: Required values and populated optional values are finite.
+    6. JSONL: The authoritative log exists and has the same rounds and required keys.
+    7. Monotonicity: Cumulative metrics (e.g. cumulative MB) are non-decreasing across rounds.
 
     Returns a :class:`ValidationResult` detailing whether the run is complete and errors found.
     """
@@ -208,14 +210,21 @@ def validate_run_evidence(
                         )
                     else:
                         rounds_list = [int(r) for r in round_series]
+                        if any(float(r) != int(r) for r in round_series):
+                            errors.append(
+                                f"telemetry round column contains non-integer values: {csv_path}"
+                            )
                         max_observed_round = max(rounds_list) if rounds_list else None
 
                         if effective_rounds is None:
                             effective_rounds = max_observed_round
 
                         if effective_rounds is not None and effective_rounds > 0:
-                            expected_seq = list(range(1, effective_rounds + 1))
-                            if rounds_list != expected_seq:
+                            expected_sequences = (
+                                list(range(1, effective_rounds + 1)),
+                                list(range(0, effective_rounds + 1)),
+                            )
+                            if rounds_list not in expected_sequences:
                                 if len(rounds_list) != len(set(rounds_list)):
                                     dup_rounds = sorted(
                                         [
@@ -238,13 +247,25 @@ def validate_run_evidence(
                                         f"1..{effective_rounds}: observed {rounds_list[:10]}..."
                                     )
 
-                # 4. Check finiteness across all numeric columns
+                # Required columns must be populated and finite. Optional columns
+                # are commonly blank (for example round-secondary bytes on all
+                # non-DAdaQuant arms), so only their populated values are checked.
                 numeric_cols = df.select_dtypes(include=["number"]).columns
                 for col in numeric_cols:
-                    values = df[col].to_numpy()
-                    if not math.isfinite(float(values.sum())) and not all(
-                        math.isfinite(float(v)) for v in values
-                    ):
+                    if df[col].isna().any() and not df[col].isna().all():
+                        nonzero_nan = df.loc[df["round"] != 0, col].isna().any()
+                        if nonzero_nan:
+                            errors.append(
+                                f"telemetry column {col!r} contains non-finite values (NaN/Inf)"
+                            )
+                    values = df[col].dropna().to_numpy()
+                    if col in REQUIRED_METRIC_COLUMNS:
+                        nonzero_rows = df.loc[df["round"] != 0, col].dropna()
+                        if len(nonzero_rows) != len(df.loc[df["round"] != 0]):
+                            errors.append(
+                                f"telemetry required column {col!r} contains NaN: {csv_path}"
+                            )
+                    if not all(math.isfinite(float(v)) for v in values):
                         errors.append(
                             f"telemetry column {col!r} contains non-finite values (NaN/Inf)"
                         )
@@ -272,6 +293,65 @@ def validate_run_evidence(
         except Exception as exc:
             errors.append(f"failed to read or validate telemetry CSV {csv_path}: {exc}")
 
+    # 6. JSONL is the authoritative superset for dynamic/client metrics. It is
+    # required for every complete run and must remain row-aligned with the CSV.
+    jsonl_path = output_dir / TELEMETRY_JSONL_FILENAME
+    jsonl_rounds: list[int] = []
+    if not jsonl_path.is_file() or jsonl_path.stat().st_size == 0:
+        errors.append(f"missing or empty telemetry JSONL: {jsonl_path}")
+    else:
+        try:
+            for line_number, line in enumerate(
+                jsonl_path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    errors.append(f"telemetry JSONL line {line_number} is not a JSON object")
+                    continue
+                missing = [key for key in REQUIRED_METRIC_COLUMNS if key not in record]
+                if missing:
+                    errors.append(
+                        f"telemetry JSONL line {line_number} missing required keys {missing}"
+                    )
+                    continue
+                round_value = record["round"]
+                if isinstance(round_value, bool) or not isinstance(round_value, (int, float)):
+                    errors.append(f"telemetry JSONL line {line_number} has a non-numeric round")
+                    continue
+                if not math.isfinite(float(round_value)) or float(round_value) != int(round_value):
+                    errors.append(f"telemetry JSONL line {line_number} has a non-integer round")
+                    continue
+                required_values_valid = True
+                for key in REQUIRED_METRIC_COLUMNS:
+                    value = record[key]
+                    if round_value == 0 and value is None:
+                        continue
+                    if (
+                        not isinstance(value, (int, float))
+                        or isinstance(value, bool)
+                        or not math.isfinite(float(value))
+                    ):
+                        required_values_valid = False
+                        break
+                if not required_values_valid:
+                    errors.append(
+                        f"telemetry JSONL line {line_number} has missing/non-finite required values"
+                    )
+                    continue
+                jsonl_rounds.append(int(round_value))
+
+            if csv_path.is_file() and csv_path.stat().st_size:
+                csv_rounds = [int(value) for value in pd.read_csv(csv_path)["round"]]
+                if jsonl_rounds != csv_rounds:
+                    errors.append(
+                        "telemetry JSONL rounds do not match CSV rounds: "
+                        f"jsonl={jsonl_rounds[:10]}... csv={csv_rounds[:10]}..."
+                    )
+        except Exception as exc:
+            errors.append(f"failed to read or validate telemetry JSONL {jsonl_path}: {exc}")
+
     is_complete = len(errors) == 0 and (effective_rounds is not None and effective_rounds > 0)
     return ValidationResult(
         is_complete=is_complete,
@@ -297,6 +377,7 @@ def is_run_evidence_complete(
 __all__ = [
     "REQUIRED_METRIC_COLUMNS",
     "TELEMETRY_CSV_FILENAME",
+    "TELEMETRY_JSONL_FILENAME",
     "ValidationResult",
     "is_run_evidence_complete",
     "validate_run_evidence",

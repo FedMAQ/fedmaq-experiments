@@ -64,7 +64,50 @@ def preregistration_contract(stage: str) -> dict[str, Any]:
         "split": split,
         "wire_protocol": wire_protocol,
         "historical_artifacts_promotable": document.get("historical_artifacts_promotable", False),
+        "selection_domains": document.get("selection_domains", {}),
     }
+
+
+def validate_matrix_against_protocol(
+    matrix_name: str,
+    matrix: dict[str, Any],
+    expanded_count: int,
+) -> None:
+    """Reject semantic matrix drift before a registered scientific dispatch."""
+    document = _load_protocol_document()
+    contracts = document.get("matrix_contracts", {})
+    contract = contracts.get(matrix_name) if isinstance(contracts, dict) else None
+    if contract is None:
+        return
+    if not isinstance(contract, dict):
+        raise ValueError(f"protocol matrix contract {matrix_name!r} is malformed")
+    rounds_value = contract.get("rounds")
+    count_value = contract.get("cell_count")
+    if not isinstance(rounds_value, (int, float, str)) or not isinstance(
+        count_value, (int, float, str)
+    ):
+        raise ValueError(f"protocol matrix contract {matrix_name!r} has invalid counts")
+    expected = {
+        "stage": contract.get("stage"),
+        "split": contract.get("split"),
+        "ledger": contract.get("ledger"),
+        "rounds": int(rounds_value),
+        "cell_count": int(count_value),
+        "sha256": contract.get("sha256"),
+    }
+    actual = {
+        "stage": matrix.get("stage", matrix.get("protocol_stage")),
+        "split": matrix.get("split", "val"),
+        "ledger": matrix.get("ledger", "unregistered"),
+        "rounds": int(matrix.get("total_rounds", 50)),
+        "cell_count": expanded_count,
+        "sha256": _sha256(matrix),
+    }
+    if actual != expected:
+        raise ValueError(
+            f"matrix {matrix_name!r} diverges from the replacement protocol: "
+            f"expected={expected}, actual={actual}"
+        )
 
 
 @dataclass(frozen=True)

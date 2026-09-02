@@ -25,3 +25,28 @@ stages:
     split: none
 wire_protocol: packed_wire_v1
 historical_artifacts_promotable: false
+
+# Independent dispatch authority. These semantic fingerprints cover the complete
+# resolved matrix, including treatment-defining overrides; regenerating a ledger
+# from an edited matrix therefore cannot make the edit appear preregistered.
+selection_domains:
+  seeds: [0, 42, 123]
+  q_ladder: [2, 3, 4, 5, 6, 7, 8, 16]
+  p_support: [-2, -1, -0.5, 0, 0.5, 1, min]
+  omega_support: [0.25, 0.5, 0.75]
+  adoption_margin: "delta > sqrt(2) * sigma(reference cell)"
+  tie_rule: "neutral-first omega=0.5; otherwise larger delta"
+
+matrix_contracts:
+  baseline_tuning_wide: {stage: matched_tuning, split: val, ledger: scientific, rounds: 100, cell_count: 145, sha256: ef1534813c561635b17c12a244974ea22b75407d492c59d46642cc1f66624f54}
+  power_mean_design: {stage: stage_1a, split: val, ledger: scientific, rounds: 100, cell_count: 84, sha256: ddb2e8edc55fb7c1425e8f59128a27362a5b17565397187b5e42a324f61d736c}
+  power_mean_omega: {stage: stage_1b, split: val, ledger: scientific, rounds: 100, cell_count: 12, sha256: bc52de88469d84645b09749d08b152d91818b3eb46278914cf275ad13866cda9}
+  benchmark_grid: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 42, sha256: 0ff37127405a3b11d7c00c537782d258fff9c7213acb0f1eecc61262a3f13617}
+  benchmark_grid_cifar100: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 42, sha256: af27fe122b5b84f82601a283185c9641e74e2773907a080f54df9503cac58d5f}
+  benchmark_grid_femnist: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 21, sha256: 6c5ae4801c28cae3055ef8f743da894e297b30d08680d1a657748cc6e9ebe85b}
+  ablation: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 36, sha256: 290123f30afa9bcc82e18ef08570fa8895d5f881e9a312396bf92fe70a0a6601}
+  fedpaq_pipeline: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: cf994fb4ab93c37a8d6da926ad4270987e8c5d01b480d00b3055f0770906bdbd}
+  fedpaq_pipeline_cifar100: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 9fd47583db13646ae1a7bf583b4cc563f1e7b4a04315610cb99e6316f6facb99}
+  fedpaq_pipeline_femnist: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: 3581a7ed8c3fec8a598c7f73ec7684c007c4ad8753256970f5af1799369e4248}
+  memory_sensitivity: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 12, sha256: 528417263084bf8830014d038837f4333aa68bd9c158451ffa0b445a86736f18}
+  uniform_memory_control: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 0e52e8dec7421985314e249889a4067c27613ff2daf419175bb3c38be3f19a20}

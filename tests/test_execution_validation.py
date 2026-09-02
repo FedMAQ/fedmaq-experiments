@@ -63,6 +63,10 @@ def _create_synthetic_run(
     truncated_rounds: bool = False,
     nonfinite_metric: bool = False,
     nonmonotone_mb: bool = False,
+    include_round_zero: bool = False,
+    extra_columns: dict[str, list[float | None]] | None = None,
+    missing_jsonl: bool = False,
+    mismatched_jsonl_rounds: bool = False,
     accuracies: list[float] | None = None,
     cumulative_mbs: list[float] | None = None,
 ) -> Path:
@@ -134,6 +138,11 @@ def _create_synthetic_run(
             acc_list = [0.3 + 0.3 * (r / total_rounds) for r in rounds]
             mb_list = [0.5 * r for r in rounds]
 
+        if include_round_zero:
+            rounds = [0, *rounds]
+            acc_list = [float("nan"), *acc_list]
+            mb_list = [float("nan"), *mb_list]
+
         if duplicate_rounds and len(rounds) > 2:
             rounds[2] = rounds[1]  # duplicate round
         if missing_round and len(rounds) > 4:
@@ -157,6 +166,24 @@ def _create_synthetic_run(
             }
         )
         df.to_csv(csv_path, index=False)
+        if extra_columns:
+            for name, values in extra_columns.items():
+                if len(values) != len(df):
+                    raise ValueError(f"extra column {name!r} has the wrong length")
+                df[name] = values
+            df.to_csv(csv_path, index=False)
+        if not missing_jsonl:
+            jsonl_rounds = list(rounds)
+            if mismatched_jsonl_rounds and len(jsonl_rounds) > 1:
+                jsonl_rounds[-1] = jsonl_rounds[-1] + 1
+            with (output_dir / "experiment_log.jsonl").open("w", encoding="utf-8") as handle:
+                for index, round_number in enumerate(jsonl_rounds):
+                    record = df.iloc[index].to_dict()
+                    record = {
+                        key: (None if pd.isna(value) else value) for key, value in record.items()
+                    }
+                    record["round"] = round_number
+                    handle.write(json.dumps(record, allow_nan=True) + "\n")
 
     return output_dir
 
@@ -229,6 +256,29 @@ def test_telemetry_failures_fail_closed(tmp_path):
     res_nm = validate_run_evidence(nonmono_dir, repo_root=tmp_path)
     assert res_nm.is_complete is False
     assert any("non-monotonic" in e for e in res_nm.errors)
+
+
+def test_round_zero_and_all_nan_optional_columns_are_valid(tmp_path):
+    run_dir = _create_synthetic_run(
+        tmp_path,
+        seed=26,
+        include_round_zero=True,
+        extra_columns={"communication/round_secondary_bytes": [None] * 101},
+    )
+    result = validate_run_evidence(run_dir, expected_rounds=100, repo_root=tmp_path)
+    assert result.is_complete is True
+
+
+def test_jsonl_is_required_and_must_match_csv_rounds(tmp_path):
+    missing = _create_synthetic_run(tmp_path, seed=27, missing_jsonl=True)
+    result = validate_run_evidence(missing, repo_root=tmp_path)
+    assert result.is_complete is False
+    assert any("JSONL" in error for error in result.errors)
+
+    mismatched = _create_synthetic_run(tmp_path, seed=28, mismatched_jsonl_rounds=True)
+    result = validate_run_evidence(mismatched, repo_root=tmp_path)
+    assert result.is_complete is False
+    assert any("do not match CSV" in error for error in result.errors)
 
 
 def test_matrix_executor_skip_completed_never_skips_malformed_runs(tmp_path):

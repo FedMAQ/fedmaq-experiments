@@ -17,6 +17,7 @@ from flwr.server.client_proxy import ClientProxy
 from fedmaq.core.config_defaults import RunContext
 from fedmaq.core.models import set_model_parameters
 from fedmaq.core.partitioning import get_client_loader
+from fedmaq.core.randomness import derive_seed
 
 logger = logging.getLogger(__name__)
 
@@ -410,7 +411,7 @@ class QuantizationPlanner:
                 },
                 batch_size=ctx.batch_size,
                 train=True,
-                seed=seed_base + pid * 100_000 + server_round,
+                seed=derive_seed("probe_loader", seed_base, pid, max(1, server_round)),
             )
             try:
                 images, labels = next(iter(loader))

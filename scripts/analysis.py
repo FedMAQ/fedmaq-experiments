@@ -99,6 +99,12 @@ class RunRecord:
     # test split is strictly forbidden from entering selection functions.
     split: str = "val"
     wire_protocol: str = "packed_wire_v1"
+    # Selection provenance recorded in run_manifest.json. These are deliberately
+    # separate from the formulation label: Stage 1b must prove that every row
+    # actually ran at the selected p before omega is compared.
+    p: float | str | None = None
+    omega: float | None = None
+    c_unit: float | None = None
 
     def __post_init__(self) -> None:
         # A record built without an explicit config name (a hand-constructed
@@ -170,13 +176,26 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
             or manifest.get("protocol", {}).get("wire_protocol")
             or "packed_wire_v1"
         )
+        manifest_run = manifest.get("run", {})
+        p_value = manifest_run.get("p", cfg["algorithm"].get("p"))
+        if p_value is not None and p_value != "min":
+            try:
+                p_value = float(p_value)
+            except (TypeError, ValueError):
+                p_value = str(p_value)
+        omega_value = manifest_run.get("omega", cfg["algorithm"].get("omega"))
+        if omega_value is not None:
+            omega_value = float(omega_value)
+        c_unit_value = cfg["algorithm"].get("c_unit")
+        if c_unit_value is not None:
+            c_unit_value = float(c_unit_value)
         runs.append(
             RunRecord(
                 job_dir=job_dir,
                 dataset=cfg["dataset"]["name"],
                 alpha=float(cfg["heterogeneity"]["alpha"]),
                 algorithm=algorithm,
-                formulation=cfg["algorithm"].get("formulation"),
+                formulation=manifest_run.get("formulation", cfg["algorithm"].get("formulation")),
                 seed=int(cfg["seed"]),
                 csv_path=csv_path,
                 refinements=(
@@ -192,6 +211,9 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 promotable=is_promotable_manifest(manifest),
                 split=split,
                 wire_protocol=wire_protocol,
+                p=p_value,
+                omega=omega_value,
+                c_unit=c_unit_value,
             )
         )
     return runs
@@ -1496,9 +1518,9 @@ def iso_byte_scores(
     comparison the thesis reports.
 
     ``group_of`` returns the label a run is scored under, or ``None`` to exclude
-    it. Membership is the caller's decision; the only thing decided here is the
-    budget ``B = min`` over every included run's final cumulative MB, read off
-    the data.
+    it. For each seed, the common budget is the minimum terminal cumulative MB
+    across that seed's arms. A missing arm or an out-of-support interpolation
+    makes the cell unscorable rather than silently shrinking one arm's sample.
 
     Deliberately free of both :func:`compute_target_floor` and
     :func:`confirmatory_runs`: the floor exists only where the grid has FedAvg
@@ -1513,28 +1535,74 @@ def iso_byte_scores(
     result: dict[str, dict] = {}
     for dataset, alpha in sorted({(r.dataset, r.alpha) for r, _ in scored}):
         cell = [(r, g) for r, g in scored if r.dataset == dataset and r.alpha == alpha]
-        finals = {
-            r.csv_path: float(frame(r)["communication/cumulative_mb"].iloc[-1]) for r, _ in cell
+        groups_in_cell = sorted({g for _, g in cell}, key=str)
+        by_group_seed: dict[object, dict[int, RunRecord]] = {group: {} for group in groups_in_cell}
+        for run, group in cell:
+            if run.seed in by_group_seed[group]:
+                raise ValueError(
+                    f"duplicate iso-byte run for {dataset} alpha={alpha} "
+                    f"group={group!r} seed={run.seed}"
+                )
+            by_group_seed[group][run.seed] = run
+        expected_seeds = sorted(set().union(*(set(members) for members in by_group_seed.values())))
+        missing_pairs = [
+            (group, seed)
+            for group, members in by_group_seed.items()
+            for seed in expected_seeds
+            if seed not in members
+        ]
+        finals_by_group_seed: dict[object, dict[int, float]] = {
+            group: {} for group in groups_in_cell
         }
-        budget_mb = min(finals.values())
-        setter, setter_group = min(cell, key=lambda rg: finals[rg[0].csv_path])
+        for group, members in by_group_seed.items():
+            for seed, run in members.items():
+                df = frame(run)
+                if "communication/cumulative_mb" not in df.columns or df.empty:
+                    continue
+                finals_by_group_seed[group][seed] = float(
+                    df["communication/cumulative_mb"].iloc[-1]
+                )
+        budget_by_seed: dict[int, float] = {}
+        for seed in expected_seeds:
+            terminal_values = [finals_by_group_seed[group].get(seed) for group in groups_in_cell]
+            if all(value is not None and math.isfinite(value) for value in terminal_values):
+                budget_by_seed[seed] = min(value for value in terminal_values if value is not None)
+        budget_mb = min(budget_by_seed.values()) if budget_by_seed else None
+        setter = setter_group = None
+        if budget_mb is not None:
+            for group in groups_in_cell:
+                for seed, value in finals_by_group_seed[group].items():
+                    if value == budget_mb:
+                        setter, setter_group = by_group_seed[group][seed], group
+                        break
+                if setter is not None:
+                    break
+        cell_scoring_error = bool(missing_pairs) or len(budget_by_seed) != len(expected_seeds)
 
         groups: dict[object, dict] = {}
         # key=str only so the JSON reads in a stable order; ranking is by score.
-        for label in sorted({g for _, g in cell}, key=str):
-            members = sorted((r for r, g in cell if g == label), key=lambda r: r.seed)
+        for label in groups_in_cell:
+            members = sorted(by_group_seed[label].values(), key=lambda r: r.seed)
             seeds: dict[int, dict] = {}
             accs_at_budget: list[float] = []
             accs_r100: list[float] = []
             for r in members:
                 df = frame(r)
-                acc_b = accuracy_at_budget(df, budget_mb)
+                seed_budget = budget_by_seed.get(r.seed)
+                acc_b = (
+                    accuracy_at_budget(df, seed_budget)
+                    if seed_budget is not None and not cell_scoring_error
+                    else None
+                )
                 acc_100 = accuracy_at_round(df, 100)
                 seeds[r.seed] = {
                     "accuracy_at_budget": acc_b,
-                    "round_at_budget": round_at_budget(df, budget_mb),
+                    "round_at_budget": (
+                        round_at_budget(df, seed_budget) if seed_budget is not None else None
+                    ),
+                    "budget_mb": seed_budget,
                     "accuracy_r100": acc_100,
-                    "final_cumulative_mb": finals[r.csv_path],
+                    "final_cumulative_mb": finals_by_group_seed[label].get(r.seed),
                 }
                 if acc_b is not None:
                     accs_at_budget.append(acc_b)
@@ -1556,7 +1624,13 @@ def iso_byte_scores(
                 "accuracy_at_budget": at_budget,
                 "mean_accuracy_at_budget": at_budget["mean"],
                 "mean_accuracy_r100": statistics.fmean(accs_r100) if accs_r100 else None,
-                "final_cumulative_mb": _mean_sd([finals[r.csv_path] for r in members]),
+                "final_cumulative_mb": _mean_sd(
+                    [
+                        finals_by_group_seed[label][r.seed]
+                        for r in members
+                        if r.seed in finals_by_group_seed[label]
+                    ]
+                ),
             }
 
         ranked = sorted(
@@ -1575,8 +1649,28 @@ def iso_byte_scores(
             "dataset": dataset,
             "alpha": alpha,
             "budget_mb": budget_mb,
-            "budget_set_by": {"group": setter_group, "seed": setter.seed},
+            "budget_by_seed": budget_by_seed,
+            "budget_set_by": (
+                {"group": setter_group, "seed": setter.seed} if setter is not None else None
+            ),
             "groups": groups,
+            "all_scored": not cell_scoring_error
+            and all(
+                value["accuracy_at_budget"] is not None
+                for group in groups.values()
+                for value in group["seeds"].values()
+            ),
+            "unscorable_reason": (
+                "missing group/seed pair or terminal spend"
+                if missing_pairs or len(budget_by_seed) != len(expected_seeds)
+                else "common budget outside one or more run supports"
+                if any(
+                    value["accuracy_at_budget"] is None
+                    for group in groups.values()
+                    for value in group["seeds"].values()
+                )
+                else None
+            ),
             "winner": ranked[0] if ranked else None,
             "margin_accuracy": margin,
             "ranking": ranked,
@@ -1877,6 +1971,19 @@ def select_power_mean_omega_iso_byte(
     # Normalize selected_p
     p_norm = selected_p if selected_p == "min" else float(selected_p)
 
+    def p_matches(run: RunRecord, expected: float | str) -> bool:
+        """Check manifest provenance, retaining compatibility with old fixtures."""
+        if run.p is None:
+            # Pre-#96 hand-built fixtures have no manifest p. Their variant remains
+            # useful for testing the join, but discovered campaign rows must carry it.
+            return True
+        if expected == "min" or run.p == "min":
+            return run.p == expected
+        try:
+            return math.isclose(float(run.p), float(expected), rel_tol=0.0, abs_tol=1e-12)
+        except (TypeError, ValueError):
+            return False
+
     # Identify candidate runs across Stage 1a (omega=0.5) and Stage 1b (omega in {0.25, 0.75})
     omega_runs: dict[float, list[RunRecord]] = {0.25: [], 0.5: [], 0.75: []}
     for r in runs:
@@ -1888,11 +1995,16 @@ def select_power_mean_omega_iso_byte(
         if r.experiment_group == stage_1b.experiment_group:
             omega_val = stage_1b.omegas_by_variant.get(r.variant)
             p_val = p_norm
+            if omega_val is not None and not p_matches(r, p_norm):
+                raise ValueError(
+                    f"power-mean Stage 1b run {r.job_dir} recorded p={r.p!r}, "
+                    f"but selected p={p_norm!r}"
+                )
         elif r.experiment_group == stage_1b.stage_1a_group:
             stage_1a = power_mean_stage_one()
             if r.variant in stage_1a.degrees_by_variant:
                 p_cand = stage_1a.degrees_by_variant[r.variant]
-                if p_cand == p_norm:
+                if p_cand == p_norm and p_matches(r, p_norm):
                     omega_val = 0.5
                     p_val = p_cand
         else:
@@ -1902,7 +2014,11 @@ def select_power_mean_omega_iso_byte(
             elif r.variant == "omega0.75":
                 omega_val = 0.75
                 p_val = p_norm
-            elif r.variant in ("omega0.5", "p0", f"p{p_norm}"):
+            elif r.variant in ("omega0.5", "p0") or (
+                r.variant.startswith("p")
+                and r.variant[1:] not in {"", "min"}
+                and math.isclose(float(r.variant[1:]), float(p_norm), abs_tol=1e-12)
+            ):
                 omega_val = 0.5
                 p_val = p_norm
 
@@ -2046,98 +2162,575 @@ def resolve_power_mean_omega(winner_result: dict, dataset: str = "cifar10") -> d
     }
 
 
+PIPELINE_PRIMARY_CELLS = frozenset(
+    {
+        ("cifar10", 0.1),
+        ("cifar10", 1.0),
+        ("cifar100", 0.1),
+        ("cifar100", 1.0),
+        ("femnist", 1.0),
+    }
+)
+
+
+def verify_gate_2_preconditions(
+    fedmaq_cfg: Mapping[str, object],
+    stage_1a_verdict: Mapping[str, object],
+    stage_1b_verdict: Mapping[str, object],
+) -> dict[str, object]:
+    """Verify that the frozen downstream config is backed by both stage verdicts.
+
+    This is intentionally a hard precondition for dispatch: a placeholder or a
+    manually edited ``p``/``omega`` must not turn a downstream run into evidence
+    for a different selection. The returned mapping is suitable for recording in
+    an assurance artifact.
+    """
+    algorithm = fedmaq_cfg.get("algorithm", fedmaq_cfg)
+    if not isinstance(algorithm, Mapping):
+        raise ValueError("FedMAQ Gate 2 config must contain an algorithm mapping")
+    formulation = algorithm.get("formulation")
+    selected_p = stage_1a_verdict.get("selected_p")
+    selected_omega = stage_1b_verdict.get("selected_omega")
+    if selected_p is None or selected_omega is None:
+        raise ValueError("Gate 2 requires resolved Stage 1a p and Stage 1b omega verdicts")
+    if formulation != "power_mean" and formulation != 2:
+        raise ValueError(f"Gate 2 expected a power-mean FedMAQ formulation, found {formulation!r}")
+
+    actual_p = algorithm.get("p")
+    actual_omega = algorithm.get("omega")
+    if actual_p is None or actual_omega is None:
+        raise ValueError("Gate 2 config must record concrete p and omega values")
+    try:
+        p_matches = (
+            selected_p == "min"
+            and actual_p == "min"
+            or math.isclose(float(actual_p), float(selected_p), rel_tol=0.0, abs_tol=1e-12)
+        )
+        omega_matches = math.isclose(
+            float(actual_omega), float(selected_omega), rel_tol=0.0, abs_tol=1e-12
+        )
+    except (TypeError, ValueError):
+        p_matches = actual_p == selected_p
+        omega_matches = False
+    if not p_matches or not omega_matches:
+        raise ValueError(
+            "Gate 2 config does not match the selection verdicts: "
+            f"config p={actual_p!r}, omega={actual_omega!r}; "
+            f"selected p={selected_p!r}, omega={selected_omega!r}"
+        )
+    return {
+        "verified": True,
+        "formulation": formulation,
+        "p": actual_p,
+        "omega": actual_omega,
+        "stage_1a": dict(stage_1a_verdict),
+        "stage_1b": dict(stage_1b_verdict),
+    }
+
+
+PRIMARY_SEEDS = frozenset({0, 42, 123})
+
+
+def _check_test_split_only(runs: list[RunRecord], stage_name: str) -> None:
+    bad = sorted({r.split for r in runs if r.split != "test"})
+    if bad:
+        raise ValueError(f"{stage_name} requires test-split inputs; found {bad}")
+
+
 def compare_fedpaq_pipeline_iso_byte(
     runs: list[RunRecord], frames: MetricsFrames | None = None
 ) -> dict:
-    """Compare ordinary FedPAQ, pipeline-equipped FedPAQ, and FedMAQ across primary cells.
+    """Compare FedPAQ, pipeline FedPAQ, and FedMAQ on the five test-set cells.
 
-    Isolates the coding pipeline (error feedback + diff coding + lossless zlib)
-    treatment effect at per-seed common validation-byte budgets.
+    The comparison is downstream-only and therefore cannot consume validation
+    rows. Its population is exact: the two benchmark-grid arms plus the
+    pipeline-control group, five cells, and seeds ``{0, 42, 123}``.
     """
     runs = promotable_runs(runs)
-    _check_validation_split_only(runs, "compare_fedpaq_pipeline_iso_byte")
-    frame_for = _frame_resolver(frames)
+    scoped = [
+        r
+        for r in runs
+        if r.experiment_group in {GRID_GROUP, FEDPAQ_PIPELINE_GROUP}
+        and r.algorithm_config in {"fedpaq", "fedpaq_pipeline", "fedmaq"}
+    ]
+    _check_test_split_only(scoped, "compare_fedpaq_pipeline_iso_byte")
+    expected_algorithms = {
+        GRID_GROUP: frozenset({"fedpaq", "fedmaq"}),
+        FEDPAQ_PIPELINE_GROUP: frozenset({"fedpaq_pipeline"}),
+    }
+    if {r.experiment_group for r in scoped} != set(expected_algorithms):
+        raise ValueError(
+            "compare_fedpaq_pipeline_iso_byte requires benchmark_grid and fedpaq_pipeline groups"
+        )
+    for group, algorithms in expected_algorithms.items():
+        members = [r for r in scoped if r.experiment_group == group]
+        if len(members) != len(algorithms) * len(PIPELINE_PRIMARY_CELLS) * len(PRIMARY_SEEDS):
+            raise ValueError(
+                f"compare_fedpaq_pipeline_iso_byte group {group!r} has "
+                f"{len(members)} rows, expected "
+                f"{len(algorithms) * len(PIPELINE_PRIMARY_CELLS) * len(PRIMARY_SEEDS)}"
+            )
+        identities = {(r.algorithm_config, r.dataset, r.alpha, r.seed) for r in members}
+        expected = {
+            (algorithm, dataset, alpha, seed)
+            for algorithm in algorithms
+            for dataset, alpha in PIPELINE_PRIMARY_CELLS
+            for seed in PRIMARY_SEEDS
+        }
+        if identities != expected:
+            raise ValueError(
+                f"compare_fedpaq_pipeline_iso_byte group {group!r} has "
+                f"unexpected/missing identities: missing={sorted(expected - identities)}, "
+                f"unexpected={sorted(identities - expected)}"
+            )
+    for run in scoped:
+        expected_group = (
+            FEDPAQ_PIPELINE_GROUP if run.algorithm_config == "fedpaq_pipeline" else GRID_GROUP
+        )
+        if run.experiment_group != expected_group:
+            raise ValueError(
+                f"pipeline comparison has {run.algorithm_config} in {run.experiment_group}; "
+                f"expected {expected_group}"
+            )
+    # The exact population has three algorithms per cell: two in the grid and
+    # one in the dedicated pipeline group.
+    by_key: dict[tuple[str, float, str, int], RunRecord] = {}
+    for run in scoped:
+        key = (run.dataset, run.alpha, run.algorithm_config, run.seed)
+        if key in by_key:
+            raise ValueError(f"duplicate pipeline comparison identity: {key}")
+        by_key[key] = run
+    for dataset, alpha in PIPELINE_PRIMARY_CELLS:
+        for seed in PRIMARY_SEEDS:
+            for algorithm in ("fedpaq", "fedpaq_pipeline", "fedmaq"):
+                if (dataset, alpha, algorithm, seed) not in by_key:
+                    raise ValueError(
+                        f"pipeline comparison missing {(dataset, alpha, algorithm, seed)}"
+                    )
 
-    target_algs = {"fedpaq", "fedpaq_pipeline", "fedmaq"}
-    scoped = [r for r in runs if (r.algorithm in target_algs or r.algorithm_config in target_algs)]
-
-    cells = sorted({(r.dataset, r.alpha) for r in scoped})
+    cell_runs = [
+        run for run in scoped if run.algorithm_config in {"fedpaq", "fedpaq_pipeline", "fedmaq"}
+    ]
     result: dict[str, dict] = {}
+    for dataset, alpha in sorted(PIPELINE_PRIMARY_CELLS):
+        cell = [r for r in cell_runs if (r.dataset, r.alpha) == (dataset, alpha)]
+        scored = iso_byte_scores(
+            cell,
+            lambda r: r.algorithm_config,
+            frames=frames,
+        )[f"{dataset}_alpha_{alpha}"]
+        if not scored["all_scored"]:
+            raise ValueError(
+                f"pipeline comparison cell {dataset} alpha={alpha} is unscorable: "
+                f"{scored['unscorable_reason']}"
+            )
+        result[f"{dataset}_alpha_{alpha}"] = scored
+    return result
 
-    for dataset, alpha in cells:
-        cell_runs = [r for r in scoped if r.dataset == dataset and r.alpha == alpha]
-        by_alg: dict[str, dict[int, RunRecord]] = {}
-        for alg in ("fedpaq", "fedpaq_pipeline", "fedmaq"):
-            members = [r for r in cell_runs if r.algorithm == alg or r.algorithm_config == alg]
-            if members:
-                by_alg[alg] = {r.seed: r for r in members}
 
-        common_seeds = (
-            sorted(set.intersection(*(set(m.keys()) for m in by_alg.values()))) if by_alg else []
+def load_authoritative_metrics(run: RunRecord) -> pd.DataFrame:
+    """Load the JSONL superset used for dynamic/client metric readouts."""
+    path = run.job_dir / "experiment_log.jsonl"
+    if not path.is_file() or path.stat().st_size == 0:
+        raise ValueError(f"missing authoritative telemetry JSONL: {path}")
+    records: list[dict] = []
+    try:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError(f"JSONL line {line_number} is not an object: {path}")
+            records.append(record)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read authoritative telemetry {path}: {exc}") from exc
+    if not records:
+        raise ValueError(f"authoritative telemetry JSONL has no records: {path}")
+    frame = pd.DataFrame.from_records(records)
+    if "round" not in frame.columns:
+        raise ValueError(f"authoritative telemetry has no round column: {path}")
+    return frame
+
+
+def _exact_round_row(frame: pd.DataFrame, run: RunRecord, round_number: int = 100) -> pd.Series:
+    rows = frame[frame["round"] == round_number]
+    if len(rows) != 1:
+        raise ValueError(
+            f"run {run.job_dir} must have exactly one round {round_number} row; found {len(rows)}"
+        )
+    return rows.iloc[0]
+
+
+def _run_jsonl_final(run: RunRecord, round_number: int = 100) -> dict:
+    frame = load_authoritative_metrics(run)
+    return _exact_round_row(frame, run, round_number).to_dict()
+
+
+def _require_grid_population(
+    runs: list[RunRecord], *, algorithms: frozenset[str], stage_name: str
+) -> dict[tuple[str, float, str, int], RunRecord]:
+    expected = {
+        (dataset, alpha, algorithm, seed)
+        for dataset, alpha in PIPELINE_PRIMARY_CELLS
+        for algorithm in algorithms
+        for seed in PRIMARY_SEEDS
+    }
+    observed: dict[tuple[str, float, str, int], RunRecord] = {}
+    for run in runs:
+        key = (run.dataset, run.alpha, run.algorithm_config, run.seed)
+        if key in observed:
+            raise ValueError(f"{stage_name} has duplicate identity {key}")
+        observed[key] = run
+    if set(observed) != expected:
+        raise ValueError(
+            f"{stage_name} has unexpected/missing identities: "
+            f"missing={sorted(expected - set(observed))}, "
+            f"unexpected={sorted(set(observed) - expected)}"
+        )
+    return observed
+
+
+def _q_distribution(record: dict, field: str = "q_count") -> dict[str, int]:
+    prefix = f"algorithm/fedmaq/{field}_"
+    counts = {
+        key.removeprefix(prefix): int(value)
+        for key, value in record.items()
+        if key.startswith(prefix) and value is not None
+    }
+    if not counts:
+        raise ValueError(f"authoritative telemetry has no FedMAQ {field} distribution")
+    return dict(sorted(counts.items(), key=lambda item: int(item[0])))
+
+
+def compare_memory_sensitivity_iso_byte(
+    runs: list[RunRecord], frames: MetricsFrames | None = None
+) -> dict:
+    """Join standard c_unit=1024 grid rows to c_unit=512/2048 sensitivity arms."""
+    runs = promotable_runs(runs)
+    scoped = [
+        r
+        for r in runs
+        if (r.experiment_group == GRID_GROUP and r.algorithm_config == "fedmaq")
+        or r.experiment_group == MEMORY_SENSITIVITY_GROUP
+    ]
+    _check_test_split_only(scoped, "compare_memory_sensitivity_iso_byte")
+    expected_variants = frozenset({"cunit512", "cunit1024", "cunit2048"})
+    by_identity: dict[tuple[str, float, str, int], RunRecord] = {}
+    for run in scoped:
+        variant = "cunit1024" if run.experiment_group == GRID_GROUP else run.variant
+        if variant not in expected_variants:
+            raise ValueError(f"unexpected memory sensitivity variant {variant!r}")
+        key = (run.dataset, run.alpha, variant, run.seed)
+        if key in by_identity:
+            raise ValueError(f"duplicate memory sensitivity identity {key}")
+        by_identity[key] = run
+    expected = {
+        (dataset, alpha, variant, seed)
+        for dataset, alpha in frozenset({("cifar10", 0.1), ("cifar10", 1.0)})
+        for variant in expected_variants
+        for seed in PRIMARY_SEEDS
+    }
+    if set(by_identity) != expected:
+        raise ValueError(
+            "memory sensitivity population is not closed: "
+            f"missing={sorted(expected - set(by_identity))}, "
+            f"unexpected={sorted(set(by_identity) - expected)}"
         )
 
-        if not common_seeds:
-            continue
-
-        budget_by_seed: dict[int, float] = {}
-        scored_by_alg: dict[str, dict[int, float]] = {alg: {} for alg in by_alg}
-        terminal_mb_by_alg: dict[str, dict[int, float]] = {alg: {} for alg in by_alg}
-
-        for seed in common_seeds:
-            seed_terminal_mbs = {
-                alg: float(frame_for(by_alg[alg][seed])["communication/cumulative_mb"].iloc[-1])
-                for alg in by_alg
-            }
-            for alg, mb in seed_terminal_mbs.items():
-                terminal_mb_by_alg[alg][seed] = mb
-            b_star = min(seed_terminal_mbs.values())
-            budget_by_seed[seed] = b_star
-
-            for alg in by_alg:
-                df = frame_for(by_alg[alg][seed])
-                acc = interpolate_accuracy_at_budget(df, b_star)
-                if acc is not None:
-                    scored_by_alg[alg][seed] = acc
-
-        groups: dict[str, dict] = {}
-        for alg in by_alg:
-            scores = [scored_by_alg[alg][s] for s in common_seeds if s in scored_by_alg[alg]]
-            term_mbs = [terminal_mb_by_alg[alg][s] for s in common_seeds]
-            groups[alg] = {
-                "seeds": {
-                    s: {
-                        "accuracy_at_budget": scored_by_alg[alg].get(s),
-                        "final_cumulative_mb": terminal_mb_by_alg[alg].get(s),
+    result: dict[str, dict] = {}
+    for dataset, alpha in sorted({(key[0], key[1]) for key in expected}):
+        cell_runs = [
+            run
+            for (dset, skew, _variant, _seed), run in by_identity.items()
+            if (dset, skew) == (dataset, alpha)
+        ]
+        scored = iso_byte_scores(
+            cell_runs,
+            lambda run: "cunit1024" if run.experiment_group == GRID_GROUP else run.variant,
+            frames=frames,
+        )[f"{dataset}_alpha_{alpha}"]
+        if not scored["all_scored"]:
+            raise ValueError(
+                f"memory sensitivity cell {dataset} alpha={alpha} is unscorable: "
+                f"{scored['unscorable_reason']}"
+            )
+        for variant in expected_variants:
+            for seed in PRIMARY_SEEDS:
+                run = by_identity[(dataset, alpha, variant, seed)]
+                expected_c_unit = {
+                    "cunit512": 512.0,
+                    "cunit1024": 1024.0,
+                    "cunit2048": 2048.0,
+                }[variant]
+                if run.c_unit is not None and not math.isclose(
+                    run.c_unit, expected_c_unit, rel_tol=0.0, abs_tol=1e-9
+                ):
+                    raise ValueError(
+                        f"memory sensitivity {variant} recorded c_unit={run.c_unit}, "
+                        f"expected {expected_c_unit}"
+                    )
+                final = _run_jsonl_final(run)
+                csv_final = _exact_round_row(load_round_metrics(run.csv_path), run)
+                scored["groups"][variant]["seeds"][seed].update(
+                    {
+                        "cumulative_upload_mb_r100": float(
+                            csv_final["communication/cumulative_upload_mb"]
+                        ),
+                        "cumulative_bidirectional_mb_r100": float(
+                            csv_final["communication/cumulative_mb"]
+                        ),
+                        "tier1_binding_fraction": final.get(
+                            "algorithm/fedmaq/tier1_binding_fraction"
+                        ),
+                        "precision_distribution": _q_distribution(final),
+                        "soft_target_precision_distribution": _q_distribution(final, "q_hat_count"),
+                        "c_unit": run.c_unit,
                     }
-                    for s in common_seeds
-                },
-                "accuracy_at_budget": summary(scores) if scores else None,
-                "mean_accuracy_at_budget": statistics.fmean(scores) if scores else None,
-                "final_cumulative_mb": summary(term_mbs) if term_mbs else None,
-            }
+                )
+        result[f"{dataset}_alpha_{alpha}"] = scored
+    return result
 
-        def _alg_sort_key(alg: str, g: dict = groups) -> tuple[float, float]:
-            mean_acc = g[alg]["mean_accuracy_at_budget"] or 0.0
-            sum_entry = g[alg]["final_cumulative_mb"]
-            neg_mb = -sum_entry["mean"] if sum_entry and sum_entry["mean"] is not None else 0.0
-            return (mean_acc, neg_mb)
 
-        ranked = sorted(
-            [alg for alg in groups if groups[alg]["mean_accuracy_at_budget"] is not None],
-            key=_alg_sort_key,
-            reverse=True,
+def compare_variable_vs_uniform_memory(
+    runs: list[RunRecord], frames: MetricsFrames | None = None
+) -> dict:
+    """Compare variable-memory FedMAQ against the preregistered uniform control."""
+    runs = promotable_runs(runs)
+    scoped = [
+        r
+        for r in runs
+        if (r.experiment_group == GRID_GROUP and r.algorithm_config == "fedmaq")
+        or r.experiment_group == "uniform_memory_control"
+    ]
+    _check_test_split_only(scoped, "compare_variable_vs_uniform_memory")
+    expected_cells = frozenset({("cifar10", 0.1), ("cifar10", 1.0)})
+    by_identity: dict[tuple[str, float, str, int], RunRecord] = {}
+    for run in scoped:
+        group = "variable_memory" if run.experiment_group == GRID_GROUP else "uniform_memory"
+        key = (run.dataset, run.alpha, group, run.seed)
+        if key in by_identity:
+            raise ValueError(f"variable/uniform comparison duplicate identity {key}")
+        by_identity[key] = run
+    expected = {
+        (dataset, alpha, group, seed)
+        for dataset, alpha in expected_cells
+        for group in {"variable_memory", "uniform_memory"}
+        for seed in PRIMARY_SEEDS
+    }
+    if set(by_identity) != expected:
+        raise ValueError(
+            "variable/uniform memory population is not closed: "
+            f"missing={sorted(expected - set(by_identity))}, "
+            f"unexpected={sorted(set(by_identity) - expected)}"
         )
+    result: dict[str, dict] = {}
+    for dataset, alpha in sorted(expected_cells):
+        cell = [
+            run
+            for (dset, skew, _group, _seed), run in by_identity.items()
+            if (dset, skew) == (dataset, alpha)
+        ]
+        scored = iso_byte_scores(
+            cell,
+            lambda run: (
+                "variable_memory" if run.experiment_group == GRID_GROUP else "uniform_memory"
+            ),
+            frames=frames,
+        )[f"{dataset}_alpha_{alpha}"]
+        if not scored["all_scored"]:
+            raise ValueError(
+                f"variable/uniform cell {dataset} alpha={alpha} is unscorable: "
+                f"{scored['unscorable_reason']}"
+            )
+        for group_name in ("variable_memory", "uniform_memory"):
+            for seed in PRIMARY_SEEDS:
+                run = by_identity[(dataset, alpha, group_name, seed)]
+                csv_final = _exact_round_row(load_round_metrics(run.csv_path), run)
+                json_final = _run_jsonl_final(run)
+                scored["groups"][group_name]["seeds"][seed].update(
+                    {
+                        "accuracy_at_budget": scored["groups"][group_name]["seeds"][seed][
+                            "accuracy_at_budget"
+                        ],
+                        "cumulative_upload_mb_r100": float(
+                            csv_final["communication/cumulative_upload_mb"]
+                        ),
+                        "cumulative_bidirectional_mb_r100": float(
+                            csv_final["communication/cumulative_mb"]
+                        ),
+                        "tier1_binding_fraction": json_final.get(
+                            "algorithm/fedmaq/tier1_binding_fraction"
+                        ),
+                        "precision_distribution": _q_distribution(json_final),
+                        "soft_target_precision_distribution": _q_distribution(
+                            json_final, "q_hat_count"
+                        ),
+                    }
+                )
+        variable = scored["groups"]["variable_memory"]["seeds"]
+        uniform = scored["groups"]["uniform_memory"]["seeds"]
+        for seed in PRIMARY_SEEDS:
+            variable_run = by_identity[(dataset, alpha, "variable_memory", seed)]
+            uniform_run = by_identity[(dataset, alpha, "uniform_memory", seed)]
+            if variable_run.post_process != uniform_run.post_process:
+                raise ValueError("variable/uniform comparison changed the pipeline treatment")
+            if variable_run.formulation != uniform_run.formulation:
+                raise ValueError("variable/uniform comparison changed formulation")
+            if variable_run.p != uniform_run.p or variable_run.omega != uniform_run.omega:
+                raise ValueError("variable/uniform comparison changed p or omega")
+            if variable_run.post_process is not True or uniform_run.post_process is not True:
+                raise ValueError("variable/uniform comparison requires post-processing")
+            variable[seed]["delta_vs_uniform"] = {
+                "accuracy_at_budget": variable[seed]["accuracy_at_budget"]
+                - uniform[seed]["accuracy_at_budget"],
+                "cumulative_upload_mb_r100": variable[seed]["cumulative_upload_mb_r100"]
+                - uniform[seed]["cumulative_upload_mb_r100"],
+                "cumulative_bidirectional_mb_r100": variable[seed][
+                    "cumulative_bidirectional_mb_r100"
+                ]
+                - uniform[seed]["cumulative_bidirectional_mb_r100"],
+            }
+        scored["deltas_vs_uniform"] = {
+            str(seed): variable[seed]["delta_vs_uniform"] for seed in PRIMARY_SEEDS
+        }
+        result[f"{dataset}_alpha_{alpha}"] = scored
+    return result
 
-        result[f"{dataset}_alpha_{alpha}"] = {
+
+LOSS_COMPONENTS: dict[str, tuple[str, ...]] = {
+    "fedavg": ("client/avg_train_loss",),
+    "fedprox": ("client/avg_train_loss",),
+    "fedpaq": ("client/avg_train_loss",),
+    "dadaquant": ("client/avg_train_loss",),
+    "feddistill": ("client/avg_task_loss", "client/avg_distill_loss"),
+    "fedkd": (
+        "client/avg_task_loss_student",
+        "client/avg_task_loss_teacher",
+        "client/avg_kd_loss_student",
+        "client/avg_kd_loss_teacher",
+        "client/avg_teacher_acc",
+    ),
+    "fedmaq": ("client/avg_train_loss", "algorithm/fedmaq/server_kd_loss"),
+}
+
+
+def loss_decomposition_report(runs: list[RunRecord]) -> dict:
+    """Read the loss components from authoritative JSONL, failing closed on gaps."""
+    scoped = [
+        r
+        for r in promotable_runs(runs)
+        if r.experiment_group == GRID_GROUP and r.algorithm_config in LOSS_COMPONENTS
+    ]
+    _check_test_split_only(scoped, "loss_decomposition_report")
+    observed = _require_grid_population(
+        scoped, algorithms=frozenset(LOSS_COMPONENTS), stage_name="loss_decomposition_report"
+    )
+    result: dict[str, dict] = {"runs": {}, "by_algorithm": {}}
+    by_algorithm: dict[str, list[dict[str, float]]] = {key: [] for key in LOSS_COMPONENTS}
+    for (dataset, alpha, algorithm, seed), run in sorted(observed.items()):
+        final = _run_jsonl_final(run)
+        components = LOSS_COMPONENTS[algorithm]
+        missing = [key for key in components if key not in final or final[key] is None]
+        if missing:
+            raise ValueError(
+                f"loss decomposition missing {missing} for {dataset} alpha={alpha} "
+                f"{algorithm} seed={seed}"
+            )
+        values = {key: float(final[key]) for key in components}
+        if not all(math.isfinite(value) for value in values.values()):
+            raise ValueError(f"loss decomposition has non-finite values for {run.job_dir}")
+        identity = f"{dataset}_alpha_{alpha}_{algorithm}_seed_{seed}"
+        result["runs"][identity] = {
             "dataset": dataset,
             "alpha": alpha,
-            "budget_by_seed": budget_by_seed,
-            "budget_mb": min(budget_by_seed.values()) if budget_by_seed else None,
-            "groups": groups,
-            "ranking": ranked,
-            "winner": ranked[0] if ranked else None,
+            "algorithm": algorithm,
+            "seed": seed,
+            **values,
         }
+        by_algorithm[algorithm].append(values)
+    for algorithm, rows in by_algorithm.items():
+        result["by_algorithm"][algorithm] = {
+            key: summary([row[key] for row in rows]) for key in LOSS_COMPONENTS[algorithm]
+        }
+    return result
 
+
+def _secondary_bytes_for_run(run: RunRecord) -> int | None:
+    frame = load_round_metrics(run.csv_path)
+    column = "communication/round_secondary_bytes"
+    if column not in frame.columns:
+        return None
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    return None if values.empty else int(values.sum())
+
+
+def headline_uplink_reduction(runs: list[RunRecord]) -> dict:
+    """Report paired FedMAQ uplink and bidirectional reductions at exact R rows."""
+    scoped = [r for r in promotable_runs(runs) if r.experiment_group == GRID_GROUP]
+    _check_test_split_only(scoped, "headline_uplink_reduction")
+    algorithms = frozenset(
+        {"fedavg", "fedprox", "fedpaq", "dadaquant", "feddistill", "fedkd", "fedmaq"}
+    )
+    observed = _require_grid_population(
+        scoped, algorithms=algorithms, stage_name="headline_uplink_reduction"
+    )
+    result: dict[str, dict] = {}
+    for dataset, alpha in sorted(PIPELINE_PRIMARY_CELLS):
+        for baseline in sorted(algorithms - {"fedmaq"}):
+            per_seed: dict[int, dict] = {}
+            uplink: list[float] = []
+            bidirectional: list[float] = []
+            for seed in sorted(PRIMARY_SEEDS):
+                maq = observed[(dataset, alpha, "fedmaq", seed)]
+                base = observed[(dataset, alpha, baseline, seed)]
+                maq_row = _exact_round_row(load_round_metrics(maq.csv_path), maq)
+                base_row = _exact_round_row(load_round_metrics(base.csv_path), base)
+                maq_upload = float(maq_row["communication/cumulative_upload_mb"])
+                base_upload = float(base_row["communication/cumulative_upload_mb"])
+                maq_bidir = float(maq_row["communication/cumulative_mb"])
+                base_bidir = float(base_row["communication/cumulative_mb"])
+                if base_upload <= 0.0 or base_bidir <= 0.0:
+                    raise ValueError(
+                        f"cannot compute reduction with zero baseline spend for seed {seed}"
+                    )
+                up_reduction = 100.0 * (base_upload - maq_upload) / base_upload
+                bi_reduction = 100.0 * (base_bidir - maq_bidir) / base_bidir
+                uplink.append(up_reduction)
+                bidirectional.append(bi_reduction)
+                per_seed[seed] = {
+                    "uplink_reduction_percent": up_reduction,
+                    "bidirectional_reduction_percent": bi_reduction,
+                    "fedmaq_cumulative_upload_mb": maq_upload,
+                    "baseline_cumulative_upload_mb": base_upload,
+                    "fedmaq_cumulative_bidirectional_mb": maq_bidir,
+                    "baseline_cumulative_bidirectional_mb": base_bidir,
+                    "fedmaq_secondary_bytes": _secondary_bytes_for_run(maq),
+                    "baseline_secondary_bytes": _secondary_bytes_for_run(base),
+                }
+            result[f"{dataset}_alpha_{alpha}_vs_{baseline}"] = {
+                "dataset": dataset,
+                "alpha": alpha,
+                "baseline": baseline,
+                "per_seed": per_seed,
+                "uplink_reduction_percent": summary(uplink),
+                "bidirectional_reduction_percent": summary(bidirectional),
+                "secondary_bytes": {
+                    "fedmaq": summary(
+                        [
+                            per_seed[s]["fedmaq_secondary_bytes"]
+                            for s in per_seed
+                            if per_seed[s]["fedmaq_secondary_bytes"] is not None
+                        ]
+                    ),
+                    "baseline": summary(
+                        [
+                            per_seed[s]["baseline_secondary_bytes"]
+                            for s in per_seed
+                            if per_seed[s]["baseline_secondary_bytes"] is not None
+                        ]
+                    ),
+                },
+            }
     return result
 
 
@@ -2608,6 +3201,8 @@ def compare_to_baselines_iso_byte(
                 "per_seed": per_seed,
                 "fedmaq_accuracy_at_budget": groups["fedmaq"]["accuracy_at_budget"],
                 "baseline_accuracy_at_budget": groups["baseline"]["accuracy_at_budget"],
+                "all_scored": scored["all_scored"],
+                "unscorable_reason": scored["unscorable_reason"],
                 "delta_at_budget": _mean_sd(deltas),
                 "min_delta": min(deltas) if deltas else None,
                 "max_delta": max(deltas) if deltas else None,
@@ -2742,10 +3337,12 @@ def ablation_iso_byte(
             config_of[r.csv_path] = config_num
             members.append(r)
     completeness = round_completeness(members, expected_round=100, frames=frames)
+    scored = iso_byte_scores(members, lambda r: config_of.get(r.csv_path), frames=frames)
     return {
         "all_complete": completeness["all_complete"],
         "incomplete_runs": completeness["incomplete_runs"],
-        "cells": iso_byte_scores(members, lambda r: config_of.get(r.csv_path), frames=frames),
+        "all_scored": bool(scored) and all(cell["all_scored"] for cell in scored.values()),
+        "cells": scored,
     }
 
 
@@ -2904,6 +3501,11 @@ def build_ablation_table(
             f"the iso-byte budget is a partial spend and every arm is scored back to "
             f"it: {iso_byte['incomplete_runs']}."
         )
+    if not iso_byte["all_scored"]:
+        violations.append(
+            "ablation iso-byte evidence is unscorable at one or more per-seed "
+            "common budgets; no partial arm may be reported."
+        )
 
     return {
         "dataset": dataset,
@@ -3018,6 +3620,36 @@ def main() -> None:
         default=BASELINE_TUNING_WIDE_GROUP,
         help="Experiment group to use for the baseline tuning evidence report.",
     )
+    parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Continue writing diagnostic reports despite an open closure certificate.",
+    )
+    parser.add_argument(
+        "--fedpaq-pipeline-output",
+        type=Path,
+        default=Path("scripts/analysis_output/fedpaq_pipeline_iso_byte.json"),
+    )
+    parser.add_argument(
+        "--memory-sensitivity-output",
+        type=Path,
+        default=Path("scripts/analysis_output/memory_sensitivity_iso_byte.json"),
+    )
+    parser.add_argument(
+        "--uniform-memory-output",
+        type=Path,
+        default=Path("scripts/analysis_output/variable_vs_uniform_memory.json"),
+    )
+    parser.add_argument(
+        "--loss-decomposition-output",
+        type=Path,
+        default=Path("scripts/analysis_output/loss_decomposition.json"),
+    )
+    parser.add_argument(
+        "--uplink-output",
+        type=Path,
+        default=Path("scripts/analysis_output/headline_uplink_reduction.json"),
+    )
     args = parser.parse_args()
 
     runs = discover_runs(args.experiments_root)
@@ -3048,6 +3680,7 @@ def main() -> None:
             "reading the verdict below."
         )
 
+    certificate: dict | None = None
     if args.expected_runs.is_file():
         with open(args.expected_runs, encoding="utf-8") as f:
             manifest_groups = json.load(f)["groups"]
@@ -3073,6 +3706,11 @@ def main() -> None:
             f"Skipped the closure certificate: {args.expected_runs} not found. "
             "Generate it with `uv run python scripts/dump_expected_runs.py`."
         )
+
+    if certificate is None or not certificate["all_closed"]:
+        if not args.allow_incomplete:
+            print("Analysis refused: expected-run closure is not closed.", file=sys.stderr)
+            raise SystemExit(1)
 
     iso_byte_result = select_winner_iso_byte(runs)
     write_legacy_report(args.iso_byte_output, iso_byte_result)
@@ -3183,6 +3821,23 @@ def main() -> None:
             "  The §5.4 contrasts are NOT attributable while any violation stands; "
             "resolve them before reporting the table."
         )
+
+    strict_reports = (
+        ("FedPAQ pipeline", args.fedpaq_pipeline_output, compare_fedpaq_pipeline_iso_byte),
+        ("memory sensitivity", args.memory_sensitivity_output, compare_memory_sensitivity_iso_byte),
+        ("variable/uniform memory", args.uniform_memory_output, compare_variable_vs_uniform_memory),
+        ("loss decomposition", args.loss_decomposition_output, loss_decomposition_report),
+        ("headline uplink", args.uplink_output, headline_uplink_reduction),
+    )
+    for label, path, builder in strict_reports:
+        try:
+            report = builder(runs)
+        except ValueError as exc:
+            report = {"error": str(exc), "reportable": False}
+            print(f"  {label} report is not reportable: {exc}")
+        else:
+            print(f"Wrote {label} report to {path}")
+        write_legacy_report(path, report)
 
 
 if __name__ == "__main__":

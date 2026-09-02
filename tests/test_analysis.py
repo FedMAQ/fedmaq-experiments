@@ -1688,7 +1688,13 @@ def test_compare_fedpaq_pipeline_iso_byte(tmp_path):
     """compare_fedpaq_pipeline_iso_byte isolates coding pipeline treatment at common budgets."""
     runs = []
     seeds = (0, 42, 123)
-    for alpha in (0.1, 1.0):
+    for dataset, alpha in (
+        ("cifar10", 0.1),
+        ("cifar10", 1.0),
+        ("cifar100", 0.1),
+        ("cifar100", 1.0),
+        ("femnist", 1.0),
+    ):
         for seed in seeds:
             # Ordinary fedpaq (higher byte spend, lower accuracy)
             r_fedpaq = _write_run(
@@ -1700,6 +1706,7 @@ def test_compare_fedpaq_pipeline_iso_byte(tmp_path):
                 [10.0, 20.0, 30.0],
                 group=GRID_GROUP,
                 alpha=alpha,
+                dataset=dataset,
             )
             # FedPAQ pipeline (moderate spend, higher accuracy)
             r_pipe = _write_run(
@@ -1711,6 +1718,7 @@ def test_compare_fedpaq_pipeline_iso_byte(tmp_path):
                 [6.0, 12.0, 18.0],
                 group=FEDPAQ_PIPELINE_GROUP,
                 alpha=alpha,
+                dataset=dataset,
             )
             # FedMAQ
             r_fedmaq = _write_run(
@@ -1722,7 +1730,10 @@ def test_compare_fedpaq_pipeline_iso_byte(tmp_path):
                 [5.0, 10.0, 15.0],
                 group=GRID_GROUP,
                 alpha=alpha,
+                dataset=dataset,
             )
+            for run in (r_fedpaq, r_pipe, r_fedmaq):
+                run.split = "test"
             runs.extend([r_fedpaq, r_pipe, r_fedmaq])
 
     result = compare_fedpaq_pipeline_iso_byte(runs)

@@ -9,6 +9,7 @@ from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
 
+from fedmaq.core.protocol import validate_matrix_against_protocol
 from scripts.common import (
     build_run_command,
     expand_matrix,
@@ -124,6 +125,11 @@ def plan_matrix(
     heterogeneities = tuple(
         str(value) for value in resolved.get("heterogeneities", ["dirichlet_alpha_0.1"])
     )
+
+    if matrix_path.resolve().parent == REPO_MATRIX_DIR and ledger == "scientific":
+        validate_matrix_against_protocol(
+            matrix_path.stem, resolved, len(expand_matrix(resolved, matrix_path.stem))
+        )
 
     task_dicts = []
     for spec in expand_matrix(resolved, matrix_path.stem):

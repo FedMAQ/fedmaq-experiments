@@ -91,6 +91,9 @@ class CanonicalRunTree:
         )
         csv_path = job_dir / "experiment_log.csv"
         metrics.to_csv(csv_path, index=False)
+        with (job_dir / "experiment_log.jsonl").open("w", encoding="utf-8") as handle:
+            for record in metrics.to_dict(orient="records"):
+                handle.write(json.dumps(record, allow_nan=True) + "\n")
         manifest = build_manifest(config, repo_root=REPO_ROOT)
         manifest["source_root"] = job_dir.resolve().as_posix()
         (job_dir / "run_manifest.json").write_text(

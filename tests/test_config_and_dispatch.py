@@ -834,6 +834,9 @@ def test_run_completion_keys_on_the_final_round_checkpoint(tmp_path):
     (tmp_path / "experiment_log.csv").write_text(
         "round,train/loss,communication/cumulative_mb\n1,0.5,1.0\n", encoding="utf-8"
     )
+    (tmp_path / "experiment_log.jsonl").write_text(
+        '{"round": 1, "communication/cumulative_mb": 1.0}\n', encoding="utf-8"
+    )
     assert not is_run_complete(tmp_path)
 
     import torch
@@ -935,6 +938,9 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     (done / "experiment_log.csv").write_text(
         "round,train/loss,communication/cumulative_mb\n1,0.5,1.0\n",
         encoding="utf-8",
+    )
+    (done / "experiment_log.jsonl").write_text(
+        '{"round": 1, "communication/cumulative_mb": 1.0}\n', encoding="utf-8"
     )
 
     dispatched.clear()
