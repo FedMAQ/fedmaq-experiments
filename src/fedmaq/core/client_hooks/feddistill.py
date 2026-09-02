@@ -38,15 +38,16 @@ if TYPE_CHECKING:
 class LogitTracker:
     """Accumulates per-class summed logits to produce a mean-logit matrix.
 
-    ``label_counts`` is initialized to ones (not zeros) so classes absent from a
-    client's shard yield a finite all-zero mean row instead of a 0/0 NaN. This
-    matters under strong non-IID (Dirichlet alpha=0.1), where most clients are
-    missing most classes; ``softmax(zeros)`` is a benign uniform target.
+    Each class mean divides by its true sample count. Classes absent from a
+    client's shard (count == 0) are explicitly guarded to yield a finite
+    all-zero row instead of a 0/0 NaN. This preserves finite targets under
+    strong non-IID partitions without introducing shrinkage into present
+    classes; ``softmax(zeros)`` is a benign uniform target.
     """
 
     def __init__(self, num_labels: int) -> None:
         self.num_labels = num_labels
-        self.label_counts = torch.ones(num_labels)
+        self.label_counts = torch.zeros(num_labels)
         self.logit_sums = torch.zeros((num_labels, num_labels))
 
     def update(self, logits: torch.Tensor, y: torch.Tensor) -> None:
@@ -60,9 +61,19 @@ class LogitTracker:
         batch_sums.scatter_add_(0, labels, logits)
         self.logit_sums += batch_sums
 
+    def presence(self) -> np.ndarray:
+        """Return a boolean presence vector ``[num_labels]`` indicating held classes."""
+        return (self.label_counts > 0).cpu().numpy().astype(bool)
+
     def avg(self) -> np.ndarray:
-        """Return the per-class mean-logit matrix ``[num_labels, num_labels]``."""
-        res = self.logit_sums / self.label_counts.unsqueeze(1)
+        """Return the per-class mean-logit matrix ``[num_labels, num_labels]``.
+
+        Absent classes (count == 0) yield a finite all-zero row instead of a
+        0/0 NaN via an explicit zero-count mask.
+        """
+        safe_counts = torch.clamp(self.label_counts, min=1.0).unsqueeze(1)
+        mask = (self.label_counts > 0).unsqueeze(1)
+        res = torch.where(mask, self.logit_sums / safe_counts, torch.zeros_like(self.logit_sums))
         return res.numpy().astype(np.float32)
 
 
@@ -81,6 +92,21 @@ def bytes_to_logits(buf: bytes, num_labels: int) -> np.ndarray:
             f"{expected} (= num_labels^2 for num_labels={num_labels})."
         )
     return arr.reshape(num_labels, num_labels).copy()
+
+
+def presence_to_bytes(presence: np.ndarray) -> bytes:
+    """Serialize a boolean presence vector for the Flower metrics channel."""
+    return presence.astype(bool).tobytes()
+
+
+def bytes_to_presence(buf: bytes, num_labels: int) -> np.ndarray:
+    """Deserialize a ``[num_labels]`` presence vector, failing loud on drift."""
+    arr = np.frombuffer(buf, dtype=bool)
+    if arr.size != num_labels:
+        raise ValueError(
+            f"FedDistill presence buffer has {arr.size} bools but expected {num_labels}."
+        )
+    return arr.copy()
 
 
 class FedDistillFit(ClientFitStrategy):
@@ -161,6 +187,7 @@ class FedDistillFit(ClientFitStrategy):
 
         updated_params = get_model_parameters(client.model)
         logit_bytes = logits_to_bytes(tracker.avg())
+        presence_bytes = presence_to_bytes(tracker.presence())
         # FedDistill shares full FedAvg weights (no delta encoding), so the
         # weight payload is billed through the same compressor_hook every other
         # arm uses (identity by default) rather than a bespoke nbytes sum here —
@@ -187,6 +214,7 @@ class FedDistillFit(ClientFitStrategy):
             "task_loss": avg_task_loss,
             "distill_loss": avg_distill_loss,
             "client_logits": logit_bytes,
+            "client_presence": presence_bytes,
         }
         # Preserve the compressor's per-tensor boundaries before the logit leg.
         attach_payloads_if_enabled(client, fit_metrics, report.payloads)

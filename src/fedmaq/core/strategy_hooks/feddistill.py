@@ -17,7 +17,11 @@ from flwr.common.typing import FitRes
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 
-from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+from fedmaq.core.client_hooks.feddistill import (
+    bytes_to_logits,
+    bytes_to_presence,
+    logits_to_bytes,
+)
 from fedmaq.core.config_defaults import resolve_run_context
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
@@ -33,7 +37,9 @@ class FedDistillHook(StrategyHook):
 
     - ``configure_fit``: broadcast the current global logit matrix (once available).
     - ``pre_aggregate_fit``: returns None so FedAvg still averages model weights.
-    - ``aggregate_fit``: average the clients' per-class logit matrices for next round.
+    - ``aggregate_fit``: average the clients' per-class logit matrices masked by
+      presence (only clients holding a class contribute to its mean; classes held
+      by no reporting clients yield a finite all-zero row).
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
@@ -65,14 +71,46 @@ class FedDistillHook(StrategyHook):
         metrics: dict[str, Scalar],
     ) -> tuple[Parameters | None, dict[str, Scalar]]:
         matrices: list[np.ndarray] = []
+        presences: list[np.ndarray] = []
         for _, fit_res in results:
             buf = fit_res.metrics.get("client_logits")
             if isinstance(buf, bytes):
-                matrices.append(bytes_to_logits(buf, self.num_classes))
+                matrix = bytes_to_logits(buf, self.num_classes)
+                presence_buf = fit_res.metrics.get("client_presence")
+                if isinstance(presence_buf, bytes):
+                    presence = bytes_to_presence(presence_buf, self.num_classes)
+                else:
+                    presence = np.any(matrix != 0.0, axis=1)
+                matrices.append(matrix)
+                presences.append(presence)
         if matrices:
-            self.global_logits = np.mean(matrices, axis=0).astype(np.float32)
-            logger.info(f"FedDistill+: averaged per-class logits from {len(matrices)} clients.")
+            matrices_arr = np.stack(matrices, axis=0)
+            presences_arr = np.stack(presences, axis=0)
+            counts = np.sum(presences_arr, axis=0)
+            sum_logits = np.sum(matrices_arr * presences_arr[:, :, None], axis=0)
+            safe_counts = np.maximum(counts, 1)[:, None]
+            self.global_logits = np.where(
+                counts[:, None] > 0, sum_logits / safe_counts, 0.0
+            ).astype(np.float32)
+            logger.info(
+                f"FedDistill+: presence-masked per-class logits from {len(matrices)} clients."
+            )
         return aggregated_parameters, metrics
+
+    def get_eval_metrics(
+        self,
+        strategy: TelemetryFedAvg,
+        server_round: int,
+    ) -> dict[str, Any]:
+        metrics: dict[str, Any] = {}
+        if self.global_logits is not None:
+            metrics["algorithm/feddistill/global_logits_l2_norm"] = float(
+                np.linalg.norm(self.global_logits)
+            )
+        return metrics
+
+    def metric_keys(self) -> list[str]:
+        return ["algorithm/feddistill/global_logits_l2_norm"]
 
     def download_size_bytes(
         self,

@@ -1928,8 +1928,9 @@ def test_strategy_hook_registry():
 def test_feddistill_logit_tracker_no_nan():
     """LogitTracker must stay finite when a client is missing most classes.
 
-    Under Dirichlet alpha=0.1 most clients hold only a few labels; counts are
-    initialized to ones so unseen classes yield a finite all-zero row, not 0/0 NaN.
+    Under Dirichlet alpha=0.1 most clients hold only a few labels; absent
+    classes are explicitly masked to zero so unseen classes yield a finite
+    all-zero row without NaNs.
     """
     from fedmaq.core.client_hooks.feddistill import LogitTracker
 
@@ -1946,13 +1947,23 @@ def test_feddistill_logit_tracker_no_nan():
 
 
 def test_feddistill_bytes_shape_guard():
-    """Deserializing a logit buffer with the wrong num_labels must fail loudly."""
-    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+    """Deserializing a logit or presence buffer with the wrong size must fail loudly."""
+    from fedmaq.core.client_hooks.feddistill import (
+        bytes_to_logits,
+        bytes_to_presence,
+        logits_to_bytes,
+        presence_to_bytes,
+    )
 
     buf = logits_to_bytes(np.zeros((3, 3), dtype=np.float32))
     assert bytes_to_logits(buf, 3).shape == (3, 3)
     with pytest.raises(ValueError, match="num_labels"):
         bytes_to_logits(buf, 4)  # 9 floats != 4^2
+
+    p_buf = presence_to_bytes(np.array([True, False, True]))
+    assert bytes_to_presence(p_buf, 3).shape == (3,)
+    with pytest.raises(ValueError, match="FedDistill presence buffer"):
+        bytes_to_presence(p_buf, 4)
 
 
 def test_feddistill_hook_aggregation_and_broadcast():
@@ -1960,7 +1971,11 @@ def test_feddistill_hook_aggregation_and_broadcast():
     from flwr.common import Code, FitIns, Status, ndarrays_to_parameters
     from flwr.common.typing import FitRes
 
-    from fedmaq.core.client_hooks.feddistill import bytes_to_logits, logits_to_bytes
+    from fedmaq.core.client_hooks.feddistill import (
+        bytes_to_logits,
+        logits_to_bytes,
+        presence_to_bytes,
+    )
     from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
 
     hook = FedDistillHook({"dataset": {"num_classes": 3}})
@@ -1971,7 +1986,10 @@ def test_feddistill_hook_aggregation_and_broadcast():
             status=Status(code=Code.OK, message=""),
             parameters=ndarrays_to_parameters([]),
             num_examples=1,
-            metrics={"client_logits": logits_to_bytes(matrix)},
+            metrics={
+                "client_logits": logits_to_bytes(matrix),
+                "client_presence": presence_to_bytes(np.ones(3, dtype=bool)),
+            },
         )
 
     m1 = np.ones((3, 3), dtype=np.float32)
@@ -2050,3 +2068,172 @@ def test_feddistill_two_round_reg_path(mock_dataset):
     _, expected_weight_report = CompressionHook().compress(p2)
     expected_logit_bytes = measure_bytes(m2["client_logits"])
     assert m2["bytes_uploaded"] == expected_weight_report.measured_bytes + expected_logit_bytes
+
+
+def test_feddistill_masked_aggregation_held_classes():
+    """Server average must be masked by presence: mean over clients holding each class.
+
+    If class 0 is held by 2 of 10 reporting clients (with values 2.0 and 4.0),
+    the server average for class 0 must equal 3.0 (mean over those 2 clients),
+    not 0.6 (diluted over all 10 clients). Classes held by no reporting clients
+    must yield a finite all-zero row without NaNs.
+    """
+    from flwr.common import Code, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import logits_to_bytes
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    num_classes = 3
+    num_clients = 10
+    hook = FedDistillHook({"dataset": {"num_classes": num_classes}})
+
+    results = []
+    m0 = np.zeros((num_classes, num_classes), dtype=np.float32)
+    m0[0] = 2.0
+    m0[1] = 1.0
+    p0 = np.array([True, True, False])
+
+    m1 = np.zeros((num_classes, num_classes), dtype=np.float32)
+    m1[0] = 4.0
+    m1[1] = 3.0
+    p1 = np.array([True, True, False])
+
+    def _make_res(matrix, presence=None):
+        metrics = {"client_logits": logits_to_bytes(matrix)}
+        if presence is not None:
+            metrics["client_presence"] = presence.astype(bool).tobytes()
+        return FitRes(
+            status=Status(code=Code.OK, message=""),
+            parameters=ndarrays_to_parameters([]),
+            num_examples=1,
+            metrics=metrics,
+        )
+
+    results.append((None, _make_res(m0, p0)))
+    results.append((None, _make_res(m1, p1)))
+
+    for _ in range(2, num_clients):
+        m_other = np.zeros((num_classes, num_classes), dtype=np.float32)
+        m_other[1] = 5.0
+        p_other = np.array([False, True, False])
+        results.append((None, _make_res(m_other, p_other)))
+
+    sentinel = ndarrays_to_parameters([])
+    hook.aggregate_fit(None, 1, results, [], sentinel, {})
+
+    assert hook.global_logits is not None
+    assert hook.global_logits.shape == (num_classes, num_classes)
+    assert np.all(np.isfinite(hook.global_logits)), "global_logits contains NaN/Inf"
+
+    np.testing.assert_allclose(
+        hook.global_logits[0], np.full(num_classes, 3.0, dtype=np.float32), atol=1e-5
+    )
+    np.testing.assert_allclose(
+        hook.global_logits[1], np.full(num_classes, 4.4, dtype=np.float32), atol=1e-5
+    )
+    np.testing.assert_allclose(
+        hook.global_logits[2], np.zeros(num_classes, dtype=np.float32), atol=1e-5
+    )
+
+
+def test_feddistill_logit_tracker_true_sample_mean():
+    """LogitTracker must divide by true sample count without shrinkage.
+
+    Previously label_counts was initialized to ones, dividing sum(logits) by
+    (1 + count). The true sample mean must equal sum(logits) / count.
+    """
+    from fedmaq.core.client_hooks.feddistill import LogitTracker
+
+    tracker = LogitTracker(num_labels=3)
+    logits_b1 = torch.tensor(
+        [
+            [1.0, 2.0, 3.0],
+            [3.0, 4.0, 5.0],
+            [10.0, 20.0, 30.0],
+        ]
+    )
+    labels_b1 = torch.tensor([0, 0, 1])
+    tracker.update(logits_b1, labels_b1)
+
+    logits_b2 = torch.tensor(
+        [
+            [2.0, 3.0, 4.0],
+            [20.0, 40.0, 60.0],
+        ]
+    )
+    labels_b2 = torch.tensor([0, 1])
+    tracker.update(logits_b2, labels_b2)
+
+    avg = tracker.avg()
+    assert avg.shape == (3, 3)
+    assert np.all(np.isfinite(avg))
+
+    np.testing.assert_allclose(avg[0], np.array([2.0, 3.0, 4.0], dtype=np.float32), atol=1e-5)
+    np.testing.assert_allclose(avg[1], np.array([15.0, 30.0, 45.0], dtype=np.float32), atol=1e-5)
+    np.testing.assert_allclose(avg[2], np.zeros(3, dtype=np.float32), atol=1e-5)
+
+
+def test_feddistill_telemetry_l2_norm():
+    """Hook registers L2 norm metric key and computes norm when logits exist."""
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    hook = FedDistillHook({"dataset": {"num_classes": 3}})
+    assert hook.metric_keys() == ["algorithm/feddistill/global_logits_l2_norm"]
+
+    assert hook.get_eval_metrics(None, 0) == {}
+
+    logits = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=np.float32)
+    hook.global_logits = logits
+    eval_metrics = hook.get_eval_metrics(None, 1)
+    expected_norm = float(np.linalg.norm(logits))
+    assert eval_metrics == {"algorithm/feddistill/global_logits_l2_norm": expected_norm}
+
+
+def test_feddistill_client_fit_to_hook_aggregation_integration(mock_dataset):
+    """GenericClient.fit emits client_presence and FedDistillHook consumes it."""
+    from flwr.common import Code, Status, ndarrays_to_parameters
+    from flwr.common.typing import FitRes
+
+    from fedmaq.core.client_hooks.feddistill import bytes_to_presence
+    from fedmaq.core.models import SimpleCNN, get_model_parameters
+    from fedmaq.core.strategy_hooks.feddistill import FedDistillHook
+
+    train_loader = torch.utils.data.DataLoader(mock_dataset, batch_size=4)
+    model = SimpleCNN(in_channels=1, num_classes=10)
+    params = get_model_parameters(model)
+    cfg = {
+        "experiment": {"local_epochs": 1, "learning_rate": 0.01, "weight_decay": 0.0},
+        "algorithm": {"name": "feddistill", "reg_alpha": 1.0},
+        "dataset": {"name": "mnist", "num_classes": 10},
+    }
+    client = GenericClient(
+        cid="0",
+        trainloader=train_loader,
+        testloader=train_loader,
+        model=model,
+        loss_hook=LossHook(),
+        compressor_hook=CompressionHook(),
+        config=cfg,
+    )
+
+    p1, n1, m1 = client.fit(params, {"server_round": 1})
+    assert "client_presence" in m1
+    presence = bytes_to_presence(m1["client_presence"], 10)
+    assert presence.dtype == bool
+    assert presence.shape == (10,)
+    assert presence.any()
+
+    hook = FedDistillHook({"dataset": {"num_classes": 10}})
+    fit_res = FitRes(
+        status=Status(code=Code.OK, message=""),
+        parameters=ndarrays_to_parameters(p1),
+        num_examples=n1,
+        metrics=m1,
+    )
+    hook.aggregate_fit(None, 1, [(None, fit_res)], [], ndarrays_to_parameters(p1), {})
+    assert hook.global_logits is not None
+    assert np.all(np.isfinite(hook.global_logits))
+    for c in range(10):
+        if not presence[c]:
+            assert np.all(hook.global_logits[c] == 0.0)
