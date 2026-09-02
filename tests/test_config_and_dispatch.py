@@ -927,6 +927,7 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
                 "run": {
                     "dataset": "cifar10",
                     "algorithm": "fedprox",
+                    "algorithm_config": "fedprox",
                     "alpha": 0.1,
                     "seed": 0,
                     "total_rounds": 1,
@@ -940,7 +941,8 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
         encoding="utf-8",
     )
     (done / "experiment_log.jsonl").write_text(
-        '{"round": 1, "communication/cumulative_mb": 1.0}\n', encoding="utf-8"
+        '{"round": 1, "communication/cumulative_mb": 1.0, "client/avg_train_loss": 0.5}\n',
+        encoding="utf-8",
     )
 
     dispatched.clear()

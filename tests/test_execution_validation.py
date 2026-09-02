@@ -183,6 +183,29 @@ def _create_synthetic_run(
                         key: (None if pd.isna(value) else value) for key, value in record.items()
                     }
                     record["round"] = round_number
+                    required_by_algorithm = {
+                        "fedavg": ("client/avg_train_loss",),
+                        "fedprox": ("client/avg_train_loss",),
+                        "fedpaq": ("client/avg_train_loss",),
+                        "dadaquant": ("client/avg_train_loss",),
+                        "feddistill": ("client/avg_task_loss", "client/avg_distill_loss"),
+                        "fedkd": (
+                            "client/avg_task_loss_student",
+                            "client/avg_task_loss_teacher",
+                            "client/avg_kd_loss_student",
+                            "client/avg_kd_loss_teacher",
+                            "client/avg_teacher_acc",
+                        ),
+                        "fedmaq": (
+                            "client/avg_train_loss",
+                            "algorithm/fedmaq/server_kd_loss",
+                            "algorithm/fedmaq/q_count_2",
+                            "algorithm/fedmaq/q_hat_count_2",
+                        ),
+                        "power_mean": ("client/avg_train_loss",),
+                    }
+                    for key in required_by_algorithm.get(algorithm, ()):
+                        record.setdefault(key, 1 if "q_count_" in key else 0.1)
                     handle.write(json.dumps(record, allow_nan=True) + "\n")
 
     return output_dir
@@ -279,6 +302,19 @@ def test_jsonl_is_required_and_must_match_csv_rounds(tmp_path):
     result = validate_run_evidence(mismatched, repo_root=tmp_path)
     assert result.is_complete is False
     assert any("do not match CSV" in error for error in result.errors)
+
+
+def test_jsonl_must_include_algorithm_readout_keys(tmp_path):
+    run_dir = _create_synthetic_run(tmp_path, seed=29)
+    jsonl_path = run_dir / "experiment_log.jsonl"
+    records = [json.loads(line) for line in jsonl_path.read_text().splitlines()]
+    records[0].pop("client/avg_train_loss")
+    jsonl_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert result.is_complete is False
+    assert any("missing readout keys" in error for error in result.errors)
 
 
 def test_matrix_executor_skip_completed_never_skips_malformed_runs(tmp_path):

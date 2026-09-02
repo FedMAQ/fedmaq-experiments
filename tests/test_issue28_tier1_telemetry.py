@@ -374,6 +374,15 @@ def test_telemetry_histogram_columns_survive_evidence_validation(tmp_path):
                     {
                         "round": round_number,
                         "communication/cumulative_mb": 10.0 * round_number,
+                        "client/avg_train_loss": 0.5,
+                        "algorithm/fedmaq/server_kd_loss": 0.1,
+                        **{
+                            f"algorithm/fedmaq/q_count_{b}": int(b == 2) for b in DEFAULT_BIT_WIDTHS
+                        },
+                        **{
+                            f"algorithm/fedmaq/q_hat_count_{b}": int(b == 2)
+                            for b in DEFAULT_BIT_WIDTHS
+                        },
                     }
                 )
                 + "\n"

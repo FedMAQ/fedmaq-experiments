@@ -92,7 +92,31 @@ class CanonicalRunTree:
         csv_path = job_dir / "experiment_log.csv"
         metrics.to_csv(csv_path, index=False)
         with (job_dir / "experiment_log.jsonl").open("w", encoding="utf-8") as handle:
+            required_by_algorithm = {
+                "fedavg": ("client/avg_train_loss",),
+                "fedprox": ("client/avg_train_loss",),
+                "fedpaq": ("client/avg_train_loss",),
+                "fedpaq_pipeline": ("client/avg_train_loss",),
+                "dadaquant": ("client/avg_train_loss",),
+                "feddistill": ("client/avg_task_loss", "client/avg_distill_loss"),
+                "fedkd": (
+                    "client/avg_task_loss_student",
+                    "client/avg_task_loss_teacher",
+                    "client/avg_kd_loss_student",
+                    "client/avg_kd_loss_teacher",
+                    "client/avg_teacher_acc",
+                ),
+                "fedmaq": (
+                    "client/avg_train_loss",
+                    "algorithm/fedmaq/server_kd_loss",
+                    "algorithm/fedmaq/q_count_2",
+                    "algorithm/fedmaq/q_hat_count_2",
+                ),
+                "power_mean": ("client/avg_train_loss",),
+            }
             for record in metrics.to_dict(orient="records"):
+                for key in required_by_algorithm.get(algorithm_config, ()):
+                    record.setdefault(key, 1 if "q_count_" in key else 0.1)
                 handle.write(json.dumps(record, allow_nan=True) + "\n")
         manifest = build_manifest(config, repo_root=REPO_ROOT)
         manifest["source_root"] = job_dir.resolve().as_posix()

@@ -27,6 +27,26 @@ logger = logging.getLogger("fedmaq.validation")
 TELEMETRY_CSV_FILENAME = "experiment_log.csv"
 TELEMETRY_JSONL_FILENAME = "experiment_log.jsonl"
 REQUIRED_METRIC_COLUMNS = ("round", "communication/cumulative_mb")
+_JSONL_REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
+    "fedavg": ("client/avg_train_loss",),
+    "fedprox": ("client/avg_train_loss",),
+    "fedpaq": ("client/avg_train_loss",),
+    "fedpaq_pipeline": ("client/avg_train_loss",),
+    "dadaquant": ("client/avg_train_loss",),
+    "feddistill": ("client/avg_task_loss", "client/avg_distill_loss"),
+    "fedkd": (
+        "client/avg_task_loss_student",
+        "client/avg_task_loss_teacher",
+        "client/avg_kd_loss_student",
+        "client/avg_kd_loss_teacher",
+        "client/avg_teacher_acc",
+    ),
+    "fedmaq": ("client/avg_train_loss", "algorithm/fedmaq/server_kd_loss"),
+    "power_mean": ("client/avg_train_loss",),
+}
+_JSONL_REQUIRED_PREFIXES: dict[str, tuple[str, ...]] = {
+    "fedmaq": ("algorithm/fedmaq/q_count_", "algorithm/fedmaq/q_hat_count_"),
+}
 
 
 @dataclass(frozen=True)
@@ -301,6 +321,13 @@ def validate_run_evidence(
         errors.append(f"missing or empty telemetry JSONL: {jsonl_path}")
     else:
         try:
+            algorithm_config = None
+            if manifest_data is not None:
+                run_info = manifest_data.get("run", {})
+                if isinstance(run_info, dict):
+                    algorithm_config = run_info.get("algorithm_config") or run_info.get("algorithm")
+            required_jsonl_keys = _JSONL_REQUIRED_KEYS.get(str(algorithm_config))
+            required_jsonl_prefixes = _JSONL_REQUIRED_PREFIXES.get(str(algorithm_config), ())
             for line_number, line in enumerate(
                 jsonl_path.read_text(encoding="utf-8").splitlines(), start=1
             ):
@@ -340,6 +367,39 @@ def validate_run_evidence(
                         f"telemetry JSONL line {line_number} has missing/non-finite required values"
                     )
                     continue
+                if int(round_value) != 0:
+                    missing_analysis_keys = [
+                        key for key in required_jsonl_keys or () if key not in record
+                    ]
+                    missing_analysis_prefixes = [
+                        prefix
+                        for prefix in required_jsonl_prefixes
+                        if not any(key.startswith(prefix) for key in record)
+                    ]
+                    if missing_analysis_keys or missing_analysis_prefixes:
+                        errors.append(
+                            f"telemetry JSONL line {line_number} is missing readout keys: "
+                            f"keys={missing_analysis_keys}, prefixes={missing_analysis_prefixes}"
+                        )
+                        continue
+                    analysis_values = [record[key] for key in required_jsonl_keys or ()] + [
+                        record[key]
+                        for prefix in required_jsonl_prefixes
+                        for key in record
+                        if key.startswith(prefix)
+                    ]
+                    if any(
+                        value is None
+                        or isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(float(value))
+                        for value in analysis_values
+                    ):
+                        errors.append(
+                            f"telemetry JSONL line {line_number} has missing/non-finite "
+                            "readout values"
+                        )
+                        continue
                 jsonl_rounds.append(int(round_value))
 
             if csv_path.is_file() and csv_path.stat().st_size:
