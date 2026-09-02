@@ -1,5 +1,5 @@
-# Memory sensitivity matrix: sweeps c_unit in {256, 1024} (12 net-new cells).
-# The c_unit=512 cells are the standard benchmark grid FedMAQ runs, joined in analysis.
+# Memory sensitivity matrix: sweeps c_unit in {512, 2048} (12 net-new cells).
+# The c_unit=1024 cells are the standard benchmark grid FedMAQ runs, joined in analysis.
 phase: explore
 stage: downstream
 protocol_stage: downstream
@@ -17,14 +17,15 @@ heterogeneities:
 
 runs:
   - alg: fedmaq
-    label: memory-sensitivity-cunit-256
-    variant: cunit256
+    label: memory-sensitivity-cunit-512
+    variant: cunit512
     overrides:
-      - algorithm.c_unit=256.0
+      - algorithm.c_unit=512.0
       - algorithm.post_process=true
   - alg: fedmaq
-    label: memory-sensitivity-cunit-1024
-    variant: cunit1024
+    label: memory-sensitivity-cunit-2048
+    variant: cunit2048
     overrides:
-      - algorithm.c_unit=1024.0
+      - algorithm.c_unit=2048.0
       - algorithm.post_process=true
+

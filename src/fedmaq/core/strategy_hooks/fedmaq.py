@@ -27,6 +27,7 @@ from fedmaq.core.kd_utils import (
 )
 from fedmaq.core.models import get_server_model_factory
 from fedmaq.core.quantization_planner import (
+    DEFAULT_BIT_WIDTHS,
     QuantizationPlanner,
     QuantPlan,
     _snap_floor,
@@ -157,6 +158,27 @@ class FedMAQHook(StrategyHook):
             metrics["algorithm/fedmaq/max_q"] = float(np.max(q_vals))
             metrics["algorithm/fedmaq/std_q"] = float(np.std(q_vals))
 
+            bit_widths = self._current_plan.bit_widths or tuple(
+                self.alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS)
+            )
+            for b in bit_widths:
+                metrics[f"algorithm/fedmaq/q_count_{b}"] = 0
+                metrics[f"algorithm/fedmaq/q_hat_count_{b}"] = 0
+
+            for q in q_vals:
+                key = f"algorithm/fedmaq/q_count_{q}"
+                if key in metrics:
+                    metrics[key] += 1
+
+            q_hat_by_cid = self._current_plan.client_q_hat
+            if q_hat_by_cid:
+                for cid in client_q:
+                    if cid in q_hat_by_cid:
+                        snapped_q = _snap_floor(q_hat_by_cid[cid], bit_widths)
+                        key = f"algorithm/fedmaq/q_hat_count_{snapped_q}"
+                        if key in metrics:
+                            metrics[key] += 1
+
         if self._current_plan.tier1_enabled and self._current_plan.client_q_max:
             q_k_max_vals = list(self._current_plan.client_q_max.values())
             metrics["algorithm/fedmaq/avg_q_k_max"] = float(np.mean(q_k_max_vals))
@@ -178,7 +200,7 @@ class FedMAQHook(StrategyHook):
         return metrics
 
     def metric_keys(self) -> list[str]:
-        return [
+        keys = [
             "algorithm/fedmaq/server_kd_loss",
             "algorithm/fedmaq/avg_grad_norm",
             "algorithm/fedmaq/min_grad_norm",
@@ -194,6 +216,11 @@ class FedMAQHook(StrategyHook):
             "algorithm/fedmaq/std_q_k_max",
             "algorithm/fedmaq/tier1_binding_fraction",
         ]
+        bit_widths = tuple(self.alg_cfg.get("bit_widths", DEFAULT_BIT_WIDTHS))
+        for b in bit_widths:
+            keys.append(f"algorithm/fedmaq/q_count_{b}")
+            keys.append(f"algorithm/fedmaq/q_hat_count_{b}")
+        return keys
 
     def server_sim_time(
         self,

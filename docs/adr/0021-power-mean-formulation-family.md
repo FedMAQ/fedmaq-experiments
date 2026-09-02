@@ -48,7 +48,7 @@ Resolving #34's six open design questions:
 | D1 | Which `p` ladder | `p ∈ {1, 0.5, 0, −0.5, −1, −2}` plus the minimum limit — named operators with intermediate points |
 | D2 | How `ω` interacts | **Two-stage, not a joint grid.** Sweep `p` at `ω=0.5`, then add `ω ∈ {0.25, 0.75}` at the selected `p`, reusing the existing `ω=0.5` cell |
 | D3 | Limit semantics | `p→0` and `p→−∞` are **special-cased exactly**, never approximated with a small `p`. A zero in either active signal yielding `s_k = 0` for `p ≤ 0` is *intended non-compensatory semantics*, not a division-by-zero |
-| D4 | Ablation signal-removal | The `ω=1` / `ω=0` endpoints, well-defined at every `p`. **The old `x⁰ = 1` convention on F2's unconstrained exponents is retired**, so no `0^0` rule is required |
+| D4 | Ablation signal-removal | The `ω=1` / `ω=0` endpoints, well-defined at every `p`. **Polarity is explicit**: `ω` weights the state/gradient signal `g̃_k` while `1−ω` weights the data-volume signal `ñ_k`. Therefore, `ω=1.0` isolates the state signal and removes data volume (`fedmaq_no_data`), while `ω=0.0` isolates data volume and removes the state signal (`fedmaq_no_state`). The family contains Formulation 2 as an algebraic identity at the center `(p=0, ω=0.5)` with shipped exponents `γ₁=0.5, γ₂=0.5`. The old `x⁰ = 1` convention on F2's unconstrained exponents is retired, so no `0^0` rule is required |
 | D5 | Config keys | `gamma1`/`gamma2` disappear; the keys are `p` and `omega`. **A single `ω`, not `ω₁, ω₂`** |
 | D6 | Manuscript narrative | "Four candidate formulations, one selected" becomes "a swept family plus two structurally different rules." Rewritten, not patched — #35 |
 
