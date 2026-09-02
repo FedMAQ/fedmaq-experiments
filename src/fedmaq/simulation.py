@@ -36,6 +36,7 @@ from fedmaq.core.partitioning import (
     get_client_loader,
     get_server_loaders,
 )
+from fedmaq.core.randomness import derive_numpy_rng, derive_seed
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
 
@@ -251,16 +252,27 @@ class SimulationApplications:
 
         def client_fn(context: fl.app.Context) -> fl.client.Client:
             partition_id = int(context.node_config["partition-id"])
-            client_seed = plan.seed + partition_id
+            client_seed = derive_seed("client", plan.seed, partition_id, 1)
             configure_torch_determinism(client_seed, strict=plan.strict_determinism)
             train_loader = get_client_loader(
                 dataset_name=plan.dataset_name,
                 client_id=partition_id,
                 client_indices_dict=plan.client_indices_dict,
-                seed=client_seed,
+                seed=derive_seed("training", plan.seed, partition_id, 1),
                 batch_size=plan.batch_size,
                 train=True,
             )
+
+            def trainloader_for_round(server_round: int):
+                return get_client_loader(
+                    dataset_name=plan.dataset_name,
+                    client_id=partition_id,
+                    client_indices_dict=plan.client_indices_dict,
+                    seed=derive_seed("training", plan.seed, partition_id, server_round),
+                    batch_size=plan.batch_size,
+                    train=True,
+                )
+
             public_loader, _ = get_server_loaders(
                 plan.dataset_name,
                 plan.public_indices,
@@ -271,7 +283,7 @@ class SimulationApplications:
             compressor_hook = get_compressor_hook(
                 plan.algorithm_name,
                 plan.algorithm_config,
-                rng=np.random.default_rng(plan.seed + partition_id),
+                rng=derive_numpy_rng("compression", plan.seed, partition_id, 1),
                 state=context.state,
             )
             return GenericClient(
@@ -284,6 +296,7 @@ class SimulationApplications:
                 config=plan.client_config,
                 public_loader=public_loader,
                 state=context.state,
+                trainloader_factory=trainloader_for_round,
             ).to_client()
 
         def evaluate_fn(

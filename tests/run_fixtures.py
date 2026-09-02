@@ -110,6 +110,7 @@ class CanonicalRunTree:
             phase=phase,
             post_process=post_process,
             variant=variant,
+            promotable=True,
         )
 
 

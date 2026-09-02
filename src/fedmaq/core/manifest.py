@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fedmaq.core.protocol import register_protocol
 from fedmaq.core.run_identity import config_sha256
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,8 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
     except Exception:
         torch_version, cuda_version, gpu = None, None, None
 
+    git = _git_provenance(repo_root)
+    protocol = register_protocol(cfg_dict, git)
     return {
         "config_sha256": config_sha256(cfg_dict),
         "created_utc": datetime.now(UTC).isoformat(),
@@ -140,7 +143,8 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
             "total_rounds": experiment.get("total_rounds"),
             "num_clients": experiment.get("num_clients"),
         },
-        "git": _git_provenance(repo_root),
+        "git": git,
+        "protocol": protocol.as_dict(),
         "environment": {
             "host": socket.gethostname(),
             "python": platform.python_version(),

@@ -24,6 +24,7 @@ after dispatch.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -46,9 +47,9 @@ def write_final_global_model(
     is not the final round or the write failed.
 
     Failure is logged and swallowed rather than raised: a run that trained for
-    100 rounds should not be lost to a disk error in its last second, and a
-    missing checkpoint is visible at analysis time in a way a crashed run is
-    not. This mirrors the failure posture of ``manifest.write_run_manifest``.
+    100 rounds should not be lost to a disk error in its last second. The final
+    path is replaced atomically, so a killed write cannot become a completion
+    sentinel.
     """
     if server_round != total_rounds:
         return None
@@ -56,12 +57,16 @@ def write_final_global_model(
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
         path = log_dir / FINAL_MODEL_FILENAME
+        temporary_path = log_dir / f".{FINAL_MODEL_FILENAME}.tmp"
         # Move to CPU first so the checkpoint loads on a machine without CUDA
         # (analysis and figure generation run on the local workstation, not the
         # datacenter allocation that produced the run).
         state_dict = {k: v.detach().cpu() for k, v in model.state_dict().items()}
-        torch.save(state_dict, path)
+        torch.save(state_dict, temporary_path)
+        os.replace(temporary_path, path)
     except Exception as exc:  # noqa: BLE001 - see docstring
+        if "temporary_path" in locals():
+            temporary_path.unlink(missing_ok=True)
         logger.error(f"Failed to write final global model to {log_dir}: {exc}")
         return None
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from numbers import Real
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -167,6 +167,7 @@ class GenericClient(fl.client.NumPyClient):
         config: dict[str, Any],
         public_loader: torch.utils.data.DataLoader | None = None,
         state: Any | None = None,
+        trainloader_factory: Callable[[int], torch.utils.data.DataLoader] | None = None,
     ) -> None:
         self.cid = cid
         self.trainloader = trainloader
@@ -177,6 +178,7 @@ class GenericClient(fl.client.NumPyClient):
         self.config = config
         self.public_loader = public_loader
         self.state = state
+        self.trainloader_factory = trainloader_factory
         self.device = torch.device(config.get("device") or DEVICE)
         self.model.to(self.device)
 
@@ -197,6 +199,9 @@ class GenericClient(fl.client.NumPyClient):
     def fit(
         self, parameters: list[np.ndarray], config: dict[str, Any]
     ) -> tuple[list[np.ndarray], int, dict[str, Any]]:
+        if self.trainloader_factory is not None:
+            server_round = int(config["server_round"])
+            self.trainloader = self.trainloader_factory(server_round)
         return self.fit_strategy.fit(self, parameters, config)
 
     def evaluate(

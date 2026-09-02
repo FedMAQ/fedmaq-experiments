@@ -27,6 +27,13 @@ if TYPE_CHECKING:
     from fedmaq.core.client import GenericClient
 
 
+def inverse_task_loss_weight(
+    student_task_loss: torch.Tensor, teacher_task_loss: torch.Tensor
+) -> torch.Tensor:
+    """Return the continuous inverse-loss weight for mutual distillation."""
+    return 1.0 / (student_task_loss + teacher_task_loss + 1e-6)
+
+
 class FedKDFit(ClientFitStrategy):
     """FedKD: joint student-teacher training with mutual KL distillation.
 
@@ -61,16 +68,19 @@ class FedKDFit(ClientFitStrategy):
 
         lr = client._get_decayed_lr(config)
         weight_decay = float(exp_config.get("weight_decay", 0.0))
+        alg_config = resolve_algorithm_config(client.config)
+        momentum = float(alg_config.get("momentum", exp_config.get("momentum", 0.9)))
         epochs = int(config.get("epochs", exp_config.get("local_epochs", 5)))
 
         optimizer = torch.optim.SGD(
             list(client.model.parameters()) + list(teacher_model.parameters()),
             lr=lr,
             weight_decay=weight_decay,
+            momentum=momentum,
         )
         ce_criterion = nn.CrossEntropyLoss()
         kl_criterion = nn.KLDivLoss(reduction="batchmean")
-        temperature = float(resolve_algorithm_config(client.config).get("temperature", 2.0))
+        temperature = float(alg_config.get("temperature", 2.0))
 
         client.model.train()
         teacher_model.train()
@@ -103,9 +113,9 @@ class FedKDFit(ClientFitStrategy):
                 kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
                 kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
 
-                denom = loss_s_task + loss_t_task + 1e-6
-                loss_kd_s = kl_t_to_s / denom
-                loss_kd_t = kl_s_to_t / denom
+                inverse_loss_weight = inverse_task_loss_weight(loss_s_task, loss_t_task)
+                loss_kd_s = kl_t_to_s * inverse_loss_weight
+                loss_kd_t = kl_s_to_t * inverse_loss_weight
 
                 loss_s = loss_s_task + loss_kd_s
                 loss_t = loss_t_task + loss_kd_t

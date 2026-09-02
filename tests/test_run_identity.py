@@ -12,7 +12,7 @@ from fedmaq.core.run_identity import (
     identity_key,
     parse_run_directory,
 )
-from scripts.analysis import GRID_GROUP, RunRecord, closure_certificate
+from scripts.analysis import GRID_GROUP, RunRecord, closure_certificate, confirmatory_runs
 from scripts.audit_study1_artifacts import run_identity_from_artifacts
 from scripts.common import expand_matrix
 
@@ -168,3 +168,10 @@ def test_nested_multirun_directory_under_outputs_is_not_legacy(tmp_path: Path):
     certificate = closure_certificate([run], manifest, groups=[GRID_GROUP])
 
     assert certificate["groups"][GRID_GROUP]["non_canonical"] == [str(run.job_dir)]
+
+
+def test_historical_run_records_cannot_enter_replacement_analysis(tmp_path: Path):
+    run = _run_record(tmp_path)
+    run.promotable = False
+
+    assert confirmatory_runs([run]) == []

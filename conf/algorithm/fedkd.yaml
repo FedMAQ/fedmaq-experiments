@@ -8,11 +8,11 @@ tmax: 0.95  # target SVD energy cutoff T_SVD per manuscript §4.3, Table 4.1
 # probe: floor=0.25 removes the mid-round dip and keeps rank+accuracy
 # improving together across rounds.
 min_rank_frac: 0.25
-# FedKD's paper contains zero occurrences of "temperature": its mutual
-# distillation is gated by prediction correctness, not by softmax softening
-# (manuscript §4.2 says so explicitly). 1.0 is the neutral point that makes the
-# manuscript's description true of what actually runs. Do not raise this.
+# FedKD uses continuous inverse-loss mutual-distillation weighting. The
+# temperature is a separate softmax parameter and does not gate KD by accuracy
+# or prediction correctness.
 temperature: 1.0  # mutual KD temperature (client-side, distinct from server KD)
+momentum: 0.9     # registered SGD momentum for joint student-teacher training
 # Simulated client compute slowdown from joint student+teacher training.
 # Was 2.5, which contradicts the source: FedKD reports the mentee's extra cost
 # as "much smaller" than the mentor's. Under our iso-architecture pairing the

@@ -90,6 +90,7 @@ def test_selection_accepts_pre_resolved_metrics_frames(tmp_path, monkeypatch):
         seed=1,
         csv_path=fedavg_path,
         experiment_group=GRID_GROUP,
+        promotable=True,
     )
     fedmaq = RunRecord(
         job_dir=tmp_path / "fedmaq",
@@ -100,6 +101,7 @@ def test_selection_accepts_pre_resolved_metrics_frames(tmp_path, monkeypatch):
         seed=1,
         csv_path=fedmaq_path,
         experiment_group=FORMULATION_STUDY_GROUP,
+        promotable=True,
     )
     frames = {
         fedavg_path: _df([1, 2], [0.5, 0.8], [5.0, 10.0]),
@@ -1023,7 +1025,7 @@ def test_exploration_margin_ignores_confirmatory_runs_entirely(tmp_path):
 
 def _write_discoverable_run(root, out_dir, *, seed, refinements, accuracy, alpha=0.3):
     """Write the artifacts discover_runs actually requires, at a real path."""
-    write_run(
+    run = write_run(
         root,
         "fedmaq",
         3,
@@ -1037,6 +1039,17 @@ def _write_discoverable_run(root, out_dir, *, seed, refinements, accuracy, alpha
         phase="explore",
         output_dir=Path(out_dir),
     )
+    manifest_path = run.job_dir / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    config = manifest["config"]
+    config.update({"protocol": "replacement-v1", "protocol_stage": "stage_1a"})
+    from fedmaq.core.protocol import register_protocol
+    from fedmaq.core.run_identity import config_sha256
+
+    manifest["config_sha256"] = config_sha256(config)
+    manifest["git"] = {"commit": "fixture-commit", "dirty": False}
+    manifest["protocol"] = register_protocol(config, manifest["git"]).as_dict()
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
 def _expand_matrix(name):

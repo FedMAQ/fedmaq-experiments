@@ -1,0 +1,21 @@
+# Versioned authority for the replacement pipeline.  Selection stages consume
+# validation data only; assurance jobs are never scientific cells.
+schema_version: 1
+name: replacement-v1
+stages:
+  matched_tuning:
+    selection_data: validation_only
+    reserved_test: true
+  stage_1a:
+    selection_data: validation_only
+    reserved_test: true
+  stage_1b:
+    selection_data: validation_only
+    reserved_test: true
+  downstream:
+    selection_data: frozen_validation_verdicts
+    reserved_test: true
+  assurance:
+    selection_data: none
+    reserved_test: false
+historical_artifacts_promotable: false

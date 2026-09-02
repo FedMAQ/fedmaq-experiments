@@ -16,6 +16,7 @@ from fedmaq.core.client_hooks.training_skeleton import (
 )
 from fedmaq.core.config_defaults import resolve_algorithm_config, resolve_experiment_config
 from fedmaq.core.models import get_model_parameters, set_model_parameters
+from fedmaq.core.randomness import derive_numpy_rng
 
 if TYPE_CHECKING:
     from fedmaq.baselines.transport import UploadReport
@@ -77,7 +78,9 @@ class StandardFit(ClientFitStrategy):
             seed = int(client.config["seed"])
             partition_id = int(client.cid)
             server_round = int(config["server_round"])
-            client.compressor_hook.rng = np.random.default_rng((seed, partition_id, server_round))
+            client.compressor_hook.rng = derive_numpy_rng(
+                "compression", seed, partition_id, server_round
+            )
 
         # Optional pre-training loss (e.g. DAdaQuant plateau signal), measured on
         # the incoming global model before any local update.

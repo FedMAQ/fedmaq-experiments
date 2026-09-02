@@ -43,6 +43,7 @@ from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fedmaq.core.protocol import is_promotable_manifest
 from fedmaq.core.run_identity import parse_run_directory
 from scripts.common import identity_key
 from scripts.report_schema import (
@@ -90,6 +91,10 @@ class RunRecord:
     # algorithm, same config name, same group, same skew. See
     # :func:`baseline_tuning_margin`.
     variant: str = ""
+    # Replacement analysis must never promote a historical or dirty run. The
+    # default keeps hand-built historical fixtures usable; discovery derives the
+    # value from the manifest's explicit protocol registration.
+    promotable: bool = False
 
     def __post_init__(self) -> None:
         # A record built without an explicit config name (a hand-constructed
@@ -145,6 +150,10 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
         if not csv_path.exists():
             continue
         cfg = OmegaConf.to_container(OmegaConf.load(config_path), resolve=True)
+        try:
+            manifest = json.loads((job_dir / "run_manifest.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            manifest = {}
         algorithm = cfg["algorithm"]["name"]
         parsed_path = parse_run_directory(job_dir, experiments_root)
         runs.append(
@@ -166,6 +175,7 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 phase=parsed_path.phase if parsed_path else None,
                 post_process=bool(cfg["algorithm"].get("post_process", False)),
                 variant=parsed_path.variant if parsed_path else "",
+                promotable=is_promotable_manifest(manifest),
             )
         )
     return runs
@@ -263,7 +273,12 @@ def confirmatory_runs(runs: list[RunRecord]) -> list[RunRecord]:
     builds its ``{seed: run}`` maps by overwriting -- so an arm silently stands in
     for FedMAQ or for a baseline depending on directory iteration order.
     """
-    return [r for r in runs if r.experiment_group != ABLATION_GROUP]
+    return [r for r in promotable_runs(runs) if r.experiment_group != ABLATION_GROUP]
+
+
+def promotable_runs(runs: list[RunRecord]) -> list[RunRecord]:
+    """Return replacement-registered runs without selecting an analysis group."""
+    return [r for r in runs if r.promotable]
 
 
 REFINEMENT_NAMES = ("soft_voting", "ema_student", "grad_norm_ema")
@@ -408,6 +423,7 @@ def exploration_noise_margin(
     quote both rather than the point estimate alone. Neither changes the rule.
     """
     frame_for = _frame_resolver(frames)
+    runs = promotable_runs(runs)
     # Scope to the exploration phase before anything else. Every confirmatory
     # FedMAQ run -- benchmark grid, formulation study, six of the seven ablation
     # arms -- also declares ``name: fedmaq`` at alpha 0.1/1.0, so an
@@ -612,6 +628,7 @@ def baseline_tuning_margin(
     ``mu`` and FedDistill's ``reg_alpha`` -- were not reproducible from the
     repository that the pre-registration tag freezes.
     """
+    runs = promotable_runs(runs)
     if reference_variants is None:
         refs = (
             BASELINE_TUNING_WIDE_REFERENCE_VARIANTS
@@ -1998,6 +2015,7 @@ def ablation_iso_byte(
     every other arm back to round 30 -- a table that looks entirely plausible and
     is wrong. Reading this mid-sweep is the ordinary way to hit it.
     """
+    runs = promotable_runs(runs)
     config_of: dict[Path, int] = {}
     members: list[RunRecord] = []
     for config_num, (alg_config, _) in ABLATION_CONFIGURATIONS.items():
@@ -2029,6 +2047,7 @@ def build_ablation_table(
     contrasts are not attributable and the table must not be reported.
     """
     frame_for = _frame_resolver(frames)
+    runs = promotable_runs(runs)
     by_config: dict[int, dict] = {}
     violations: list[str] = []
 

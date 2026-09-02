@@ -89,6 +89,11 @@ hydra:
 # this. Both directions are enforced in tests/test_simulation.py.
 seed: 42
 
+# Replacement-pipeline authority. Historical manifests without this field are
+# retained for diagnosis but cannot enter replacement evidence analysis.
+protocol: replacement-v1
+protocol_stage: downstream
+
 # Ray runtime settings, forwarded to ray.init() through Flower's
 # ``backend_config["init_args"]`` (see fedmaq.simulation).
 #

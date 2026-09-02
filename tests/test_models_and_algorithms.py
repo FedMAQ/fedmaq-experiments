@@ -653,6 +653,7 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
             "tmin": 0.1,
             "tmax": 0.9,
             "temperature": 2.0,
+            "momentum": 0.25,
         },
         "dataset": {"name": "mnist", "num_classes": 10},
     }
@@ -666,6 +667,15 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
     from fedmaq.baselines.compression import FedKDCompressionHook
 
     compressor_hook = FedKDCompressionHook(energy=0.5)
+
+    optimizer_kwargs = {}
+    original_sgd = torch.optim.SGD
+
+    def recording_sgd(parameters, **kwargs):
+        optimizer_kwargs.update(kwargs)
+        return original_sgd(parameters, **kwargs)
+
+    monkeypatch.setattr(torch.optim, "SGD", recording_sgd)
 
     client = GenericClient(
         cid="0",
@@ -683,9 +693,20 @@ def test_fedkd_client_fit(mock_dataset, tmp_path, monkeypatch):
     assert num_examples == 100
     assert "bytes_uploaded" in metrics
     assert metrics["partition_id"] == 0
+    assert optimizer_kwargs["momentum"] == pytest.approx(0.25)
 
     teacher_file = persistence_dir / "teacher_0.pth"
     assert teacher_file.exists()
+
+
+def test_fedkd_uses_continuous_inverse_task_loss_weight() -> None:
+    from fedmaq.core.client_hooks.fedkd import inverse_task_loss_weight
+
+    low_loss_weight = inverse_task_loss_weight(torch.tensor(0.5), torch.tensor(0.5))
+    high_loss_weight = inverse_task_loss_weight(torch.tensor(2.0), torch.tensor(2.0))
+
+    assert low_loss_weight.item() > high_loss_weight.item()
+    assert low_loss_weight.item() == pytest.approx(1.0 / 1.000001)
 
 
 def test_fedkd_runtime_persistence_isolated_from_shared_cache(mock_dataset, tmp_path, monkeypatch):
@@ -948,6 +969,15 @@ def test_fedpaq_requires_rng_for_stochastic_rounding():
     from fedmaq.baselines.quantization import FedPAQCompressionHook
 
     hook = FedPAQCompressionHook(q=8)
+    with pytest.raises(ValueError, match="seeded rng"):
+        hook.compress([np.array([-2.0, 0.0, 2.0], dtype=np.float32)])
+
+
+def test_fedmaq_postprocess_requires_rng_for_stochastic_rounding():
+    """The stateful FedMAQ compression path also rejects an unseeded stream."""
+    from fedmaq.baselines.postprocess import FedMAQPostProcessCompressionHook
+
+    hook = FedMAQPostProcessCompressionHook(q=8)
     with pytest.raises(ValueError, match="seeded rng"):
         hook.compress([np.array([-2.0, 0.0, 2.0], dtype=np.float32)])
 

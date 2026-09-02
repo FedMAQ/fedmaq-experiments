@@ -40,7 +40,7 @@ class FedKDHook(StrategyHook):
 
     - ``pre_configure_fit``: compresses server parameters via SVD before sending.
     - ``configure_fit``: injects the round energy scalar into each client's config.
-    - ``pre_evaluate``: decompresses SVD parameters before global evaluation.
+    - ``pre_evaluate``: preserves the post-aggregation parameters for evaluation.
     - ``aggregate_fit``: passes through (FedAvg weight aggregation is used as-is).
     """
 
@@ -60,10 +60,6 @@ class FedKDHook(StrategyHook):
         # *delta* against this reference (gradient-like, genuinely low-rank),
         # never to the full weight matrices (which are not low-rank).
         self._reference: list[np.ndarray] | None = None
-        # Reconstructed parameters cached from pre_configure_fit so pre_evaluate
-        # evaluates the exact same compressed state clients received, instead of
-        # running a second, independent compression pass.
-        self._last_reconstructed: Parameters | None = None
         self._last_download_report: UploadReport | None = None
         self._last_mean_rank_retained: float | None = None
 
@@ -73,6 +69,12 @@ class FedKDHook(StrategyHook):
         ndarrays: list[Any],
     ) -> UploadReport:
         """Return the SVD-compressed download report at the current energy."""
+        # ``pre_configure_fit`` already serialized the payload sent to clients.
+        # Reusing that report is essential: by the time telemetry records the
+        # round, ``_reference`` has advanced to the broadcast state and a fresh
+        # calculation would describe a different delta.
+        if self._last_download_report is not None:
+            return self._last_download_report
         reference = self._reference or [np.zeros_like(arr) for arr in ndarrays]
         payloads: list[bytes] = []
         for arr, ref in zip(ndarrays, reference, strict=True):
@@ -108,6 +110,7 @@ class FedKDHook(StrategyHook):
             self._reference = [np.zeros_like(arr) for arr in ndarrays]
 
         new_reference: list[np.ndarray] = []
+        payloads: list[bytes] = []
         rank_ratios: list[float] = []
         for arr, ref in zip(ndarrays, self._reference, strict=True):
             if arr.size == 0:
@@ -124,6 +127,8 @@ class FedKDHook(StrategyHook):
             else:
                 delta_hat = delta
             new_reference.append(ref + delta_hat)
+            if tag == "download":
+                payloads.append(svd_payload(compressed))
         if rank_ratios:
             mean_ratio = sum(rank_ratios) / len(rank_ratios)
             if tag == "download":
@@ -136,6 +141,8 @@ class FedKDHook(StrategyHook):
                 len(rank_ratios),
             )
         self._reference = new_reference
+        if tag == "download":
+            self._last_download_report = UploadReport.from_payloads(payloads)
         return ndarrays_to_parameters(new_reference)
 
     def pre_configure_fit(
@@ -145,9 +152,7 @@ class FedKDHook(StrategyHook):
         parameters: Parameters,
     ) -> Parameters:
         self._current_energy = self._compute_energy(server_round)
-        reconstructed = self._svd_compress_delta(parameters, self._current_energy, tag="download")
-        self._last_reconstructed = reconstructed
-        return reconstructed
+        return self._svd_compress_delta(parameters, self._current_energy, tag="download")
 
     def configure_fit(
         self,
@@ -181,13 +186,11 @@ class FedKDHook(StrategyHook):
     ) -> Parameters:
         if server_round <= 0:
             return parameters
-        # Reuse the exact reconstruction already sent to clients this round
-        # (avoids a second, independent compression pass diverging from what
-        # clients actually train on).
-        if self._last_reconstructed is not None:
-            return self._last_reconstructed
-        energy = self._compute_energy(server_round)
-        return self._svd_compress_delta(parameters, energy, tag="eval")
+        # The aggregate is already in the ordinary parameter domain. FedKD's
+        # SVD transform applies only to the server-to-client broadcast; the
+        # model evaluated and checkpointed after a round is the post-fit
+        # aggregate, not the cached pre-fit broadcast.
+        return parameters
 
     def get_eval_metrics(self, strategy: TelemetryFedAvg, server_round: int) -> dict[str, Any]:
         metrics = {}

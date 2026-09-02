@@ -5,11 +5,14 @@ and subprocess execution helpers used by ``scripts/run_matrix.py``.
 """
 
 import logging
+import pickle
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import torch
 
 from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
 from fedmaq.core.run_identity import NO_GROUP, get_canonical_output_dir, identity_key
@@ -160,7 +163,14 @@ def is_run_complete(output_dir: Path) -> bool:
     wall-clock; skipping an unfinished one leaves a hole that only surfaces at
     analysis time, so the bias points the safe way.
     """
-    return (output_dir / FINAL_MODEL_FILENAME).is_file()
+    checkpoint = output_dir / FINAL_MODEL_FILENAME
+    if not checkpoint.is_file() or checkpoint.stat().st_size == 0:
+        return False
+    try:
+        state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    except (OSError, RuntimeError, EOFError, ValueError, pickle.UnpicklingError):
+        return False
+    return isinstance(state_dict, dict) and bool(state_dict)
 
 
 def build_run_command(

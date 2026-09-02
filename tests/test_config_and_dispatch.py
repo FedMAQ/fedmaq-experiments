@@ -827,8 +827,13 @@ def test_run_completion_keys_on_the_final_round_checkpoint(tmp_path):
     (tmp_path / "experiment_log.csv").write_text("round\n", encoding="utf-8")
     assert not is_run_complete(tmp_path)
 
-    (tmp_path / FINAL_MODEL_FILENAME).write_bytes(b"")
+    import torch
+
+    torch.save({"weight": torch.ones(1)}, tmp_path / FINAL_MODEL_FILENAME)
     assert is_run_complete(tmp_path)
+
+    (tmp_path / FINAL_MODEL_FILENAME).write_bytes(b"")
+    assert not is_run_complete(tmp_path)
 
     group = get_sweep_group_dir("primary", "cifar10", "mobilenetv2", "benchmark_grid")
     run_dir = get_canonical_output_dir(
@@ -902,7 +907,7 @@ def test_sweep_records_failed_indices_and_can_skip_completed_runs(tmp_path, monk
     # dispatch only the one that failed.
     done = group_dir / "fedprox" / "dirichlet_alpha_0.1" / "seed_0"
     done.mkdir(parents=True, exist_ok=True)
-    (done / FINAL_MODEL_FILENAME).write_bytes(b"")
+    torch.save({"weight": torch.ones(1)}, done / FINAL_MODEL_FILENAME)
 
     dispatched.clear()
     monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "probe", "--skip_completed"])
