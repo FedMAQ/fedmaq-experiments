@@ -1,0 +1,25 @@
+# Stage 1b of the re-cut formulation design: omega follow-up at the selected p.
+# Sweeps omega in {0.25, 0.75} (2 net-new variants x 2 skews x 3 seeds = 12 cells).
+# The omega=0.5 cells at the selected p are reused from Stage 1a (power_mean_design).
+phase: explore
+experiment_group: power_mean_omega
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: power_mean
+    label: power-mean-omega-0.25
+    variant: omega0.25
+    overrides:
+      - algorithm.omega=0.25
+  - alg: power_mean
+    label: power-mean-omega-0.75
+    variant: omega0.75
+    overrides:
+      - algorithm.omega=0.75

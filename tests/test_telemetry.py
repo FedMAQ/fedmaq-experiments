@@ -63,6 +63,9 @@ def test_common_csv_fieldnames_are_public_contract():
         "client/avg_local_loss",
         "client/avg_epochs_trained",
         "client/avg_q",
+        "client/modeled_capacity_mb_mean",
+        "client/modeled_capacity_mb_min",
+        "client/modeled_capacity_mb_max",
     ]
 
 

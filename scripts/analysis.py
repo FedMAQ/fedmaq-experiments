@@ -222,6 +222,9 @@ ABLATION_GROUP = "ablation"
 FORMULATION_STUDY_GROUP = "formulation_study"
 GRID_GROUP = "benchmark_grid"
 POWER_MEAN_DESIGN_GROUP = "power_mean_design"
+POWER_MEAN_OMEGA_GROUP = "power_mean_omega"
+FEDPAQ_PIPELINE_GROUP = "fedpaq_pipeline"
+MEMORY_SENSITIVITY_GROUP = "memory_sensitivity"
 
 
 @dataclass(frozen=True)
@@ -277,6 +280,52 @@ def power_mean_stage_one() -> PowerMeanStageOne:
         degrees_by_variant=degrees_by_variant,
         omega=omegas.pop(),
         seeds=seed_sets[0],
+    )
+
+
+@dataclass(frozen=True)
+class PowerMeanStageOneB:
+    """The selectable omega settings and shared seeds declared by Stage 1b."""
+
+    experiment_group: str
+    stage_1a_group: str
+    algorithm_config: str
+    omegas_by_variant: dict[str, float]
+    candidate_omegas: tuple[float, ...]
+    seeds: frozenset[int]
+
+
+@cache
+def power_mean_stage_one_b() -> PowerMeanStageOneB:
+    """Compose the Stage-1b matrix and candidate omega set."""
+    conf_dir = Path(__file__).resolve().parents[1] / "conf"
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(conf_dir / "matrix" / f"{POWER_MEAN_OMEGA_GROUP}.yaml"), resolve=True
+    )
+    omegas_by_variant: dict[str, float] = {}
+    seed_sets: list[frozenset[int]] = []
+    algorithm_configs: set[str] = set()
+    with initialize_config_dir(config_dir=str(conf_dir), version_base="1.3"):
+        for run in matrix["runs"]:
+            algorithm_config = str(run["alg"])
+            composed = compose(
+                config_name="config",
+                overrides=[f"algorithm={algorithm_config}", *run.get("overrides", [])],
+            )
+            if composed.algorithm.formulation != "power_mean":
+                continue
+            omega_val = float(composed.algorithm.omega)
+            omegas_by_variant[str(run["variant"])] = omega_val
+            seed_sets.append(frozenset(int(seed) for seed in run.get("seeds", matrix["seeds"])))
+            algorithm_configs.add(algorithm_config)
+
+    return PowerMeanStageOneB(
+        experiment_group=str(matrix["experiment_group"]),
+        stage_1a_group=POWER_MEAN_DESIGN_GROUP,
+        algorithm_config=algorithm_configs.pop() if algorithm_configs else "power_mean",
+        omegas_by_variant=omegas_by_variant,
+        candidate_omegas=(0.25, 0.5, 0.75),
+        seeds=seed_sets[0] if seed_sets else frozenset({0, 42, 123}),
     )
 
 
@@ -1617,14 +1666,17 @@ def select_power_mean_degree_iso_byte(
 ) -> dict:
     runs = promotable_runs(runs)
     _check_validation_split_only(runs, "select_power_mean_degree_iso_byte")
-    """Select the Stage-1 compensation degree at the minimum common MB budget.
+    """Select the Stage-1 compensation degree at per-seed common validation-byte budgets.
 
     The first re-cut stage selects only among the seven power-mean degrees. F0,
-    F3 and F4 are structural comparators in the same matrix, but cannot stand in
+    F3 and F4 are structural controls in the same matrix, but cannot stand in
     for a compensation degree or collapse the p ladder under ``power_mean``.
+    They remain strictly descriptive.
     """
     stage = power_mean_stage_one()
-    candidates = [
+    frame_for = _frame_resolver(frames)
+
+    eligible_runs = [
         r
         for r in runs
         if r.experiment_group == stage.experiment_group
@@ -1632,27 +1684,147 @@ def select_power_mean_degree_iso_byte(
         and r.formulation == "power_mean"
         and r.variant in stage.degrees_by_variant
     ]
-    for dataset, alpha in sorted({(r.dataset, r.alpha) for r in candidates}):
-        by_variant = {
-            variant: [
-                r
-                for r in candidates
-                if r.dataset == dataset and r.alpha == alpha and r.variant == variant
-            ]
-            for variant in stage.degrees_by_variant
+
+    descriptive_runs = [
+        r
+        for r in runs
+        if r.experiment_group == stage.experiment_group
+        and r.algorithm_config == stage.algorithm_config
+        and (r.formulation != "power_mean" or r.variant not in stage.degrees_by_variant)
+    ]
+
+    all_datasets_alphas = sorted({(r.dataset, r.alpha) for r in eligible_runs})
+    if not all_datasets_alphas:
+        # Fallback to any runs in the group to provide informative error
+        all_datasets_alphas = sorted(
+            {(r.dataset, r.alpha) for r in runs if r.experiment_group == stage.experiment_group}
+        )
+
+    result: dict[str, dict] = {}
+    for dataset, alpha in all_datasets_alphas:
+        cell_eligible = [r for r in eligible_runs if r.dataset == dataset and r.alpha == alpha]
+        by_variant: dict[str, dict[int, RunRecord]] = {}
+        for variant in stage.degrees_by_variant:
+            members = [r for r in cell_eligible if r.variant == variant]
+            if len(members) != len(stage.seeds) or {r.seed for r in members} != stage.seeds:
+                seeds_found = [r.seed for r in members]
+                expected_seeds = sorted(stage.seeds)
+                raise ValueError(
+                    f"power-mean Stage 1 is incomplete for {dataset} alpha={alpha}: "
+                    f"variant {variant!r} has seeds {seeds_found}, expected {expected_seeds}"
+                )
+            by_variant[variant] = {r.seed: r for r in members}
+
+        common_seeds = sorted(stage.seeds)
+        budget_by_seed: dict[int, float] = {}
+        scored_by_variant: dict[str, dict[int, float]] = {v: {} for v in stage.degrees_by_variant}
+        terminal_mb_by_variant: dict[str, dict[int, float]] = {
+            v: {} for v in stage.degrees_by_variant
         }
-        missing = [variant for variant, members in by_variant.items() if not members]
-        bad_seeds = {
-            variant: [r.seed for r in members]
-            for variant, members in by_variant.items()
-            if len(members) != len(stage.seeds) or {r.seed for r in members} != stage.seeds
-        }
-        if missing or bad_seeds:
-            raise ValueError(
-                f"power-mean Stage 1 is incomplete for {dataset} alpha={alpha}: "
-                f"missing variants={missing}, invalid seeds={bad_seeds}"
+
+        for seed in common_seeds:
+            seed_terminal_mbs: dict[str, float] = {}
+            for v in stage.degrees_by_variant:
+                r_v = by_variant[v][seed]
+                df_v = frame_for(r_v)
+                t_mb = float(df_v["communication/cumulative_mb"].iloc[-1])
+                terminal_mb_by_variant[v][seed] = t_mb
+                seed_terminal_mbs[v] = t_mb
+            b_star = min(seed_terminal_mbs.values())
+            budget_by_seed[seed] = b_star
+
+            for v in stage.degrees_by_variant:
+                r_v = by_variant[v][seed]
+                df_v = frame_for(r_v)
+                acc_interp = interpolate_accuracy_at_budget(df_v, b_star)
+                if acc_interp is None:
+                    raise ValueError(
+                        f"power-mean Stage 1 variant {v!r} seed {seed} is out of support "
+                        f"at budget {b_star:.4f} MB"
+                    )
+                scored_by_variant[v][seed] = acc_interp
+
+        groups: dict[str, dict] = {}
+        for v in stage.degrees_by_variant:
+            scores_v = [scored_by_variant[v][s] for s in common_seeds]
+            term_mbs_v = [terminal_mb_by_variant[v][s] for s in common_seeds]
+            groups[v] = {
+                "seeds": {
+                    s: {
+                        "accuracy_at_budget": scored_by_variant[v][s],
+                        "final_cumulative_mb": terminal_mb_by_variant[v][s],
+                        "accuracy_r100": accuracy_at_round(frame_for(by_variant[v][s]), 100),
+                    }
+                    for s in common_seeds
+                },
+                "accuracy_at_budget": summary(scores_v),
+                "mean_accuracy_at_budget": statistics.fmean(scores_v),
+                "final_cumulative_mb": summary(term_mbs_v),
+                "degree_p": stage.degrees_by_variant[v],
+            }
+
+        ranked = sorted(
+            stage.degrees_by_variant.keys(),
+            key=lambda v: (
+                groups[v]["mean_accuracy_at_budget"],
+                -groups[v]["final_cumulative_mb"]["mean"],
+                v,
+            ),
+            reverse=True,
+        )
+        margin = None
+        if len(ranked) > 1:
+            margin = (
+                groups[ranked[0]]["mean_accuracy_at_budget"]
+                - groups[ranked[1]]["mean_accuracy_at_budget"]
             )
-    return iso_byte_scores(candidates, lambda r: r.variant, frames=frames)
+
+        # Evaluate descriptive controls (F0, F3, F4) safely at per-seed B*_s
+        cell_descriptive = [
+            r for r in descriptive_runs if r.dataset == dataset and r.alpha == alpha
+        ]
+        descriptive_controls: dict[str, dict] = {}
+        ctrl_variants = sorted({r.variant for r in cell_descriptive if r.variant})
+        for cv in ctrl_variants:
+            cv_runs = [r for r in cell_descriptive if r.variant == cv]
+            cv_by_seed = {r.seed: r for r in cv_runs}
+            cv_seeds: dict[int, dict] = {}
+            cv_scores: list[float] = []
+            cv_term_mbs: list[float] = []
+            for s in common_seeds:
+                if s in cv_by_seed:
+                    df_c = frame_for(cv_by_seed[s])
+                    t_mb = float(df_c["communication/cumulative_mb"].iloc[-1])
+                    cv_term_mbs.append(t_mb)
+                    b_star = budget_by_seed[s]
+                    acc_c = interpolate_accuracy_at_budget(df_c, b_star)
+                    if acc_c is not None:
+                        cv_scores.append(acc_c)
+                    cv_seeds[s] = {
+                        "accuracy_at_budget": acc_c,
+                        "final_cumulative_mb": t_mb,
+                        "accuracy_r100": accuracy_at_round(df_c, 100),
+                    }
+            descriptive_controls[cv] = {
+                "seeds": cv_seeds,
+                "accuracy_at_budget": summary(cv_scores) if cv_scores else None,
+                "mean_accuracy_at_budget": statistics.fmean(cv_scores) if cv_scores else None,
+                "final_cumulative_mb": summary(cv_term_mbs) if cv_term_mbs else None,
+            }
+
+        result[f"{dataset}_alpha_{alpha}"] = {
+            "dataset": dataset,
+            "alpha": alpha,
+            "budget_by_seed": budget_by_seed,
+            "budget_mb": min(budget_by_seed.values()) if budget_by_seed else None,
+            "groups": groups,
+            "descriptive_controls": descriptive_controls,
+            "winner": ranked[0] if ranked else None,
+            "margin_accuracy": margin,
+            "ranking": ranked,
+        }
+
+    return result
 
 
 def resolve_power_mean_degree(winner_result: dict, dataset: str = "cifar10") -> dict:
@@ -1685,6 +1857,288 @@ def resolve_power_mean_degree(winner_result: dict, dataset: str = "cifar10") -> 
         "alpha_1.0_winner": moderate,
         "rule": "agreement" if severe == moderate else "severe-skew tie-break",
     }
+
+
+def select_power_mean_omega_iso_byte(
+    runs: list[RunRecord],
+    selected_p: float | str = 0.0,
+    frames: MetricsFrames | None = None,
+) -> dict:
+    """Select the Stage-1b omega setting in {0.25, 0.5, 0.75} at the selected p.
+
+    Evaluates at per-seed common validation-byte budgets using linear interpolation
+    without extrapolation and applies the neutral-first tie rule (omega=0.5 preferred).
+    """
+    runs = promotable_runs(runs)
+    _check_validation_split_only(runs, "select_power_mean_omega_iso_byte")
+    stage_1b = power_mean_stage_one_b()
+    frame_for = _frame_resolver(frames)
+
+    # Normalize selected_p
+    p_norm = selected_p if selected_p == "min" else float(selected_p)
+
+    # Identify candidate runs across Stage 1a (omega=0.5) and Stage 1b (omega in {0.25, 0.75})
+    omega_runs: dict[float, list[RunRecord]] = {0.25: [], 0.5: [], 0.75: []}
+    for r in runs:
+        if r.formulation != "power_mean":
+            continue
+        omega_val: float | None = None
+        p_val: float | str | None = None
+
+        if r.experiment_group == stage_1b.experiment_group:
+            omega_val = stage_1b.omegas_by_variant.get(r.variant)
+            p_val = p_norm
+        elif r.experiment_group == stage_1b.stage_1a_group:
+            stage_1a = power_mean_stage_one()
+            if r.variant in stage_1a.degrees_by_variant:
+                p_cand = stage_1a.degrees_by_variant[r.variant]
+                if p_cand == p_norm:
+                    omega_val = 0.5
+                    p_val = p_cand
+        else:
+            if r.variant == "omega0.25":
+                omega_val = 0.25
+                p_val = p_norm
+            elif r.variant == "omega0.75":
+                omega_val = 0.75
+                p_val = p_norm
+            elif r.variant in ("omega0.5", "p0", f"p{p_norm}"):
+                omega_val = 0.5
+                p_val = p_norm
+
+        if omega_val in omega_runs and p_val == p_norm:
+            omega_runs[omega_val].append(r)
+
+    all_datasets_alphas = sorted(
+        {(r.dataset, r.alpha) for members in omega_runs.values() for r in members}
+    )
+    if not all_datasets_alphas:
+        raise ValueError(
+            f"no eligible power-mean runs found for Stage 1b omega selection at p={selected_p!r}"
+        )
+
+    result: dict[str, dict] = {}
+    for dataset, alpha in all_datasets_alphas:
+        by_omega: dict[float, dict[int, RunRecord]] = {}
+        for w in stage_1b.candidate_omegas:
+            members = [
+                r for r in omega_runs.get(w, []) if r.dataset == dataset and r.alpha == alpha
+            ]
+            if len(members) != len(stage_1b.seeds) or {r.seed for r in members} != stage_1b.seeds:
+                seeds_found = [r.seed for r in members]
+                expected_seeds = sorted(stage_1b.seeds)
+                raise ValueError(
+                    f"power-mean Stage 1b is incomplete for {dataset} alpha={alpha} omega={w}: "
+                    f"found seeds {seeds_found}, expected {expected_seeds}"
+                )
+            by_omega[w] = {r.seed: r for r in members}
+
+        common_seeds = sorted(stage_1b.seeds)
+        budget_by_seed: dict[int, float] = {}
+        scored_by_omega: dict[float, dict[int, float]] = {w: {} for w in stage_1b.candidate_omegas}
+        terminal_mb_by_omega: dict[float, dict[int, float]] = {
+            w: {} for w in stage_1b.candidate_omegas
+        }
+
+        for seed in common_seeds:
+            seed_terminal_mbs = {}
+            for w in stage_1b.candidate_omegas:
+                r_w = by_omega[w][seed]
+                df_w = frame_for(r_w)
+                t_mb = float(df_w["communication/cumulative_mb"].iloc[-1])
+                terminal_mb_by_omega[w][seed] = t_mb
+                seed_terminal_mbs[w] = t_mb
+            b_star = min(seed_terminal_mbs.values())
+            budget_by_seed[seed] = b_star
+
+            for w in stage_1b.candidate_omegas:
+                r_w = by_omega[w][seed]
+                df_w = frame_for(r_w)
+                acc_interp = interpolate_accuracy_at_budget(df_w, b_star)
+                if acc_interp is None:
+                    raise ValueError(
+                        f"power-mean Stage 1b omega={w} seed {seed} is out of support "
+                        f"at budget {b_star:.4f} MB"
+                    )
+                scored_by_omega[w][seed] = acc_interp
+
+        groups: dict[float, dict] = {}
+        for w in stage_1b.candidate_omegas:
+            scores_w = [scored_by_omega[w][s] for s in common_seeds]
+            term_mbs_w = [terminal_mb_by_omega[w][s] for s in common_seeds]
+            groups[w] = {
+                "seeds": {
+                    s: {
+                        "accuracy_at_budget": scored_by_omega[w][s],
+                        "final_cumulative_mb": terminal_mb_by_omega[w][s],
+                        "accuracy_r100": accuracy_at_round(frame_for(by_omega[w][s]), 100),
+                    }
+                    for s in common_seeds
+                },
+                "accuracy_at_budget": summary(scores_w),
+                "mean_accuracy_at_budget": statistics.fmean(scores_w),
+                "final_cumulative_mb": summary(term_mbs_w),
+                "omega": w,
+            }
+
+        # Neutral-first tie-breaking: exact preference order [0.5, 0.25, 0.75] on equal accuracy
+        ranked = sorted(
+            list(stage_1b.candidate_omegas),
+            key=lambda w: (
+                groups[w]["mean_accuracy_at_budget"],
+                1 if w == 0.5 else 0,
+                -abs(w - 0.5),
+            ),
+            reverse=True,
+        )
+        margin = None
+        if len(ranked) > 1:
+            margin = (
+                groups[ranked[0]]["mean_accuracy_at_budget"]
+                - groups[ranked[1]]["mean_accuracy_at_budget"]
+            )
+
+        result[f"{dataset}_alpha_{alpha}"] = {
+            "dataset": dataset,
+            "alpha": alpha,
+            "selected_p": p_norm,
+            "budget_by_seed": budget_by_seed,
+            "budget_mb": min(budget_by_seed.values()) if budget_by_seed else None,
+            "groups": {str(k): v for k, v in groups.items()},
+            "winner": ranked[0] if ranked else None,
+            "margin_accuracy": margin,
+            "ranking": [float(w) for w in ranked],
+        }
+
+    return result
+
+
+def resolve_power_mean_omega(winner_result: dict, dataset: str = "cifar10") -> dict:
+    """Resolve Stage 1b's two skew verdicts to the selected omega at the selected p."""
+    entries = {
+        entry["alpha"]: entry for entry in winner_result.values() if entry["dataset"] == dataset
+    }
+    required = {0.1, 1.0}
+    missing = required - set(entries)
+    if missing:
+        raise ValueError(
+            f"power-mean omega selection needs both skews for {dataset!r}; "
+            f"missing alpha {sorted(missing)}"
+        )
+
+    severe = float(entries[0.1]["winner"])
+    moderate = float(entries[1.0]["winner"])
+    candidate_omegas = {0.25, 0.5, 0.75}
+    if severe not in candidate_omegas or moderate not in candidate_omegas:
+        raise ValueError(
+            f"power-mean omega selection has invalid winners: severe={severe!r}, "
+            f"moderate={moderate!r}"
+        )
+    selected_omega = severe
+    selected_p = entries[0.1].get("selected_p", entries[1.0].get("selected_p"))
+    return {
+        "dataset": dataset,
+        "selected_p": selected_p,
+        "selected_omega": selected_omega,
+        "alpha_0.1_winner": severe,
+        "alpha_1.0_winner": moderate,
+        "rule": "agreement" if severe == moderate else "severe-skew tie-break",
+    }
+
+
+def compare_fedpaq_pipeline_iso_byte(
+    runs: list[RunRecord], frames: MetricsFrames | None = None
+) -> dict:
+    """Compare ordinary FedPAQ, pipeline-equipped FedPAQ, and FedMAQ across primary cells.
+
+    Isolates the coding pipeline (error feedback + diff coding + lossless zlib)
+    treatment effect at per-seed common validation-byte budgets.
+    """
+    runs = promotable_runs(runs)
+    _check_validation_split_only(runs, "compare_fedpaq_pipeline_iso_byte")
+    frame_for = _frame_resolver(frames)
+
+    target_algs = {"fedpaq", "fedpaq_pipeline", "fedmaq"}
+    scoped = [r for r in runs if (r.algorithm in target_algs or r.algorithm_config in target_algs)]
+
+    cells = sorted({(r.dataset, r.alpha) for r in scoped})
+    result: dict[str, dict] = {}
+
+    for dataset, alpha in cells:
+        cell_runs = [r for r in scoped if r.dataset == dataset and r.alpha == alpha]
+        by_alg: dict[str, dict[int, RunRecord]] = {}
+        for alg in ("fedpaq", "fedpaq_pipeline", "fedmaq"):
+            members = [r for r in cell_runs if r.algorithm == alg or r.algorithm_config == alg]
+            if members:
+                by_alg[alg] = {r.seed: r for r in members}
+
+        common_seeds = (
+            sorted(set.intersection(*(set(m.keys()) for m in by_alg.values()))) if by_alg else []
+        )
+
+        if not common_seeds:
+            continue
+
+        budget_by_seed: dict[int, float] = {}
+        scored_by_alg: dict[str, dict[int, float]] = {alg: {} for alg in by_alg}
+        terminal_mb_by_alg: dict[str, dict[int, float]] = {alg: {} for alg in by_alg}
+
+        for seed in common_seeds:
+            seed_terminal_mbs = {
+                alg: float(frame_for(by_alg[alg][seed])["communication/cumulative_mb"].iloc[-1])
+                for alg in by_alg
+            }
+            for alg, mb in seed_terminal_mbs.items():
+                terminal_mb_by_alg[alg][seed] = mb
+            b_star = min(seed_terminal_mbs.values())
+            budget_by_seed[seed] = b_star
+
+            for alg in by_alg:
+                df = frame_for(by_alg[alg][seed])
+                acc = interpolate_accuracy_at_budget(df, b_star)
+                if acc is not None:
+                    scored_by_alg[alg][seed] = acc
+
+        groups: dict[str, dict] = {}
+        for alg in by_alg:
+            scores = [scored_by_alg[alg][s] for s in common_seeds if s in scored_by_alg[alg]]
+            term_mbs = [terminal_mb_by_alg[alg][s] for s in common_seeds]
+            groups[alg] = {
+                "seeds": {
+                    s: {
+                        "accuracy_at_budget": scored_by_alg[alg].get(s),
+                        "final_cumulative_mb": terminal_mb_by_alg[alg].get(s),
+                    }
+                    for s in common_seeds
+                },
+                "accuracy_at_budget": summary(scores) if scores else None,
+                "mean_accuracy_at_budget": statistics.fmean(scores) if scores else None,
+                "final_cumulative_mb": summary(term_mbs) if term_mbs else None,
+            }
+
+        def _alg_sort_key(alg: str, g: dict = groups) -> tuple[float, float]:
+            mean_acc = g[alg]["mean_accuracy_at_budget"] or 0.0
+            sum_entry = g[alg]["final_cumulative_mb"]
+            neg_mb = -sum_entry["mean"] if sum_entry and sum_entry["mean"] is not None else 0.0
+            return (mean_acc, neg_mb)
+
+        ranked = sorted(
+            [alg for alg in groups if groups[alg]["mean_accuracy_at_budget"] is not None],
+            key=_alg_sort_key,
+            reverse=True,
+        )
+
+        result[f"{dataset}_alpha_{alpha}"] = {
+            "dataset": dataset,
+            "alpha": alpha,
+            "budget_by_seed": budget_by_seed,
+            "budget_mb": min(budget_by_seed.values()) if budget_by_seed else None,
+            "groups": groups,
+            "ranking": ranked,
+            "winner": ranked[0] if ranked else None,
+        }
+
+    return result
 
 
 def select_winner(runs: list[RunRecord], frames: MetricsFrames | None = None) -> dict:

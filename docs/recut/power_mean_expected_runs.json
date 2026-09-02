@@ -105,6 +105,39 @@
         "cifar10|power_mean_design|power_mean|resource-only|a1.0|f0|s42"
       ],
       "count": 84
+    },
+    "power_mean_omega": {
+      "matrices": [
+        "power_mean_omega"
+      ],
+      "regimes": {
+        "power_mean": {
+          "phases": [
+            "explore"
+          ],
+          "post_process": [
+            false
+          ],
+          "total_rounds": [
+            100
+          ]
+        }
+      },
+      "runs": [
+        "cifar10|power_mean_omega|power_mean|omega0.25|a0.1|fpower_mean|s0",
+        "cifar10|power_mean_omega|power_mean|omega0.25|a0.1|fpower_mean|s123",
+        "cifar10|power_mean_omega|power_mean|omega0.25|a0.1|fpower_mean|s42",
+        "cifar10|power_mean_omega|power_mean|omega0.25|a1.0|fpower_mean|s0",
+        "cifar10|power_mean_omega|power_mean|omega0.25|a1.0|fpower_mean|s123",
+        "cifar10|power_mean_omega|power_mean|omega0.25|a1.0|fpower_mean|s42",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a0.1|fpower_mean|s0",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a0.1|fpower_mean|s123",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a0.1|fpower_mean|s42",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a1.0|fpower_mean|s0",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a1.0|fpower_mean|s123",
+        "cifar10|power_mean_omega|power_mean|omega0.75|a1.0|fpower_mean|s42"
+      ],
+      "count": 12
     }
   }
 }

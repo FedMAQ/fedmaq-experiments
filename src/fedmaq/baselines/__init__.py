@@ -53,6 +53,9 @@ _COMPRESSOR_HOOKS: dict[
     "fedpaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
         q=int(alg_cfg.get("q", 8)), rng=rng
     ),
+    "fedpaq_pipeline": lambda alg_cfg, rng, state: FedMAQPostProcessCompressionHook(
+        q=int(alg_cfg.get("q", 8)), state=state, rng=rng
+    ),
     "dadaquant": lambda alg_cfg, rng, state: DAdaQuantCompressionHook(
         q=int(alg_cfg.get("q_min", 1)),
         rng=rng,
@@ -88,14 +91,14 @@ def get_compressor_hook(
         Algorithm sub-config dict (``cfg.algorithm`` as a plain dict).
     rng:
         Seeded NumPy generator for stochastic rounding reproducibility
-        (FedPAQ / DAdaQuant / FedMAQ). Required by the time the returned
+        (FedPAQ / DAdaQuant / FedMAQ / FedPAQ-pipeline). Required by the time the returned
         hook's ``compress()`` reaches a stochastic-rounding branch; passing
         None defers that requirement to whoever reseeds the hook (see
         ``StandardFit.fit()``), not to a silent unseeded default.
     state:
         Per-client persistent :class:`flwr.app.RecordDict` (``Context.state``).
         Only consumed when dispatching to :class:`FedMAQPostProcessCompressionHook`
-        (``alg_name == "fedmaq"`` and ``alg_cfg["post_process"]`` is true);
+        (``alg_name in ("fedmaq", "fedpaq_pipeline")`` with active post-processing pipeline);
         ignored otherwise.
 
     Returns

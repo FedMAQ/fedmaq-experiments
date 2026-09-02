@@ -15,9 +15,11 @@ from analysis import (
     BASELINE_TUNING_GROUP,
     BASELINE_TUNING_WIDE_GROUP,
     EXPLORATION_GROUP,
+    FEDPAQ_PIPELINE_GROUP,
     FORMULATION_STUDY_GROUP,
     GRID_GROUP,
     POWER_MEAN_DESIGN_GROUP,
+    POWER_MEAN_OMEGA_GROUP,
     RunRecord,
     accuracy_at_budget,
     accuracy_at_round,
@@ -25,6 +27,7 @@ from analysis import (
     baseline_tuning_specs,
     build_ablation_table,
     closure_certificate,
+    compare_fedpaq_pipeline_iso_byte,
     compare_to_baselines,
     compare_to_baselines_iso_byte,
     discover_runs,
@@ -34,13 +37,16 @@ from analysis import (
     frozen_refinement_layer,
     iso_byte_scores,
     power_mean_stage_one,
+    power_mean_stage_one_b,
     resolve_frozen_formulation,
     resolve_metrics_frame,
     resolve_power_mean_degree,
+    resolve_power_mean_omega,
     round_at_budget,
     round_completeness,
     run_identity,
     select_power_mean_degree_iso_byte,
+    select_power_mean_omega_iso_byte,
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
@@ -1558,7 +1564,178 @@ def test_power_mean_degree_selection_keeps_the_p_ladder_distinct(tmp_path):
     assert resolution["rule"] == "severe-skew tie-break"
 
 
-def test_power_mean_degree_selection_rejects_an_incomplete_stage(tmp_path):
+def test_power_mean_degree_selection_evaluates_descriptive_controls_safely(tmp_path):
+    """Structural controls (F0, F3, F4) remain descriptive and do not fail if out of support."""
+    stage = power_mean_stage_one()
+    runs = []
+    # 7 eligible variants finishing at 15 MB
+    for variant in stage.degrees_by_variant:
+        acc = 0.85 if variant == "p-1" else 0.70
+        for seed in stage.seeds:
+            run = _write_run(
+                tmp_path,
+                "fedmaq",
+                "power_mean",
+                seed,
+                [0.4, 0.6, acc],
+                [5.0, 10.0, 15.0],
+                group=POWER_MEAN_DESIGN_GROUP,
+                alpha=0.1,
+                variant=variant,
+            )
+            run.algorithm_config = stage.algorithm_config
+            runs.append(run)
+
+    # Descriptive control F0 finishing early at 10.0 MB (out of support at 15.0 MB)
+    for seed in stage.seeds:
+        run_f0 = _write_run(
+            tmp_path,
+            "fedmaq",
+            0,
+            seed,
+            [0.3, 0.5, 0.6],
+            [3.0, 6.0, 10.0],
+            group=POWER_MEAN_DESIGN_GROUP,
+            alpha=0.1,
+            variant="resource-only",
+        )
+        run_f0.algorithm_config = stage.algorithm_config
+        runs.append(run_f0)
+
+    # Descriptive control F3
+    for seed in stage.seeds:
+        run_f3 = _write_run(
+            tmp_path,
+            "fedmaq",
+            3,
+            seed,
+            [0.4, 0.6, 0.75],
+            [5.0, 10.0, 16.0],
+            group=POWER_MEAN_DESIGN_GROUP,
+            alpha=0.1,
+            variant="f3-kappa-0.5",
+        )
+        run_f3.algorithm_config = stage.algorithm_config
+        runs.append(run_f3)
+
+    selection = select_power_mean_degree_iso_byte(runs)["cifar10_alpha_0.1"]
+    assert selection["winner"] == "p-1"
+    assert "resource-only" not in selection["groups"]
+    assert "resource-only" in selection["descriptive_controls"]
+    # F0 is out of support at 15 MB budget, so accuracy_at_budget is None
+    assert selection["descriptive_controls"]["resource-only"]["accuracy_at_budget"] is None
+    # F3 was in support, so its accuracy was interpolated
+    assert selection["descriptive_controls"]["f3-kappa-0.5"]["accuracy_at_budget"] is not None
+
+
+def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tmp_path):
+    """Stage 1b joins Stage 1a omega=0.5 runs with Stage 1b omega in {0.25, 0.75}
+    and applies neutral-first tie breaking.
+    """
+    stage_1a = power_mean_stage_one()
+    stage_1b = power_mean_stage_one_b()
+    selected_p = -1.0
+    runs = []
+
+    # Stage 1a runs (omega=0.5 at p=-1, variant="p-1")
+    for alpha in (0.1, 1.0):
+        for seed in stage_1b.seeds:
+            r1a = _write_run(
+                tmp_path,
+                "fedmaq",
+                "power_mean",
+                seed,
+                [0.4, 0.6, 0.75],
+                [5.0, 10.0, 15.0],
+                group=POWER_MEAN_DESIGN_GROUP,
+                alpha=alpha,
+                variant="p-1",
+            )
+            r1a.algorithm_config = stage_1a.algorithm_config
+            runs.append(r1a)
+
+        # Stage 1b runs (omega=0.25 and omega=0.75 at equal accuracy 0.75)
+        for w_var in ("omega0.25", "omega0.75"):
+            for seed in stage_1b.seeds:
+                r1b = _write_run(
+                    tmp_path,
+                    "fedmaq",
+                    "power_mean",
+                    seed,
+                    [0.4, 0.6, 0.75],
+                    [5.0, 10.0, 15.0],
+                    group=POWER_MEAN_OMEGA_GROUP,
+                    alpha=alpha,
+                    variant=w_var,
+                )
+                r1b.algorithm_config = stage_1b.algorithm_config
+                runs.append(r1b)
+
+    selection = select_power_mean_omega_iso_byte(runs, selected_p=selected_p)
+    assert selection["cifar10_alpha_0.1"]["selected_p"] == -1.0
+    # Neutral-first tie-break selects 0.5 when accuracies are identical
+    assert selection["cifar10_alpha_0.1"]["winner"] == 0.5
+    assert selection["cifar10_alpha_1.0"]["winner"] == 0.5
+    assert selection["cifar10_alpha_0.1"]["ranking"] == [0.5, 0.25, 0.75]
+
+    resolution = resolve_power_mean_omega(selection)
+    assert resolution["selected_p"] == -1.0
+    assert resolution["selected_omega"] == 0.5
+    assert resolution["rule"] == "agreement"
+
+
+def test_compare_fedpaq_pipeline_iso_byte(tmp_path):
+    """compare_fedpaq_pipeline_iso_byte isolates coding pipeline treatment at common budgets."""
+    runs = []
+    seeds = (0, 42, 123)
+    for alpha in (0.1, 1.0):
+        for seed in seeds:
+            # Ordinary fedpaq (higher byte spend, lower accuracy)
+            r_fedpaq = _write_run(
+                tmp_path,
+                "fedpaq",
+                None,
+                seed,
+                [0.4, 0.5, 0.65],
+                [10.0, 20.0, 30.0],
+                group=GRID_GROUP,
+                alpha=alpha,
+            )
+            # FedPAQ pipeline (moderate spend, higher accuracy)
+            r_pipe = _write_run(
+                tmp_path,
+                "fedpaq_pipeline",
+                None,
+                seed,
+                [0.4, 0.6, 0.72],
+                [6.0, 12.0, 18.0],
+                group=FEDPAQ_PIPELINE_GROUP,
+                alpha=alpha,
+            )
+            # FedMAQ
+            r_fedmaq = _write_run(
+                tmp_path,
+                "fedmaq",
+                "power_mean",
+                seed,
+                [0.4, 0.65, 0.78],
+                [5.0, 10.0, 15.0],
+                group=GRID_GROUP,
+                alpha=alpha,
+            )
+            runs.extend([r_fedpaq, r_pipe, r_fedmaq])
+
+    result = compare_fedpaq_pipeline_iso_byte(runs)
+    assert "cifar10_alpha_0.1" in result
+    assert "cifar10_alpha_1.0" in result
+    cell = result["cifar10_alpha_0.1"]
+    assert set(cell["groups"].keys()) == {"fedpaq", "fedpaq_pipeline", "fedmaq"}
+    assert cell["winner"] == "fedmaq"
+    assert cell["ranking"] == ["fedmaq", "fedpaq_pipeline", "fedpaq"]
+
+
+def test_power_mean_selectors_reject_test_split_data(tmp_path):
+    """Selectors fail closed if given test-split data."""
     stage = power_mean_stage_one()
     run = _write_run(
         tmp_path,
@@ -1572,18 +1749,26 @@ def test_power_mean_degree_selection_rejects_an_incomplete_stage(tmp_path):
         variant="p1",
     )
     run.algorithm_config = stage.algorithm_config
+    run.split = "test"
 
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="requires validation-split inputs"):
         select_power_mean_degree_iso_byte([run])
 
+    with pytest.raises(ValueError, match="requires validation-split inputs"):
+        select_power_mean_omega_iso_byte([run], selected_p=1.0)
 
-def test_power_mean_recut_expected_set_has_all_84_stage_one_identities():
+
+def test_power_mean_recut_expected_set_has_all_96_identities():
     groups = expected_identities(POWER_MEAN_RECUT_MATRICES)
 
     design = groups[POWER_MEAN_DESIGN_GROUP]
     assert design["count"] == 84
     assert len(set(design["runs"])) == 84
     assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 42
+
+    omega = groups[POWER_MEAN_OMEGA_GROUP]
+    assert omega["count"] == 12
+    assert len(set(omega["runs"])) == 12
 
 
 def test_iso_byte_budget_is_the_minimum_final_spend_across_arms(tmp_path):

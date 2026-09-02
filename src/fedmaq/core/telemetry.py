@@ -68,6 +68,9 @@ COMMON_CSV_FIELDNAMES: list[str] = [
     "client/avg_local_loss",
     "client/avg_epochs_trained",
     "client/avg_q",
+    "client/modeled_capacity_mb_mean",
+    "client/modeled_capacity_mb_min",
+    "client/modeled_capacity_mb_max",
 ]
 
 
@@ -211,6 +214,25 @@ class TelemetryManager:
                         for _, fit_res in results
                     )
                     round_client_metrics[f"client/avg_{k}"] = weighted_sum / total_examples
+
+        # Modeled client memory capacity stats for sampled clients in this round (§4.1)
+        cost_model = getattr(strategy, "cost_model", None)
+        if results and cost_model is not None and hasattr(cost_model, "client_memory"):
+            sampled_capacities = [
+                float(cost_model.client_memory[strategy._partition_sort_key(cp, fr)])
+                for cp, fr in results
+                if strategy._partition_sort_key(cp, fr) < len(cost_model.client_memory)
+            ]
+            if sampled_capacities:
+                round_client_metrics["client/modeled_capacity_mb_mean"] = float(
+                    np.mean(sampled_capacities)
+                )
+                round_client_metrics["client/modeled_capacity_mb_min"] = float(
+                    np.min(sampled_capacities)
+                )
+                round_client_metrics["client/modeled_capacity_mb_max"] = float(
+                    np.max(sampled_capacities)
+                )
 
         if not results:
             self._last_snapshot = replace(

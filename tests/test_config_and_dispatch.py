@@ -16,6 +16,8 @@ ALGORITHM_CONFIGS = [
     "fedavg",
     "fedprox",
     "fedpaq",
+    "fedpaq_pipeline",
+    "power_mean",
     "dadaquant",
     "fedmd",
     "fedkd",
@@ -1493,3 +1495,60 @@ def test_run_cfg_smoke_cfd_two_rounds(mock_dataset, tmp_path, monkeypatch):
     # so cumulative bytes must still be positive and finite overall.
     assert telemetry.cumulative_bytes > 0
     assert np.isfinite(telemetry.cumulative_bytes)
+
+
+def test_power_mean_omega_matrix_expands_to_twelve_cells():
+    from scripts.common import expand_matrix
+
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR) / "matrix" / "power_mean_omega.yaml"),
+        resolve=True,
+    )
+    tasks = expand_matrix(matrix, "power_mean_omega")
+    assert len(tasks) == 12
+    assert {t["variant"] for t in tasks} == {"omega0.25", "omega0.75"}
+    assert {t["seed"] for t in tasks} == {0, 42, 123}
+
+
+def test_fedpaq_pipeline_matrices_expand_to_fifteen_cells():
+    from scripts.common import expand_matrix
+
+    c10 = expand_matrix(
+        OmegaConf.to_container(
+            OmegaConf.load(Path(CONF_DIR) / "matrix" / "fedpaq_pipeline.yaml"),
+            resolve=True,
+        ),
+        "fedpaq_pipeline",
+    )
+    c100 = expand_matrix(
+        OmegaConf.to_container(
+            OmegaConf.load(Path(CONF_DIR) / "matrix" / "fedpaq_pipeline_cifar100.yaml"),
+            resolve=True,
+        ),
+        "fedpaq_pipeline_cifar100",
+    )
+    femnist = expand_matrix(
+        OmegaConf.to_container(
+            OmegaConf.load(Path(CONF_DIR) / "matrix" / "fedpaq_pipeline_femnist.yaml"),
+            resolve=True,
+        ),
+        "fedpaq_pipeline_femnist",
+    )
+    assert len(c10) == 6
+    assert len(c100) == 6
+    assert len(femnist) == 3
+    assert len(c10 + c100 + femnist) == 15
+    assert all(t["experiment_group"] == "fedpaq_pipeline" for t in c10 + c100 + femnist)
+
+
+def test_memory_sensitivity_matrix_expands_to_twelve_net_new_cells():
+    from scripts.common import expand_matrix
+
+    matrix = OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR) / "matrix" / "memory_sensitivity.yaml"),
+        resolve=True,
+    )
+    tasks = expand_matrix(matrix, "memory_sensitivity")
+    assert len(tasks) == 12
+    assert {t["variant"] for t in tasks} == {"cunit256", "cunit1024"}
+    assert {t["seed"] for t in tasks} == {0, 42, 123}

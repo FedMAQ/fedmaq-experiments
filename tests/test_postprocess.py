@@ -222,7 +222,7 @@ def test_output_contract_matches_input_shape_dtype():
 
 def test_get_compressor_hook_dispatch():
     """post_process=True + 'fedmaq' -> new hook; post_process=False -> plain FedPAQ;
-    post_process=True on any non-'fedmaq' alg_name is ignored (defensive)."""
+    'fedpaq_pipeline' -> new hook; post_process=True on ordinary 'fedpaq' is ignored (defensive)."""
     fedmaq_on = get_compressor_hook("fedmaq", {"post_process": True, "q_min": 2})
     assert isinstance(fedmaq_on, FedMAQPostProcessCompressionHook)
 
@@ -230,6 +230,12 @@ def test_get_compressor_hook_dispatch():
     assert isinstance(fedmaq_off, FedPAQCompressionHook)
     assert not isinstance(fedmaq_off, FedMAQPostProcessCompressionHook)
 
+    # Ordinary fedpaq ignores post_process=True as defensive invariant
     other_alg = get_compressor_hook("fedpaq", {"post_process": True, "q": 8})
     assert isinstance(other_alg, FedPAQCompressionHook)
     assert not isinstance(other_alg, FedMAQPostProcessCompressionHook)
+
+    # Distinct registered fedpaq_pipeline arm activates the post-processing hook
+    fedpaq_pipe = get_compressor_hook("fedpaq_pipeline", {"post_process": True, "q": 8})
+    assert isinstance(fedpaq_pipe, FedMAQPostProcessCompressionHook)
+    assert fedpaq_pipe.q == 8

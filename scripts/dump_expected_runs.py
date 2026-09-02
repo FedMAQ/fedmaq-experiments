@@ -70,8 +70,19 @@ REPORTABLE_MATRICES = (
     "uniform_memory_control",
 )
 
-POWER_MEAN_RECUT_MATRICES = ("power_mean_design",)
+POWER_MEAN_RECUT_MATRICES = ("power_mean_design", "power_mean_omega")
 BASELINE_TUNING_WIDE_MATRICES = ("baseline_tuning_wide",)
+FEDPAQ_PIPELINE_MATRICES = (
+    "fedpaq_pipeline",
+    "fedpaq_pipeline_cifar100",
+    "fedpaq_pipeline_femnist",
+)
+MEMORY_SENSITIVITY_MATRICES = ("memory_sensitivity",)
+
+FEDPAQ_PIPELINE_SNAPSHOT_PATH = REPO_ROOT / "docs" / "recut" / "fedpaq_pipeline_expected_runs.json"
+MEMORY_SENSITIVITY_SNAPSHOT_PATH = (
+    REPO_ROOT / "docs" / "recut" / "memory_sensitivity_expected_runs.json"
+)
 
 
 def _load_matrix(name: str) -> dict:
@@ -176,17 +187,34 @@ def main() -> int:
     parser.add_argument(
         "--power-mean-recut",
         action="store_true",
-        help="write or check the separate expected set for the power-mean re-cut",
+        help="write or check the separate expected set for the power-mean re-cut (Stage 1a and 1b)",
     )
     parser.add_argument(
         "--baseline-tuning-wide",
         action="store_true",
         help="write or check the separate expected set for the widened tuning stage",
     )
+    parser.add_argument(
+        "--fedpaq-pipeline",
+        action="store_true",
+        help="write or check the separate expected set for the fedpaq_pipeline comparison",
+    )
+    parser.add_argument(
+        "--memory-sensitivity",
+        action="store_true",
+        help="write or check the separate expected set for the memory sensitivity sweep",
+    )
     args = parser.parse_args()
 
-    if args.power_mean_recut and args.baseline_tuning_wide:
-        parser.error("the two separate expected-set modes are mutually exclusive")
+    active_modes = [
+        args.power_mean_recut,
+        args.baseline_tuning_wide,
+        args.fedpaq_pipeline,
+        args.memory_sensitivity,
+    ]
+    if sum(active_modes) > 1:
+        parser.error("the separate expected-set modes are mutually exclusive")
+
     if args.power_mean_recut:
         matrix_names = POWER_MEAN_RECUT_MATRICES
         snapshot_path = POWER_MEAN_SNAPSHOT_PATH
@@ -195,6 +223,14 @@ def main() -> int:
         matrix_names = BASELINE_TUNING_WIDE_MATRICES
         snapshot_path = BASELINE_TUNING_WIDE_SNAPSHOT_PATH
         command = "uv run python scripts/dump_expected_runs.py --baseline-tuning-wide"
+    elif args.fedpaq_pipeline:
+        matrix_names = FEDPAQ_PIPELINE_MATRICES
+        snapshot_path = FEDPAQ_PIPELINE_SNAPSHOT_PATH
+        command = "uv run python scripts/dump_expected_runs.py --fedpaq-pipeline"
+    elif args.memory_sensitivity:
+        matrix_names = MEMORY_SENSITIVITY_MATRICES
+        snapshot_path = MEMORY_SENSITIVITY_SNAPSHOT_PATH
+        command = "uv run python scripts/dump_expected_runs.py --memory-sensitivity"
     else:
         matrix_names = REPORTABLE_MATRICES
         snapshot_path = SNAPSHOT_PATH

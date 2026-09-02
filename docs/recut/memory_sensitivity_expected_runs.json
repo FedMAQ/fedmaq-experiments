@@ -1,0 +1,38 @@
+{
+  "note": "GENERATED FILE -- do not edit by hand. Regenerate with `uv run python scripts/dump_expected_runs.py --memory-sensitivity`. Derived from conf/matrix/*.yaml; scripts/analysis.py reads it as the expected side of the closure certificate.",
+  "groups": {
+    "memory_sensitivity": {
+      "matrices": [
+        "memory_sensitivity"
+      ],
+      "regimes": {
+        "fedmaq": {
+          "phases": [
+            "explore"
+          ],
+          "post_process": [
+            true
+          ],
+          "total_rounds": [
+            100
+          ]
+        }
+      },
+      "runs": [
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a0.1|f2|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a0.1|f2|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a0.1|f2|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a1.0|f2|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a1.0|f2|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit1024|a1.0|f2|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a0.1|f2|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a0.1|f2|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a0.1|f2|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a1.0|f2|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a1.0|f2|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit256|a1.0|f2|s42"
+      ],
+      "count": 12
+    }
+  }
+}

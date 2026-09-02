@@ -440,3 +440,90 @@ def test_closure_certificate_rejects_missing_unexpected_and_duplicates(tmp_path)
     cert = closure_certificate(runs, manifest_groups, expected_round=100)
     assert cert["all_closed"] is False
     assert len(cert["groups"]["test_group"]["missing"]) > 0
+
+
+def test_stage_1b_closure_and_selection_validation(tmp_path):
+    """Stage 1b verifies closure against expected runs and selects omega (neutral preference)."""
+    from scripts.analysis import (
+        POWER_MEAN_DESIGN_GROUP,
+        POWER_MEAN_OMEGA_GROUP,
+        power_mean_stage_one_b,
+        select_power_mean_omega_iso_byte,
+    )
+    from scripts.dump_expected_runs import POWER_MEAN_RECUT_MATRICES, expected_identities
+
+    manifest = expected_identities(POWER_MEAN_RECUT_MATRICES)
+    stage_1b = power_mean_stage_one_b()
+
+    runs = []
+    # Stage 1a runs (omega=0.5 at p=-1)
+    for alpha in (0.1, 1.0):
+        for seed in (0, 42, 123):
+            run_dir = _create_synthetic_run(
+                tmp_path,
+                phase="explore",
+                dataset="cifar10",
+                group=POWER_MEAN_DESIGN_GROUP,
+                algorithm="power_mean",
+                alpha=alpha,
+                seed=seed,
+                variant="p-1",
+                split="val",
+                total_rounds=100,
+            )
+            runs.append(
+                RunRecord(
+                    job_dir=run_dir,
+                    dataset="cifar10",
+                    alpha=alpha,
+                    algorithm="power_mean",
+                    formulation="power_mean",
+                    seed=seed,
+                    csv_path=run_dir / "experiment_log.csv",
+                    experiment_group=POWER_MEAN_DESIGN_GROUP,
+                    algorithm_config="power_mean",
+                    variant="p-1",
+                    promotable=True,
+                    split="val",
+                )
+            )
+
+    # Stage 1b runs (omega=0.25 and omega=0.75)
+    for alpha in (0.1, 1.0):
+        for w_var in ("omega0.25", "omega0.75"):
+            for seed in (0, 42, 123):
+                run_dir = _create_synthetic_run(
+                    tmp_path,
+                    phase="explore",
+                    dataset="cifar10",
+                    group=POWER_MEAN_OMEGA_GROUP,
+                    algorithm="power_mean",
+                    alpha=alpha,
+                    seed=seed,
+                    variant=w_var,
+                    split="val",
+                    total_rounds=100,
+                )
+                runs.append(
+                    RunRecord(
+                        job_dir=run_dir,
+                        dataset="cifar10",
+                        alpha=alpha,
+                        algorithm="power_mean",
+                        formulation="power_mean",
+                        seed=seed,
+                        csv_path=run_dir / "experiment_log.csv",
+                        experiment_group=POWER_MEAN_OMEGA_GROUP,
+                        algorithm_config="power_mean",
+                        variant=w_var,
+                        promotable=True,
+                        split="val",
+                    )
+                )
+
+    cert = closure_certificate(runs, manifest, groups=[stage_1b.experiment_group])
+    assert cert["all_closed"] is True
+
+    selection = select_power_mean_omega_iso_byte(runs, selected_p=-1.0)
+    assert selection["cifar10_alpha_0.1"]["winner"] == 0.5
+    assert selection["cifar10_alpha_1.0"]["winner"] == 0.5

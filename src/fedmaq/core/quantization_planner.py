@@ -209,8 +209,11 @@ def compute_fedmaq_q_k_t_details(
     ``resource_aware=False`` lifts the Tier-1 memory ceiling so the Tier-2 soft
     target alone governs the assignment. This is Ablation Configuration 2
     (manuscript §4.3.7), which places FedMAQ in the memory-blind condition the
-    reproducible baselines occupy. Capacity is a simulated scalar consumed only
-    here, so lifting the cap costs no real memory.
+    reproducible baselines occupy. Modeled client capacity c_k is a synthetic
+    simulation state (modeled with Raspberry Pi 5 as a client compute reference)
+    governing the Tier-1 quantization ceiling q_{k,max} = floor(c_k / c_unit),
+    strictly distinct from simulator host hardware RAM / host VRAM (such as NVIDIA
+    L40S simulation host references).
     """
     tilde_g = g_k / g_max if g_max > 0.0 else 0.0
     tilde_n = n_k / n_max if n_max > 0.0 else 0.0

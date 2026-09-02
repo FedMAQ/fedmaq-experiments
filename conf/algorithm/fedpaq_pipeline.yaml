@@ -1,0 +1,7 @@
+name: fedpaq_pipeline
+# Inherits the selected ordinary FedPAQ q (default 8 if not overridden)
+q: 8
+
+# Post-processing pipeline (§4.3, FedMAQ-style): error-feedback + diff-coding + lossless zlib
+# on top of FedPAQ quantization to isolate the coding pipeline treatment.
+post_process: true

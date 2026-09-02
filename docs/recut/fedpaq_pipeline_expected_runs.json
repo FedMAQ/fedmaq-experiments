@@ -1,0 +1,43 @@
+{
+  "note": "GENERATED FILE -- do not edit by hand. Regenerate with `uv run python scripts/dump_expected_runs.py --fedpaq-pipeline`. Derived from conf/matrix/*.yaml; scripts/analysis.py reads it as the expected side of the closure certificate.",
+  "groups": {
+    "fedpaq_pipeline": {
+      "matrices": [
+        "fedpaq_pipeline",
+        "fedpaq_pipeline_cifar100",
+        "fedpaq_pipeline_femnist"
+      ],
+      "regimes": {
+        "fedpaq_pipeline": {
+          "phases": [
+            "formal"
+          ],
+          "post_process": [
+            true
+          ],
+          "total_rounds": [
+            100
+          ]
+        }
+      },
+      "runs": [
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s0",
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s123",
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s42",
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s0",
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s123",
+        "cifar100|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s42",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s0",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s123",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a0.1|fnone|s42",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s0",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s123",
+        "cifar10|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s42",
+        "femnist|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s0",
+        "femnist|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s123",
+        "femnist|fedpaq_pipeline|fedpaq_pipeline||a1.0|fnone|s42"
+      ],
+      "count": 15
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Pipeline-equipped FedPAQ control arm for the primary benchmark grid (CIFAR-10 half). 6 runs.
+# Isolates the coding pipeline (error feedback + diff coding + lossless zlib) treatment
+# while inheriting all other factors from ordinary FedPAQ.
+phase: formal
+experiment_group: fedpaq_pipeline
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedpaq_pipeline
+    label: fedpaq_pipeline
