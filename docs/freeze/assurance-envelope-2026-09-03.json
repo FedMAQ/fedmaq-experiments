@@ -2,30 +2,53 @@
   "schema_version": 1,
   "envelope_id": "fedmaq-pipeline-assurance-2026-09-03",
   "created_at": "2026-09-03",
-  "created_by": "thesis author (post-remediation candidate re-declaration)",
+  "created_by": "thesis author (post-repeatability candidate declaration)",
   "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-03.json",
-  "purpose": "Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.",
+  "purpose": "Immutable, content-hashed record binding the remediated pipeline candidate for the replacement campaign following completion of #96, #97, #98, #99, #100, and clearance of Gate 0.",
   "specification": {
     "specification_issue": "FedMAQ/fedmaq-experiments#92",
     "execution_issue": "FedMAQ/fedmaq-experiments#100"
   },
   "content_hash": {
     "algorithm": "sha256",
-    "value": null
+    "recipe": "sha256 over json.dumps(envelope, sort_keys=True, separators=(',',':'), default=str).encode('utf-8'), with content_hash.value set to null. Identical to src/fedmaq/core/run_identity.py:config_sha256.",
+    "value": "1b87080acaaec961db69e137d370f83aaf25a5fa1aba807763fd6a03e48ea12d"
   },
   "revision_vector": {
     "fedmaq-experiments": {
       "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
-      "revision": "0c6028e74f5461f0b9e65520de1975d0da646b3f",
+      "revision": "dcf35966efee416b7a569c321908277a6faf6c6f",
       "clean_tree": true,
       "role": "remediated pipeline implementation, configuration, dispatch, tests"
     }
   },
   "candidate": {
     "repository": "fedmaq-experiments",
-    "revision": "0c6028e74f5461f0b9e65520de1975d0da646b3f",
+    "revision": "dcf35966efee416b7a569c321908277a6faf6c6f",
+    "short": "dcf3596",
     "pinned_on": "2026-09-03",
-    "pin_semantics": "Remediated pipeline candidate closing #96-#100"
+    "pin_semantics": "Remediated pipeline candidate clearing Gate 0 (implementation audit, test suite, and GPU golden repeatability)"
+  },
+  "gate_0": {
+    "step_1_code_correctness": "PASS",
+    "step_2_gpu_golden_repeatability": "PASS",
+    "step_3_matrix_dry_runs": "PASS",
+    "repeatability_evidence": {
+      "host": "ALTDSI-Jupyterhub00 (A100 40GB PCIe, dual Xeon Platinum 8276)",
+      "algorithms": [
+        "fedavg",
+        "fedprox",
+        "fedpaq",
+        "fedavg_kd",
+        "dadaquant",
+        "fedmaq",
+        "fedkd",
+        "feddistill",
+        "cfd"
+      ],
+      "result": "bit-exact match across independent captures capture_a and capture_b",
+      "evidence_directory": "~/fedmaq-golden-EVIDENCE"
+    }
   },
   "freeze_certificate": {
     "path": "docs/freeze/source_manifest.json",

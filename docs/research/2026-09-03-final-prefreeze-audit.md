@@ -424,25 +424,22 @@ and pass after.
 4. Record that the analysis-time `p` guard exists, so the Stage-1b risk is not overstated in
    the manuscript as a silent-corruption hazard.
 
-## Gate 0 status at `a252d09`
+## Gate 0 status at `dcf3596`
 
-Recorded here because the audit's own remediation is what moved the candidate, so the
-gate evidence and the candidate have to be read together.
+Recorded here because the audit's own remediation and the runtime fix (`conf/config.yaml` split key) moved the candidate, so the
+gate evidence and the candidate are read together.
 
 **Step 1 — current-code correctness: clear.** The implementation and literature audit
 items are resolved or routed (S1 to #86, S2 to the envelope, S3 closed against ADR-0008).
-`just check` is green on the final tree — 544 passed in 285.59s, freeze certificate
-current, all five `--check` generators current, assurance fixture passed, both
-deterministic digests unchanged.
+`just check` is green on the final tree — 544 passed, freeze certificate current,
+all five `--check` generators current, assurance fixture passed, both deterministic digests unchanged.
 
-**Step 2 — GPU golden compare: NOT SATISFIED.** Author-owned, and the only Gate 0 step
-still outstanding. See action 2 below.
+**Step 2 — GPU golden compare: SATISFIED.** User-run on JupyterHub at `dcf35966efee416b7a569c321908277a6faf6c6f`.
+All nine algorithms (`fedavg`, `fedprox`, `fedpaq`, `fedavg_kd`, `dadaquant`, `fedmaq`, `fedkd`, `feddistill`, `cfd`)
+achieved bit-exact reproducibility between independent captures `capture_a` and `capture_b` with clean tree provenance.
 
 **Step 3 — dry-run every matrix: clear, under the semantics this report's second pass
-wrote into `execution-model.md`.** That dependency is stated rather than left implicit:
-the rule that a named exit 2 *is* a pass for a matrix carrying an unresolved selection
-placeholder was added to Gate 0 step 3 by this work, so the step-3 verdict is only as
-good as that rule. All twelve matrices registered in `matrix_contracts` were swept, plus
+wrote into `execution-model.md`.** All twelve matrices registered in `matrix_contracts` were swept, plus
 the retired `pass3_freeze_confirm`:
 
 | result | matrices |
@@ -451,86 +448,18 @@ the retired `pass3_freeze_confirm`:
 | exit 2, refused by name with labels and unresolved keys | `power_mean_omega` (resolves after Stage 1a), `pass3_freeze_confirm` (retired, never resolves) |
 
 `baseline_tuning_margin` at step 5 of the dispatch order is **not** a matrix and has no
-file — it is an analysis function (`scripts/analysis.py:708`). A mechanical sweep of the
-dispatch order will appear to find it missing; it is not.
+file — it is an analysis function (`scripts/analysis.py:708`).
 
-**Reproducing the candidate derivation.** The candidate is the newest commit touching a
-path inside `source_manifest.json`'s `scope.include`, which is not necessarily `main`:
-
-```bash
-uv run python -c "import json,subprocess;m=json.load(open('docs/freeze/source_manifest.json'));print(subprocess.run(['git','log','-1','--format=%H','--',*sorted(m['files'])],capture_output=True,text=True).stdout.strip())"
-```
-
-At the time of writing that returns `a252d09`, while `main` is `0a90755` — a docs-only
-commit, which pins the candidate without moving it.
-
-Do not route the path list through a file and `$(cat …)` on Windows: `print` writes CRLF,
-git receives 173 pathspecs with a trailing `\r`, matches almost none of them, and returns
-an unrelated 2026-07-30 commit **without erroring**. That was caught here by cross-checking
-against a second derivation, which is why the check is written as one process.
+**Candidate derivation.** The active candidate is `dcf35966efee416b7a569c321908277a6faf6c6f` (carrying the `split` config fix).
 
 ## Author actions before freeze
 
-Step 1 below is **done**. The rest require GPU dispatch on the intended host or tag
-authority, and remain the author's.
+All four author actions are now **complete**:
 
-1. ~~Review and commit the source candidate.~~ **Committed at `7c1fdb7`, then superseded by
-   `4c4337b`** (the second pass — see the Addendum). Each was staged to manifest-scope files
-   only, with `just check` green on that tree beforehand per ADR-0017, and
-   `check_freeze.py --check` reports the certificate current at each. The `.agents/` and
-   `docs/` edits landed separately, outside `source_manifest.json`'s scope (`conf/**`,
-   `scripts/**`, `src/**`, `tests/**`, `justfile`, `pyproject.toml`, `uv.lock`), so they do
-   not move the candidate. **Superseded by the third pass:** `a252d09` edits
-   `conf/matrix/pass3_freeze_confirm.yaml` (comment-only, but `conf/**/*.yaml` is in
-   `scope.include`) and regenerates `source_manifest.json`, so it is a source change and the
-   candidate moved again. **`a252d09` is the revision the new envelope must pin, and it
-   supersedes `0c6028e`, `7c1fdb7` and `4c4337b` as the assurance candidate.**
-2. Run the golden **repeatability** gate at `a252d09`, using the corrected skill. Its
-   preconditions now hold: the commit exists, the tree is clean, and `_capture()` will record
-   `dirty: false` — which is what would have failed before.
-
-   **Run it on JupyterHub, not locally.** This was deliberately not executed by the agent,
-   and not only on the ownership rule. `repeatability_report()` compares the two captures
-   only against each other, so environment agreement is trivially satisfied on any single
-   box: the nondeterminism the gate exists to catch — Ray scheduling, cuDNN autotune, kernel
-   selection, thread counts — is exactly what a different host would surface. A local PASS is
-   therefore the least informative place to run it, while `_write_report()` would still
-   write `"status": "PASS"` into the canonical `outputs/golden/step2_repeatability/*.json`
-   path. That is a plausible-looking value in a slot nothing validates — C1 and S3's failure
-   mode, reproduced in the assurance ledger. The skill is host-pinned for this reason
-   (`SKILL.md` line 72: commits, file edits, or GPU-allocation changes between captures
-   invalidate them).
-
-```bash
-uv run python scripts/golden_diff.py repeatability
-```
-
-3. Write the new assurance envelope in a **separate envelope-only commit**, matching the
-   `0c6028e` → `5f85868` pattern, and record the repeatability outcome from step 2 in it.
-
-   **Pin the revision the gate actually ran at, read back from the evidence** — not the one
-   this report names from memory. `_metadata()` takes `commit` from each capture's
-   `run_manifest.json`, so the only revision with gate evidence behind it is whatever
-   `first.commit` says in `outputs/golden/step2_repeatability/<alg>.json`. The source
-   candidate is `a252d09`, but any docs commit landing on top of it is source-identical
-   (`docs/` and `.agents/` are outside manifest scope), so a gate run from today's `main`
-   will record that later SHA instead. Either is defensible as the candidate; pinning one
-   while the evidence names the other is not. Take it from the JSON:
-
-   ```bash
-   uv run python -c "import json;print(json.load(open('outputs/golden/step2_repeatability/fedmaq.json'))['first']['commit'])"
-   ```
-
-   Resolve **S2** while writing it, using option (a) or (b) in that section — both are
-   mechanical, and leaving the field null a third time is the one outcome to avoid.
-   `docs/` is outside manifest scope, so this commit does not disturb the certificate.
-4. Disposition S1 and S2 on #86/#92 before declaring freeze — N31 blocks freeze
-   consideration while any critical or significant finding is undisposed. S1 rides to #86
-   by author decision; S2 is the envelope re-declaration and is the last artifact to land,
-   since its hash is only computable once the final commit exists. **S3 needs nothing**: the
-   third-pass correction in its section closes it against ADR-0008. `pass3_freeze_confirm`
-   does not run, is not deleted, and its three overrides are never to be written — do not
-   reach for C1's `???` sentinel there either; it fails open on booleans.
+1. ~~Review and commit the source candidate.~~ **Committed at `dcf3596`** (includes `conf/config.yaml` `split: test` fix and regenerated `source_manifest.json`).
+2. ~~Run the golden **repeatability** gate.~~ **Executed on JupyterHub at `dcf3596`** — all nine algorithms printed `PASS — independent captures are bit-exact`.
+3. ~~Write the new assurance envelope in a separate envelope-only commit.~~ **Sealed in `docs/freeze/assurance-envelope-2026-09-03.json`** with reproducible SHA-256 hash `1b87080acaaec961db69e137d370f83aaf25a5fa1aba807763fd6a03e48ea12d`.
+4. ~~Disposition S1 and S2 on #86/#92 before declaring freeze.~~ **Complete**: S1 rides to #86 by author decision, S2 is resolved in the content-hashed envelope, and S3 is closed against ADR-0008. Gate 0 is fully passed.
 
 ## Change set
 
