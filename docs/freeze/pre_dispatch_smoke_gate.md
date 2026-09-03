@@ -19,6 +19,8 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 Per repository rules, agents do not run experiments at any scale. The author executes the following 5 fast, CPU-only ($R=2$, $K=2$, `experiment.client_gpus=0`) cells in PowerShell:
 
+**Re-run required before this gate can be called clear.** The evidence under `outputs/smoke/` was captured at commit `9bfca9e`. Commit `dcf3596` (2026-09-03) added a permanent `split: test` base key to `conf/config.yaml`, one of 7 `scope.include` files changed since that capture — per Section 1's own rule, this invalidates the existing smoke evidence regardless of the syntax fix below. All 5 cells need re-capture at the current candidate, not just Cell 5.
+
 ```powershell
 # 1. FedMAQ (Calibrated c_unit=1024, post-processing enabled, power-mean base)
 uv run python scripts/run.py experiment=ci experiment.client_gpus=0 algorithm=fedmaq algorithm.post_process=true hydra.run.dir=outputs/smoke/fedmaq
@@ -33,7 +35,9 @@ uv run python scripts/run.py experiment=ci experiment.client_gpus=0 algorithm=fe
 uv run python scripts/run.py experiment=ci experiment.client_gpus=0 algorithm=fedmaq_no_data hydra.run.dir=outputs/smoke/ablation_no_data
 
 # 5. Validation Split Check (Stage-A selection split on validation loader)
-uv run python scripts/run.py experiment=ci experiment.client_gpus=0 +split=val protocol_stage=matched_tuning algorithm=fedmaq hydra.run.dir=outputs/smoke/val_split
+# NOTE: was `+split=val`. Commit dcf3596 added a base `split: test` key to conf/config.yaml,
+# so `+split=val` now fails with a Hydra "already at 'split'" error (+ requires the key be absent).
+uv run python scripts/run.py experiment=ci experiment.client_gpus=0 split=val protocol_stage=matched_tuning algorithm=fedmaq hydra.run.dir=outputs/smoke/val_split
 ```
 
 ---
