@@ -360,8 +360,20 @@ uv run python scripts/golden_diff.py repeatability
 ```
 
 3. Write the new assurance envelope in a **separate envelope-only commit**, matching the
-   `0c6028e` → `5f85868` pattern. It pins `7c1fdb7`, not `0c6028e`, and it should record the
-   repeatability outcome from step 2. Resolve **S2** while writing it, using option (a) or
+   `0c6028e` → `5f85868` pattern, and record the repeatability outcome from step 2 in it.
+
+   **Pin the revision the gate actually ran at, read back from the evidence** — not the one
+   this report names from memory. `_metadata()` takes `commit` from each capture's
+   `run_manifest.json`, so the only revision with gate evidence behind it is whatever
+   `first.commit` says in `outputs/golden/step2_repeatability/<alg>.json`. The source
+   candidate is `7c1fdb7`, but the docs commit `b158860` sits on top of it and is
+   source-identical (`docs/` and `.agents/` are outside manifest scope), so a gate run from
+   today's `main` will record `b158860`. Either is defensible as the candidate; pinning one
+   while the evidence names the other is not. Take it from the JSON:
+
+   ```bash
+   uv run python -c "import json;print(json.load(open('outputs/golden/step2_repeatability/fedmaq.json'))['first']['commit'])"
+   ``` Resolve **S2** while writing it, using option (a) or
    (b) in that section — both are mechanical, and leaving the field null a third time is the
    one outcome to avoid. `docs/` is outside manifest scope, so this commit does not disturb
    the certificate.
