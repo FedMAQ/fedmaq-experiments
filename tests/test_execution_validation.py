@@ -87,7 +87,6 @@ def _create_synthetic_run(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Checkpoint
     if not missing_checkpoint:
         checkpoint_path = output_dir / FINAL_MODEL_FILENAME
         if corrupt_checkpoint:
@@ -95,7 +94,6 @@ def _create_synthetic_run(
         else:
             torch.save({"weight": torch.tensor([1.0, 2.0])}, checkpoint_path)
 
-    # 2. Manifest
     if not missing_manifest:
         manifest_path = output_dir / MANIFEST_FILENAME
         if corrupt_manifest:
@@ -173,7 +171,6 @@ def _create_synthetic_run(
                 }
             manifest_path.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
 
-    # 3. Telemetry CSV
     if not missing_csv:
         csv_path = output_dir / "experiment_log.csv"
         if accuracies is not None and cumulative_mbs is not None:

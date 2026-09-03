@@ -706,6 +706,18 @@ def _curve_seeds(curves: dict[int, list[dict]], variant: str) -> list[int]:
     )
 
 
+def _is_adopted_variant(variant: str, adopted: str | None, ref_variant: str) -> bool:
+    """Whether ``variant`` carries the adoption mark.
+
+    The clearing challenger if one exists, else the reference -- so "nothing
+    cleared" reads as "kept the shipped default" rather than every row in the
+    table reading False, which would collapse that distinction with "no data".
+    """
+    return variant == (
+        adopted if adopted is not None else (ref_variant if variant == ref_variant else False)
+    )
+
+
 def baseline_tuning_margin(
     runs: list[RunRecord],
     alpha: float = EXPLORATION_ALPHA,
@@ -768,7 +780,7 @@ def baseline_tuning_margin(
         values_by_variant = spec.get("values", {})
         expected_variants = list(values_by_variant)
         paper_variant = spec.get("paper_default_variant")
-        adopted_variant = spec.get("adopted_variant")
+        spec_adopted_variant = spec.get("adopted_variant")
 
         runs_by_variant: dict[str, list[RunRecord]] = {}
         for r in members:
@@ -811,8 +823,8 @@ def baseline_tuning_margin(
             "paper_default_variant": paper_variant,
             "paper_default_value": values_by_variant.get(paper_variant),
             "paper_default_note": spec.get("paper_default_note"),
-            "shipped_adopted_variant": adopted_variant,
-            "adopted_value": values_by_variant.get(adopted_variant),
+            "shipped_adopted_variant": spec_adopted_variant,
+            "adopted_value": values_by_variant.get(spec_adopted_variant),
             "expected_variants": expected_variants,
             "missing_variants": [
                 variant for variant in expected_variants if variant not in runs_by_variant
@@ -850,7 +862,7 @@ def baseline_tuning_margin(
                     "seeds": _curve_seeds(curves, variant),
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant == adopted_variant,
+                    "is_adopted": variant == spec_adopted_variant,
                 }
                 for variant in variants
             ]
@@ -872,7 +884,7 @@ def baseline_tuning_margin(
                     "seeds": _curve_seeds(curves, variant),
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant == adopted_variant,
+                    "is_adopted": variant == spec_adopted_variant,
                 }
                 for variant in variants
             ]
@@ -934,7 +946,7 @@ def baseline_tuning_margin(
                         "seeds": _curve_seeds(curves, variant),
                         "is_reference": variant == ref_variant,
                         "is_paper_default": variant == paper_variant,
-                        "is_adopted": variant == adopted_variant,
+                        "is_adopted": variant == spec_adopted_variant,
                     }
                     for variant in variants
                 ]
@@ -991,12 +1003,7 @@ def baseline_tuning_margin(
                     "seeds": common_seeds,
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant
-                    == (
-                        adopted
-                        if adopted is not None
-                        else (ref_variant if variant == ref_variant else False)
-                    ),
+                    "is_adopted": _is_adopted_variant(variant, adopted, ref_variant),
                 }
                 for variant in variants
             ]
@@ -1042,12 +1049,7 @@ def baseline_tuning_margin(
                     "seeds": _curve_seeds(curves, variant),
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant
-                    == (
-                        adopted
-                        if adopted is not None
-                        else (ref_variant if variant == ref_variant else False)
-                    ),
+                    "is_adopted": _is_adopted_variant(variant, adopted, ref_variant),
                 }
                 for variant in variants
             ]

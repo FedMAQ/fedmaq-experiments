@@ -44,7 +44,6 @@ class FedMDFit(ClientFitStrategy):
         batches = 0
         epochs_trained = 0
 
-        # 1. Load weights if file exists, else pre-train
         if model_path.exists():
             client.model.load_state_dict(torch.load(model_path, map_location=client.device))
         else:
@@ -69,7 +68,6 @@ class FedMDFit(ClientFitStrategy):
                 outputs = client.model(images)
                 return StepResult(loss=criterion(outputs, labels))
 
-            # a. Pre-train on public dataset
             if client.public_loader is not None:
                 run_epochs(
                     model=client.model,
@@ -80,7 +78,7 @@ class FedMDFit(ClientFitStrategy):
                     device=client.device,
                 )
 
-            # b. Pre-train on private dataset. loss_sum/batches/correct/total_samples
+            # Pre-train on private dataset. loss_sum/batches/correct/total_samples
             # are shared with the revisit phase below (same running accumulator as
             # the original code), so they're tracked manually here rather than via
             # run_epochs' own per-call averaging -- combining two already-divided
@@ -110,8 +108,6 @@ class FedMDFit(ClientFitStrategy):
             # Save initial weights
             torch.save(client.model.state_dict(), model_path)
 
-        # 2. Check if we received predictions (soft targets) from the server
-        # (if server_round > 1)
         server_round = config.get("server_round", 1)
         if server_round > 1 and len(parameters) == 1 and client.public_loader is not None:
             avg_predictions = parameters[0]
@@ -188,7 +184,6 @@ class FedMDFit(ClientFitStrategy):
             # Save updated weights
             torch.save(client.model.state_dict(), model_path)
 
-        # 3. Compute predictions on public dataset to send back to server
         prediction_batches: list[np.ndarray] = []
         if client.public_loader is not None:
             client.model.eval()

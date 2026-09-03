@@ -647,6 +647,18 @@ def test_exploration_margin_refuses_to_guess_when_reference_is_underpowered(tmp_
     assert "sigma" not in result
 
 
+def test_exploration_noise_margin_rejects_test_split_data(tmp_path):
+    """Fails closed on test-split data, like every other margin function."""
+    runs = [
+        _explore_run(tmp_path, "off", s, acc, OFF)
+        for s, acc in zip((0, 42, 123), (0.70, 0.72, 0.74), strict=True)
+    ]
+    runs[0].split = "test"
+
+    with pytest.raises(ValueError, match="requires validation-split inputs"):
+        exploration_noise_margin(runs)
+
+
 SV_AND_EMA_ON = (True, True, False)
 
 
