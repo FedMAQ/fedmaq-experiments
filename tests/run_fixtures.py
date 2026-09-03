@@ -53,6 +53,11 @@ class CanonicalRunTree:
         phase = phase or ("formal" if group in {"benchmark_grid", "ablation"} else "explore")
         if not variant and group == "formulation_study" and algorithm_config == "fedmaq":
             variant = f"f{formulation}"
+        fixture_p: float | str | None = None
+        if algorithm_config == "power_mean":
+            fixture_p = -1.0
+            if variant.startswith("p") and variant[1:]:
+                fixture_p = "min" if variant[1:] == "min" else float(variant[1:])
 
         relative_dir = output_dir or get_canonical_output_dir(
             phase=phase,
@@ -77,6 +82,7 @@ class CanonicalRunTree:
             "algorithm": {
                 "name": algorithm,
                 "formulation": formulation,
+                "p": fixture_p,
                 "soft_voting": refinements[0],
                 "ema_student": refinements[1],
                 "grad_norm_ema": refinements[2],
@@ -139,6 +145,7 @@ class CanonicalRunTree:
             post_process=post_process,
             variant=variant,
             promotable=True,
+            p=fixture_p,
         )
 
 

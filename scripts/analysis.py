@@ -105,6 +105,8 @@ class RunRecord:
     p: float | str | None = None
     omega: float | None = None
     c_unit: float | None = None
+    memory_regime: str | None = None
+    algorithm_treatment_signature: str | None = None
 
     def __post_init__(self) -> None:
         # A record built without an explicit config name (a hand-constructed
@@ -189,6 +191,17 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
         c_unit_value = cfg["algorithm"].get("c_unit")
         if c_unit_value is not None:
             c_unit_value = float(c_unit_value)
+        algorithm_treatment = {
+            key: value for key, value in cfg["algorithm"].items() if key != "c_unit"
+        }
+        algorithm_treatment_signature = json.dumps(
+            algorithm_treatment, sort_keys=True, default=str, separators=(",", ":")
+        )
+        memory_regime = (
+            "uniform"
+            if cfg.get("heterogeneity", {}).get("uniform_memory_mb") is not None
+            else "variable"
+        )
         runs.append(
             RunRecord(
                 job_dir=job_dir,
@@ -214,6 +227,8 @@ def discover_runs(experiments_root: Path) -> list[RunRecord]:
                 p=p_value,
                 omega=omega_value,
                 c_unit=c_unit_value,
+                memory_regime=memory_regime,
+                algorithm_treatment_signature=algorithm_treatment_signature,
             )
         )
     return runs
@@ -1972,11 +1987,9 @@ def select_power_mean_omega_iso_byte(
     p_norm = selected_p if selected_p == "min" else float(selected_p)
 
     def p_matches(run: RunRecord, expected: float | str) -> bool:
-        """Check manifest provenance, retaining compatibility with old fixtures."""
+        """Check that the run manifest records the selected power-mean degree."""
         if run.p is None:
-            # Pre-#96 hand-built fixtures have no manifest p. Their variant remains
-            # useful for testing the join, but discovered campaign rows must carry it.
-            return True
+            return False
         if expected == "min" or run.p == "min":
             return run.p == expected
         try:
@@ -2402,6 +2415,19 @@ def _q_distribution(record: dict, field: str = "q_count") -> dict[str, int]:
     return dict(sorted(counts.items(), key=lambda item: int(item[0])))
 
 
+def _required_finite_metric(record: dict, key: str) -> float:
+    """Return a required finite scalar from an authoritative JSONL readout."""
+    if key not in record or record[key] is None:
+        raise ValueError(f"authoritative telemetry is missing required metric {key}")
+    try:
+        value = float(record[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"authoritative telemetry metric {key} is not numeric") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"authoritative telemetry metric {key} is not finite")
+    return value
+
+
 def compare_memory_sensitivity_iso_byte(
     runs: list[RunRecord], frames: MetricsFrames | None = None
 ) -> dict:
@@ -2462,7 +2488,7 @@ def compare_memory_sensitivity_iso_byte(
                     "cunit1024": 1024.0,
                     "cunit2048": 2048.0,
                 }[variant]
-                if run.c_unit is not None and not math.isclose(
+                if run.c_unit is None or not math.isclose(
                     run.c_unit, expected_c_unit, rel_tol=0.0, abs_tol=1e-9
                 ):
                     raise ValueError(
@@ -2479,8 +2505,8 @@ def compare_memory_sensitivity_iso_byte(
                         "cumulative_bidirectional_mb_r100": float(
                             csv_final["communication/cumulative_mb"]
                         ),
-                        "tier1_binding_fraction": final.get(
-                            "algorithm/fedmaq/tier1_binding_fraction"
+                        "tier1_binding_fraction": _required_finite_metric(
+                            final, "algorithm/fedmaq/tier1_binding_fraction"
                         ),
                         "precision_distribution": _q_distribution(final),
                         "soft_target_precision_distribution": _q_distribution(final, "q_hat_count"),
@@ -2558,8 +2584,8 @@ def compare_variable_vs_uniform_memory(
                         "cumulative_bidirectional_mb_r100": float(
                             csv_final["communication/cumulative_mb"]
                         ),
-                        "tier1_binding_fraction": json_final.get(
-                            "algorithm/fedmaq/tier1_binding_fraction"
+                        "tier1_binding_fraction": _required_finite_metric(
+                            json_final, "algorithm/fedmaq/tier1_binding_fraction"
                         ),
                         "precision_distribution": _q_distribution(json_final),
                         "soft_target_precision_distribution": _q_distribution(
@@ -2572,6 +2598,17 @@ def compare_variable_vs_uniform_memory(
         for seed in PRIMARY_SEEDS:
             variable_run = by_identity[(dataset, alpha, "variable_memory", seed)]
             uniform_run = by_identity[(dataset, alpha, "uniform_memory", seed)]
+            if variable_run.memory_regime is not None and variable_run.memory_regime != "variable":
+                raise ValueError("variable-memory arm does not record variable memory")
+            if uniform_run.memory_regime is not None and uniform_run.memory_regime != "uniform":
+                raise ValueError("uniform-memory arm does not record uniform memory")
+            if (
+                variable_run.algorithm_treatment_signature is not None
+                and uniform_run.algorithm_treatment_signature is not None
+                and variable_run.algorithm_treatment_signature
+                != uniform_run.algorithm_treatment_signature
+            ):
+                raise ValueError("variable/uniform comparison changed non-memory treatment")
             if variable_run.post_process != uniform_run.post_process:
                 raise ValueError("variable/uniform comparison changed the pipeline treatment")
             if variable_run.formulation != uniform_run.formulation:

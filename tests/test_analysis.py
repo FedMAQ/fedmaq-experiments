@@ -1652,6 +1652,7 @@ def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tm
                 variant="p-1",
             )
             r1a.algorithm_config = stage_1a.algorithm_config
+            r1a.p = selected_p
             runs.append(r1a)
 
         # Stage 1b runs (omega=0.25 and omega=0.75 at equal accuracy 0.75)
@@ -1669,6 +1670,7 @@ def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tm
                     variant=w_var,
                 )
                 r1b.algorithm_config = stage_1b.algorithm_config
+                r1b.p = selected_p
                 runs.append(r1b)
 
     selection = select_power_mean_omega_iso_byte(runs, selected_p=selected_p)
@@ -1682,6 +1684,26 @@ def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tm
     assert resolution["selected_p"] == -1.0
     assert resolution["selected_omega"] == 0.5
     assert resolution["rule"] == "agreement"
+
+
+def test_power_mean_omega_selection_rejects_missing_manifest_p(tmp_path):
+    """Stage 1b must not infer the selected degree from a variant name alone."""
+    stage_1b = power_mean_stage_one_b()
+    run = _write_run(
+        tmp_path,
+        "fedmaq",
+        "power_mean",
+        0,
+        [0.4, 0.6, 0.75],
+        [5.0, 10.0, 15.0],
+        group=POWER_MEAN_OMEGA_GROUP,
+        alpha=0.1,
+        variant="omega0.25",
+    )
+    run.algorithm_config = stage_1b.algorithm_config
+
+    with pytest.raises(ValueError, match="recorded p=None"):
+        select_power_mean_omega_iso_byte([run], selected_p=-1.0)
 
 
 def test_compare_fedpaq_pipeline_iso_byte(tmp_path):

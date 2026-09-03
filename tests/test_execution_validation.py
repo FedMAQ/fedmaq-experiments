@@ -463,6 +463,7 @@ def test_balanced_matched_tuning_scoring_and_tie_rule(tmp_path):
                     variant=var,
                     promotable=True,
                     split="val",
+                    p=-1.0,
                 )
             )
 
@@ -571,6 +572,7 @@ def test_stage_1b_closure_and_selection_validation(tmp_path):
                     variant="p-1",
                     promotable=True,
                     split="val",
+                    p=-1.0,
                 )
             )
 
@@ -604,6 +606,7 @@ def test_stage_1b_closure_and_selection_validation(tmp_path):
                         variant=w_var,
                         promotable=True,
                         split="val",
+                        p=-1.0,
                     )
                 )
 
