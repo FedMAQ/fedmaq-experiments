@@ -1,5 +1,10 @@
 # Exploration-phase PRE-FREEZE CONFIRMATION, manuscript §4.3.1.
 #
+# STATUS: retained pre-registration record. This stage was skipped as degenerate
+# (ADR-0008); it does not run. The design text below is preserved as pre-registered
+# and should be read in the past tense -- see the block beginning "THIS MATRIX DID
+# NOT RUN" for what actually happened and why the file is kept.
+#
 # Stage 3 of 3, and the last thing that runs before the freeze. §4.3.1: "Exploration
 # ends by pre-registering a frozen configuration, preceded by a final confirmation
 # of the surviving mechanism set against the unrefined configuration at three seeds
@@ -11,16 +16,22 @@
 # trades early stability for late-phase lag. Two arms only, at the full budget:
 # the surviving set against the unrefined reference.
 #
-# BEFORE RUNNING: replace the placeholder overrides in `fedmaq-surviving-set`
-# with the actual surviving set from
-# scripts/analysis_output/exploration_margin.json ("surviving_refinement_set").
-# The values below are NOT a prediction of what will survive, and they are not
-# fedmaq.yaml's defaults either: that file freezes all three `false` under
-# "Decision 79/80 ... empty surviving set ... Do not flip these". So this arm as
-# written contradicts the frozen decision, and if the surviving set is genuinely
-# empty it is also indistinguishable in intent from `fedmaq-unrefined`. Resolving
-# `pending_selection` therefore means deciding whether this matrix still runs at
-# all -- see the audit's S3 disposition.
+# THIS MATRIX DID NOT RUN, AND WILL NOT. Exploration executed 2026-08-02 and the
+# noise-margin verdict was an empty surviving set, so ADR-0008 records the
+# pre-registered empty-freeze branch executing directly and this Stage 3
+# confirmation being skipped as degenerate: with nothing in the surviving set both
+# arms below are config-identical to unrefined, and the comparison has nothing to
+# compare.
+#
+# The file is retained deliberately. ADR-0010 holds that a pre-registered branch is
+# never deleted even after it has been ruled out, because the pre-specification is
+# what makes the decision not to run it auditable rather than post-hoc.
+#
+# The `fedmaq-surviving-set` overrides below are placeholders that were never
+# resolved. They set all three mechanisms true, which contradicts fedmaq.yaml's
+# "Decision 79/80 ... empty surviving set ... Do not flip these"; `pending_selection`
+# keeps the dispatch planner refusing this matrix by name, so that contradiction
+# cannot reach an allocation.
 #
 # AFTER RUNNING: if the surviving set still clears the margin at R=100, write
 # those values into conf/algorithm/fedmaq.yaml -- and ONLY there. The §4.3.7
