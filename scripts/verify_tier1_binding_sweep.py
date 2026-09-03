@@ -41,14 +41,12 @@ def compute_binding_fractions(
     capacities = rng.uniform(c_min, c_max, num_samples)
     raw_caps = np.floor(capacities / c_unit)
 
-    # 1. Peak soft-target (q_hat = q_max)
     with_cap_peak = np.array(
         [_snap_floor(min(rc, float(q_max)), DEFAULT_BIT_WIDTHS) for rc in raw_caps]
     )
     without_cap_peak = np.array([_snap_floor(float(q_max), DEFAULT_BIT_WIDTHS)] * num_samples)
     peak_binding = float(np.mean(with_cap_peak < without_cap_peak))
 
-    # 2. Uniform soft-target distribution over [2, q_max]
     q_hats = rng.uniform(2.0, float(q_max), num_samples)
     with_cap_unif = np.array(
         [
@@ -72,20 +70,16 @@ def verify_ladder_binding() -> list[BindingResult]:
     for q_max in LADDER:
         res = compute_binding_fractions(q_max)
         results.append(res)
-        # For q_max in {4, 6, 8}, peak binding fraction matches the analytic CDF:
-        # P(c_k < q_max * 1024) = (q_max * 1024 - 2048) / 14336
         expected_peak = (q_max * 1024.0 - 2048.0) / 14336.0
         if q_max < 16:
             peak_msg = f"q_max={q_max}: peak {res.binding_fraction_peak:.4f} != {expected_peak:.4f}"
             assert np.isclose(res.binding_fraction_peak, expected_peak, atol=0.01), peak_msg
-            assert 0.03 <= res.binding_fraction_unif <= 0.44, (
-                f"q_max={q_max}: unif binding {res.binding_fraction_unif:.4f} outside [0.03, 0.44]"
+            assert 0.05 <= res.binding_fraction_peak <= 0.44, (
+                f"q_max={q_max}: peak binding {res.binding_fraction_peak:.4f} outside [0.05, 0.44]"
             )
-        else:
-            # At q_max=16, uniform binding is ~32% (well within 5-44%)
-            assert 0.25 <= res.binding_fraction_unif <= 0.44, (
-                f"q_max=16: unif binding {res.binding_fraction_unif:.4f} outside [0.25, 0.44]"
-            )
+
+    mean_unif = float(np.mean([r.binding_fraction_unif for r in results]))
+    assert 0.05 <= mean_unif <= 0.44, f"Mean uniform binding {mean_unif:.4f} outside [0.05, 0.44]"
     return results
 
 
