@@ -30,7 +30,14 @@ historical_artifacts_promotable: false
 # resolved matrix, including treatment-defining overrides; regenerating a ledger
 # from an edited matrix therefore cannot make the edit appear preregistered.
 selection_domains:
+  # Registered base for every scientific matrix. baseline_tuning_wide alone
+  # extends it to [0, 42, 123, 7, 21], these three first, because matched tuning
+  # budgets 29 arms x 5 seeds = 145 cells; scripts/stage_manifest.py enforces
+  # that five-seed tuple for Stage A. No other stage extends the base.
   seeds: [0, 42, 123]
+  # Bit-width histogram bins (q_count_b, q_hat_count_b), not a swept axis: no
+  # matrix sweeps a key of this name, and the swept algorithm.q reaches 32,
+  # which this list excludes.
   q_ladder: [2, 3, 4, 5, 6, 7, 8, 16]
   p_support: [-2, -1, -0.5, 0, 0.5, 1, min]
   omega_support: [0.25, 0.5, 0.75]
