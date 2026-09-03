@@ -1,6 +1,6 @@
 # ADR-0008 — The exploration protocol, and the refinement layer that froze empty
 
-**Status**: Accepted · 2026-07-18, protocol rewritten 2026-07-26, executed 2026-08-02
+**Status**: Accepted · 2026-07-18, protocol rewritten 2026-07-26, executed 2026-08-02, addendum 2026-09-03
 **Supersedes**: `docs/DECISIONS.md` Decisions 27–31, 33–35, 53, 61, 70, 79, 80 (file deleted; see ADR-0014)
 
 ## Context

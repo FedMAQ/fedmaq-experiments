@@ -89,8 +89,9 @@ No allocation run precedes this gate.
    labels and the unresolved keys. That named exit **is** this step's pass signal for
    such a matrix — it is evidence the interlock is live, not a gate failure. Every
    other matrix must dry-run clean. A pre-selection matrix becomes dry-runnable only
-   once the stage that resolves it has been run and its verdict written in, which by
-   construction is after this gate.
+   once the stage that resolves it has been run and its verdict written in — by
+   construction, after this gate — or never, if its branch is retired rather than
+   resolved, as `pass3_freeze_confirm` was under ADR-0008.
 
 ### Stage A — Widened matched tuning (145 validation cells)
 

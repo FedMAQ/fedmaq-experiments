@@ -1,9 +1,8 @@
 # Exploration-phase PRE-FREEZE CONFIRMATION, manuscript §4.3.1.
 #
 # STATUS: retained pre-registration record. This stage was skipped as degenerate
-# (ADR-0008); it does not run. The design text below is preserved as pre-registered
-# and should be read in the past tense -- see the block beginning "THIS MATRIX DID
-# NOT RUN" for what actually happened and why the file is kept.
+# (ADR-0008); it does not run. Everything below is pre-registered design text, not
+# live procedure. Each branch is marked with whether it fired.
 #
 # Stage 3 of 3, and the last thing that runs before the freeze. §4.3.1: "Exploration
 # ends by pre-registering a frozen configuration, preceded by a final confirmation
@@ -23,9 +22,8 @@
 # arms below are config-identical to unrefined, and the comparison has nothing to
 # compare.
 #
-# The file is retained deliberately. ADR-0010 holds that a pre-registered branch is
-# never deleted even after it has been ruled out, because the pre-specification is
-# what makes the decision not to run it auditable rather than post-hoc.
+# The file is retained under ADR-0010's rule against deleting a pre-registered
+# branch that has been ruled out.
 #
 # The `fedmaq-surviving-set` overrides below are placeholders that were never
 # resolved. They set all three mechanisms true, which contradicts fedmaq.yaml's
@@ -33,7 +31,9 @@
 # keeps the dispatch planner refusing this matrix by name, so that contradiction
 # cannot reach an allocation.
 #
-# AFTER RUNNING: if the surviving set still clears the margin at R=100, write
+# AFTER RUNNING -- BRANCH NOT TAKEN. This stage never ran, so none of the steps
+# below were performed and none should be. Retained as pre-registered text only.
+# If the surviving set still clears the margin at R=100, write
 # those values into conf/algorithm/fedmaq.yaml -- and ONLY there. The §4.3.7
 # ablation arms inherit that file through their defaults list and restate only
 # their own removal, so the freeze reaches all of them from one edit; there is no
@@ -45,7 +45,9 @@
 # docs/freeze/resolved_configs.yaml is what makes the tagged state readable as
 # chapter 6 §6.2's recoverable frozen configuration. `--check` fails on a stale one.
 #
-# IF IT DOES NOT CLEAR -- pre-registered here, before the runs exist, because a
+# IF IT DOES NOT CLEAR -- THIS IS THE BRANCH THAT FIRED, at the Stage 2 factorial
+# rather than here; ADR-0008 records it executing directly and this stage being
+# skipped as degenerate. Pre-registered here, before the runs existed, because a
 # failure branch invented after seeing the numbers is not a failure branch. The
 # surviving set collapses to EMPTY: all three refinements ship off, fedmaq.yaml
 # freezes unrefined, and Ablation Configuration 8 drops from conf/matrix/
