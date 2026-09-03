@@ -93,6 +93,8 @@ seed: 42
 # retained for diagnosis but cannot enter replacement evidence analysis.
 protocol: replacement-v1
 protocol_stage: downstream
+split: test
+
 
 # Ray runtime settings, forwarded to ray.init() through Flower's
 # ``backend_config["init_args"]`` (see fedmaq.simulation).
