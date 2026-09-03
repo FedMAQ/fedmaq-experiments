@@ -2086,6 +2086,11 @@ def test_baseline_tuning_margin_reproduces_decision_81_fedprox(tmp_path):
     # the only reason conf/algorithm/fedprox.yaml ships 0.01 rather than 0.1.
     assert cell["adopted_variant"] == "mu0p01"
     assert cell["retained_shipped_value"] is False
+    assert {row["variant"]: row["is_adopted"] for row in cell["table"]} == {
+        "mu1p0": False,
+        "mu0p01": True,
+        "mu0p1": False,
+    }
 
 
 def test_baseline_tuning_margin_reproduces_decision_81_fedpaq_retention(tmp_path):
@@ -2106,6 +2111,14 @@ def test_baseline_tuning_margin_reproduces_decision_81_fedpaq_retention(tmp_path
     assert all(c["delta"] > 0 for c in cell["challengers"].values())
     assert cell["adopted_variant"] is None
     assert cell["retained_shipped_value"] is True
+    # Nothing clears, so the reference retains the mark rather than every row
+    # reading False -- the distinction "no data" and "verdict: keep shipped" must
+    # not collapse to the same table.
+    assert {row["variant"]: row["is_adopted"] for row in cell["table"]} == {
+        "q8": True,
+        "q4": False,
+        "q16": False,
+    }
 
 
 def test_baseline_tuning_margin_refuses_an_underpowered_reference_cell(tmp_path):

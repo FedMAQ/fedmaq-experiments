@@ -109,7 +109,6 @@ def validate_run_evidence(
     if repo_root is None:
         repo_root = _infer_repo_root(output_dir)
 
-    # 1. Atomic final model checkpoint check
     checkpoint_path = output_dir / FINAL_MODEL_FILENAME
     if not checkpoint_path.is_file() or checkpoint_path.stat().st_size == 0:
         errors.append(f"missing or empty checkpoint: {checkpoint_path}")
@@ -130,7 +129,6 @@ def validate_run_evidence(
         ) as exc:
             errors.append(f"failed to load checkpoint {checkpoint_path}: {exc}")
 
-    # 2. Manifest and run identity check
     manifest_path = output_dir / MANIFEST_FILENAME
     manifest_data: dict[str, Any] | None = None
     manifest_rounds: int | None = None
@@ -264,7 +262,6 @@ def validate_run_evidence(
     if effective_rounds is None:
         effective_rounds = manifest_rounds
 
-    # 3. Telemetry log check
     csv_path = output_dir / TELEMETRY_CSV_FILENAME
     max_observed_round: int | None = None
 
@@ -282,7 +279,6 @@ def validate_run_evidence(
 
                 if "round" in df.columns:
                     round_series = df["round"]
-                    # Check for non-finite or non-integer round values
                     if not pd.api.types.is_numeric_dtype(round_series) or round_series.isna().any():
                         errors.append(
                             f"telemetry round column contains NaN or non-numeric values: {csv_path}"
@@ -349,7 +345,6 @@ def validate_run_evidence(
                             f"telemetry column {col!r} contains non-finite values (NaN/Inf)"
                         )
 
-                # 5. Check monotonicity of cumulative metrics
                 if "communication/cumulative_mb" in df.columns:
                     mb_values = df["communication/cumulative_mb"].to_numpy()
                     for idx in range(1, len(mb_values)):
@@ -372,7 +367,7 @@ def validate_run_evidence(
         except Exception as exc:
             errors.append(f"failed to read or validate telemetry CSV {csv_path}: {exc}")
 
-    # 6. JSONL is the authoritative superset for dynamic/client metrics. It is
+    # JSONL is the authoritative superset for dynamic/client metrics. It is
     # required for every complete run and must remain row-aligned with the CSV.
     jsonl_path = output_dir / TELEMETRY_JSONL_FILENAME
     jsonl_rounds: list[int] = []

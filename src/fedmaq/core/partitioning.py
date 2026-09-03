@@ -396,7 +396,6 @@ def generate_partition_indices(
 
     rng = np.random.default_rng(seed)
 
-    # Step 1: Slice off server public pool (balanced across classes)
     public_indices: list[int] = []
     class_indices = {c: np.where(labels == c)[0] for c in range(num_classes)}
 
@@ -424,7 +423,6 @@ def generate_partition_indices(
             class_indices[c] = np.setdiff1d(class_indices[c], selected)
             shortfall -= n_select
 
-    # Step 2: Slice off server validation pool
     if partition == "writer":
         writer_ids = getattr(dataset, "writer_ids", None)
         if writer_ids is None:
@@ -472,7 +470,6 @@ def generate_partition_indices(
                 class_indices[c] = np.setdiff1d(class_indices[c], selected)
                 val_shortfall -= n_select
 
-        # Step 3: Partition remaining data among clients
         client_indices = _generate_dirichlet_partition(class_indices, num_clients, alpha, rng)
 
     # Compute realized post-holdout shard statistics & per-client class count matrix

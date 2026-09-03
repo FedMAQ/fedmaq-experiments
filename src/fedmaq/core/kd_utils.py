@@ -100,7 +100,6 @@ def run_server_side_kd(
         for images, _ in public_loader:
             images = images.to(device)
 
-            # Get soft targets from teachers
             with torch.no_grad():
                 teacher_soft_preds_list = []
                 for teacher in teachers:

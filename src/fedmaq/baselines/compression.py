@@ -29,20 +29,16 @@ def compress_tensor(
     if len(orig_shape) < 2:
         return (tensor_np,)
 
-    # Reshape to 2D
     if len(orig_shape) > 2:
         mat = tensor_np.reshape(orig_shape[0], -1)
     else:
         mat = tensor_np
 
-    # SVD
     try:
         u, sigma, v = np.linalg.svd(mat, full_matrices=False)
     except np.linalg.LinAlgError:
-        # Fallback if SVD fails to converge
         return (tensor_np,)
 
-    # Determine threshold based on energy
     sigma_sq = np.square(sigma)
     total_energy = np.sum(sigma_sq)
     if total_energy == 0.0:

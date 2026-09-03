@@ -679,7 +679,6 @@ def test_validation_rejects_missing_partition_cache_entry(tmp_path: Path):
 def test_validation_rejects_missing_partition_cache_file(tmp_path: Path):
     """Evidence validation must reject runs whose cache file does not exist on disk."""
     run_dir = _create_synthetic_run(tmp_path)
-    # Remove the created cache file
     cache_file = tmp_path / ".data_partitions" / "cifar10_clients_10_alpha_0.3_pub_200_seed_0.json"
     cache_file.unlink()
 

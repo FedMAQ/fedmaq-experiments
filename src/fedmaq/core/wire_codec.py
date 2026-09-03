@@ -53,6 +53,8 @@ def pack_bits(values: np.ndarray, bit_width: int) -> bytes:
     if values.size == 0:
         return b""
     if bit_width < 1 or bit_width > 33:
+        # 33 = 32 (max protocol quantization bit-width, control_messages.assigned_q)
+        # + 1 extra bit that differential codes need for their doubled alphabet [-2L, 2L].
         raise ValueError(f"Unsupported bit_width {bit_width}; must lie in [1, 33]")
 
     if bit_width == 8:
@@ -88,6 +90,7 @@ def unpack_bits(buf: bytes, num_elements: int, bit_width: int) -> np.ndarray:
     if num_elements == 0:
         return np.zeros(0, dtype=np.int64)
     if bit_width < 1 or bit_width > 33:
+        # Same bound as pack_bits; see its comment for the 33 derivation.
         raise ValueError(f"Unsupported bit_width {bit_width}; must lie in [1, 33]")
 
     expected_len = (num_elements * bit_width + 7) // 8
@@ -252,6 +255,11 @@ def unpack_quantized_tensor(buf: bytes) -> WireTensor:
     elif nominal_q > 0:
         L = symmetric_levels(nominal_q)
     else:
+        # nominal_q == 0 is never emitted by pack_quantized_tensor (q and levels are
+        # both validated >= 1 there), so this branch is unreachable via any payload
+        # this module itself writes. Kept so the decoder stays total on any header
+        # satisfying the struct format, deriving L from bit_width alone -- delete only
+        # after confirming no other wire producer relies on this fallback.
         if not is_diff:
             L = (1 << (bit_width - 1)) if bit_width > 1 else 1
         else:

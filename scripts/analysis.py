@@ -525,6 +525,7 @@ def exploration_noise_margin(
     """
     frame_for = _frame_resolver(frames)
     runs = promotable_runs(runs)
+    _check_validation_split_only(runs, "exploration_noise_margin")
     # Scope to the exploration phase before anything else. Every confirmatory
     # FedMAQ run -- benchmark grid, formulation study, six of the seven ablation
     # arms -- also declares ``name: fedmaq`` at alpha 0.1/1.0, so an
@@ -1041,7 +1042,12 @@ def baseline_tuning_margin(
                     "seeds": _curve_seeds(curves, variant),
                     "is_reference": variant == ref_variant,
                     "is_paper_default": variant == paper_variant,
-                    "is_adopted": variant == adopted_variant,
+                    "is_adopted": variant
+                    == (
+                        adopted
+                        if adopted is not None
+                        else (ref_variant if variant == ref_variant else False)
+                    ),
                 }
                 for variant in variants
             ]
