@@ -35,7 +35,7 @@ hydra:
 # while conf/matrix/benchmark_grid.yaml set it, so the CIFAR-100 and FEMNIST rows
 # of one communication table would have been measured in a different regime from
 # the CIFAR-10 rows; and nothing tested it, because tests read conf/matrix/ and a
-# comment is not a matrix. tests/test_simulation.py now asserts all three files
+# comment is not a matrix. tests/test_config_and_dispatch.py now asserts all three files
 # carry the flag and that they sum to 105.
 #
 # ORDERING IS LOAD-BEARING (§4.5). The exploration phase (pass2_explore ->
@@ -86,7 +86,7 @@ hydra:
 #         removals from its reference.
 #
 # See the headers of fedmaq.yaml and conf/matrix/ablation.yaml before changing
-# this. Both directions are enforced in tests/test_simulation.py.
+# this. Both directions are enforced in tests/test_config_and_dispatch.py.
 seed: 42
 
 # Replacement-pipeline authority. Historical manifests without this field are

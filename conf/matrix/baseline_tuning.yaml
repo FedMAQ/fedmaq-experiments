@@ -80,7 +80,7 @@
 # REGIME. Every baseline ships post_process: false and the primary grid enables
 # the post-processing pipeline on FedMAQ only, so these runs are already in the
 # regime the baselines are reported in. No override is needed and none is set;
-# tests/test_simulation.py enforces the absence.
+# tests/test_config_and_dispatch.py enforces the absence.
 #
 # PHASE. These runs are `explore`, not `formal`, and are NOT among the 177.
 # They sit at the held-out alpha = 0.3 with every other exploration run, and

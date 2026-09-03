@@ -18,7 +18,7 @@
 # stage that runs FedMAQ with the §4.3 pipeline (error feedback + difference
 # coding + lossless zlib). Omitting it here while CIFAR-10 carries it would make
 # FedMAQ's communication rows incomparable across datasets -- the same row of the
-# same table measured under two different regimes. tests/test_simulation.py
+# same table measured under two different regimes. tests/test_config_and_dispatch.py
 # enforces the flag on every primary-grid file.
 phase: formal
 stage: downstream

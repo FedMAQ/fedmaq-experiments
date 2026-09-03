@@ -10,7 +10,7 @@
 # nothing besides. If the freeze returns the EMPTY set, this arm collapses into a
 # duplicate of Configuration 7 and drops from the study -- pre-registered in
 # conf/matrix/pass3_freeze_confirm.yaml and enforced by
-# tests/test_simulation.py::test_configuration_8_exists_only_while_there_is_a_layer_to_remove.
+# tests/test_config_and_dispatch.py::test_configuration_8_exists_only_while_there_is_a_layer_to_remove.
 # For what it composes to, see docs/freeze/ or `scripts/dump_frozen_configs.py`.
 # Usage: uv run python scripts/run.py algorithm=fedmaq_no_refinements
 defaults:

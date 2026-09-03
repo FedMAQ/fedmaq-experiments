@@ -6,7 +6,7 @@
 # grad_norm_ema all false). Configuration 8 removed "the frozen refinement layer";
 # an empty layer has nothing left to remove, so the arm would duplicate
 # Configuration 7 and report pure noise as a component's contribution.
-# tests/test_simulation.py::test_configuration_8_exists_only_while_there_is_a_layer_to_remove
+# tests/test_config_and_dispatch.py::test_configuration_8_exists_only_while_there_is_a_layer_to_remove
 # enforces this — it will fail again if a future freeze re-enables any refinement
 # and this arm is not restored.
 #
@@ -27,7 +27,7 @@
 # So Configuration 7 runs here, without the pipeline, as the study's own parity
 # anchor. Six extra runs, which took the grid to 183 until Decision 80 dropped
 # Configuration 8 and returned it to 177. NOTHING IN THIS FILE
-# MAY SET algorithm.post_process=true -- tests/test_simulation.py enforces it.
+# MAY SET algorithm.post_process=true -- tests/test_config_and_dispatch.py enforces it.
 #
 # Configuration 1 (uncompressed FedAvg) is still inherited from the benchmark
 # grid: it has no compression stage for the pipeline to attach to, so its

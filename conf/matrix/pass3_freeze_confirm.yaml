@@ -23,7 +23,7 @@
 # their own removal, so the freeze reaches all of them from one edit; there is no
 # longer a set of parallel copies to keep in step. Then:
 #   1. uv run python scripts/dump_frozen_configs.py   (refresh docs/freeze/)
-#   2. uv run python -m pytest tests/test_simulation.py
+#   2. uv run python -m pytest tests/test_config_and_dispatch.py
 #   3. commit and tag.
 # Step 1 is not optional bookkeeping: the arms are no longer self-describing, and
 # docs/freeze/resolved_configs.yaml is what makes the tagged state readable as
@@ -64,7 +64,7 @@ heterogeneities:
 
 # Both arms dispatch `alg: fedmaq` and differ only by override, so each needs its
 # own `variant` to key a distinct output directory -- see scripts/common.py:
-# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
+# get_canonical_output_dir. tests/test_config_and_dispatch.py asserts no matrix collides.
 runs:
   - alg: fedmaq
     label: fedmaq-unrefined

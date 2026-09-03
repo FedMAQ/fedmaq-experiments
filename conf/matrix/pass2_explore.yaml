@@ -37,7 +37,7 @@ heterogeneities:
 
 # All four arms dispatch `alg: fedmaq` and differ only by override, so each needs
 # its own `variant` to key a distinct output directory -- see scripts/common.py:
-# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
+# get_canonical_output_dir. tests/test_config_and_dispatch.py asserts no matrix collides.
 runs:
   # Unrefined reference: all three mechanisms off. This is also the cell whose
   # seed-to-seed spread defines the noise margin (rerun at 3 seeds for sigma).

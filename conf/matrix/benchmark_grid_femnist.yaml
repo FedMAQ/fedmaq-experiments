@@ -24,7 +24,7 @@
 # names the output tree truthfully; it does not select anything.
 #
 # post_process=true on FedMAQ, matching both CIFAR halves. See the header of
-# benchmark_grid_cifar100.yaml. tests/test_simulation.py enforces it.
+# benchmark_grid_cifar100.yaml. tests/test_config_and_dispatch.py enforces it.
 phase: formal
 stage: downstream
 protocol_stage: downstream

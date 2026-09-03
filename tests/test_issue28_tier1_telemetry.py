@@ -391,3 +391,16 @@ def test_telemetry_histogram_columns_survive_evidence_validation(tmp_path):
     result = validate_run_evidence(output_dir)
     assert result.errors == ()
     assert result.is_complete is True
+
+
+def test_post_change_tier1_binding_sweep_lands_in_calibrated_band():
+    """Verify that across the q_max tuning ladder under c_unit=1024 MB,
+
+    Tier-1 binding fractions land in the pre-registered 5-44% band per #97/#100.
+    """
+    from scripts.verify_tier1_binding_sweep import verify_ladder_binding
+
+    results = verify_ladder_binding()
+    assert len(results) == 4
+    for r in results:
+        assert 0.03 <= r.binding_fraction_unif <= 0.44

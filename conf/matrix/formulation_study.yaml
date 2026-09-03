@@ -23,7 +23,7 @@
 # NO RUN HERE MAY SET algorithm.post_process=true. §4.3.6 withholds the pipeline
 # so the formulations are judged on their mathematical merit alone, and §4.3.7
 # depends on that: Configuration 4's anchor has to sit in the same pipeline-free
-# regime as the ablation arms it is compared beside. tests/test_simulation.py
+# regime as the ablation arms it is compared beside. tests/test_config_and_dispatch.py
 # enforces it.
 #
 # BEFORE DISPATCH: the exploration phase must have completed (§4.5). These runs

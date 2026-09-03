@@ -67,7 +67,7 @@ heterogeneities:
 # its own `variant` to key a distinct output directory. The canonical path keys on
 # the algorithm, not the run label, so without it all eight cells at a given seed
 # write into one directory and only the last survives -- see scripts/common.py:
-# get_canonical_output_dir. tests/test_simulation.py asserts no matrix collides.
+# get_canonical_output_dir. tests/test_config_and_dispatch.py asserts no matrix collides.
 runs:
   - alg: fedmaq
     label: sv0-ema0-gne0   # unrefined reference; defines sigma
