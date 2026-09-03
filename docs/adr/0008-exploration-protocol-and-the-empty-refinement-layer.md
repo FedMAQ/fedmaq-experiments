@@ -129,3 +129,39 @@ What landed:
   the ablation is not gated from this direction.
 - Confirmatory run counts moved when Configuration 8 dropped. Counts live in the
   pinned dispatch Issue, not here — see ADR-0014.
+
+## Addendum, 2026-09-03 — the closure certificate stays permanently open
+
+Skipping Stage 3 as degenerate has a bookkeeping consequence that was not written
+down at the time, and that reads as a defect to anyone who meets it cold.
+
+`pass3_freeze_confirm` remains in `REPORTABLE_MATRICES` in
+`scripts/dump_expected_runs.py`, so its eight cells are still promised by
+`docs/freeze/expected_runs.json`. `scripts/analysis.py` builds its closure
+certificate over every group in that manifest with no group filter, and
+`all_closed` is an AND across them. Those eight cells will never be observed, so
+the historical closure certificate reports `pass3_freeze_confirm: OPEN — observed
+0 of 8` permanently, and `analysis.py` refuses to proceed without
+`--allow-incomplete`.
+
+**That signal is accurate and is left in place.** Eight cells were pre-registered
+and not run; the certificate saying so is the truth, and this ADR is the reason.
+The alternatives were both worse. Removing the matrix from `REPORTABLE_MATRICES`
+would close the certificate by deleting the record, which ADR-0010 forbids — a
+pre-registered branch is never deleted even after it has been ruled out, because
+the pre-specification is what makes the decision not to run it auditable rather
+than post-hoc. Adding a standing exemption would convert a true signal into a
+maintained silence.
+
+`--allow-incomplete` is therefore the correct invocation for historical analysis,
+and it is deliberately an at-invocation acknowledgement rather than a default: it
+also suppresses genuine gaps in the other seven groups, so it should be passed by
+someone who has read this addendum and no one else.
+
+None of this touches the replacement campaign. Its authority is
+`matrix_contracts` in `conf/protocol/replacement-v1.yaml`, which registers twelve
+matrices totalling 415 cells and does not include `pass3_freeze_confirm`; its
+ledgers are the separate snapshots under `docs/recut/`, consumed by
+`scripts/select_power_mean.py`, `scripts/select_omega.py`, and
+`tests/test_stage_contracts.py`. `historical_artifacts_promotable: false` keeps
+the two ledgers apart by construction.

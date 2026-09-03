@@ -19,11 +19,19 @@ Two freeze-blocking defects were found and fixed in this pass. Two acceptance cr
 the closed issue #96 remain unmet; they are not fixed here because each carries blast
 radius beyond a pre-freeze polish, and they are routed below.
 
-Three findings require author disposition before freeze is declared — **S1**, **S2**, and
-**S3**. S3 is the generalization of C1 to the pre-freeze confirmation matrix; unlike C1 it
-must **not** be fixed by the same mechanism, for the reason given in its section. A second
-pass has since landed the mechanism S3 actually needs — see the Addendum at the end of this
-report — but the scientific disposition S3 asks for remains open and author-owned.
+Three findings were raised as requiring author disposition — **S1**, **S2**, and **S3**.
+S3 is the generalization of C1 to the pre-freeze confirmation matrix; unlike C1 it must
+**not** be fixed by the same mechanism, for the reason given in its section. A second pass
+landed the mechanism S3 actually needs — see the Addendum at the end of this report.
+
+**A third pass has since closed S3 entirely: it was never open.** ADR-0008 had already
+recorded the Stage 3 confirmation as skipped as degenerate against an empty surviving set,
+and this report reached that conclusion's opposite twice by bad evidence — inferring "no
+exploration" from an empty *local* `outputs/`, which `docs/agents/execution-model.md`
+forbids, and treating the historical `expected_runs.json` as the replacement campaign's
+gate-enforced contract, which `matrix_contracts` is. Both errors are recorded in full in the
+S3 section rather than edited away. **S1 and S2 remain author-owned**; S1 is dispositioned as
+riding to #86.
 
 This report certifies neither that the pipeline is ready, nor that #101 is complete, nor
 that manuscript reconciliation may begin. The source changes landed here **invalidate the
@@ -246,7 +254,7 @@ schema-version constant — unlike `control_messages.py`, which stamps `CONTROL_
 a debugging capture, not an evidence artifact, and is not freeze-relevant. Recorded so the
 assertion is not re-opened.
 
-### S3 — The second placeholder is live, and C1's fix must NOT be copied to it (significant, ROUTED)
+### S3 — The second placeholder is live, and C1's fix must NOT be copied to it (significant, CLOSED third pass — see the correction at the end of this section)
 
 A sweep of `conf/` for placeholder patterns — the generalization C1 motivates — returns
 exactly one other site: the `fedmaq-surviving-set` arm of
@@ -309,6 +317,45 @@ bear on that disposition:
   `fedmaq-unrefined` describe the same configuration, and the matrix's two-arm comparison
   has nothing to compare. That is evidence for the "superseded" branch of the disposition
   below, but it is a scientific judgement this audit does not make.
+
+**Correction (third pass, 2026-09-03). S3's scientific disposition was not open. It had
+already been made, and this audit reached for the wrong evidence twice.** The two errors are
+recorded rather than edited away, because both are reasoning failures a later reader could
+repeat.
+
+*First error — "Exploration has not run" is false, and was inferred illegitimately.* It rests
+on `outputs/` containing only `ci`, `golden`, and `smoke`. That inference is explicitly
+forbidden by `docs/agents/execution-model.md`: results live on the datacenter allocation, and
+**an empty local `outputs/` proves nothing about which stages have run**. ADR-0008 is Accepted
+and records exploration as **executed 2026-08-02**, with all 26 `pass2_factorial` runs clean
+and an empty surviving set. The missing `scripts/analysis_output/exploration_margin.json` is
+likewise a local-artifact absence, not evidence of a missing run.
+
+*Second error — the wrong ledger was called "the gate-enforced contract."*
+`docs/freeze/expected_runs.json` is the **historical** pipeline's closure manifest: 270 cells
+across eight legacy groups, generated from `REPORTABLE_MATRICES`. The **replacement**
+campaign's gate-enforced contract is `matrix_contracts` in
+`conf/protocol/replacement-v1.yaml` — twelve registered matrices totalling 415 cells
+(matched_tuning 145, stage_1a 84, stage_1b 12, downstream 174), and `pass3_freeze_confirm`
+does not appear in it. The same file sets `historical_artifacts_promotable: false`, which
+keeps the two ledgers apart by construction. So `expected_runs.json` still listing those eight
+cells is not a signal that the replacement design expects them; it is the historical record
+doing its job.
+
+*Disposition, therefore: neither of the two branches offered above.* ADR-0008 records the
+pre-registered empty-freeze branch executing directly and the Stage 3 confirmation being
+**skipped as degenerate** — a documented interpretation, flagged at the time rather than
+silently elided. The first branch (edit the overrides from `exploration_margin.json`) asks for
+values from a stage whose verdict was "empty". The second branch (remove it from
+`dump_expected_runs.py`) collides with ADR-0010: a pre-registered branch is never deleted even
+after it has been ruled out. What was actually needed was neither a run nor a deletion but a
+**record correction**: the matrix header no longer points at "the audit's S3 disposition" for
+a question ADR-0008 had already answered, and ADR-0008 carries a dated addendum recording that
+the historical closure certificate stays permanently open at `pass3_freeze_confirm: 0 of 8`,
+that this is accurate, and that `--allow-incomplete` is the deliberate at-invocation
+acknowledgement for historical analysis.
+
+**S3 is closed. No author disposition is required.**
 
 ## High-risk assertions: confirm / reject
 
@@ -419,11 +466,13 @@ uv run python scripts/golden_diff.py repeatability
    Resolve **S2** while writing it, using option (a) or (b) in that section — both are
    mechanical, and leaving the field null a third time is the one outcome to avoid.
    `docs/` is outside manifest scope, so this commit does not disturb the certificate.
-4. Disposition S1, S2, and S3 on #86/#92 before declaring freeze — N31 blocks freeze
-   consideration while any critical or significant finding is undisposed. S3 is the one
-   that can still corrupt a dispatch: decide whether `pass3_freeze_confirm` runs, and if it
-   does, its three overrides must be written from `exploration_margin.json` first. Do not
-   reach for C1's `???` sentinel there; it fails open on booleans.
+4. Disposition S1 and S2 on #86/#92 before declaring freeze — N31 blocks freeze
+   consideration while any critical or significant finding is undisposed. S1 rides to #86
+   by author decision; S2 is the envelope re-declaration and is the last artifact to land,
+   since its hash is only computable once the final commit exists. **S3 needs nothing**: the
+   third-pass correction in its section closes it against ADR-0008. `pass3_freeze_confirm`
+   does not run, is not deleted, and its three overrides are never to be written — do not
+   reach for C1's `???` sentinel there either; it fails open on booleans.
 
 ## Change set
 

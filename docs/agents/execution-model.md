@@ -84,6 +84,13 @@ No allocation run precedes this gate.
    the returned evidence. Do not reuse a capture from before a quantizer or byte-axis
    correction.
 3. Dry-run every matrix named below. Dry-run output is validation, not dispatch.
+   A matrix still carrying an unresolved selection placeholder is the exception: the
+   dispatch planner refuses it and `run_matrix.py --dry_run` exits 2, naming the run
+   labels and the unresolved keys. That named exit **is** this step's pass signal for
+   such a matrix — it is evidence the interlock is live, not a gate failure. Every
+   other matrix must dry-run clean. A pre-selection matrix becomes dry-runnable only
+   once the stage that resolves it has been run and its verdict written in, which by
+   construction is after this gate.
 
 ### Stage A — Widened matched tuning (145 validation cells)
 
@@ -139,7 +146,7 @@ authorize this campaign.
     A material change after this gate opens a new labelled exploration amendment; it
     is not folded silently into the frozen campaign.
 
-### Stage 2 — Downstream confirmation (147 reported cells)
+### Stage 2 — Downstream confirmation (174 reported cells)
 
 12. `--matrix benchmark_grid`, `--matrix benchmark_grid_cifar100`, and
     `--matrix benchmark_grid_femnist`. The three files share one experiment group and
