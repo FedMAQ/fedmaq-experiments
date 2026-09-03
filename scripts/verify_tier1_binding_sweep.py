@@ -1,38 +1,50 @@
 """Compute and verify the Tier-1 memory ceiling binding fraction across the tuning ladder.
 
 Under ADR-0002 and Issue #97 calibration, client capacities c_k are sampled from
-U(2048, 16384) MiB and c_unit is calibrated to 1024 MiB. Across the registered
-tuning ladder q_max in {4, 6, 8, 16}, realized Tier-1 binding fractions land in
-the expected 5-44% band under empirical/representative soft-target distributions.
+U(2048, 16384) MiB and c_unit is calibrated to 1024 MiB in conf/algorithm/fedmaq.yaml.
+Across the registered tuning ladder q_max in {4, 6, 8, 16}, realized Tier-1 binding
+fractions land in the expected 5-44% band under empirical/representative soft-target distributions.
 """
 
 from __future__ import annotations
 
 import argparse
-from typing import NamedTuple
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
+from hydra import compose, initialize_config_dir
 
 from fedmaq.core.quantization_planner import DEFAULT_BIT_WIDTHS, _snap_floor
 
-C_UNIT_DEFAULT = 1024.0
-C_MIN_DEFAULT = 2048.0
-C_MAX_DEFAULT = 16384.0
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONF_DIR = REPO_ROOT / "conf"
 LADDER = (4, 6, 8, 16)
 
 
-class BindingResult(NamedTuple):
+@dataclass(frozen=True)
+class BindingResult:
     q_max: int
     binding_fraction_peak: float
     binding_fraction_unif: float
 
 
+def load_calibration_parameters() -> tuple[float, float, float]:
+    """Resolve c_unit and capacity limits from configuration."""
+    with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["algorithm=fedmaq"])
+    c_unit = float(cfg.algorithm.c_unit)
+    c_min = 2048.0
+    c_max = 16384.0
+    return c_unit, c_min, c_max
+
+
 def compute_binding_fractions(
     q_max: int,
     *,
-    c_unit: float = C_UNIT_DEFAULT,
-    c_min: float = C_MIN_DEFAULT,
-    c_max: float = C_MAX_DEFAULT,
+    c_unit: float,
+    c_min: float,
+    c_max: float,
     num_samples: int = 100_000,
     seed: int = 42,
 ) -> BindingResult:
@@ -66,20 +78,20 @@ def compute_binding_fractions(
 
 def verify_ladder_binding() -> list[BindingResult]:
     """Verify that binding fractions across the ladder are non-zero and within expected ranges."""
+    c_unit, c_min, c_max = load_calibration_parameters()
     results: list[BindingResult] = []
     for q_max in LADDER:
-        res = compute_binding_fractions(q_max)
+        res = compute_binding_fractions(q_max, c_unit=c_unit, c_min=c_min, c_max=c_max)
         results.append(res)
-        expected_peak = (q_max * 1024.0 - 2048.0) / 14336.0
+        expected_peak = (q_max * c_unit - c_min) / (c_max - c_min)
         if q_max < 16:
-            peak_msg = f"q_max={q_max}: peak {res.binding_fraction_peak:.4f} != {expected_peak:.4f}"
-            assert np.isclose(res.binding_fraction_peak, expected_peak, atol=0.01), peak_msg
-            assert 0.05 <= res.binding_fraction_peak <= 0.44, (
-                f"q_max={q_max}: peak binding {res.binding_fraction_peak:.4f} outside [0.05, 0.44]"
-            )
+            assert np.isclose(res.binding_fraction_peak, expected_peak, atol=0.01)
+            assert 0.05 <= res.binding_fraction_peak <= 0.44
+        else:
+            assert np.isclose(res.binding_fraction_peak, 1.0, atol=0.01)
 
     mean_unif = float(np.mean([r.binding_fraction_unif for r in results]))
-    assert 0.05 <= mean_unif <= 0.44, f"Mean uniform binding {mean_unif:.4f} outside [0.05, 0.44]"
+    assert 0.05 <= mean_unif <= 0.44
     return results
 
 
@@ -89,7 +101,8 @@ def main() -> int:
     parser.parse_args()
 
     results = verify_ladder_binding()
-    print("Tier-1 Binding Sweep Results (c_unit=1024 MB, U(2048, 16384)):")
+    c_unit, _, _ = load_calibration_parameters()
+    print(f"Tier-1 Binding Sweep Results (c_unit={c_unit:.1f} MB, U(2048, 16384)):")
     for r in results:
         print(
             f"  q_max={r.q_max:2d}: peak_binding={r.binding_fraction_peak * 100:5.2f}% | "

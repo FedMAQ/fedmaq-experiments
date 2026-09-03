@@ -11,7 +11,7 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 - **Rationale**: The assurance envelope `docs/freeze/assurance-envelope-2026-08-29.json` was pinned to candidate commit `d804b7f`, covering 146 files under the pre-remediation architecture. The remediation tickets (#96, #97, #98, #99, #100) modified core runtime, telemetry, manifests, partitions, algorithms, and configurations within `scope.include`.
 - **Impact**: Under ADR-0015 and the Gate 7 invalidation matrix (`docs/freeze/verify_gate_7.py`), any modification within `scope.include` invalidates Gates 1, 3, 4, and 6.
-- **Protocol**: Re-declaring the candidate is an author action. The author creates or updates `docs/freeze/assurance-envelope-2026-09-03.json` following the template in Section 4 below after candidate freeze.
+- **Protocol**: Re-declaring the candidate is an author action. The author executes the paste-ready script in Section 4 below to generate `docs/freeze/assurance-envelope-2026-09-03.json` pinned to the candidate commit.
 
 ---
 
@@ -47,55 +47,59 @@ uv run python scripts/verify_smoke_evidence.py --smoke-dir outputs/smoke
 ```
 
 This checks:
-1. **Completion**: Each cell directory contains `final_global_model.pt`, `run_manifest.json`, `experiment_log.csv`, and `experiment_log.jsonl`.
-2. **Validator Acceptance**: Core `validate_run_evidence()` passes with zero errors (#96 regression check).
-3. **Split & Loader Provenance**: Manifest confirms `split="val"` and `loader_used="val"` for Cell 5, and `split="test"`, `loader_used="test"` for Cells 1–4 (#99).
-4. **Partition Cache Provenance**: Run manifest binds `partition_cache.sha256` matching the canonical digest computed from the disk cache file (#99 & #102).
-5. **Formulation Metadata**: Run manifest binds `formulation`, `p`, and `omega`.
-6. **Tier-1 Binding Fraction**: `algorithm/fedmaq/tier1_binding_fraction` is logged and strictly non-zero (#97).
-7. **Bit-Width Histograms**: Discrete histograms `q_count_{b}` and `q_hat_count_{b}` for $b \in \{2..8, 16\}$ are logged and sum to the sampled client count per round (#97).
-8. **FedDistill+ Norm**: `algorithm/feddistill/global_logits_l2_norm` is logged and positive (#98).
+1. **Completion**: Core `validate_run_evidence()` passes with zero errors (#96 regression check).
+2. **Split & Loader Provenance**: Manifest confirms `split="val"` and `loader_used="val"` for Cell 5, and `split="test"`, `loader_used="test"` for Cells 1–4 (#99).
+3. **Partition Cache Provenance**: Run manifest binds `partition_cache.sha256` matching the canonical digest computed from the disk cache file (#99).
+4. **Formulation Metadata**: Run manifest binds `formulation`, `p`, and `omega`.
+5. **Tier-1 Binding Fraction**: `algorithm/fedmaq/tier1_binding_fraction` is logged and strictly non-zero (#97).
+6. **Bit-Width Histograms**: Discrete histograms `q_count_{b}` and `q_hat_count_{b}` for $b \in \{2..8, 16\}$ are logged and sum to the sampled client count per round (#97).
+7. **FedDistill+ Norm**: `algorithm/feddistill/global_logits_l2_norm` is logged and positive (#98).
 
 ---
 
-## 4. Assurance Envelope Re-Declaration Template (Author Action)
+## 4. Paste-Ready Candidate Re-Declaration Command (Author Action)
 
-Save as `docs/freeze/assurance-envelope-2026-09-03.json` with the current candidate commit SHA:
+Execute the following paste-ready PowerShell command to generate `docs/freeze/assurance-envelope-2026-09-03.json` with the current git commit revision:
 
-```json
-{
-  "schema_version": 1,
-  "envelope_id": "fedmaq-pipeline-assurance-2026-09-03",
-  "created_at": "2026-09-03",
-  "created_by": "thesis author (post-remediation candidate re-declaration)",
-  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-03.json",
-  "purpose": "Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.",
-  "specification": {
-    "specification_issue": "FedMAQ/fedmaq-experiments#92",
-    "execution_issue": "FedMAQ/fedmaq-experiments#100"
-  },
-  "content_hash": {
-    "algorithm": "sha256",
-    "value": null
-  },
-  "revision_vector": {
-    "fedmaq-experiments": {
-      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
-      "revision": "<CANDIDATE_COMMIT_SHA>",
-      "clean_tree": true,
-      "role": "remediated pipeline implementation, configuration, dispatch, tests"
+```powershell
+uv run python -c "
+import json, subprocess, sys
+from pathlib import Path
+
+commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+envelope = {
+    'schema_version': 1,
+    'envelope_id': 'fedmaq-pipeline-assurance-2026-09-03',
+    'created_at': '2026-09-03',
+    'created_by': 'thesis author (post-remediation candidate re-declaration)',
+    'canonical_location': 'fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-03.json',
+    'purpose': 'Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.',
+    'specification': {
+        'specification_issue': 'FedMAQ/fedmaq-experiments#92',
+        'execution_issue': 'FedMAQ/fedmaq-experiments#100'
+    },
+    'content_hash': {'algorithm': 'sha256', 'value': None},
+    'revision_vector': {
+        'fedmaq-experiments': {
+            'canonical_identity': 'https://github.com/FedMAQ/fedmaq-experiments',
+            'revision': commit,
+            'clean_tree': True,
+            'role': 'remediated pipeline implementation, configuration, dispatch, tests'
+        }
+    },
+    'candidate': {
+        'repository': 'fedmaq-experiments',
+        'revision': commit,
+        'pinned_on': '2026-09-03',
+        'pin_semantics': 'Remediated pipeline candidate closing #96-#100'
+    },
+    'freeze_certificate': {
+        'path': 'docs/freeze/source_manifest.json',
+        'schema_version': 1,
+        'state_at_candidate': 'current'
     }
-  },
-  "candidate": {
-    "repository": "fedmaq-experiments",
-    "revision": "<CANDIDATE_COMMIT_SHA>",
-    "pinned_on": "2026-09-03",
-    "pin_semantics": "Remediated pipeline candidate closing #96-#100"
-  },
-  "freeze_certificate": {
-    "path": "docs/freeze/source_manifest.json",
-    "schema_version": 1,
-    "state_at_candidate": "current"
-  }
 }
+Path('docs/freeze/assurance-envelope-2026-09-03.json').write_text(json.dumps(envelope, indent=2) + '\n', encoding='utf-8')
+print(f'Wrote docs/freeze/assurance-envelope-2026-09-03.json pinned to {commit}')
+"
 ```
