@@ -1,6 +1,14 @@
 # Stage 1b of the re-cut formulation design: omega follow-up at the selected p.
 # Sweeps omega in {0.25, 0.75} (2 net-new variants x 2 skews x 3 seeds = 12 cells).
 # The omega=0.5 cells at the selected p are reused from Stage 1a (power_mean_design).
+#
+# WRITING IN THE STAGE-1A VERDICT also re-registers this matrix. Replacing `???` changes
+# this file's resolved content, so `matrix_contracts.power_mean_omega.sha256` in
+# conf/protocol/replacement-v1.yaml no longer matches and dispatch raises "diverges from
+# the replacement protocol". That is a re-registration debt, not tampering: update the
+# contract in the same commit as the write-in. Take the correct digest from the `actual=`
+# sha256 quoted in the raise; it is `protocol._sha256` over this file's resolved container.
+# Until then the planner refuses this matrix on the placeholder, ahead of the hash check.
 phase: explore
 stage: stage_1b
 protocol_stage: stage_1b
@@ -21,12 +29,13 @@ runs:
     label: power-mean-omega-0.25
     variant: omega0.25
     overrides:
-      # PRE-DISPATCH PLACEHOLDER, fail-closed. `???` composes to OmegaConf MISSING, so
-      # reading `algorithm.p` raises MissingMandatoryValue until the Stage-1a verdict is
-      # written in. Do not substitute a plausible default the way the freeze-confirm
-      # matrix does: `_power_mean_base.yaml` defaults `p: 0`, which is itself a Stage-1a
-      # candidate, so a forgotten edit would dispatch all 12 cells at the wrong
-      # compensation degree and they would be indistinguishable on disk -- the identity
+      # PRE-DISPATCH PLACEHOLDER. `???` composes to OmegaConf MISSING, so a subscript
+      # read of `algorithm.p` raises -- but only a subscript: `.get("p", 0.0)` returns
+      # 0.0 silently. The read that actually refuses this matrix is the planner's
+      # (scripts/matrix_planner.py: unresolved_selection). Do not substitute a plausible
+      # default the way the freeze-confirm matrix does: `_power_mean_base.yaml` defaults
+      # `p: 0`, itself a Stage-1a candidate, so a forgotten edit would dispatch all 12
+      # cells at the wrong compensation degree, indistinguishable on disk -- the identity
       # key does not encode `p`. ADR-0021 D2; issue #96.
       - algorithm.p=???
       - algorithm.omega=0.25

@@ -1718,3 +1718,172 @@ def test_stage_1b_p_is_explicit_and_fails_closed_until_selection():
                 f"Stage-1b run {run['label']!r} resolves algorithm.p to {resolved!r}, "
                 f"which is neither a finite degree nor 'min'."
             )
+
+
+def _planner_probe_matrix(runs: list[dict]) -> dict:
+    return {
+        "phase": "smoke",
+        "experiment_group": "planner_probe",
+        "dataset": "cifar10",
+        "model": "mobilenetv2",
+        "total_rounds": 1,
+        "client_gpus": 0.0,
+        "ledger": "smoke",
+        "seeds": [0],
+        "heterogeneities": ["dirichlet_alpha_0.1"],
+        "runs": runs,
+    }
+
+
+def test_dispatch_refuses_an_override_left_at_the_missing_sentinel(tmp_path):
+    """Planning must reject `???` rather than relying on the consumer to raise --
+    see `test_the_missing_sentinel_is_not_safe_by_itself` for why it cannot.
+    """
+    from scripts.matrix_planner import plan_matrix
+
+    for override in ("algorithm.p=???", "algorithm.p='???'", "+algorithm.p=???"):
+        matrix = _planner_probe_matrix(
+            [{"alg": "power_mean", "label": "omega-probe", "overrides": [override]}]
+        )
+        # The guard is only possible because the token is an element of an `overrides`
+        # list, not a config node: resolution passes it through instead of raising.
+        resolved = OmegaConf.to_container(OmegaConf.create(matrix), resolve=True)
+        assert resolved["runs"][0]["overrides"] == [override]
+
+        with pytest.raises(ValueError, match=r"omega-probe.*algorithm\.p"):
+            plan_matrix(tmp_path / "probe.yaml", matrix)
+
+
+def test_the_missing_sentinel_is_not_safe_by_itself():
+    """Why the guard sits in the planner and not at the consumers.
+
+    `???` fails closed only under a subscript. `quantization_planner.py` subscripts
+    `p` only when the formulation requires it, and `manifest.py` records the run with
+    `.get` -- so an unresolved `p` can reach a run as a plausible default *and* leave
+    no trace of the placeholder in that run's provenance.
+
+    If OmegaConf ever makes `.get` raise, this test fails and the guard's rationale
+    narrows; the guard itself still stands, because booleans remain fail-open.
+    """
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        cfg = compose(
+            config_name="config",
+            overrides=["algorithm=power_mean", "algorithm.p=???", "algorithm.omega=0.25"],
+        )
+
+    with pytest.raises(MissingMandatoryValue):
+        _ = cfg.algorithm["p"]
+    assert cfg.algorithm.get("p", 0.0) == 0.0
+    assert cfg.algorithm.get("p") is None
+    assert OmegaConf.to_container(OmegaConf.create({"k": "???"}), resolve=True).get("k", False)
+
+
+def test_dispatch_refuses_a_run_declaring_pending_selection(tmp_path):
+    """A placeholder whose value is *plausible* needs a declared marker, not a comment.
+
+    `algorithm.soft_voting=true` under a `# PLACEHOLDER` comment is indistinguishable
+    from a decided value: it is well-formed, it composes, and it trains. The run
+    therefore declares its own unresolved keys in a field the planner reads, and
+    clearing that field is the act that records the decision.
+    """
+    from scripts.matrix_planner import plan_matrix
+
+    matrix = _planner_probe_matrix(
+        [
+            {
+                "alg": "fedmaq",
+                "label": "surviving-set-probe",
+                "pending_selection": ["soft_voting"],
+                "overrides": ["algorithm.soft_voting=true"],
+            }
+        ]
+    )
+    with pytest.raises(ValueError, match=r"surviving-set-probe.*soft_voting"):
+        plan_matrix(tmp_path / "probe.yaml", matrix)
+
+
+def test_a_misspelt_run_spec_key_is_rejected_rather_than_ignored(tmp_path):
+    """`expand_matrix` reads run-spec keys through `.get`, so `pending_selections`
+    would be silently ignored and the guard would never fire -- fail-open, relocated
+    from the value to the key. The planner therefore rejects unknown keys outright.
+    """
+    from scripts.matrix_planner import plan_matrix
+
+    matrix = _planner_probe_matrix(
+        [
+            {
+                "alg": "fedmaq",
+                "label": "typo-probe",
+                "pending_selections": ["soft_voting"],
+                "overrides": ["algorithm.soft_voting=true"],
+            }
+        ]
+    )
+    with pytest.raises(ValueError, match=r"typo-probe.*pending_selections"):
+        plan_matrix(tmp_path / "probe.yaml", matrix)
+
+
+def test_dispatch_plans_normally_once_the_selection_is_written_in(tmp_path):
+    """Bidirectional, so the guard cannot become a permanent block on the campaign."""
+    from scripts.matrix_planner import plan_matrix
+
+    matrix = _planner_probe_matrix(
+        [
+            {"alg": "power_mean", "label": "omega-probe", "overrides": ["algorithm.p=0"]},
+            {
+                "alg": "fedmaq",
+                "label": "surviving-set-probe",
+                "variant": "surviving-set",
+                "pending_selection": [],
+                "overrides": ["algorithm.soft_voting=true"],
+            },
+        ]
+    )
+    plan = plan_matrix(tmp_path / "probe.yaml", matrix)
+    assert [task.label for task in plan.tasks] == [
+        "omega-probe-dirichlet_alpha_0.1-seed0",
+        "surviving-set-probe-dirichlet_alpha_0.1-seed0",
+    ]
+
+
+def test_the_two_pre_selection_matrices_refuse_to_dispatch_today():
+    """Expected to fail the moment the author resolves either matrix -- that is the
+    signal to delete this test, not to weaken the guard.
+    """
+    from scripts.matrix_planner import plan_matrix
+
+    for name in ("power_mean_omega", "pass3_freeze_confirm"):
+        path = Path(CONF_DIR) / "matrix" / f"{name}.yaml"
+        with pytest.raises(ValueError, match="unresolved"):
+            plan_matrix(path, OmegaConf.load(path))
+
+
+def test_every_registered_matrix_either_matches_its_contract_or_is_pre_selection():
+    """`matrix_contracts` is hand-maintained and had no test; editing a registered
+    matrix silently breaks its own dispatch, which `just check` cannot see.
+
+    A pre-selection matrix is exempt from the fingerprint because it is still being
+    written -- but only while the guard refuses to dispatch it, so the exemption cannot
+    be claimed by a matrix that would actually run. The exemption is derived from
+    `unresolved_selection` rather than an allowlist, so it expires on write-in.
+    """
+    from fedmaq.core.protocol import REPLACEMENT_PROTOCOL, validate_matrix_against_protocol
+    from scripts.common import expand_matrix
+    from scripts.matrix_planner import plan_matrix, unresolved_selection
+
+    protocol_path = Path(CONF_DIR) / "protocol" / f"{REPLACEMENT_PROTOCOL}.yaml"
+    protocol = OmegaConf.to_container(OmegaConf.load(protocol_path), resolve=True)
+    contracts = protocol["matrix_contracts"]
+    assert contracts, "protocol registers no matrix contracts"
+
+    for name in contracts:
+        path = Path(CONF_DIR) / "matrix" / f"{name}.yaml"
+        assert path.exists(), f"protocol registers {name!r} but conf/matrix has no such matrix"
+        matrix = OmegaConf.to_container(OmegaConf.load(path), resolve=True)
+        pre_selection = any(unresolved_selection(run) for run in matrix.get("runs") or [])
+
+        if pre_selection:
+            with pytest.raises(ValueError, match="unresolved"):
+                plan_matrix(path, OmegaConf.load(path))
+        else:
+            validate_matrix_against_protocol(name, matrix, len(expand_matrix(matrix, name)))

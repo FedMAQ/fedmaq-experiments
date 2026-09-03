@@ -22,6 +22,11 @@ from scripts.common import (
 
 REPO_MATRIX_DIR = (Path(__file__).resolve().parents[1] / "conf" / "matrix").resolve()
 
+# Closed set, because `expand_matrix` reads every run-spec key through `.get`: an
+# unrecognised key is silently ignored rather than rejected, so a misspelt
+# `pending_selection` would disarm the guard below with no signal.
+RUN_SPEC_KEYS = frozenset({"alg", "label", "overrides", "pending_selection", "seeds", "variant"})
+
 
 @dataclass(frozen=True)
 class MatrixTask:
@@ -82,6 +87,37 @@ def _resolved_mapping(matrix: Mapping[str, Any] | DictConfig) -> dict[str, Any]:
     return dict(resolved)
 
 
+def unresolved_selection(run: Mapping[str, Any]) -> list[str]:
+    """Return the keys of one matrix row still awaiting a selection verdict.
+
+    Two markers, because the ``???`` sentinel does not fail closed on every read.
+    Measured, on a composed ``algorithm.p=???``: a ``DictConfig`` subscript raises
+    ``MissingMandatoryValue``, but ``.get("p", 0.0)`` returns ``0.0`` and ``.get("p")``
+    returns ``None``. ``quantization_planner.py`` takes the subscript only when the
+    formulation requires ``p``, and ``manifest.py`` records the run with ``.get`` -- so
+    the sentinel's safety is contingent, and provenance would not even show the
+    placeholder. This planner is the one read that fails closed regardless.
+
+    ``???`` is visible here because it sits inside an ``overrides`` *list*: a string
+    element, not a node, so ``to_container(..., resolve=True)`` passes it through
+    verbatim instead of raising.
+
+    ``pending_selection`` covers the keys the sentinel would actively break. A boolean
+    read as ``alg_cfg.get("soft_voting", False)`` sees the string ``'???'`` as truthy
+    and switches the mechanism ON -- the inverse of a placeholder's purpose.
+    """
+    sentinel = [
+        key.strip().lstrip("+~")
+        for key, _, value in (
+            str(override).partition("=") for override in (run.get("overrides") or [])
+        )
+        # Quotes survive YAML into the override string, so `p='???'` is the same marker.
+        if value.strip().strip("\"'") == "???"
+    ]
+    pending = [str(key) for key in (run.get("pending_selection") or [])]
+    return sentinel + pending
+
+
 def plan_matrix(
     matrix_path: Path,
     matrix: Mapping[str, Any] | DictConfig,
@@ -125,6 +161,29 @@ def plan_matrix(
     heterogeneities = tuple(
         str(value) for value in resolved.get("heterogeneities", ["dirichlet_alpha_0.1"])
     )
+
+    for spec in runs_spec:
+        unknown = sorted(set(spec) - RUN_SPEC_KEYS)
+        if unknown:
+            raise ValueError(
+                f"{matrix_path.name} run {spec.get('label', spec.get('alg'))!r} declares "
+                f"unrecognised key(s) {unknown}; known keys are {sorted(RUN_SPEC_KEYS)}"
+            )
+
+    # Whole-matrix, ahead of the protocol check: a pre-selection matrix has no stable
+    # fingerprint yet, so a hash mismatch here would report the placeholder as tampering.
+    # Filtering is ignored deliberately -- one unresolved row means the matrix identity
+    # is still moving, and rows dispatched under the old identity are not comparable.
+    unresolved = {
+        str(spec.get("label", spec.get("alg"))): keys
+        for spec in runs_spec
+        if (keys := unresolved_selection(spec))
+    }
+    if unresolved:
+        detail = "; ".join(f"{label}: {', '.join(keys)}" for label, keys in unresolved.items())
+        raise ValueError(
+            f"{matrix_path.name} has unresolved selections and cannot be dispatched -- {detail}"
+        )
 
     if matrix_path.resolve().parent == REPO_MATRIX_DIR and ledger == "scientific":
         validate_matrix_against_protocol(
@@ -226,4 +285,4 @@ def plan_matrix(
     )
 
 
-__all__ = ["MatrixPlan", "MatrixTask", "plan_matrix"]
+__all__ = ["MatrixPlan", "MatrixTask", "plan_matrix", "unresolved_selection"]

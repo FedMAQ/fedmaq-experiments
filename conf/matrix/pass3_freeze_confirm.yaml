@@ -14,8 +14,13 @@
 # BEFORE RUNNING: replace the placeholder overrides in `fedmaq-surviving-set`
 # with the actual surviving set from
 # scripts/analysis_output/exploration_margin.json ("surviving_refinement_set").
-# The values below are the current fedmaq.yaml defaults and are NOT a prediction
-# of what will survive.
+# The values below are NOT a prediction of what will survive, and they are not
+# fedmaq.yaml's defaults either: that file freezes all three `false` under
+# "Decision 79/80 ... empty surviving set ... Do not flip these". So this arm as
+# written contradicts the frozen decision, and if the surviving set is genuinely
+# empty it is also indistinguishable in intent from `fedmaq-unrefined`. Resolving
+# `pending_selection` therefore means deciding whether this matrix still runs at
+# all -- see the audit's S3 disposition.
 #
 # AFTER RUNNING: if the surviving set still clears the margin at R=100, write
 # those values into conf/algorithm/fedmaq.yaml -- and ONLY there. The §4.3.7
@@ -79,8 +84,12 @@ runs:
   - alg: fedmaq
     label: fedmaq-surviving-set
     variant: surviving-set
+    # Set from exploration_margin.json before dispatch; clearing this list is the act
+    # that records the verdict. These keys cannot use power_mean_omega's `???`
+    # sentinel: the consumer reads them as `alg_cfg.get(key, False)`, where the string
+    # '???' is truthy, so the sentinel would turn every mechanism ON instead of off.
+    pending_selection: [soft_voting, ema_student, grad_norm_ema]
     overrides:
-      # PLACEHOLDER — set from exploration_margin.json before dispatch.
       - algorithm.soft_voting=true
       - algorithm.ema_student=true
       - algorithm.grad_norm_ema=true
