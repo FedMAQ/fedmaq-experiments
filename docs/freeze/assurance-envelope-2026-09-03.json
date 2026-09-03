@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "envelope_id": "fedmaq-pipeline-assurance-2026-09-03",
+  "created_at": "2026-09-03",
+  "created_by": "thesis author (post-remediation candidate re-declaration)",
+  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-03.json",
+  "purpose": "Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.",
+  "specification": {
+    "specification_issue": "FedMAQ/fedmaq-experiments#92",
+    "execution_issue": "FedMAQ/fedmaq-experiments#100"
+  },
+  "content_hash": {
+    "algorithm": "sha256",
+    "value": null
+  },
+  "revision_vector": {
+    "fedmaq-experiments": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
+      "revision": "0c6028e74f5461f0b9e65520de1975d0da646b3f",
+      "clean_tree": true,
+      "role": "remediated pipeline implementation, configuration, dispatch, tests"
+    }
+  },
+  "candidate": {
+    "repository": "fedmaq-experiments",
+    "revision": "0c6028e74f5461f0b9e65520de1975d0da646b3f",
+    "pinned_on": "2026-09-03",
+    "pin_semantics": "Remediated pipeline candidate closing #96-#100"
+  },
+  "freeze_certificate": {
+    "path": "docs/freeze/source_manifest.json",
+    "schema_version": 1,
+    "state_at_candidate": "current"
+  }
+}
