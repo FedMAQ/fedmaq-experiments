@@ -15,21 +15,23 @@ literature wiki, analyses, and presentations repositories were not read or modif
 
 **Changes required.**
 
-Two freeze-blocking defects were found and fixed in this pass. Three acceptance criteria
-of the closed issue #96 remain unmet; they are not fixed here because each carries blast
+Two freeze-blocking defects were found and fixed in this pass. Two acceptance criteria of
+the closed issue #96 remain unmet; they are not fixed here because each carries blast
 radius beyond a pre-freeze polish, and they are routed below.
 
 Three findings require author disposition before freeze is declared — **S1**, **S2**, and
 **S3**. S3 is the generalization of C1 to the pre-freeze confirmation matrix; unlike C1 it
-must **not** be fixed by the same mechanism, for the reason given in its section.
+must **not** be fixed by the same mechanism, for the reason given in its section. A second
+pass has since landed the mechanism S3 actually needs — see the Addendum at the end of this
+report — but the scientific disposition S3 asks for remains open and author-owned.
 
 This report certifies neither that the pipeline is ready, nor that #101 is complete, nor
 that manuscript reconciliation may begin. The source changes landed here **invalidate the
 #100 assurance candidate**: a fresh golden repeatability gate and a new assurance envelope
 must be run by the thesis author against the new candidate before freeze is considered.
-That candidate is now committed at **`7c1fdb7`**, statically green but not yet gated — the
-repeatability run is what converts it from a candidate into an assured one, and it has not
-happened.
+That candidate is **`4c4337b`** (it was `7c1fdb7` when this report was first written; the
+second pass superseded it), statically green but not yet gated — the repeatability run is
+what converts it from a candidate into an assured one, and it has not happened.
 
 ## Findings
 
@@ -47,10 +49,9 @@ either run. Four layers failed to catch the consequence:
    — no `p`, no `omega`. The Stage-1b variants are `omega0.25` / `omega0.75` and
    `formulation` is `None` for `power_mean`, so a `p=0` cell and a `p=-1` cell produce
    **byte-identical identity keys and output directories**.
-3. `scripts/run_matrix.py` performs no dispatchability check. A census of
-   `run_matrix.py`, `matrix_executor.py`, and `matrix_planner.py` for
-   `stage_ledgers|stage_manifest|dispatchable|selection|placeholder|PENDING` returns one
-   hit: `matrix_executor.py:81: "state": "pending"`.
+3. The dispatch path performed no unresolved-selection check. `plan_matrix` validated the
+   matrix against the protocol contract but nothing looked at whether a run's values had
+   been chosen. (Closed by the second pass — see the Addendum.)
 4. `tests/test_stage_contracts.py::test_ledgers_have_required_counts_and_are_disjoint`
    asserts Stage 1b has **12 cells** — which wrong-`p` evidence satisfies exactly.
 
@@ -62,7 +63,7 @@ override, all five `--check` generators still reported *current*, because none o
 reads `algorithm.p`.
 
 **Partial mitigation that does exist.** `select_power_mean_omega_iso_byte()` in
-`scripts/analysis.py:2006-2014` routes runs whose `experiment_group` equals the Stage-1b
+`scripts/analysis.py` routes runs whose `experiment_group` equals the Stage-1b
 group into a guarded branch that calls `p_matches(r, p_norm)` and raises, naming
 `r.job_dir` and both `p` values. An earlier reading of the function's `else` branch as the
 Stage-1b path was wrong; the guard is real and fail-closed. So the failure mode was
@@ -78,13 +79,23 @@ accepts `???` and composes it to OmegaConf `MISSING`, so `_QuantParams.from_cfg(
 construction — before the first training round, on cell 1. Verified end-to-end for both
 runs.
 
-The mechanism is worth stating precisely, because the guarantee is conditional. The raise
-comes from the `alg_cfg["p"]` read at `src/fedmaq/core/quantization_planner.py:103` while
-the algorithm config is still a `DictConfig`. `OmegaConf.to_container(cfg, resolve=True)`
-does **not** raise on `MISSING` — it yields the plain string `'???'`. So on any path that
-flattens the config to a plain dict before the planner sees it, that read returns `'???'`
-and `_parse_power_mean_degree()` raises `ValueError` instead. Both paths fail closed before
-training, which is what matters here, but only the `DictConfig` path is pinned by the test.
+The mechanism is worth stating precisely, because the guarantee is conditional — and the
+first version of this paragraph understated how conditional. Measured on a composed
+`algorithm.p=???`:
+
+| read | result |
+| --- | --- |
+| `cfg.algorithm["p"]` | raises `MissingMandatoryValue` |
+| `cfg.algorithm.get("p", 0.0)` | returns `0.0` — **fail-open** |
+| `cfg.algorithm.get("p")` | returns `None` — **fail-open** |
+| `to_container(resolve=True)["p"]` → `_parse_power_mean_degree()` | raises `ValueError` |
+
+There are four reads, not two, and two of them fail open. The raise depends on the
+`alg_cfg["p"]` subscript at `src/fedmaq/core/quantization_planner.py:103`, which is taken
+only when the formulation requires `p`; `src/fedmaq/core/manifest.py:147` records the run
+with `.get`, so an unresolved `p` would leave no trace of the placeholder in that run's
+provenance. This is why the second pass moved the check to the planner, which fails closed
+regardless of consumer — see the Addendum.
 
 This deliberately does **not** follow #96's instruction to copy the freeze-confirm
 convention. `conf/matrix/pass3_freeze_confirm.yaml:83` writes real working values under a
@@ -124,23 +135,26 @@ optional and non-certifying, and to key the pass criterion to the harness's actu
 `PASS — independent captures are bit-exact`. `.agents/` is outside `source_manifest.json`,
 so this fix carries no source blast radius.
 
-### S1 — #96 closed with three acceptance criteria unmet (significant, ROUTED)
+### S1 — #96 closed with two acceptance criteria unmet (significant, ROUTED)
 
-Issue #96 is closed. Walking its acceptance list against the code, roughly 17 of 20 bullets
-are met — including round-0 acceptance, the all-NaN optional-column skip, JSONL as a
-required checked artifact, `derive_seed` hash-combination, parsed-number variant matching,
-the non-zero closure exit behind `--allow-incomplete`, per-seed iso-byte budgeting, the
-Gate-2 precondition, and the FedPAQ-pipeline / memory-sensitivity / variable-vs-uniform
-readouts. Three are not:
+Issue #96 is closed. Walking its acceptance list against the code, 18 of 20 bullets are met
+— including round-0 acceptance, the all-NaN optional-column skip, JSONL as a required
+checked artifact, `derive_seed` hash-combination, parsed-number variant matching, the
+non-zero closure exit behind `--allow-incomplete`, per-seed iso-byte budgeting, the Gate-2
+precondition, and the FedPAQ-pipeline / memory-sensitivity / variable-vs-uniform readouts.
+Two are not:
 
 | # | Criterion | State |
 | --- | --- | --- |
 | 3 (half) | "the identity key incorporates `p` and `omega` so two Stage-1b cells cannot collide on disk" | **Unmet.** `identity_key()` takes neither. The closing receipt claims "Manifests expose p/omega/formulation" — true, at `src/fedmaq/core/manifest.py:147-148` — and silently drops the identity-key half of the same bullet. |
-| 4 | "The Stage-1b matrix carries explicit `p` overrides marked as pre-dispatch placeholders" | **Was unmet.** Fixed as C1; claimed by no closing receipt. |
-| 11 / #102-15 | "Selection domains … registered in the replacement protocol, with a startup cross-check against the matrices"; "Startup validation compares the dispatch expansion against that independently registered authority" | **Unmet.** `selection_domains` has exactly one reference in the entire codebase — `src/fedmaq/core/protocol.py:67`, `document.get("selection_domains", {})` — a passthrough with a default. Nothing writes it, validates against it, or tests it. |
+| 4 | "The Stage-1b matrix carries explicit `p` overrides marked as pre-dispatch placeholders" | **Met.** Fixed as C1 and enforced by the second pass; claimed by no closing receipt. |
+| 11 / #102-15 | "Selection domains … registered in the replacement protocol, with a startup cross-check against the matrices"; "Startup validation compares the dispatch expansion against that independently registered authority" | **Half met.** Correction to this report's first version: `selection_domains` is *not* an unread passthrough. `preregistration_contract()` returns it, `register_protocol()` hashes the whole contract into `preregistration_sha256` (`protocol.py:161`), and `is_promotable_manifest()` recomputes and compares it (`protocol.py:209-211`) — so editing it invalidates the promotability of every existing manifest. What is genuinely absent is the **cross-check against the matrices**: nothing compares the registered seed list, `q` ladder, `p` support or `omega` support to what the matrices actually expand to. |
 
-The three unmet bullets are one theme: **no authority independent of the matrices
-constrains dispatch.** That is the disposition Lens 3 routed to #96 and marked as the
+The unmet half is one theme: **no authority independent of the matrices constrains the
+dispatched design.** (Narrower than this report first stated — `matrix_contracts` *is* such
+an authority for stage/split/ledger/rounds/cell-count/content-hash, and the second pass
+put it under test; what remains unconstrained is the selection domains.) That is the
+disposition Lens 3 routed to #96 and marked as the
 condition under which "the existence of a valid hash must not be described as proof that
 the dispatched scientific design matched the preregistration." It has not landed, so that
 caveat still holds and must not be stated otherwise in the manuscript.
@@ -197,14 +211,17 @@ strictly better than the current state, which describes a guarantee it does not 
 ### M1 — Root config cell accounting is stale (minor, ROUTED to #101)
 
 `conf/config.yaml` still describes "The 183 runs of §4.5" and a 105-run primary grid, and
-lists retired matrices (`formulation_study`, `pass2_explore`, `pass2_factorial`,
-`pass3_freeze_confirm`). The live contract is 415 = 145 + 84 + 12 + 174. Left unedited
+lists `formulation_study`, `pass2_explore`, `pass2_factorial` and `pass3_freeze_confirm`
+as retired. That list is `config.yaml`'s claim, not this audit's: S3 shows the
+gate-enforced contract still expects `pass3_freeze_confirm`'s cells, which is part of why
+its status needs author disposition. The live contract is 415 = 145 + 84 + 12 + 174.
+Left unedited
 deliberately: #96 states that every number is written once after the code settles, and
 #101 owns that reconciliation. Editing it now would write a number that pass will rewrite.
 
 ### M2 — Unreachable defensive branch in the Stage-1b selector (minor, informational)
 
-The `else` branch at `scripts/analysis.py:2024-2036` admits `omega0.25` / `omega0.75` /
+The `else` branch of `select_power_mean_omega_iso_byte()` admits `omega0.25` / `omega0.75` /
 `omega0.5` / `p0` variants without a `p` check. It is dead-defensive: a census of
 `conf/matrix/` shows those variants occur only in `power_mean_omega.yaml` (Stage-1b group)
 and `power_mean_design.yaml` (Stage-1a group), both of which are handled by the two guarded
@@ -232,8 +249,8 @@ assertion is not re-opened.
 ### S3 — The second placeholder is live, and C1's fix must NOT be copied to it (significant, ROUTED)
 
 A sweep of `conf/` for placeholder patterns — the generalization C1 motivates — returns
-exactly one other site: `conf/matrix/pass3_freeze_confirm.yaml:83`, where the
-`fedmaq-surviving-set` arm carries three real, working booleans under a
+exactly one other site: the `fedmaq-surviving-set` arm of
+`conf/matrix/pass3_freeze_confirm.yaml`, which carried three real, working booleans under a
 `# PLACEHOLDER — set from exploration_margin.json before dispatch.` comment. This is
 structurally the C1 hazard: `identity_key()` encodes the *variant string*
 (`surviving-set`), not the booleans, so a forgotten edit would dispatch cells that are
@@ -276,14 +293,31 @@ prediction of what will survive," is the safer of the two.
 **Do not apply `???` to boolean overrides anywhere.** The sentinel is safe only where the
 consumer subscripts a `DictConfig` or parses the value, as C1's does.
 
+**Update (second pass).** The mechanism this finding needed — one that is neither the
+fail-open sentinel nor a comment — has since landed: the arm declares
+`pending_selection: [soft_voting, ema_student, grad_norm_ema]`, and `plan_matrix` refuses
+the matrix while that list is non-empty. The hazard is now inert; the **scientific
+disposition below is still open and still author-owned**. Two things found while landing it
+bear on that disposition:
+
+- The header's claim that the placeholder values "are the current fedmaq.yaml defaults" was
+  **inverted**. `conf/algorithm/fedmaq.yaml:74,79,83` freeze all three `false` under
+  "Decision 79/80 … empty surviving set … Do not flip these". The arm's `=true` overrides
+  therefore contradict the frozen decision rather than restating a default. Corrected in
+  the file.
+- If Decision 79/80's empty surviving set stands, `fedmaq-surviving-set` and
+  `fedmaq-unrefined` describe the same configuration, and the matrix's two-arm comparison
+  has nothing to compare. That is evidence for the "superseded" branch of the disposition
+  below, but it is a scientific judgement this audit does not make.
+
 ## High-risk assertions: confirm / reject
 
 | Assertion | Disposition |
 | --- | --- |
 | Stage 1b can be dispatched with an unresolved `p` and silently run at the default | **Confirmed**, with correction: analysis fails closed, so the loss was 12 wasted cells plus a booby-trapped recovery, not silently corrupt evidence. Fixed (C1). |
-| No central contract reader gates dispatch | **Confirmed.** `run_matrix.py` consults no ledger, manifest, or selection provenance; `selection_domains` is an unread passthrough. Routed (S1). |
+| No central contract reader gates dispatch | **Partly confirmed — this report's first version overstated it.** `validate_matrix_against_protocol()` (`src/fedmaq/core/protocol.py:71`) *is* a central contract reader, called from `plan_matrix` for repo matrices on the `scientific` ledger; it compares stage, split, ledger, rounds, cell count and a sha256 of the full resolved matrix against `matrix_contracts`. And `selection_domains` is bound into `preregistration_sha256`, not unread. What was true: it had **no test coverage at all** (closed in the second pass), it exempts any matrix with no registered contract, and no check compared a run's *selection state* to anything. Routed (S1) for the selection-domain cross-check only. |
 | `control_messages.py` is imported by nothing | **Confirmed.** Its only importer is `tests/test_control_messages.py`. **No action taken, and none recommended pre-freeze:** N29 requires "a versioned, byte-tested control-message schema with declared direction and multiplicity", which the module already is (`CONTROL_SCHEMA_VERSION`, `ControlDirection`, struct-packed, tested). Wiring it into telemetry would change round byte totals, hence the iso-byte protocol, hence every communication claim in the manuscript. That is #101/#103 territory, not a pre-freeze polish. A tripwire pinning it as registered-but-unwired is the author's call. |
-| Ablation Configuration 8 is an orphan needing wiring or deletion | **Rejected — already satisfied.** `tests/test_config_and_dispatch.py:145,309` guard it bidirectionally: `test_configuration_8_exists_only_while_there_is_a_layer_to_remove` asserts the arm is present iff `_frozen_refinements()` is non-empty, and `test_configuration_8_can_express_any_freeze` asserts the config holds every refinement flag off. #101 should close this item with that reason. |
+| Ablation Configuration 8 is an orphan needing wiring or deletion | **Rejected — already satisfied.** Two tests in `tests/test_config_and_dispatch.py` guard it bidirectionally: `test_configuration_8_exists_only_while_there_is_a_layer_to_remove` asserts the arm is present iff `_frozen_refinements()` is non-empty, and `test_configuration_8_can_express_any_freeze` asserts the config holds every refinement flag off. #101 should close this item with that reason. |
 | The golden gate does not distinguish transition from repeatability | **Split.** Harness and tests: **rejected**, already correct. Skill: **confirmed** and freeze-blocking. Fixed (C2). |
 | The assurance envelope's content hash is absent | **Confirmed.** Routed (S2). |
 | Envelope-only commits must follow the source candidate | **Confirmed as already correct.** `git show --stat 5f85868` touches only the envelope file (35 insertions) over source candidate `0c6028e`. The same sequencing applies to this pass. |
@@ -310,14 +344,20 @@ and pass after.
 - A startup test that dispatch expansion equals an independently registered authority, and
   that drift in split, wire protocol, stage, treatment, or exact set is rejected. Blocked on
   #96 bullet 11 / #102-15 (S1). Regenerating a ledger from the same edited matrix is not an
-  independent check.
+  independent check. **Partly delivered by the second pass**: stage, split, ledger, rounds,
+  cell count and full-content hash are now tested against `matrix_contracts` for every
+  registered matrix. The selection-domain half — seed list, `q` ladder, `p` and `omega`
+  support compared to what the matrices expand to — is still absent.
 - A test asserting the freeze envelope's declared `content_hash` matches its content (S2).
 
 ## Amendments to the plan
 
 1. The plan's instruction to follow the freeze-confirm placeholder convention is **rejected**;
-   that convention writes plausible working defaults, which is the defect. Fail-closed
-   sentinels only for selection-dependent values.
+   that convention writes plausible working defaults, which is the defect. Restated after
+   the second pass, because the first wording contradicted S3 — S3's booleans *are*
+   selection-dependent, and the sentinel is exactly wrong for them: use the `???` sentinel
+   only where the consumer subscripts or parses the value, and a declared
+   `pending_selection` marker everywhere else. Neither is a comment.
 2. N27's completion criteria must name the **skill** explicitly as a verified surface. A
    correct harness with an incorrect skill is not a working gate, and the harness's
    `compare` → `transition` alias preserves the old muscle memory while silently changing
@@ -332,14 +372,15 @@ and pass after.
 Step 1 below is **done**. The rest require GPU dispatch on the intended host or tag
 authority, and remain the author's.
 
-1. ~~Review and commit the source candidate.~~ **Committed at `7c1fdb7`**, staged to exactly
-   the three manifest-scope files, with `just check` green on that tree beforehand per
-   ADR-0017. `check_freeze.py --check` reports the certificate current at that revision. The
-   `.agents/` and `docs/` edits landed separately, outside `source_manifest.json`'s scope
-   (`conf/**`, `scripts/**`, `src/**`, `tests/**`, `justfile`, `pyproject.toml`, `uv.lock`),
-   so they do not move the candidate. **`7c1fdb7` is the revision the new envelope must pin,
-   and it supersedes `0c6028e` as the assurance candidate.**
-2. Run the golden **repeatability** gate at `7c1fdb7`, using the corrected skill. Its
+1. ~~Review and commit the source candidate.~~ **Committed at `7c1fdb7`, then superseded by
+   `4c4337b`** (the second pass — see the Addendum). Each was staged to manifest-scope files
+   only, with `just check` green on that tree beforehand per ADR-0017, and
+   `check_freeze.py --check` reports the certificate current at each. The `.agents/` and
+   `docs/` edits landed separately, outside `source_manifest.json`'s scope (`conf/**`,
+   `scripts/**`, `src/**`, `tests/**`, `justfile`, `pyproject.toml`, `uv.lock`), so they do
+   not move the candidate. **`4c4337b` is the revision the new envelope must pin, and it
+   supersedes both `0c6028e` and `7c1fdb7` as the assurance candidate.**
+2. Run the golden **repeatability** gate at `4c4337b`, using the corrected skill. Its
    preconditions now hold: the commit exists, the tree is clean, and `_capture()` will record
    `dirty: false` — which is what would have failed before.
 
@@ -366,17 +407,18 @@ uv run python scripts/golden_diff.py repeatability
    this report names from memory. `_metadata()` takes `commit` from each capture's
    `run_manifest.json`, so the only revision with gate evidence behind it is whatever
    `first.commit` says in `outputs/golden/step2_repeatability/<alg>.json`. The source
-   candidate is `7c1fdb7`, but the docs commit `b158860` sits on top of it and is
-   source-identical (`docs/` and `.agents/` are outside manifest scope), so a gate run from
-   today's `main` will record `b158860`. Either is defensible as the candidate; pinning one
+   candidate is `4c4337b`, but any docs commit landing on top of it is source-identical
+   (`docs/` and `.agents/` are outside manifest scope), so a gate run from today's `main`
+   will record that later SHA instead. Either is defensible as the candidate; pinning one
    while the evidence names the other is not. Take it from the JSON:
 
    ```bash
    uv run python -c "import json;print(json.load(open('outputs/golden/step2_repeatability/fedmaq.json'))['first']['commit'])"
-   ``` Resolve **S2** while writing it, using option (a) or
-   (b) in that section — both are mechanical, and leaving the field null a third time is the
-   one outcome to avoid. `docs/` is outside manifest scope, so this commit does not disturb
-   the certificate.
+   ```
+
+   Resolve **S2** while writing it, using option (a) or (b) in that section — both are
+   mechanical, and leaving the field null a third time is the one outcome to avoid.
+   `docs/` is outside manifest scope, so this commit does not disturb the certificate.
 4. Disposition S1, S2, and S3 on #86/#92 before declaring freeze — N31 blocks freeze
    consideration while any critical or significant finding is undisposed. S3 is the one
    that can still corrupt a dispatch: decide whether `pass3_freeze_confirm` runs, and if it
@@ -385,7 +427,8 @@ uv run python scripts/golden_diff.py repeatability
 
 ## Change set
 
-Source candidate, committed at `7c1fdb7` (supersedes `0c6028e` as the assurance candidate):
+First-pass source candidate, committed at `7c1fdb7` (superseded `0c6028e`, and itself
+superseded by `4c4337b` — see the Addendum):
 
 - `conf/matrix/power_mean_omega.yaml` — fail-closed `algorithm.p=???` on both Stage-1b runs.
 - `tests/test_config_and_dispatch.py` — the acceptance test above, plus `math` and
@@ -398,7 +441,7 @@ the pinned candidate stays minimal:
 - `.agents/skills/jupyterhub-golden-gate/SKILL.md` — rewritten for the two-operation gate.
 - `docs/research/2026-09-03-final-prefreeze-audit.md` — this report.
 
-`just check` passes on this change set, end to end and unmasked (exit 0): freeze certificate
+At `7c1fdb7`, `just check` passed on this change set, end to end and unmasked (exit 0): freeze certificate
 current, Ruff format and lint clean, mypy clean, **537 passed** (536 baseline + the one new
 acceptance test), all five `--check` generators current, and the assurance fixture green.
 Both deterministic digests are unchanged from the baseline —
@@ -411,3 +454,110 @@ stages are `ruff format --check` and `ruff check` over the tree, and both passed
 change set, as they did at the baseline — so there was no reformatting left to do. `just
 fix` was deliberately not invoked, because it rewrites files outside this change set and
 would sweep unrelated edits into the source candidate. mypy is likewise clean.
+
+## Addendum — second pass, 2026-09-03: the dispatch guard
+
+Landed at **`4c4337b`**, which supersedes `7c1fdb7` as the assurance candidate. Corrections
+this pass forced on the report above are marked inline; the substantive ones are the
+`.get` fail-open table in C1, the S1 `selection_domains` reason, the "no central contract
+reader" disposition, and the count of unmet #96 bullets (two, not three).
+
+### What C1's sentinel actually guaranteed
+
+Not enough. `???` fails closed under a subscript and under
+`_parse_power_mean_degree()`, but `.get(key, default)` returns the default and `.get(key)`
+returns `None` — and those are live reads: `quantization_planner.py:103` subscripts `p`
+only when the formulation requires it, and `manifest.py:147` records the run with `.get`.
+On a boolean the sentinel is not merely weak but inverted:
+`alg_cfg.get("soft_voting", False)` reads the string `'???'` as **truthy** and turns the
+mechanism on. So the sentinel could not be generalized to S3, and it was not safe on its
+own even where it was used.
+
+### The guard
+
+`plan_matrix` now refuses to plan any matrix carrying an unresolved selection, and reports
+the run labels and key names. Two markers, because one cannot cover both cases:
+
+- **`???` in an override value**, for keys whose consumer subscripts or parses. Readable at
+  the planner because the token sits inside an `overrides` *list* — a string element, not a
+  config node — so `to_container(..., resolve=True)` passes it through verbatim.
+- **A declared `pending_selection` list**, for keys whose placeholder is *plausible*.
+  Clearing the list is the act that records the verdict.
+
+Three properties worth stating, because each was a way to get this wrong:
+
+- **Whole-matrix, and `--only` cannot bypass it.** One unresolved row means the matrix's
+  identity is still moving, so rows dispatched under the old identity are not comparable to
+  rows dispatched after. This forecloses running `pass3_freeze_confirm`'s fully-resolved
+  `fedmaq-unrefined` arm early — a reasonable thing to want. It is a one-line change to
+  scope the check to the selected labels if the author prefers that trade.
+- **Ahead of protocol validation**, so a pre-selection matrix reports its placeholder rather
+  than a fingerprint mismatch that reads as tampering.
+- **Run-spec keys are a closed set** (`alg`, `label`, `overrides`, `pending_selection`,
+  `seeds`, `variant`). `expand_matrix` reads them through `.get`, so a misspelt
+  `pending_selection` would be ignored silently — the same fail-open class, relocated from
+  the value to the key.
+
+Verified at the CLI: `run_matrix.py --dry_run` exits 2 on both pre-selection matrices,
+naming the labels and keys, with or without `--only`; resolved matrices dry-run normally.
+
+### The protocol-fingerprint divergence `7c1fdb7` created, and why it is not repaired here
+
+Editing `conf/matrix/power_mean_omega.yaml` in the first pass changed its resolved-content
+sha256 from `bc52de88…cda9` to a new value, diverging from the digest pinned at
+`matrix_contracts.power_mean_omega.sha256`. From that commit until this one, `plan_matrix`
+raised on every Stage-1b dispatch. **`just check` could not see it**: nothing in the suite
+called `validate_matrix_against_protocol`. A sweep of all twelve registered contracts found
+exactly one divergent — the one the first pass edited.
+
+It is deliberately **not** repaired by rewriting the pinned hash. Two reasons: the file
+changes again when the Stage-1a verdict is written in, so any digest registered now is
+stale before use; and `conf/protocol/replacement-v1.yaml` is the pre-registration authority,
+which agents may not edit. Instead the stale state is made honest — the guard fires first
+and reports the placeholder — and the matrix header now documents the re-registration debt
+the author settles at write-in, naming where the correct digest comes from.
+
+### Tests added
+
+`tests/test_config_and_dispatch.py`, seven new:
+
+| test | what it pins |
+| --- | --- |
+| `test_the_missing_sentinel_is_not_safe_by_itself` | the four reads above, including the two that fail open |
+| `test_dispatch_refuses_an_override_left_at_the_missing_sentinel` | `???`, `'???'` and `+`-prefixed forms all refused |
+| `test_dispatch_refuses_a_run_declaring_pending_selection` | the declared marker refuses |
+| `test_a_misspelt_run_spec_key_is_rejected_rather_than_ignored` | `pending_selections` cannot disarm the guard |
+| `test_dispatch_plans_normally_once_the_selection_is_written_in` | bidirectional; the guard is not a permanent block |
+| `test_the_two_pre_selection_matrices_refuse_to_dispatch_today` | it fires on the real matrices |
+| `test_every_registered_matrix_either_matches_its_contract_or_is_pre_selection` | first coverage of `validate_matrix_against_protocol` |
+
+The last one closes the class of defect the first pass introduced: for every name in
+`matrix_contracts`, the matrix either validates against the protocol **or** is pre-selection
+*and* provably undispatchable. The pre-selection exemption is computed from
+`unresolved_selection()`, not from an allowlist, so it expires by itself at write-in — at
+which point `power_mean_omega`'s stale digest fails immediately, which is the intended
+signal.
+
+### Residual limits — what this does not guarantee
+
+- `pending_selection` protects against *forgetting* to write a value in. It does not protect
+  against clearing the list without editing the override. A declared marker cannot; only a
+  value the consumer refuses can, and for booleans no such value exists.
+- The guard sees the dispatch path. It does not constrain what the chosen values *are*; the
+  selection-domain cross-check (S1, bullet 11) is still absent.
+- `validate_matrix_against_protocol` still returns silently for any matrix with no
+  registered contract, so `pass3_freeze_confirm` (`ledger: historical`) is fingerprint-
+  ungated. Only the selection guard covers it.
+
+### Gate status
+
+`just check` green at `4c4337b`, exit 0: freeze certificate current, Ruff format and lint
+clean, mypy clean, **544 passed** (537 baseline + 7), all five `--check` generators current,
+assurance fixture green. Both deterministic digests unchanged from the baseline
+(`d69590…63ab` fixture, `6d005f…c3d8` analysis), so nothing here moved a deterministic
+surface. Tree clean, `_git_provenance()` reports `dirty: False` at `4c4337b` — the
+repeatability gate's preconditions hold.
+
+**This changes nothing about what remains author-owned**: the repeatability gate on
+JupyterHub, the envelope-only commit, the S1/S2/S3 dispositions, the `power_mean_omega`
+re-registration at write-in, and whether `pass3_freeze_confirm` runs at all.
