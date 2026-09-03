@@ -424,6 +424,51 @@ and pass after.
 4. Record that the analysis-time `p` guard exists, so the Stage-1b risk is not overstated in
    the manuscript as a silent-corruption hazard.
 
+## Gate 0 status at `a252d09`
+
+Recorded here because the audit's own remediation is what moved the candidate, so the
+gate evidence and the candidate have to be read together.
+
+**Step 1 — current-code correctness: clear.** The implementation and literature audit
+items are resolved or routed (S1 to #86, S2 to the envelope, S3 closed against ADR-0008).
+`just check` is green on the final tree — 544 passed in 285.59s, freeze certificate
+current, all five `--check` generators current, assurance fixture passed, both
+deterministic digests unchanged.
+
+**Step 2 — GPU golden compare: NOT SATISFIED.** Author-owned, and the only Gate 0 step
+still outstanding. See action 2 below.
+
+**Step 3 — dry-run every matrix: clear, under the semantics this report's second pass
+wrote into `execution-model.md`.** That dependency is stated rather than left implicit:
+the rule that a named exit 2 *is* a pass for a matrix carrying an unresolved selection
+placeholder was added to Gate 0 step 3 by this work, so the step-3 verdict is only as
+good as that rule. All twelve matrices registered in `matrix_contracts` were swept, plus
+the retired `pass3_freeze_confirm`:
+
+| result | matrices |
+|---|---|
+| exit 0, `Dry run completed successfully.` | `baseline_tuning_wide`, `power_mean_design`, `benchmark_grid`, `benchmark_grid_cifar100`, `benchmark_grid_femnist`, `ablation`, `uniform_memory_control`, `fedpaq_pipeline`, `fedpaq_pipeline_cifar100`, `fedpaq_pipeline_femnist`, `memory_sensitivity` |
+| exit 2, refused by name with labels and unresolved keys | `power_mean_omega` (resolves after Stage 1a), `pass3_freeze_confirm` (retired, never resolves) |
+
+`baseline_tuning_margin` at step 5 of the dispatch order is **not** a matrix and has no
+file — it is an analysis function (`scripts/analysis.py:708`). A mechanical sweep of the
+dispatch order will appear to find it missing; it is not.
+
+**Reproducing the candidate derivation.** The candidate is the newest commit touching a
+path inside `source_manifest.json`'s `scope.include`, which is not necessarily `main`:
+
+```bash
+uv run python -c "import json,subprocess;m=json.load(open('docs/freeze/source_manifest.json'));print(subprocess.run(['git','log','-1','--format=%H','--',*sorted(m['files'])],capture_output=True,text=True).stdout.strip())"
+```
+
+At the time of writing that returns `a252d09`, while `main` is `0a90755` — a docs-only
+commit, which pins the candidate without moving it.
+
+Do not route the path list through a file and `$(cat …)` on Windows: `print` writes CRLF,
+git receives 173 pathspecs with a trailing `\r`, matches almost none of them, and returns
+an unrelated 2026-07-30 commit **without erroring**. That was caught here by cross-checking
+against a second derivation, which is why the check is written as one process.
+
 ## Author actions before freeze
 
 Step 1 below is **done**. The rest require GPU dispatch on the intended host or tag
