@@ -11,7 +11,7 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 - **Rationale**: The assurance envelope `docs/freeze/assurance-envelope-2026-08-29.json` was pinned to candidate commit `d804b7f`, covering 146 files under the pre-remediation architecture. The remediation tickets (#96, #97, #98, #99, #100) modified core runtime, telemetry, manifests, partitions, algorithms, and configurations within `scope.include`.
 - **Impact**: Under ADR-0015 and the Gate 7 invalidation matrix (`docs/freeze/verify_gate_7.py`), any modification within `scope.include` invalidates Gates 1, 3, 4, and 6.
-- **Protocol**: Re-declaring the candidate is an author action. The author executes the paste-ready script in Section 4 below to generate `docs/freeze/assurance-envelope-2026-09-03.json` pinned to the candidate commit.
+- **Protocol**: Re-declaring the candidate is an author action. The author executes the paste-ready script in Section 4 below to generate `docs/freeze/assurance-envelope-2026-09-04.json` pinned to the candidate commit.
 
 ---
 
@@ -63,20 +63,26 @@ This checks:
 
 ## 4. Paste-Ready Candidate Re-Declaration Command (Author Action)
 
-Execute the following paste-ready PowerShell command to generate `docs/freeze/assurance-envelope-2026-09-03.json` with the current git commit revision:
+Execute the following paste-ready PowerShell command to generate `docs/freeze/assurance-envelope-2026-09-04.json` with the current git commit revision:
 
 ```powershell
 uv run python -c "
 import json, subprocess, sys
 from pathlib import Path
+from fedmaq.core.run_identity import config_sha256
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+if subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip():
+    raise SystemExit('working tree is dirty; this declaration would assert clean_tree falsely')
+out = Path('docs/freeze/assurance-envelope-2026-09-04.json')
+if out.exists():
+    raise SystemExit(f'{out} already exists; refusing to overwrite a sealed envelope')
 envelope = {
     'schema_version': 1,
-    'envelope_id': 'fedmaq-pipeline-assurance-2026-09-03',
-    'created_at': '2026-09-03',
+    'envelope_id': 'fedmaq-pipeline-assurance-2026-09-04',
+    'created_at': '2026-09-04',
     'created_by': 'thesis author (post-remediation candidate re-declaration)',
-    'canonical_location': 'fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-03.json',
+    'canonical_location': 'fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-04.json',
     'purpose': 'Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.',
     'specification': {
         'specification_issue': 'FedMAQ/fedmaq-experiments#92',
@@ -94,7 +100,7 @@ envelope = {
     'candidate': {
         'repository': 'fedmaq-experiments',
         'revision': commit,
-        'pinned_on': '2026-09-03',
+        'pinned_on': '2026-09-04',
         'pin_semantics': 'Remediated pipeline candidate closing #96-#100'
     },
     'freeze_certificate': {
@@ -103,7 +109,10 @@ envelope = {
         'state_at_candidate': 'current'
     }
 }
-Path('docs/freeze/assurance-envelope-2026-09-03.json').write_text(json.dumps(envelope, indent=2) + '\n', encoding='utf-8')
-print(f'Wrote docs/freeze/assurance-envelope-2026-09-03.json pinned to {commit}')
+digest = config_sha256(envelope)
+envelope['content_hash']['value'] = digest
+out.write_text(json.dumps(envelope, indent=2) + '\n', encoding='utf-8')
+print(f'Wrote {out} pinned to {commit}')
+print(f'content_hash {digest}')
 "
 ```
