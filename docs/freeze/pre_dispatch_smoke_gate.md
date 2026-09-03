@@ -77,13 +77,16 @@ if subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip():
 out = Path('docs/freeze/assurance-envelope-2026-09-04.json')
 if out.exists():
     raise SystemExit(f'{out} already exists; refusing to overwrite a sealed envelope')
+freeze = subprocess.run([sys.executable, 'scripts/check_freeze.py', '--check'], capture_output=True, text=True)
+if freeze.returncode != 0:
+    raise SystemExit('freeze certificate is not current; state_at_candidate would be false:\n' + freeze.stderr)
 envelope = {
     'schema_version': 1,
     'envelope_id': 'fedmaq-pipeline-assurance-2026-09-04',
     'created_at': '2026-09-04',
-    'created_by': 'thesis author (post-remediation candidate re-declaration)',
+    'created_by': 'thesis author (pre-dispatch candidate re-declaration)',
     'canonical_location': 'fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-04.json',
-    'purpose': 'Immutable, content-hashed record binding the remediated pipeline candidate across experiment, literature, and manuscript repositories following completion of #96, #97, #98, #99, and #100.',
+    'purpose': 'Immutable, content-hashed record binding the pre-dispatch pipeline candidate across experiment, literature, and manuscript repositories. Covers the remediation closing #96, #97, #98, #99, and #100, and the subsequent pre-freeze assurance landing tracked at #92.',
     'specification': {
         'specification_issue': 'FedMAQ/fedmaq-experiments#92',
         'execution_issue': 'FedMAQ/fedmaq-experiments#100'
@@ -101,7 +104,7 @@ envelope = {
         'repository': 'fedmaq-experiments',
         'revision': commit,
         'pinned_on': '2026-09-04',
-        'pin_semantics': 'Remediated pipeline candidate closing #96-#100'
+        'pin_semantics': 'Pre-dispatch candidate: remediation #96-#100 plus the pre-freeze assurance landing (#92)'
     },
     'freeze_certificate': {
         'path': 'docs/freeze/source_manifest.json',
