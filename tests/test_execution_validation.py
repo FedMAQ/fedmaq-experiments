@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -67,6 +68,9 @@ def _create_synthetic_run(
     extra_columns: dict[str, list[float | None]] | None = None,
     missing_jsonl: bool = False,
     mismatched_jsonl_rounds: bool = False,
+    missing_partition_cache: bool = False,
+    corrupt_partition_cache: bool = False,
+    mismatched_partition_digest: bool = False,
     accuracies: list[float] | None = None,
     cumulative_mbs: list[float] | None = None,
 ) -> Path:
@@ -97,7 +101,7 @@ def _create_synthetic_run(
         if corrupt_manifest:
             manifest_path.write_text("{corrupt json", encoding="utf-8")
         else:
-            manifest_data = {
+            manifest_data: dict[str, Any] = {
                 "schema_version": 1,
                 "run": {
                     "algorithm": algorithm,
@@ -109,6 +113,7 @@ def _create_synthetic_run(
                     "total_rounds": total_rounds,
                     "num_clients": 10,
                     "split": split,
+                    "loader_used": "val" if split == "val" else "test",
                     "wire_protocol": wire_protocol,
                 },
                 "protocol": {
@@ -121,6 +126,51 @@ def _create_synthetic_run(
                 },
                 "git": {"commit": "abcdef1234567890", "dirty": False},
             }
+            if not missing_partition_cache:
+                cache_dir = base_dir / ".data_partitions"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                cache_filename = f"{dataset}_clients_10_alpha_{alpha}_pub_200_seed_{seed}.json"
+                cache_file = cache_dir / cache_filename
+                cache_content: dict[str, Any] = {
+                    "schema_version": 1,
+                    "dataset": dataset,
+                    "num_clients": 10,
+                    "alpha": alpha,
+                    "num_public_samples": 200,
+                    "num_val_samples": 5000,
+                    "seed": seed,
+                    "partition": "dirichlet",
+                    "public_indices": list(range(200)),
+                    "validation_indices": list(range(200, 5200)),
+                    "client_indices": {str(i): [5200 + i] for i in range(10)},
+                    "shard_sizes": [1] * 10,
+                    "shard_stats": {
+                        "min": 1,
+                        "max": 1,
+                        "mean": 1.0,
+                        "median": 1.0,
+                        "std": 0.0,
+                        "total": 10,
+                    },
+                    "client_class_counts": [[1] + [0] * 9 for _ in range(10)],
+                }
+                if corrupt_partition_cache:
+                    cache_file.write_text("{corrupt partition cache", encoding="utf-8")
+                else:
+                    cache_file.write_text(json.dumps(cache_content, indent=2), encoding="utf-8")
+
+                from fedmaq.core.partitioning import canonical_partition_digest
+
+                sha256 = (
+                    "0" * 64
+                    if mismatched_partition_digest
+                    else canonical_partition_digest(cache_content)
+                )
+                manifest_data["partition_cache"] = {
+                    "schema_version": 1,
+                    "path": f".data_partitions/{cache_filename}",
+                    "sha256": sha256,
+                }
             manifest_path.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
 
     # 3. Telemetry CSV
@@ -616,3 +666,31 @@ def test_stage_1b_closure_and_selection_validation(tmp_path):
     selection = select_power_mean_omega_iso_byte(runs, selected_p=-1.0)
     assert selection["cifar10_alpha_0.1"]["winner"] == 0.5
     assert selection["cifar10_alpha_1.0"]["winner"] == 0.5
+
+
+def test_validation_rejects_missing_partition_cache_entry(tmp_path: Path):
+    """Evidence validation must reject replacement-v1 runs missing partition_cache in manifest."""
+    run_dir = _create_synthetic_run(tmp_path, missing_partition_cache=True)
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert any("run manifest missing required partition_cache" in err for err in result.errors)
+    assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)
+
+
+def test_validation_rejects_missing_partition_cache_file(tmp_path: Path):
+    """Evidence validation must reject runs whose cache file does not exist on disk."""
+    run_dir = _create_synthetic_run(tmp_path)
+    # Remove the created cache file
+    cache_file = tmp_path / ".data_partitions" / "cifar10_clients_10_alpha_0.3_pub_200_seed_0.json"
+    cache_file.unlink()
+
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert any("partition cache missing" in err for err in result.errors)
+    assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)
+
+
+def test_validation_rejects_mismatched_partition_cache_digest(tmp_path: Path):
+    """Evidence validation must reject runs whose cache SHA-256 does not match manifest."""
+    run_dir = _create_synthetic_run(tmp_path, mismatched_partition_digest=True)
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert any("partition cache digest mismatch" in err for err in result.errors)
+    assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)

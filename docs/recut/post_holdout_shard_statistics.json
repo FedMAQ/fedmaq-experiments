@@ -1,0 +1,290 @@
+{
+  "cifar10_clients_100_alpha_0.1_pub_200_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 1,
+      "max": 2443,
+      "mean": 448.0,
+      "median": 316.5,
+      "std": 469.7682194444405,
+      "total": 44800
+    },
+    "sha256": "89e66f688a53eb1d0c927acf74ba6a94ba617c6a0e047b6e3c11dea9aa0e6b72"
+  },
+  "cifar10_clients_100_alpha_0.1_pub_200_seed_0.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 0,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 1,
+      "max": 1939,
+      "mean": 448.0,
+      "median": 316.0,
+      "std": 440.4647318458085,
+      "total": 44800
+    },
+    "sha256": "b1abc6b97290058fac257983c8fbd8dd911a68257beb24f34abe57590eeebfc1"
+  },
+  "cifar10_clients_100_alpha_0.1_pub_200_seed_123.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 123,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 5,
+      "max": 1738,
+      "mean": 448.0,
+      "median": 324.5,
+      "std": 407.7272863078948,
+      "total": 44800
+    },
+    "sha256": "7f9e3b81130520d51dfc4423101b6e159381369ed1b03197c3eba1b2f719eb52"
+  },
+  "cifar10_clients_100_alpha_0.1_pub_3000_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 5,
+      "max": 1790,
+      "mean": 420.0,
+      "median": 341.0,
+      "std": 380.52009145378906,
+      "total": 42000
+    },
+    "sha256": "6809f70dfca8a9bea929b616e75e8dcfb84ec105944c9b2215d68a1c9054faac"
+  },
+  "cifar10_clients_100_alpha_0.1_pub_3000_seed_0.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 0,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 7,
+      "max": 2088,
+      "mean": 420.0,
+      "median": 273.0,
+      "std": 419.68743131049325,
+      "total": 42000
+    },
+    "sha256": "83869d65d322435e03cd1086d2102202ea0cd1ba4dad2d2ef5f2fb7f50f058c9"
+  },
+  "cifar10_clients_100_alpha_0.1_pub_3000_seed_123.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.1,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 123,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 3,
+      "max": 1973,
+      "mean": 420.0,
+      "median": 331.0,
+      "std": 391.6600311494651,
+      "total": 42000
+    },
+    "sha256": "d0fe5b775a02077a288078f26a010eab60c925bd49715d95db21ed013d0b1c45"
+  },
+  "cifar10_clients_100_alpha_0.3_pub_3000_seed_0.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.3,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 0,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 66,
+      "max": 1771,
+      "mean": 420.0,
+      "median": 340.0,
+      "std": 296.4553254708034,
+      "total": 42000
+    },
+    "sha256": "a7f5aff6bdf9f982902cb3afb32a18b825b36d37e66e072b369faadbad9e8e01"
+  },
+  "cifar10_clients_100_alpha_0.3_pub_3000_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.3,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 60,
+      "max": 1032,
+      "mean": 420.0,
+      "median": 408.0,
+      "std": 212.35121850368554,
+      "total": 42000
+    },
+    "sha256": "27c89b96c9d8d7c5d8d216c1b0814392d3dccc4776690c7579eea09c60a5efaa"
+  },
+  "cifar10_clients_100_alpha_0.3_pub_3000_seed_123.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 0.3,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 123,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 60,
+      "max": 1337,
+      "mean": 420.0,
+      "median": 383.0,
+      "std": 246.07088409643265,
+      "total": 42000
+    },
+    "sha256": "f26643b73481085afd8a1eb14bceef09d0d2227d77017d906dd288ed6cbd5e4d"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_200_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 221,
+      "max": 1118,
+      "mean": 448.0,
+      "median": 423.0,
+      "std": 138.66520832566474,
+      "total": 44800
+    },
+    "sha256": "1c9bcd3e6234f8471e032c5e718f3d5fc8167d3bf411a5b29755932828abf906"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_200_seed_0.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 0,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 187,
+      "max": 836,
+      "mean": 448.0,
+      "median": 424.0,
+      "std": 140.37293186366097,
+      "total": 44800
+    },
+    "sha256": "7ad3b6f95875ac273ec93fac0f7ed675513c50817eaaea493be50919854a19e3"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_200_seed_123.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 200,
+    "num_val_samples": 5000,
+    "seed": 123,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 123,
+      "max": 827,
+      "mean": 448.0,
+      "median": 422.5,
+      "std": 128.07123018070843,
+      "total": 44800
+    },
+    "sha256": "e42785b7d407636805cf6160b7dcdd96e80e4646de86ce6725951053bab84008"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_3000_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 193,
+      "max": 933,
+      "mean": 420.0,
+      "median": 390.0,
+      "std": 128.70167054082864,
+      "total": 42000
+    },
+    "sha256": "2298b2b9199d0042722aff5a0c26a71c3f73d9517767ced2ad859f9623ad1484"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_3000_seed_0.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 0,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 146,
+      "max": 786,
+      "mean": 420.0,
+      "median": 427.5,
+      "std": 121.50802442637277,
+      "total": 42000
+    },
+    "sha256": "1c2242cab82d8eb610e8d2a34bb5e9c1791433f085351fb6e65cb83a337d409e"
+  },
+  "cifar10_clients_100_alpha_1.0_pub_3000_seed_123.json": {
+    "dataset": "cifar10",
+    "num_clients": 100,
+    "alpha": 1.0,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 123,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 187,
+      "max": 803,
+      "mean": 420.0,
+      "median": 405.5,
+      "std": 131.64535692533937,
+      "total": 42000
+    },
+    "sha256": "84943b810549cc76275e74c4499488603fb2327bf31a20caf9efc72990b54073"
+  },
+  "cifar10_clients_2_alpha_0.1_pub_3000_seed_42.json": {
+    "dataset": "cifar10",
+    "num_clients": 2,
+    "alpha": 0.1,
+    "num_public_samples": 3000,
+    "num_val_samples": 5000,
+    "seed": 42,
+    "partition": "dirichlet",
+    "shard_stats": {
+      "min": 19754,
+      "max": 22246,
+      "mean": 21000.0,
+      "median": 21000.0,
+      "std": 1246.0,
+      "total": 42000
+    },
+    "sha256": "d0204f2f27deb342ad7268368469b02dddcb6428464675e469f77bff1c5c05e1"
+  }
+}

@@ -32,10 +32,13 @@ from fedmaq.core.models import (
     set_model_parameters,
 )
 from fedmaq.core.partitioning import (
+    CACHE_DIR,
     generate_partition_indices,
     get_client_loader,
+    get_partition_cache_info,
     get_server_loaders,
 )
+from fedmaq.core.protocol import register_protocol
 from fedmaq.core.randomness import derive_numpy_rng, derive_seed
 from fedmaq.core.strategy import TelemetryFedAvg
 from fedmaq.core.telemetry import TelemetryManager
@@ -222,6 +225,7 @@ class SimulationPlan:
     seed: int
     strict_determinism: bool
     public_indices: Any
+    val_indices: Any
     client_indices_dict: Any
     client_config: dict[str, Any]
     batch_size: int
@@ -230,6 +234,9 @@ class SimulationPlan:
     total_rounds: int
     device: str | None
     backend_config: dict[str, dict[str, ConfigRecordValues]]
+    split: str = "val"
+    loader_used: str = "val"
+    partition_cache_info: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -273,7 +280,7 @@ class SimulationApplications:
                     train=True,
                 )
 
-            public_loader, _ = get_server_loaders(
+            public_loader, _, _ = get_server_loaders(
                 plan.dataset_name,
                 plan.public_indices,
                 batch_size=plan.batch_size,
@@ -303,7 +310,7 @@ class SimulationApplications:
             server_round: int,
             parameters: fl.common.NDArrays,
             _config: dict[str, fl.common.Scalar],
-            test_loader: Any,
+            eval_loader: Any,
         ) -> tuple[float, dict[str, float]] | None:
             device = torch.device(plan.device) if plan.device else DEVICE
             if plan.algorithm_name == "fedmd":
@@ -318,7 +325,7 @@ class SimulationApplications:
                     )
                     return evaluate_global_model(
                         eval_model,
-                        test_loader,
+                        eval_loader,
                         num_classes=plan.num_classes,
                         device=device,
                     )
@@ -326,7 +333,7 @@ class SimulationApplications:
                     client_paths=client_paths,
                     dataset_name=plan.dataset_name,
                     num_classes=plan.num_classes,
-                    test_loader=test_loader,
+                    test_loader=eval_loader,
                     device=device,
                 )
 
@@ -340,7 +347,7 @@ class SimulationApplications:
             )
             return evaluate_global_model(
                 eval_model,
-                test_loader,
+                eval_loader,
                 num_classes=plan.num_classes,
                 device=device,
             )
@@ -350,22 +357,25 @@ class SimulationApplications:
                 plan.algorithm_name, plan.dataset_name, plan.num_classes
             )
             initial_parameters = ndarrays_to_parameters(get_model_parameters(initial_model))
-            _, test_loader = get_server_loaders(
+            public_loader, val_loader, test_loader = get_server_loaders(
                 plan.dataset_name,
                 plan.public_indices,
+                validation_indices=plan.val_indices,
                 batch_size=plan.batch_size,
             )
+            eval_loader = val_loader if plan.split == "val" else test_loader
             strategy = TelemetryFedAvg(
                 telemetry_manager=telemetry,
                 config=plan.config,
                 client_indices_dict=plan.client_indices_dict,
                 public_indices=plan.public_indices,
+                split=plan.split,
                 fraction_fit=plan.client_fraction,
                 fraction_evaluate=0.0,
                 min_fit_clients=max(1, int(plan.num_clients * plan.client_fraction)),
                 min_available_clients=plan.num_clients,
                 evaluate_fn=lambda server_round, parameters, config: evaluate_fn(
-                    server_round, parameters, config, test_loader
+                    server_round, parameters, config, eval_loader
                 ),
                 initial_parameters=initial_parameters,
             )
@@ -462,18 +472,44 @@ class SimulationBuilder:
         self.alg_name: str = self.cfg.algorithm.name
         self.dataset_name: str = self.cfg.dataset.name
         self.num_classes: int = int(self.cfg.dataset.num_classes)
-        self.public_indices, self.client_indices_dict = generate_partition_indices(
-            dataset_name=self.dataset_name,
-            num_clients=self.cfg.experiment.num_clients,
-            alpha=self.cfg.heterogeneity.alpha,
-            num_public_samples=self.cfg.experiment.num_public_samples,
-            seed=self.cfg.seed,
-            partition=OmegaConf.select(self.cfg, "heterogeneity.partition", default="dirichlet"),
+        partition = str(OmegaConf.select(self.cfg, "heterogeneity.partition", default="dirichlet"))
+        self.public_indices, self.val_indices, self.client_indices_dict = (
+            generate_partition_indices(
+                dataset_name=self.dataset_name,
+                num_clients=self.cfg.experiment.num_clients,
+                alpha=self.cfg.heterogeneity.alpha,
+                num_public_samples=self.cfg.experiment.num_public_samples,
+                seed=self.cfg.seed,
+                partition=partition,
+            )
         )
+
+        if partition == "writer":
+            cache_name = (
+                f"{self.dataset_name.lower()}_clients_{self.cfg.experiment.num_clients}_"
+                f"writer_pub_{self.cfg.experiment.num_public_samples}_seed_{self.cfg.seed}.json"
+            )
+        else:
+            cache_name = (
+                f"{self.dataset_name.lower()}_clients_{self.cfg.experiment.num_clients}_"
+                f"alpha_{self.cfg.heterogeneity.alpha}_pub_{self.cfg.experiment.num_public_samples}_seed_{self.cfg.seed}.json"
+            )
+        cache_file = CACHE_DIR / cache_name
+        self.partition_cache_info = get_partition_cache_info(cache_file)
+
+        protocol_reg = register_protocol(self.cfg_dict, {"commit": None, "dirty": False})
+        split_override = OmegaConf.select(self.cfg, "split", default=None)
+        self.split = str(split_override if split_override is not None else protocol_reg.split)
+        self.loader_used = "val" if self.split == "val" else "test"
 
         self.telemetry = TelemetryManager(self.cfg_dict)
         self.telemetry.init_wandb()
-        write_run_manifest(self.cfg_dict, self.telemetry.log_dir)
+        write_run_manifest(
+            self.cfg_dict,
+            self.telemetry.log_dir,
+            partition_cache=self.partition_cache_info,
+            loader_used=self.loader_used,
+        )
 
         self.client_config = self.cfg_dict
         if self.alg_name == "fedkd":
@@ -494,6 +530,7 @@ class SimulationBuilder:
             seed=int(self.cfg.seed),
             strict_determinism=self.strict_determinism,
             public_indices=self.public_indices,
+            val_indices=self.val_indices,
             client_indices_dict=self.client_indices_dict,
             client_config=self.client_config,
             batch_size=int(self.cfg.experiment.batch_size),
@@ -502,6 +539,9 @@ class SimulationBuilder:
             total_rounds=int(self.cfg.experiment.total_rounds),
             device=OmegaConf.select(self.cfg, "device", default=None),
             backend_config=self._backend_config(),
+            split=self.split,
+            loader_used=self.loader_used,
+            partition_cache_info=self.partition_cache_info,
         )
 
     def _backend_config(self) -> dict[str, dict[str, ConfigRecordValues]]:

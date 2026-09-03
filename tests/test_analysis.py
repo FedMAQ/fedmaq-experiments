@@ -1055,6 +1055,8 @@ def _write_discoverable_run(root, out_dir, *, seed, refinements, accuracy, alpha
     manifest["config_sha256"] = config_sha256(config)
     manifest["git"] = {"commit": "fixture-commit", "dirty": False}
     manifest["protocol"] = register_protocol(config, manifest["git"]).as_dict()
+    manifest["run"]["loader_used"] = manifest["protocol"]["split"]
+    manifest["run"]["split"] = manifest["protocol"]["split"]
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 

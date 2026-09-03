@@ -43,6 +43,8 @@ COMMON_CSV_FIELDNAMES: list[str] = [
     "test/precision",
     "test/recall",
     "test/f1",
+    "val/loss",
+    "val/accuracy",
     "communication/round_bytes",
     "communication/round_payload_bytes",
     "communication/round_upload_bytes",

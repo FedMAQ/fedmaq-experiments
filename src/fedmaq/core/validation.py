@@ -20,6 +20,7 @@ import torch
 
 from fedmaq.core.checkpoint import FINAL_MODEL_FILENAME
 from fedmaq.core.manifest import MANIFEST_FILENAME
+from fedmaq.core.partitioning import canonical_partition_digest
 from fedmaq.core.run_identity import parse_run_directory
 
 logger = logging.getLogger("fedmaq.validation")
@@ -197,6 +198,64 @@ def validate_run_evidence(
                                     f"identity mismatch on alpha: path={parsed.heterogeneity_path} "
                                     f"vs manifest={alpha_val}"
                                 )
+
+                    # Partition cache validation (Issues #99 and #102)
+                    partition_cache = manifest_data.get("partition_cache")
+                    protocol_info = manifest_data.get("protocol", {})
+                    is_replacement_scientific = (
+                        isinstance(protocol_info, dict)
+                        and protocol_info.get("name") == "replacement-v1"
+                        and protocol_info.get("historical") is False
+                        and protocol_info.get("stage") != "assurance"
+                    )
+                    if partition_cache is not None:
+                        if not isinstance(partition_cache, dict):
+                            errors.append(
+                                f"manifest 'partition_cache' not a mapping: {manifest_path}"
+                            )
+                        else:
+                            cache_rel_path = partition_cache.get("path")
+                            expected_sha256 = partition_cache.get("sha256")
+                            expected_schema = partition_cache.get("schema_version")
+                            if not cache_rel_path or not expected_sha256:
+                                errors.append(
+                                    f"manifest 'partition_cache' missing path/sha256: "
+                                    f"{manifest_path}"
+                                )
+                            else:
+                                root = repo_root or Path.cwd()
+                                full_cache_path = Path(root) / cache_rel_path
+                                if not full_cache_path.is_file():
+                                    errors.append(f"partition cache missing: {cache_rel_path}")
+                                else:
+                                    try:
+                                        with open(full_cache_path, encoding="utf-8") as f:
+                                            cache_obj = json.load(f)
+                                        actual_sha256 = canonical_partition_digest(cache_obj)
+                                        if actual_sha256 != expected_sha256:
+                                            errors.append(
+                                                "partition cache digest mismatch: "
+                                                f"expected={expected_sha256}, "
+                                                f"actual={actual_sha256}"
+                                            )
+                                        if (
+                                            expected_schema is not None
+                                            and cache_obj.get("schema_version") != expected_schema
+                                        ):
+                                            errors.append(
+                                                f"partition cache schema mismatch: "
+                                                f"expected={expected_schema}, "
+                                                f"actual={cache_obj.get('schema_version')}"
+                                            )
+                                    except Exception as exc:
+                                        errors.append(
+                                            f"failed to read partition cache {full_cache_path}: "
+                                            f"{exc}"
+                                        )
+                    elif is_replacement_scientific:
+                        errors.append(
+                            f"run manifest missing required partition_cache: {manifest_path}"
+                        )
         except (OSError, json.JSONDecodeError, UnicodeError) as exc:
             errors.append(f"corrupt run manifest {manifest_path}: {exc}")
 

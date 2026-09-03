@@ -120,7 +120,7 @@ class CFDHook(StrategyHook):
             and strategy is not None
             and strategy.public_indices is not None
         ):
-            self._public_loader, _ = get_server_loaders(
+            self._public_loader, _, _ = get_server_loaders(
                 self.dataset_name, strategy.public_indices, batch_size=self.batch_size
             )
             self._public_labels = np.concatenate(

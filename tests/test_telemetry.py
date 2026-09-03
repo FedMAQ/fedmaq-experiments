@@ -38,6 +38,8 @@ def test_common_csv_fieldnames_are_public_contract():
         "test/precision",
         "test/recall",
         "test/f1",
+        "val/loss",
+        "val/accuracy",
         "communication/round_bytes",
         "communication/round_payload_bytes",
         "communication/round_upload_bytes",

@@ -180,10 +180,10 @@ def test_builder_cleans_run_owned_persistence_if_app_construction_fails(tmp_path
     monkeypatch.setattr(
         simulation,
         "generate_partition_indices",
-        lambda **_kwargs: ([], {0: [], 1: []}),
+        lambda **_kwargs: ([], [], {0: [], 1: []}),
     )
     monkeypatch.setattr(simulation, "TelemetryManager", FakeTelemetry)
-    monkeypatch.setattr(simulation, "write_run_manifest", lambda *_args: None)
+    monkeypatch.setattr(simulation, "write_run_manifest", lambda *_args, **_kwargs: None)
 
     def fail_app_construction(**_kwargs):
         raise RuntimeError("app construction failed")
@@ -243,10 +243,10 @@ def test_builder_keeps_persistence_driver_owned_when_callbacks_are_serialized(
     monkeypatch.setattr(
         simulation,
         "generate_partition_indices",
-        lambda **_kwargs: ([], {0: [], 1: []}),
+        lambda **_kwargs: ([], [], {0: [], 1: []}),
     )
     monkeypatch.setattr(simulation, "TelemetryManager", FakeTelemetry)
-    monkeypatch.setattr(simulation, "write_run_manifest", lambda *_args: None)
+    monkeypatch.setattr(simulation, "write_run_manifest", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(simulation, "ClientApp", FakeApp)
     monkeypatch.setattr(simulation, "ServerApp", FakeApp)
 

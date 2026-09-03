@@ -210,6 +210,15 @@ def is_promotable_manifest(manifest: dict[str, Any]) -> bool:
     if expected_preregistration_sha256 != preregistration_sha256:
         return False
 
+    contract_split = contract.get("split")
+    if contract_split in ("val", "test"):
+        if "run" in manifest:
+            run_info = manifest.get("run")
+            if not isinstance(run_info, dict) or run_info.get("loader_used") != contract_split:
+                return False
+        elif "loader_used" in manifest and manifest.get("loader_used") != contract_split:
+            return False
+
     envelope_body = {key: value for key, value in envelope.items() if key != "sha256"}
     git = manifest.get("git")
     return bool(

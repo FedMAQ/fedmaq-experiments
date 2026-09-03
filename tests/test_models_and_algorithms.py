@@ -140,20 +140,22 @@ def test_deterministic_dirichlet_partitioning(mock_dataset, tmp_path, monkeypatc
     num_public = 10
     seed = 42
 
-    pub_idx1, client_dict1 = generate_partition_indices(
+    pub_idx1, val_idx1, client_dict1 = generate_partition_indices(
         "mnist", num_clients, alpha, num_public, seed
     )
 
     assert len(pub_idx1) == num_public
+    assert len(val_idx1) == 10  # 10% of 100-sample mock dataset
     assert len(client_dict1) == num_clients
     total_client_samples = sum(len(indices) for indices in client_dict1.values())
-    assert len(pub_idx1) + total_client_samples == 100
+    assert len(pub_idx1) + len(val_idx1) + total_client_samples == 100
 
-    pub_idx2, client_dict2 = generate_partition_indices(
+    pub_idx2, val_idx2, client_dict2 = generate_partition_indices(
         "mnist", num_clients, alpha, num_public, seed
     )
 
     assert pub_idx1 == pub_idx2
+    assert val_idx1 == val_idx2
     for k in client_dict1.keys():
         assert client_dict1[k] == client_dict2[k]
 
@@ -174,18 +176,23 @@ def test_partition_seed_invariant_for_paired_arms(mock_dataset, tmp_path, monkey
 
     # Arm A and Arm B: same config + seed, independent cache dirs (fresh generation).
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "arm_a")
-    pub_a, clients_a = generate_partition_indices("mnist", num_clients, alpha, num_public, seed)
+    pub_a, val_a, clients_a = generate_partition_indices(
+        "mnist", num_clients, alpha, num_public, seed
+    )
 
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "arm_b")
-    pub_b, clients_b = generate_partition_indices("mnist", num_clients, alpha, num_public, seed)
+    pub_b, val_b, clients_b = generate_partition_indices(
+        "mnist", num_clients, alpha, num_public, seed
+    )
 
     assert pub_a == pub_b, "Paired arms at the same seed diverged on the public pool"
+    assert val_a == val_b, "Paired arms at the same seed diverged on the validation slice"
     for k in clients_a:
         assert clients_a[k] == clients_b[k], f"Paired arms diverged on client {k}"
 
     # A different seed (independent replicate) must produce a different partition.
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path / "seed_7")
-    _, clients_c = generate_partition_indices("mnist", num_clients, alpha, num_public, seed=7)
+    _, _, clients_c = generate_partition_indices("mnist", num_clients, alpha, num_public, seed=7)
     assert any(clients_a[k] != clients_c[k] for k in clients_a), (
         "Distinct seeds produced identical partitions — replicates are not independent"
     )
@@ -207,7 +214,7 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
     seed = 42
     writer_ids = mock_writer_dataset.writer_ids
 
-    pub_idx1, client_dict1 = generate_partition_indices(
+    pub_idx1, val_idx1, client_dict1 = generate_partition_indices(
         "femnist",
         num_clients,
         num_public_samples=num_public,
@@ -216,6 +223,7 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
     )
 
     assert len(pub_idx1) == num_public
+    assert len(val_idx1) > 0, "Validation slice for writer partition should not be empty"
     assert len(client_dict1) == num_clients
 
     # Each client is exactly one writer, and no writer is shared between clients.
@@ -227,16 +235,23 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
         seen_writers |= owners
     assert len(seen_writers) == num_clients, "A writer was assigned to two clients"
 
+    # Validation writers must be disjoint from client writers
+    val_writers = {int(writer_ids[i]) for i in val_idx1}
+    assert seen_writers.isdisjoint(val_writers), "Validation writers overlap with client writers"
+
     # Samples from unselected writers are deliberately unused, mirroring LEAF's own
     # subsampling — so the partition does NOT cover the corpus.
     total_client_samples = sum(len(v) for v in client_dict1.values())
-    assert len(pub_idx1) + total_client_samples < 100
+    assert len(pub_idx1) + len(val_idx1) + total_client_samples < 100
 
     pub_set = set(pub_idx1)
+    val_set = set(val_idx1)
+    assert pub_set.isdisjoint(val_set), "Public pool overlaps with validation slice"
     for indices in client_dict1.values():
         assert pub_set.isdisjoint(set(indices)), "Public pool overlaps with client data"
+        assert val_set.isdisjoint(set(indices)), "Validation slice overlaps with client data"
 
-    pub_idx2, client_dict2 = generate_partition_indices(
+    pub_idx2, val_idx2, client_dict2 = generate_partition_indices(
         "femnist",
         num_clients,
         num_public_samples=num_public,
@@ -244,6 +259,7 @@ def test_writer_based_partitioning(mock_writer_dataset, tmp_path, monkeypatch):
         partition="writer",
     )
     assert pub_idx1 == pub_idx2
+    assert val_idx1 == val_idx2
     for k in client_dict1.keys():
         assert client_dict1[k] == client_dict2[k]
 
@@ -265,7 +281,7 @@ def test_public_pool_exact_size_with_remainder(tmp_path, monkeypatch):
     from fedmaq.core.partitioning import generate_partition_indices
 
     num_public = 17  # 17 // 7 = 2 base, remainder = 3
-    pub_idx, client_dict = generate_partition_indices(
+    pub_idx, _, client_dict = generate_partition_indices(
         "mnist", num_clients=2, alpha=0.5, num_public_samples=num_public, seed=42
     )
 
@@ -276,14 +292,18 @@ def test_client_server_loaders(mock_dataset):
     """Test retrieval of client and server PyTorch DataLoaders."""
     client_dict = {"0": [0, 1, 2], "1": [3, 4]}
     pub_idx = [5, 6, 7]
+    val_idx = [8, 9]
 
     train_loader = get_client_loader(
         "mnist", client_id=0, client_indices_dict=client_dict, batch_size=2, train=True
     )
     assert len(train_loader.dataset) == 3
 
-    pub_loader, test_loader = get_server_loaders("mnist", pub_idx, batch_size=2)
+    pub_loader, val_loader, test_loader = get_server_loaders(
+        "mnist", pub_idx, validation_indices=val_idx, batch_size=2
+    )
     assert len(pub_loader.dataset) == 3
+    assert len(val_loader.dataset) == 2
     assert len(test_loader.dataset) == 100  # patched test dataset has 100 samples
 
 
@@ -291,7 +311,7 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     """Test 1-round CPU dry-run simulation of the client/server environment."""
     monkeypatch.setattr("fedmaq.core.partitioning.CACHE_DIR", tmp_path)
 
-    public_indices, client_indices_dict = generate_partition_indices(
+    public_indices, _, client_indices_dict = generate_partition_indices(
         "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
     )
 
@@ -342,7 +362,7 @@ def test_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         nonlocal strategy
         global_model = get_model("mnist", num_classes=10)
         initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
-        _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
+        _, _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
         def evaluate_fn(server_round, parameters, config):
             return 0.5, {"accuracy": 0.9}
@@ -513,7 +533,7 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         shutil.rmtree(model_dir)
 
     try:
-        public_indices, client_indices_dict = generate_partition_indices(
+        public_indices, _, client_indices_dict = generate_partition_indices(
             "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
         )
 
@@ -550,7 +570,7 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             train_loader = get_client_loader(
                 "mnist", partition_id, client_indices_dict, batch_size=2, train=True
             )
-            public_loader, _ = get_server_loaders("mnist", public_indices, batch_size=2)
+            public_loader, _, _ = get_server_loaders("mnist", public_indices, batch_size=2)
             model = get_model("mnist", num_classes=10)
             return GenericClient(
                 cid=str(partition_id),
@@ -571,7 +591,7 @@ def test_fedmd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             nonlocal strategy
             global_model = get_model("mnist", num_classes=10)
             initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
-            _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
+            _, _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
             def evaluate_fn(server_round, parameters, config):
                 client_paths = list(model_dir.glob("client_*.pth")) if model_dir.exists() else []
@@ -806,7 +826,7 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
     persistence_dir = tmp_path / "fedkd_models"
 
     try:
-        public_indices, client_indices_dict = generate_partition_indices(
+        public_indices, _, client_indices_dict = generate_partition_indices(
             "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
         )
 
@@ -881,7 +901,7 @@ def test_fedkd_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
 
             global_model = TinyCNN(in_channels=1, num_classes=10)
             initial_parameters = ndarrays_to_parameters(get_model_parameters(global_model))
-            _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
+            _, _, test_loader = get_server_loaders("mnist", public_indices, batch_size=2)
 
             def evaluate_fn(server_round, parameters, config):
                 return 0.5, {"accuracy": 0.9}
@@ -1170,7 +1190,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
         shutil.rmtree(persistence_dir)
 
     try:
-        public_indices, client_indices_dict = generate_partition_indices(
+        public_indices, _, client_indices_dict = generate_partition_indices(
             "mnist", num_clients=2, alpha=0.5, num_public_samples=10, seed=42
         )
 
@@ -1211,7 +1231,7 @@ def test_fedmaq_simulation_dry_run(mock_dataset, tmp_path, monkeypatch):
             train_loader = get_client_loader(
                 "mnist", partition_id, client_indices_dict, batch_size=2, train=True
             )
-            public_loader, _ = get_server_loaders("mnist", public_indices, batch_size=2)
+            public_loader, _, _ = get_server_loaders("mnist", public_indices, batch_size=2)
             model = get_model("mnist", num_classes=10)
             loss_hook = LossHook()
             from fedmaq.baselines.quantization import DAdaQuantCompressionHook

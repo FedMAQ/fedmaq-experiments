@@ -166,6 +166,7 @@ class TelemetryFedAvg(FedAvg):
         config: dict[str, Any],
         client_indices_dict: dict[str, list[int]] | None = None,
         public_indices: list[int] | None = None,
+        split: str | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -174,6 +175,7 @@ class TelemetryFedAvg(FedAvg):
         self.config = config
         self.public_indices = public_indices
         self.client_indices_dict = client_indices_dict
+        self.split = split or str(config.get("split", "test"))
 
         # Shared partition-ID cache used by multiple hooks
         self.proxy_cid_to_partition_id: dict[str, int] = {}
@@ -325,6 +327,10 @@ class TelemetryFedAvg(FedAvg):
                 "system/server_sim_time_sec": snapshot.server_time,
                 "system/wall_time_sec": snapshot.wall_time,
             }
+
+            if self.split == "val":
+                log_metrics["val/loss"] = loss
+                log_metrics["val/accuracy"] = acc
 
             if snapshot.round_secondary_bytes is not None:
                 log_metrics["communication/round_secondary_bytes"] = snapshot.round_secondary_bytes

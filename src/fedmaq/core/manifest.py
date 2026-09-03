@@ -108,7 +108,12 @@ def resolve_algorithm_config_name() -> str | None:
     return str(choice) if choice is not None else None
 
 
-def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> dict[str, Any]:
+def build_manifest(
+    cfg_dict: dict[str, Any],
+    repo_root: Path | None = None,
+    partition_cache: dict[str, Any] | None = None,
+    loader_used: str | None = None,
+) -> dict[str, Any]:
     """Assemble the manifest record for one run."""
     if repo_root is None:
         # src/fedmaq/core/manifest.py -> repo root
@@ -146,8 +151,10 @@ def build_manifest(cfg_dict: dict[str, Any], repo_root: Path | None = None) -> d
             "total_rounds": experiment.get("total_rounds"),
             "num_clients": experiment.get("num_clients"),
             "split": protocol.split,
+            "loader_used": loader_used or ("val" if protocol.split == "val" else "test"),
             "wire_protocol": protocol.wire_protocol,
         },
+        "partition_cache": partition_cache,
         "git": git,
         "protocol": protocol.as_dict(),
         "environment": {
@@ -183,7 +190,12 @@ def _dispatch_provenance() -> dict[str, Any] | None:
     return {"shard": shard}
 
 
-def write_run_manifest(cfg_dict: dict[str, Any], log_dir: Path) -> Path | None:
+def write_run_manifest(
+    cfg_dict: dict[str, Any],
+    log_dir: Path,
+    partition_cache: dict[str, Any] | None = None,
+    loader_used: str | None = None,
+) -> Path | None:
     """Write ``run_manifest.json`` beside the run's telemetry logs.
 
     Never raises: a provenance failure must not abort a multi-hour grid run. A
@@ -191,7 +203,11 @@ def write_run_manifest(cfg_dict: dict[str, Any], log_dir: Path) -> Path | None:
     recoverable.
     """
     try:
-        manifest = build_manifest(cfg_dict)
+        manifest = build_manifest(
+            cfg_dict,
+            partition_cache=partition_cache,
+            loader_used=loader_used,
+        )
         log_dir.mkdir(parents=True, exist_ok=True)
         manifest["source_root"] = log_dir.resolve().as_posix()
         path = log_dir / MANIFEST_FILENAME

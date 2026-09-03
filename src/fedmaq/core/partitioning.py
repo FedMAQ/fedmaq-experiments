@@ -17,19 +17,31 @@ Supported partition modes:
     writers give TV distance 0.259 and a 17.2x spread in samples per client.
 """
 
+import hashlib
 import json
 import os
 import random
 from collections.abc import Sized
 from functools import lru_cache
 from pathlib import Path
-from typing import cast
+from typing import Any, NamedTuple, cast
 
 import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, Subset
 from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
+
+PARTITION_SCHEMA_VERSION = 1
+
+
+class PartitionIndices(NamedTuple):
+    """Deterministic partition assignment container."""
+
+    public_indices: list[int]
+    validation_indices: list[int]
+    client_indices: dict[str, list[int]]
+
 
 # Base paths
 DATA_DIR = Path("data").resolve()
@@ -238,16 +250,14 @@ def _generate_writer_partition(
     writer_ids: np.ndarray,
     num_clients: int,
     rng: np.random.Generator,
-) -> dict[str, list[int]]:
+    num_val_writers: int | None = None,
+) -> tuple[list[int], dict[str, list[int]]]:
     """Writer-based natural partition for FEMNIST: one real writer per client.
 
-    ``num_clients`` writers are drawn without replacement from those still holding
-    samples after the public proxy pool has been carved out. Samples belonging to
-    unselected writers go unused, which is the same subsampling LEAF itself applies
-    when scaling the 3,400-writer corpus down to a tractable client count.
-
-    Unlike the Dirichlet path this consumes no ``alpha``: the skew in label
-    distribution, sample count, and handwriting style is the corpus's own.
+    Holds out a disjoint writer subset for server validation before assigning
+    writers to clients. ``num_clients`` writers are drawn without replacement from
+    those still holding samples after the public proxy pool and validation subset have
+    been carved out. Samples belonging to unselected writers go unused.
     """
     if num_clients > 0 and writer_ids.size == 0:
         raise ValueError("writer partition requires a dataset exposing writer_ids")
@@ -256,22 +266,66 @@ def _generate_writer_partition(
     remaining_writers = writer_ids[remaining]
 
     available = np.unique(remaining_writers)
-    if available.size < num_clients:
-        raise ValueError(
-            f"writer partition needs {num_clients} writers but only {available.size} "
-            f"remain after reserving the public pool"
+    total_available = int(available.size)
+    if num_val_writers is None:
+        num_val_writers = min(
+            max(1, int(round(num_clients * 0.1))), max(0, total_available - num_clients)
         )
-    selected = rng.choice(available, size=num_clients, replace=False)
 
-    # Group once rather than filtering per writer: the corpus is ~670k samples.
+    if total_available < num_clients + num_val_writers:
+        raise ValueError(
+            f"writer partition needs {num_clients} client writers + {num_val_writers} val writers "
+            f"but only {total_available} remain after reserving the public pool"
+        )
+
+    # Deterministic selection: first val writers, then client writers from remainder
+    val_writers = rng.choice(available, size=num_val_writers, replace=False)
+    client_available = np.setdiff1d(available, val_writers)
+    selected_clients = rng.choice(client_available, size=num_clients, replace=False)
+
     order = np.argsort(remaining_writers, kind="stable")
     sorted_writers = remaining_writers[order]
-    starts = np.searchsorted(sorted_writers, selected, side="left")
-    ends = np.searchsorted(sorted_writers, selected, side="right")
 
-    return {
+    # Extract validation sample indices
+    val_indices: list[int] = []
+    val_starts = np.searchsorted(sorted_writers, val_writers, side="left")
+    val_ends = np.searchsorted(sorted_writers, val_writers, side="right")
+    for start, end in zip(val_starts, val_ends, strict=True):
+        val_indices.extend(remaining[order[start:end]].tolist())
+
+    # Extract client sample indices
+    client_starts = np.searchsorted(sorted_writers, selected_clients, side="left")
+    client_ends = np.searchsorted(sorted_writers, selected_clients, side="right")
+    client_indices = {
         str(k): remaining[order[start:end]].tolist()
-        for k, (start, end) in enumerate(zip(starts, ends, strict=True))
+        for k, (start, end) in enumerate(zip(client_starts, client_ends, strict=True))
+    }
+
+    return val_indices, client_indices
+
+
+def canonical_partition_digest(cache_data: dict[str, Any]) -> str:
+    """Compute deterministic SHA-256 digest of canonical partition cache JSON."""
+    canonical_bytes = json.dumps(cache_data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical_bytes).hexdigest()
+
+
+def get_partition_cache_info(cache_file: Path | str) -> dict[str, Any] | None:
+    """Return partition cache schema, relative path, and content digest, or None if missing."""
+    path = Path(cache_file).resolve()
+    if not path.is_file():
+        return None
+    with open(path, encoding="utf-8") as f:
+        cache_data = json.load(f)
+    digest = canonical_partition_digest(cache_data)
+    try:
+        rel_path = path.relative_to(DATA_DIR.parent).as_posix()
+    except ValueError:
+        rel_path = path.name
+    return {
+        "schema_version": int(cache_data.get("schema_version", PARTITION_SCHEMA_VERSION)),
+        "path": rel_path,
+        "sha256": digest,
     }
 
 
@@ -282,8 +336,15 @@ def generate_partition_indices(
     num_public_samples: int = 200,
     seed: int = 42,
     partition: str = "dirichlet",
-) -> tuple[list[int], dict[str, list[int]]]:
+    num_val_samples: int | None = None,
+    num_val_writers: int | None = None,
+    force: bool = False,
+) -> PartitionIndices:
     """Generate or retrieve cached partition indices (deterministic).
+
+    Holds out a stratified validation slice from the train pool before client
+    partitioning for Dirichlet datasets, and a disjoint writer subset for FEMNIST
+    writer partitioning.
 
     Args:
         dataset_name: Torchvision dataset identifier.
@@ -292,10 +353,12 @@ def generate_partition_indices(
         num_public_samples: Samples reserved for the server-side public proxy pool.
         seed: RNG seed for reproducibility.
         partition: ``"dirichlet"`` (default) or ``"writer"`` (FEMNIST natural partition).
+        num_val_samples: Samples reserved for server validation (default 5,000 for CIFAR).
+        num_val_writers: Writers reserved for server validation in writer mode.
+        force: If True, ignore existing cache on disk and recompute.
 
     Returns:
-        public_indices: Indices reserved for server-side public pool.
-        client_indices: Map of str(client_id) -> list of sample indices.
+        PartitionIndices(public_indices, validation_indices, client_indices)
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -311,10 +374,20 @@ def generate_partition_indices(
         )
     cache_file = CACHE_DIR / cache_name
 
-    if cache_file.is_file():
+    if cache_file.is_file() and not force:
         with open(cache_file) as f:
             cache_data = json.load(f)
-        return cache_data["public_indices"], cache_data["client_indices"]
+        if (
+            cache_data.get("schema_version") == PARTITION_SCHEMA_VERSION
+            and "validation_indices" in cache_data
+            and "public_indices" in cache_data
+            and "client_indices" in cache_data
+        ):
+            return PartitionIndices(
+                cache_data["public_indices"],
+                cache_data["validation_indices"],
+                cache_data["client_indices"],
+            )
 
     # Generate indices
     dataset = load_dataset(dataset_name, train=True)
@@ -327,10 +400,6 @@ def generate_partition_indices(
     public_indices: list[int] = []
     class_indices = {c: np.where(labels == c)[0] for c in range(num_classes)}
 
-    # Distribute num_public_samples as evenly as possible across classes: base
-    # count per class plus one extra for the first `remainder` classes, so the
-    # pool totals exactly num_public_samples (when enough samples are available)
-    # instead of silently dropping num_public_samples % num_classes samples.
     base_per_class = num_public_samples // num_classes
     remainder = num_public_samples % num_classes
     for c in range(num_classes):
@@ -341,8 +410,6 @@ def generate_partition_indices(
         public_indices.extend(selected.tolist())
         class_indices[c] = np.setdiff1d(class_indices[c], selected)
 
-    # Top up from classes with remaining capacity if any class was short on
-    # samples, so the pool still reaches num_public_samples when feasible.
     shortfall = num_public_samples - len(public_indices)
     if shortfall > 0:
         for c in range(num_classes):
@@ -357,7 +424,7 @@ def generate_partition_indices(
             class_indices[c] = np.setdiff1d(class_indices[c], selected)
             shortfall -= n_select
 
-    # Step 2: Partition remaining data
+    # Step 2: Slice off server validation pool
     if partition == "writer":
         writer_ids = getattr(dataset, "writer_ids", None)
         if writer_ids is None:
@@ -365,18 +432,91 @@ def generate_partition_indices(
                 f"partition='writer' requires writer identifiers, which "
                 f"{dataset_name!r} does not expose"
             )
-        client_indices = _generate_writer_partition(
-            class_indices, np.asarray(writer_ids), num_clients, rng
+        val_indices, client_indices = _generate_writer_partition(
+            class_indices, np.asarray(writer_ids), num_clients, rng, num_val_writers=num_val_writers
         )
     else:
+        # Default validation holdout size: 5,000 for CIFAR or large datasets,
+        # 10% for smaller mock datasets.
+        if num_val_samples is None:
+            if (
+                dataset_name.lower() in ("cifar10", "cifar-10", "cifar100", "cifar-100")
+                or len(labels) >= 50000
+            ):
+                num_val_samples = 5000
+            else:
+                num_val_samples = max(1, int(round(len(labels) * 0.10)))
+
+        val_indices = []
+        base_val_per_class = num_val_samples // num_classes
+        val_remainder = num_val_samples % num_classes
+        for c in range(num_classes):
+            target = base_val_per_class + (1 if c < val_remainder else 0)
+            n_available = len(class_indices[c])
+            n_select = min(target, n_available)
+            selected = rng.choice(class_indices[c], size=n_select, replace=False)
+            val_indices.extend(selected.tolist())
+            class_indices[c] = np.setdiff1d(class_indices[c], selected)
+
+        val_shortfall = num_val_samples - len(val_indices)
+        if val_shortfall > 0:
+            for c in range(num_classes):
+                if val_shortfall <= 0:
+                    break
+                n_available = len(class_indices[c])
+                if n_available == 0:
+                    continue
+                n_select = min(val_shortfall, n_available)
+                selected = rng.choice(class_indices[c], size=n_select, replace=False)
+                val_indices.extend(selected.tolist())
+                class_indices[c] = np.setdiff1d(class_indices[c], selected)
+                val_shortfall -= n_select
+
+        # Step 3: Partition remaining data among clients
         client_indices = _generate_dirichlet_partition(class_indices, num_clients, alpha, rng)
 
+    # Compute realized post-holdout shard statistics & per-client class count matrix
+    shard_sizes = [int(len(client_indices[str(k)])) for k in range(num_clients)]
+    shard_stats = {
+        "min": int(min(shard_sizes)) if shard_sizes else 0,
+        "max": int(max(shard_sizes)) if shard_sizes else 0,
+        "mean": float(np.mean(shard_sizes)) if shard_sizes else 0.0,
+        "median": float(np.median(shard_sizes)) if shard_sizes else 0.0,
+        "std": float(np.std(shard_sizes)) if shard_sizes else 0.0,
+        "total": int(sum(shard_sizes)),
+    }
+
+    client_class_counts: list[list[int]] = []
+    for k in range(num_clients):
+        c_indices = client_indices[str(k)]
+        if c_indices:
+            client_labels = labels[c_indices]
+            counts = [int(np.sum(client_labels == c)) for c in range(num_classes)]
+        else:
+            counts = [0] * num_classes
+        client_class_counts.append(counts)
+
     # Save to cache
-    cache_data = {"public_indices": public_indices, "client_indices": client_indices}
-    with open(cache_file, "w") as f:
+    cache_data = {
+        "schema_version": PARTITION_SCHEMA_VERSION,
+        "dataset": dataset_name,
+        "num_clients": num_clients,
+        "alpha": alpha if partition != "writer" else None,
+        "num_public_samples": num_public_samples,
+        "num_val_samples": len(val_indices),
+        "seed": seed,
+        "partition": partition,
+        "public_indices": public_indices,
+        "validation_indices": val_indices,
+        "client_indices": client_indices,
+        "shard_sizes": shard_sizes,
+        "shard_stats": shard_stats,
+        "client_class_counts": client_class_counts,
+    }
+    with open(cache_file, "w", encoding="utf-8") as f:
         json.dump(cache_data, f)
 
-    return public_indices, client_indices
+    return PartitionIndices(public_indices, val_indices, client_indices)
 
 
 def _seed_worker(worker_id: int) -> None:
@@ -421,14 +561,23 @@ def get_client_loader(
 
 
 def get_server_loaders(
-    dataset_name: str, public_indices: list[int], batch_size: int = 64
-) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """Return public unlabeled server dataset loader and central evaluation test loader."""
+    dataset_name: str,
+    public_indices: list[int],
+    validation_indices: list[int] | None = None,
+    batch_size: int = 64,
+) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    """Return public unlabeled server dataset loader, validation loader, and central test loader."""
     train_dataset = _load_dataset_cached(dataset_name, True)
     public_subset = Subset(train_dataset, public_indices)
     public_loader = torch.utils.data.DataLoader(public_subset, batch_size=batch_size, shuffle=False)
 
+    if validation_indices is not None:
+        val_subset = Subset(train_dataset, validation_indices)
+    else:
+        val_subset = Subset(train_dataset, [])
+    val_loader = torch.utils.data.DataLoader(val_subset, batch_size=batch_size, shuffle=False)
+
     test_dataset = _load_dataset_cached(dataset_name, False)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    return public_loader, test_loader
+    return public_loader, val_loader, test_loader

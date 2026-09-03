@@ -219,7 +219,9 @@ def distill_ensemble_into_global(
         }
 
     try:
-        public_loader, _ = get_server_loaders(dataset_name, public_indices, batch_size=batch_size)
+        public_loader, _, _ = get_server_loaders(
+            dataset_name, public_indices, batch_size=batch_size
+        )
         kd_loss = run_server_side_kd(
             student_model=student_model,
             teachers=teachers,
