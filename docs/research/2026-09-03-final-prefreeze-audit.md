@@ -597,3 +597,40 @@ repeatability gate's preconditions hold.
 **This changes nothing about what remains author-owned**: the repeatability gate on
 JupyterHub, the envelope-only commit, the S1/S2/S3 dispositions, the `power_mean_omega`
 re-registration at write-in, and whether `pass3_freeze_confirm` runs at all.
+
+## Post-seal update, 2026-09-04: candidate advanced past the sealed Gate 0
+
+Gate 0 sealed above at `dcf3596` (all three steps PASS, envelope
+`docs/freeze/assurance-envelope-2026-09-03.json`, hash `1b87080a…8ea12d`). Two commits have
+since landed on `main`, both inside `source_manifest.json`'s `scope.include`
+(`scripts/**/*.py`, `src/**/*.py`, `tests/**/*.py`):
+
+- **`5fe0d93`** — fixed two real defects in `scripts/analysis.py`: `exploration_noise_margin`
+  was missing the validation-split guard every sibling margin function has, and
+  `baseline_tuning_margin`'s historical branch read `is_adopted` off the always-`None`
+  spec-declared field instead of the locally-computed verdict the wide branch already used
+  correctly. Added regression coverage for both. Also a comment-hygiene pass across `src/`,
+  `scripts/`, `tests/` per `.agents/rules/comment-hygiene.md`.
+- **`9a99cd4`** — closed a two-axis (Standards + Spec) code-review pass over `5fe0d93`
+  itself: factored the duplicated `is_adopted` ternary into `_is_adopted_variant()`, renamed
+  the shadowing local `adopted_variant` to `spec_adopted_variant` (output schema keys and the
+  YAML spec field name untouched), added the missing test the review flagged, and finished
+  the comment-hygiene sweep in `fedmd.py` and `test_execution_validation.py`.
+
+Neither commit touches training, telemetry, matrix, or protocol logic — both are read as
+bugfix-and-hygiene, not campaign-affecting. **No campaign cell was dispatched.** Verified
+clean on the final tree: freeze certificate regenerated and current, Ruff format/lint clean,
+mypy clean, 545 passed (544 baseline + the one new regression test), all five `--check`
+generators current, assurance fixture green, both deterministic digests unchanged from every
+prior candidate in this report (`d695901…63ab` fixture, `6d005f5…c3d8` analysis) — so this
+update moved no deterministic surface either.
+
+**Per this report's own Section 1 rule** (any `scope.include` change invalidates Gates 1, 3,
+4, 6), the sealed envelope, its GPU golden repeatability pin, and the still-outstanding
+5-cell smoke evidence (`docs/freeze/pre_dispatch_smoke_gate.md` §2, captured at `9bfca9e`,
+already flagged stale at `dcf3596` in commit `5044792` and never re-captured) are now all
+pinned to a commit two revisions behind the current candidate. **The active candidate is
+`9a99cd4`.** Re-declaring the envelope and re-running Gate 0 step 2 are author actions on
+JupyterHub, per `docs/freeze/pre_dispatch_smoke_gate.md`; nothing in this update performs
+them. This report continues to certify neither that the pipeline is ready nor that freeze
+may be considered.
