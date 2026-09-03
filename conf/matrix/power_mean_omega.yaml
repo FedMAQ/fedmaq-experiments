@@ -21,11 +21,19 @@ runs:
     label: power-mean-omega-0.25
     variant: omega0.25
     overrides:
-      # PLACEHOLDER: algorithm.p=<selected_p> (resolved from stage 1a verdict before dispatch)
+      # PRE-DISPATCH PLACEHOLDER, fail-closed. `???` composes to OmegaConf MISSING, so
+      # reading `algorithm.p` raises MissingMandatoryValue until the Stage-1a verdict is
+      # written in. Do not substitute a plausible default the way the freeze-confirm
+      # matrix does: `_power_mean_base.yaml` defaults `p: 0`, which is itself a Stage-1a
+      # candidate, so a forgotten edit would dispatch all 12 cells at the wrong
+      # compensation degree and they would be indistinguishable on disk -- the identity
+      # key does not encode `p`. ADR-0021 D2; issue #96.
+      - algorithm.p=???
       - algorithm.omega=0.25
   - alg: power_mean
     label: power-mean-omega-0.75
     variant: omega0.75
     overrides:
-      # PLACEHOLDER: algorithm.p=<selected_p> (resolved from stage 1a verdict before dispatch)
+      # PRE-DISPATCH PLACEHOLDER, fail-closed -- see the omega=0.25 run above.
+      - algorithm.p=???
       - algorithm.omega=0.75

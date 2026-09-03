@@ -1,13 +1,14 @@
 """Configuration, matrix-dispatch, and run-provenance contract tests."""
 
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 from hydra import compose, initialize_config_dir
-from omegaconf import OmegaConf
+from omegaconf import MissingMandatoryValue, OmegaConf
 from torch.utils.data import TensorDataset
 
 CONF_DIR = str((Path(__file__).parent.parent / "conf").resolve())
@@ -1669,3 +1670,51 @@ def test_power_mean_base_and_fedmaq_configs_agree_on_shared_keys():
             f"Config discrepancy on shared key {k!r}: "
             f"fedmaq.yaml={fedmaq_cfg[k]!r} vs _power_mean_base.yaml={power_mean_base_cfg[k]!r}"
         )
+
+
+def test_stage_1b_p_is_explicit_and_fails_closed_until_selection():
+    """Stage 1b must carry `p` as an override, and must refuse to dispatch unresolved.
+
+    ADR-0021 D2 requires the omega follow-up to run at the `p` Stage 1a selected, and
+    this matrix is the only thing that puts `p` on those runs. `_power_mean_base.yaml`
+    defaults `p: 0`, which is itself a Stage-1a candidate, and neither `variant` nor
+    `identity_key` encodes `p` -- so a run that silently took the default is
+    indistinguishable on disk from one at the selected degree, and `--skip_completed`
+    would treat it as already done. A comment naming the placeholder is not enough:
+    the override must exist, and while unresolved it must be unreadable rather than
+    plausible.
+
+    Bidirectional, so it does not block the author's Stage-1a write-back. It holds
+    while `p` is the `???` sentinel (dispatch raises before the first round) and after
+    a concrete degree is written in (dispatch composes and plans normally). The only
+    state it rejects is the lossy one: `p` absent, or resolvable to a default that
+    no selection chose.
+    """
+    matrix = _matrix("power_mean_omega")
+    for run in matrix["runs"]:
+        overrides = run.get("overrides") or []
+        values = {
+            key.strip(): value.strip()
+            for key, _, value in (override.partition("=") for override in overrides)
+        }
+        assert "algorithm.p" in values, (
+            f"Stage-1b run {run['label']!r} sets no algorithm.p override, so Hydra "
+            f"resolves it to the _power_mean_base.yaml default p=0 -- a Stage-1a "
+            f"candidate that no selection chose."
+        )
+
+        with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+            composed = compose(
+                config_name="config",
+                overrides=[f"algorithm={run['alg']}", *overrides],
+            )
+
+        if values["algorithm.p"] == "???":
+            with pytest.raises(MissingMandatoryValue):
+                _ = composed.algorithm.p
+        else:
+            resolved = composed.algorithm.p
+            assert resolved == "min" or math.isfinite(float(resolved)), (
+                f"Stage-1b run {run['label']!r} resolves algorithm.p to {resolved!r}, "
+                f"which is neither a finite degree nor 'min'."
+            )
