@@ -639,11 +639,15 @@ may be considered.
 
 ## Second post-seal update, 2026-09-04: the assurance-surface landing
 
-Landed at **`2e72492`**, which supersedes `9a99cd4` as the active candidate. One source
-commit, deliberately: the envelope re-declaration stays a separate author commit.
+Landed across **`2e72492`** and **`acdd645`**, which supersede `9a99cd4` as the active
+candidate. The second commit hardens the first: the selection-domain cross-check guarded its
+own coverage with a single total, which passes while asserting nothing about `omega` if
+`omega` overrides ever stop appearing. It is counted per axis now. Both are source
+commits, deliberately kept apart from the envelope re-declaration, which stays an author
+commit.
 
 This pass was run under an explicit authorization to invalidate the sealed capture — the
-author's standing instruction was to land everything worth landing in one commit and re-run
+author's standing instruction was to land everything worth landing in one pass and re-run
 the golden capture once, rather than to minimize churn. What follows is therefore a record of
 what was judged worth landing *and what was judged not*, since the second list is the one a
 later reader cannot reconstruct.
@@ -658,8 +662,21 @@ later reader cannot reconstruct.
   matrices with `just check` and CI both green. All four were verified current before the
   guards were added, so this closed a missing guard, not live drift.
 - **S2's cross-check** — see the *Resolved, 2026-09-04* note in S2 above.
-- **Row 11 / #102-15's missing half.** The matrix cross-check that section identifies as
-  "genuinely absent" now exists, scoped to `p` and `omega`. See the scope note below.
+- **Row 11 / #102-15, restated more narrowly than the row asks.** The row asks for *startup
+  validation* comparing dispatch expansion against `selection_domains`. What landed is a
+  pytest guard, not a startup check, and the distinction matters because enforcement at
+  dispatch already exists by another route: `validate_matrix_against_protocol` recomputes
+  `_sha256(matrix)` and refuses any registered `ledger: scientific` matrix whose hash has
+  moved, so `p` cannot be widened in place. What no check covered before is the
+  **re-registration** path — widening the matrix *and* updating
+  `matrix_contracts.<name>.sha256`, which reconciles the contract and passes dispatch. Only
+  `selection_domains`, hashed separately into `preregistration_sha256`, contradicts that,
+  and nothing read it. The new test is that tripwire. Row 11 should be read as partially
+  addressed: the re-registration hole is closed, a startup cross-check is still absent.
+  Both axes are asserted independently, and a negative control was run before the guard was
+  accepted — dropping any dispatched `p` or `omega` value from its support makes it fail,
+  and an override key that drifts out of the matrices now fails the test rather than
+  silently reducing it to a single-axis check.
 
 Also corrected: `conf/config.yaml`'s dispatch inventory listed six matrices including
 `formulation_study`, now `stage: historical`, and gave `ablation` as 42 where
@@ -721,7 +738,7 @@ digests are unchanged from every prior candidate in this report
 (`d695901…63ab` fixture, `6d005f5…c3d8` analysis), so this landing moved no deterministic
 surface — it added assurance surface only.
 
-**The active candidate is `2e72492`.** The sealed envelope, its GPU golden repeatability pin,
+**The active candidate is `acdd645`.** The sealed envelope, its GPU golden repeatability pin,
 and the outstanding 5-cell smoke evidence remain pinned behind it. Re-running Gate 0 step 2
 and re-declaring the envelope are author actions on JupyterHub; nothing in this update
 performs them. This report continues to certify neither that the pipeline is ready nor that
