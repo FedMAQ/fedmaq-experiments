@@ -16,14 +16,30 @@ hydra:
 # Canonical seeds: [0, 42, 123]
 #
 # EVERY CONFIRMATORY RUN IS DISPATCHED THROUGH A MATRIX FILE. Do not hand-type a
-# --multirun for any of them. The 183 runs of §4.5:
+# --multirun for any of them, and do not dispatch a matrix that
+# conf/protocol/replacement-v1.yaml does not register. Its `matrix_contracts` is the
+# preregistered set and carries each matrix's cell count and content hash; counts are
+# deliberately not repeated here, because the copy of them that used to live in this
+# block outlived two of the matrices it listed. Anything else under conf/matrix/ is
+# exploration history or a retired stage.
 #
-#   uv run python scripts/run_matrix.py --matrix benchmark_grid           # 42
-#   uv run python scripts/run_matrix.py --matrix benchmark_grid_cifar100  # 42
-#   uv run python scripts/run_matrix.py --matrix benchmark_grid_femnist   # 21
-#   uv run python scripts/run_matrix.py --matrix formulation_study        # 30
-#   uv run python scripts/run_matrix.py --matrix ablation                 # 42
-#   uv run python scripts/run_matrix.py --matrix uniform_memory_control   #  6
+# Selection stages, in order -- each one's verdict is written back before the next:
+#
+#   uv run python scripts/run_matrix.py --matrix baseline_tuning_wide
+#   uv run python scripts/run_matrix.py --matrix power_mean_design
+#   uv run python scripts/run_matrix.py --matrix power_mean_omega
+#
+# Downstream, once selection is written back:
+#
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid_cifar100
+#   uv run python scripts/run_matrix.py --matrix benchmark_grid_femnist
+#   uv run python scripts/run_matrix.py --matrix ablation
+#   uv run python scripts/run_matrix.py --matrix fedpaq_pipeline
+#   uv run python scripts/run_matrix.py --matrix fedpaq_pipeline_cifar100
+#   uv run python scripts/run_matrix.py --matrix fedpaq_pipeline_femnist
+#   uv run python scripts/run_matrix.py --matrix memory_sensitivity
+#   uv run python scripts/run_matrix.py --matrix uniform_memory_control
 #
 # The three benchmark_grid* files share one `experiment_group`, so analysis.py
 # reads them as the single 105-run primary grid the manuscript describes.

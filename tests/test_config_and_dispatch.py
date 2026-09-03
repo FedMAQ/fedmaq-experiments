@@ -196,6 +196,23 @@ def test_frozen_config_snapshot_is_current():
     )
 
 
+def _assert_expected_runs_snapshot_is_current(*mode_flags: str):
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "scripts/dump_expected_runs.py", *mode_flags, "--check"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    command = " ".join(["uv run python scripts/dump_expected_runs.py", *mode_flags])
+    assert result.returncode == 0, (
+        f"{result.stdout}{result.stderr}\nRun `{command}` and commit the result."
+    )
+
+
 def test_expected_runs_snapshot_is_current():
     """docs/freeze/expected_runs.json must match what conf/matrix/*.yaml promises.
 
@@ -203,59 +220,32 @@ def test_expected_runs_snapshot_is_current():
     not merely go out of date -- it silently redefines what "complete" means. A
     matrix that gains a seed and a manifest that does not is a grid the
     certificate certifies as closed while it is short.
-    """
-    import subprocess
-    import sys
 
-    repo_root = Path(__file__).parent.parent
-    result = subprocess.run(
-        [sys.executable, "scripts/dump_expected_runs.py", "--check"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, (
-        f"{result.stdout}{result.stderr}\n"
-        "Run `uv run python scripts/dump_expected_runs.py` and commit the result."
-    )
+    `just check` and CI invoke the generator in this mode only. Every other mode
+    writes a snapshot this one does not read, so each is covered by its own test
+    below or by nothing at all.
+    """
+    _assert_expected_runs_snapshot_is_current()
 
 
 def test_power_mean_recut_expected_runs_snapshot_is_current():
     """The re-cut's separate expected set must not silently redefine v1 closure."""
-    import subprocess
-    import sys
-
-    repo_root = Path(__file__).parent.parent
-    result = subprocess.run(
-        [sys.executable, "scripts/dump_expected_runs.py", "--power-mean-recut", "--check"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, (
-        f"{result.stdout}{result.stderr}\n"
-        "Run `uv run python scripts/dump_expected_runs.py --power-mean-recut` "
-        "and commit the result."
-    )
+    _assert_expected_runs_snapshot_is_current("--power-mean-recut")
 
 
 def test_baseline_tuning_wide_expected_runs_snapshot_is_current():
     """The widened tuning stage has its own expected set, outside v1 closure."""
-    import subprocess
-    import sys
+    _assert_expected_runs_snapshot_is_current("--baseline-tuning-wide")
 
-    repo_root = Path(__file__).parent.parent
-    result = subprocess.run(
-        [sys.executable, "scripts/dump_expected_runs.py", "--baseline-tuning-wide", "--check"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, (
-        f"{result.stdout}{result.stderr}\n"
-        "Run `uv run python scripts/dump_expected_runs.py --baseline-tuning-wide` "
-        "and commit the result."
-    )
+
+def test_fedpaq_pipeline_expected_runs_snapshot_is_current():
+    """The three FedPAQ-pipeline datasets share one expected set, outside v1 closure."""
+    _assert_expected_runs_snapshot_is_current("--fedpaq-pipeline")
+
+
+def test_memory_sensitivity_expected_runs_snapshot_is_current():
+    """The memory-sensitivity sweep has its own expected set, outside v1 closure."""
+    _assert_expected_runs_snapshot_is_current("--memory-sensitivity")
 
 
 def test_each_reportable_arm_carries_one_regime():
@@ -372,6 +362,81 @@ def test_primary_grid_turns_the_post_process_pipeline_on(name):
         f"conf/matrix/{name}.yaml must run FedMAQ with "
         "algorithm.post_process=true. Without it the primary grid measures "
         "communication without the §4.3 pipeline and reports it as if it had."
+    )
+
+
+def _protocol_document():
+    return OmegaConf.to_container(
+        OmegaConf.load(Path(CONF_DIR).parent / "conf" / "protocol" / "replacement-v1.yaml"),
+        resolve=True,
+    )
+
+
+def _comparable(value):
+    """Compare a preregistered support entry against an override token by value.
+
+    Overrides reach ``expand_matrix`` as ``"algorithm.p=-0.5"`` strings while the
+    support lists hold YAML scalars, so ``"0" in [0, 0.5, "min"]`` is False for a
+    degree that was preregistered.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def test_registered_matrices_only_dispatch_preregistered_p_and_omega():
+    """Every `p` and `omega` a preregistered matrix dispatches lies in its support.
+
+    `selection_domains` is the independent dispatch authority: it is hashed into
+    `preregistration_sha256`, so regenerating a ledger from a widened matrix cannot
+    make the widening look preregistered. Nothing until now compared it against what
+    the matrices actually expand to.
+
+    Scoped to `p` and `omega`, which are the axes selection ranges over. The other
+    two domains do not describe this dispatch surface and asserting them here would
+    fail on correct configuration: `seeds` is stage-scoped -- `baseline_tuning_wide`
+    runs five by design, pinned at `scripts/stage_manifest.py` -- and `q_ladder` names
+    a quantity no matrix sweeps, since matrices set `algorithm.q` (FedPAQ's fixed
+    width, which reaches 32) and `algorithm.q_max` (FedMAQ's ceiling), documented as
+    different quantities in `conf/algorithm/dadaquant.yaml`.
+
+    Arms carrying no `p` are outside the power-mean sweep by construction:
+    formulations 0, 3, and 4 parameterise resources, `kappa`, or `tau_*` instead. The
+    `???` sentinel is admitted because it is the unresolved state
+    `test_stage_1b_p_is_explicit_and_fails_closed_until_selection` requires, and
+    dispatch already refuses it.
+    """
+    from scripts.common import expand_matrix
+
+    protocol = _protocol_document()
+    domains = protocol["selection_domains"]
+    supports = {
+        "algorithm.p": {_comparable(value) for value in domains["p_support"]},
+        "algorithm.omega": {_comparable(value) for value in domains["omega_support"]},
+    }
+
+    checked = 0
+    for name in sorted(protocol["matrix_contracts"]):
+        for spec in expand_matrix(_matrix(name), name):
+            for override in spec["overrides"]:
+                key, _, value = override.partition("=")
+                support = supports.get(key.strip())
+                if support is None or value.strip() == "???":
+                    continue
+                checked += 1
+                assert _comparable(value.strip()) in support, (
+                    f"conf/matrix/{name}.yaml run {spec['label']!r} sets "
+                    f"{key.strip()}={value.strip()}, which is outside the "
+                    f"preregistered support in conf/protocol/replacement-v1.yaml. "
+                    "Widen the support there and re-declare the preregistration, or "
+                    "drop the arm -- a ledger regenerated from this matrix would "
+                    "otherwise report an unpreregistered treatment as preregistered."
+                )
+
+    assert checked, (
+        "No p or omega override was found in any registered matrix, so this test "
+        "asserted nothing. The override keys or the matrix registration moved."
     )
 
 
