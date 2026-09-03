@@ -193,26 +193,28 @@ When writing it, take option (a) or (b) and do not leave the field null a third 
 
 (a) *Carry a real hash.* Adopt the working in-repo pattern at
 `src/fedmaq/core/protocol.py:170`, `{**envelope_body, "sha256": _sha256(envelope_body)}`, and
-state the input domain in the document itself so it is checkable rather than decorative:
-
-```json
-"content_hash": {
-  "algorithm": "sha256",
-  "input_domain": "canonical JSON of this document with the content_hash key removed, sorted keys, separators (',', ':'), UTF-8",
-  "value": "<sha256>"
-}
-```
-
-The value is then reproducible in one line, which is what makes it a provenance record rather
-than an assertion:
-
-```bash
-uv run python -c "import hashlib,json,pathlib,sys; d=json.loads(pathlib.Path(sys.argv[1]).read_text('utf-8')); d.pop('content_hash'); print(hashlib.sha256(json.dumps(d,sort_keys=True,separators=(',',':')).encode()).hexdigest())" docs/freeze/assurance-envelope-<date>.json
-```
+state the input domain in the document itself so it is checkable rather than decorative.
 
 (b) *Drop the claim.* Remove the `content_hash` object and strike "content-hashed" from
 `purpose`. The envelope still binds the candidate through `revision_vector` and `candidate`,
 which are the fields anything actually relies on.
+
+**Resolved, 2026-09-04.** Option (a) was taken, but the input domain landed as *`content_hash.value`
+set to `null`* rather than *the `content_hash` key removed* — the form this section originally
+sketched. Both are self-consistent; only one reproduces the envelopes that exist, and the
+earlier sketch's one-liner reports a false mismatch on both of them. The implemented recipe
+is `src/fedmaq/core/run_identity.py:config_sha256`, which the envelopes name themselves, so
+the envelope digest and the run-identity digest share one convention instead of two that can
+disagree. Note `default=str`, which the sketch omitted:
+
+```bash
+uv run python -c "import hashlib,json,pathlib,sys; d=json.loads(pathlib.Path(sys.argv[1]).read_text('utf-8')); want=d['content_hash']['value']; d['content_hash']['value']=None; got=hashlib.sha256(json.dumps(d,sort_keys=True,separators=(',',':'),default=str).encode('utf-8')).hexdigest(); print('MATCH' if want==got else f'MISMATCH declared={want} computed={got}')" docs/freeze/assurance-envelope-<date>.json
+```
+
+Both envelopes reproduce under it, and `tests/test_freeze.py::test_every_assurance_envelope_matches_its_own_content_hash`
+now asserts it over every envelope under `docs/freeze/`, so the field is no longer read by
+nothing. The generator in `docs/freeze/pre_dispatch_smoke_gate.md` §4 already emits
+`'value': None`, so a re-declared envelope satisfies this check without further change.
 
 Option (a) is preferable — the envelope's stated job is to be content-hashed — but (b) is
 strictly better than the current state, which describes a guarantee it does not provide.
@@ -634,3 +636,93 @@ pinned to a commit two revisions behind the current candidate. **The active cand
 JupyterHub, per `docs/freeze/pre_dispatch_smoke_gate.md`; nothing in this update performs
 them. This report continues to certify neither that the pipeline is ready nor that freeze
 may be considered.
+
+## Second post-seal update, 2026-09-04: the assurance-surface landing
+
+Landed at **`2e72492`**, which supersedes `9a99cd4` as the active candidate. One source
+commit, deliberately: the envelope re-declaration stays a separate author commit.
+
+This pass was run under an explicit authorization to invalidate the sealed capture — the
+author's standing instruction was to land everything worth landing in one commit and re-run
+the golden capture once, rather than to minimize churn. What follows is therefore a record of
+what was judged worth landing *and what was judged not*, since the second list is the one a
+later reader cannot reconstruct.
+
+### Landed
+
+- **Two missing snapshot guards.** `dump_expected_runs.py` has four re-cut modes;
+  `justfile` and `.github/workflows/ci.yml` invoke it with no mode flag, so only
+  `docs/freeze/expected_runs.json` is checked there. `--power-mean-recut` and
+  `--baseline-tuning-wide` had tests. `--fedpaq-pipeline` (15 cells across three datasets)
+  and `--memory-sensitivity` (12 cells) had nothing: those snapshots could drift from their
+  matrices with `just check` and CI both green. All four were verified current before the
+  guards were added, so this closed a missing guard, not live drift.
+- **S2's cross-check** — see the *Resolved, 2026-09-04* note in S2 above.
+- **Row 11 / #102-15's missing half.** The matrix cross-check that section identifies as
+  "genuinely absent" now exists, scoped to `p` and `omega`. See the scope note below.
+
+Also corrected: `conf/config.yaml`'s dispatch inventory listed six matrices including
+`formulation_study`, now `stage: historical`, and gave `ablation` as 42 where
+`matrix_contracts` registers 36. An operator following it would have dispatched a retired
+matrix and miscounted the campaign. The replacement cites `matrix_contracts` rather than
+restating counts, because the duplicated copy is what went stale.
+
+### Deliberately not landed, with grounds
+
+- **Row 3's identity-key half.** Unchanged, and the bullet should be read as *satisfied by a
+  checked property* rather than open. `identity_key` omits `p`, but `variant` is the
+  disambiguator and every registered Stage-1a and Stage-1b run carries a distinct one;
+  `test_no_matrix_dispatches_two_runs_into_one_output_directory` composes every file in
+  `conf/matrix/` and asserts task count equals distinct-output-directory count, so a matrix
+  that differed only by `p` under a shared variant already fails. The lossy state — `p`
+  absent and resolving to the `_power_mean_base.yaml` default — is refused pre-dispatch by
+  the planner. Adding `p`/`omega` to `identity_key` would change every canonical output path
+  for stages about to run, to close a collision that is already closed.
+- **The other two selection domains.** `seeds` and `q_ladder` were excluded from the new
+  cross-check because asserting them would fail on correct configuration.
+  `baseline_tuning_wide` runs five seeds by design (29 arms x 5 = 145, pinned at
+  `scripts/stage_manifest.py`), and it is the only `stage: matched_tuning` matrix — so
+  `selection_domains.seeds` governs the selection and downstream stages only, which the
+  document does not say. `q_ladder` has no referent at all: matrices sweep `algorithm.q`
+  (FedPAQ's fixed width, which reaches 32, outside the ladder) and `algorithm.q_max`
+  (FedMAQ's ceiling), two different quantities per `conf/algorithm/dadaquant.yaml`'s own
+  comment. **Both are preregistration-documentation gaps, not dispatch defects, and neither
+  is safe to fix here**: `selection_domains` is hashed into `preregistration_sha256`, so
+  editing it invalidates the promotability of every existing manifest. Author's call, at a
+  stage boundary.
+- **`memory_sensitivity`'s `phase: explore`.** It is the only `stage: downstream` matrix at
+  that phase and is `formal` by every ADR-0009 criterion, so its 12 cells will land under
+  `outputs/explore/`. Functionally inert today — `analysis.py` globs phase-agnostically and
+  all three `EXPLORATION_PHASE` filters are additionally scoped by `experiment_group`, which
+  never names this matrix. Fixing it costs a `matrix_contracts.memory_sensitivity.sha256`
+  re-registration, and re-hashing a preregistered contract to settle a naming inconsistency
+  is the one item here an examiner could read as tampering. It belongs in the Stage-1b
+  write-in, which forces a `matrix_contracts` edit anyway and carries a scientific reason.
+- **`baseline_tuning_wide.yaml`'s formulation header.** Reads as written for the superseded
+  numbering, but `identity.fedmaq_formulation: 2` is a live data key, not a comment: read by
+  `scripts/stage_manifest.py` and keyed on by `scripts/analysis.py`, and its value already
+  agrees with the frozen `conf/algorithm/fedmaq.yaml`. Editing it would desync the Stage A
+  manifest from the config it dispatches and force a sha256 re-registration on the 145-cell
+  matrix that runs first. `conf/matrix/ablation.yaml`'s Decision-84 notes are historical
+  record under `.agents/rules/comment-hygiene.md`, and their correct replacement depends on
+  formulation numbering that #97 has not settled.
+- **`scripts/audit_study1_artifacts.py`'s `STUDY1_GROUPS`.** Raises against the re-cut
+  manifests, but it is analysis-path, safe after the campaign, and the direction is
+  unverified: the re-cut groups are `split: val` selection stages while every current member
+  is `split: test` downstream, so the fix may be removing `formulation_study` rather than
+  substituting.
+
+### Verification
+
+`just check` passed end to end on the final tree (exit 0): freeze certificate regenerated and
+current, Ruff format and lint clean, mypy clean, **549 passed** (545 baseline + the four new
+guards), all five `--check` generators current, assurance fixture green. Both deterministic
+digests are unchanged from every prior candidate in this report
+(`d695901…63ab` fixture, `6d005f5…c3d8` analysis), so this landing moved no deterministic
+surface — it added assurance surface only.
+
+**The active candidate is `2e72492`.** The sealed envelope, its GPU golden repeatability pin,
+and the outstanding 5-cell smoke evidence remain pinned behind it. Re-running Gate 0 step 2
+and re-declaring the envelope are author actions on JupyterHub; nothing in this update
+performs them. This report continues to certify neither that the pipeline is ready nor that
+freeze may be considered.

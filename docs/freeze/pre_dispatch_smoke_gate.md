@@ -19,7 +19,7 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 Per repository rules, agents do not run experiments at any scale. The author executes the following 5 fast, CPU-only ($R=2$, $K=2$, `experiment.client_gpus=0`) cells in PowerShell:
 
-**Re-run required before this gate can be called clear.** The evidence under `outputs/smoke/` was captured at commit `9bfca9e`. Commit `dcf3596` (2026-09-03) added a permanent `split: test` base key to `conf/config.yaml`, one of 7 `scope.include` files changed since that capture — per Section 1's own rule, this invalidates the existing smoke evidence regardless of the syntax fix below. All 5 cells need re-capture at the current candidate, not just Cell 5.
+**Re-run required before this gate can be called clear.** The evidence under `outputs/smoke/` was captured at commit `9bfca9e` and has never been re-captured at any later candidate. Many `scope.include` files have changed since — `git diff --name-only 9bfca9e..HEAD` against `scope.include` gives the current list, which grows with every source commit and is deliberately not restated here — and per Section 1's own rule any one of them invalidates the existing smoke evidence, regardless of the Cell 5 syntax fix. All 5 cells need re-capture at whatever candidate is current when the gate is run, not just Cell 5.
 
 ```powershell
 # 1. FedMAQ (Calibrated c_unit=1024, post-processing enabled, power-mean base)
