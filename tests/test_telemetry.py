@@ -7,6 +7,7 @@ undeclared/unknown key never grows or duplicates the header after it is fixed.
 """
 
 import csv
+import json
 from pathlib import Path
 
 from fedmaq.core.strategy_hooks import get_strategy_hook
@@ -121,6 +122,20 @@ def test_undeclared_key_is_appended_once_and_never_duplicates_header(tmp_path, m
     assert rows[0] == header_after_first_write  # schema locked after round 0
     assert len(rows) == 3  # still exactly one header + two data rows
     assert "debug/never_seen_before" not in rows[0]  # silently dropped, not appended
+
+
+def test_reusing_output_directory_starts_fresh_local_logs(tmp_path, monkeypatch):
+    """A rerun in a fixed Hydra directory must not combine two run histories."""
+    first = _make_manager(tmp_path, monkeypatch)
+    first.log(round_num=0, metrics={"round": 0, "test/accuracy": 0.1})
+
+    second = _make_manager(tmp_path, monkeypatch)
+    second.log(round_num=1, metrics={"round": 1, "test/accuracy": 0.2})
+
+    csv_rows = _read_csv(second.csv_path)
+    assert [row[0] for row in csv_rows[1:]] == ["1"]
+    json_rows = [json.loads(line) for line in second.jsonl_path.read_text().splitlines()]
+    assert [row["round"] for row in json_rows] == [1]
 
 
 def test_a_wandb_failure_costs_visibility_and_nothing_else(tmp_path, monkeypatch):

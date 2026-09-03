@@ -150,6 +150,7 @@ class TelemetryManager:
         # ignored. This prevents header duplication when algorithm-specific metrics
         # (e.g. DAdaQuant q_t) appear only in certain rounds.
         self._csv_fieldnames: list[str] | None = None
+        self._local_logs_initialized = False
 
     def init_wandb(self) -> None:
         """Initialize WandB connection if enabled."""
@@ -444,8 +445,9 @@ class TelemetryManager:
                 )
 
     def _write_local_logs(self, metrics: dict[str, Any]) -> None:
+        first_write = not self._local_logs_initialized
         try:
-            with open(self.jsonl_path, "a", encoding="utf-8") as f:
+            with open(self.jsonl_path, "w" if first_write else "a", encoding="utf-8") as f:
                 f.write(json.dumps(metrics) + "\n")
         except Exception as exc:
             logger.warning(f"Failed to write to local JSONL log: {exc}")
@@ -461,18 +463,24 @@ class TelemetryManager:
                 self._csv_fieldnames = fieldnames
 
             file_exists = self.csv_path.exists()
-            with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
+            with open(
+                self.csv_path,
+                "w" if first_write else "a",
+                newline="",
+                encoding="utf-8",
+            ) as f:
                 writer = csv.DictWriter(
                     f,
                     fieldnames=self._csv_fieldnames,
                     extrasaction="ignore",
                     restval="",
                 )
-                if not file_exists:
+                if first_write or not file_exists:
                     writer.writeheader()
                 writer.writerow(metrics)
         except Exception as exc:
             logger.warning(f"Failed to write to local CSV log: {exc}")
+        self._local_logs_initialized = True
 
     def finish(self) -> None:
         """Close the WandB run.
