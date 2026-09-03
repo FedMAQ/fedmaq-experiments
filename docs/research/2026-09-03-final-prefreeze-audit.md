@@ -37,8 +37,8 @@ This report certifies neither that the pipeline is ready, nor that #101 is compl
 that manuscript reconciliation may begin. The source changes landed here **invalidate the
 #100 assurance candidate**: a fresh golden repeatability gate and a new assurance envelope
 must be run by the thesis author against the new candidate before freeze is considered.
-That candidate is **`a597edb`** (`7c1fdb7` when this report was first written, `4c4337b`
-after the second pass, `a597edb` after the third — see the S3 correction), statically green
+That candidate is **`a252d09`** (`7c1fdb7` when this report was first written, `4c4337b`
+after the second pass, `a252d09` after the third — see the S3 correction), statically green
 but not yet gated — the repeatability run is what converts it from a candidate into an
 assured one, and it has not happened.
 
@@ -363,7 +363,7 @@ author authorized this specific edit. It is comment-only: no resolved value move
 `dump_frozen_configs.py --check` confirms — `docs/freeze/resolved_configs.yaml` is current and
 does not contain this matrix at all. What did move is the file's hash in
 `docs/freeze/source_manifest.json`, regenerated in the same commit, which is why the assurance
-candidate advanced to `a597edb`.
+candidate advanced to `a252d09`.
 
 **S3 is closed. No author disposition is required.**
 
@@ -435,12 +435,12 @@ authority, and remain the author's.
    `check_freeze.py --check` reports the certificate current at each. The `.agents/` and
    `docs/` edits landed separately, outside `source_manifest.json`'s scope (`conf/**`,
    `scripts/**`, `src/**`, `tests/**`, `justfile`, `pyproject.toml`, `uv.lock`), so they do
-   not move the candidate. **Superseded by the third pass:** `a597edb` edits
+   not move the candidate. **Superseded by the third pass:** `a252d09` edits
    `conf/matrix/pass3_freeze_confirm.yaml` (comment-only, but `conf/**/*.yaml` is in
    `scope.include`) and regenerates `source_manifest.json`, so it is a source change and the
-   candidate moved again. **`a597edb` is the revision the new envelope must pin, and it
+   candidate moved again. **`a252d09` is the revision the new envelope must pin, and it
    supersedes `0c6028e`, `7c1fdb7` and `4c4337b` as the assurance candidate.**
-2. Run the golden **repeatability** gate at `a597edb`, using the corrected skill. Its
+2. Run the golden **repeatability** gate at `a252d09`, using the corrected skill. Its
    preconditions now hold: the commit exists, the tree is clean, and `_capture()` will record
    `dirty: false` — which is what would have failed before.
 
@@ -467,7 +467,7 @@ uv run python scripts/golden_diff.py repeatability
    this report names from memory. `_metadata()` takes `commit` from each capture's
    `run_manifest.json`, so the only revision with gate evidence behind it is whatever
    `first.commit` says in `outputs/golden/step2_repeatability/<alg>.json`. The source
-   candidate is `a597edb`, but any docs commit landing on top of it is source-identical
+   candidate is `a252d09`, but any docs commit landing on top of it is source-identical
    (`docs/` and `.agents/` are outside manifest scope), so a gate run from today's `main`
    will record that later SHA instead. Either is defensible as the candidate; pinning one
    while the evidence names the other is not. Take it from the JSON:
