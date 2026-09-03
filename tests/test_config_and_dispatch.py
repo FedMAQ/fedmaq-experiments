@@ -416,7 +416,7 @@ def test_registered_matrices_only_dispatch_preregistered_p_and_omega():
         "algorithm.omega": {_comparable(value) for value in domains["omega_support"]},
     }
 
-    checked = 0
+    checked = dict.fromkeys(supports, 0)
     for name in sorted(protocol["matrix_contracts"]):
         for spec in expand_matrix(_matrix(name), name):
             for override in spec["overrides"]:
@@ -424,7 +424,7 @@ def test_registered_matrices_only_dispatch_preregistered_p_and_omega():
                 support = supports.get(key.strip())
                 if support is None or value.strip() == "???":
                     continue
-                checked += 1
+                checked[key.strip()] += 1
                 assert _comparable(value.strip()) in support, (
                     f"conf/matrix/{name}.yaml run {spec['label']!r} sets "
                     f"{key.strip()}={value.strip()}, which is outside the "
@@ -434,9 +434,14 @@ def test_registered_matrices_only_dispatch_preregistered_p_and_omega():
                     "otherwise report an unpreregistered treatment as preregistered."
                 )
 
-    assert checked, (
-        "No p or omega override was found in any registered matrix, so this test "
-        "asserted nothing. The override keys or the matrix registration moved."
+    unexercised = sorted(key for key, count in checked.items() if not count)
+    assert not unexercised, (
+        f"No registered matrix dispatched {', '.join(unexercised)}, so this test "
+        "asserted nothing about that axis while passing on the other. Both skip "
+        "branches above fail open -- an override key this test does not name is "
+        "silently ignored, and `???` is skipped wholesale -- so the axis is counted "
+        "per key rather than in total. Repair the key or the matrix registration; "
+        "do not drop the axis."
     )
 
 

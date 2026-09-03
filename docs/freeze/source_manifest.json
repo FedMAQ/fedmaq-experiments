@@ -159,7 +159,7 @@
     "tests/test_cfd.py": "22e652803676001adbefc6eed92adaf8771de9f92eb4209e44ddecfefd73b90f",
     "tests/test_client_manager.py": "c6b75f282b5f1000f75a46981aadcc91cfd78360ad47a70d71a2fe2eb94212c8",
     "tests/test_common.py": "3a465a8d42fb28f15c0967ee557ff60fe14e6c2962cdf250c211976acd0eb423",
-    "tests/test_config_and_dispatch.py": "b07ce279f7d216a07cd22776efea72bb038e4169b71ae206c4b6e858b9c0f743",
+    "tests/test_config_and_dispatch.py": "37914c2228bf7e256941648bf416a0fc6cf78370a4b61854cebaa7b813282e78",
     "tests/test_config_defaults.py": "b562911960063ad32cb12fe0b71d1bcf3263dee0824cd9d01a57c14ad801f151",
     "tests/test_control_messages.py": "f445aa4c80cb624033cfe90e2fe8e8d39634da3f289871540e98f1def205c791",
     "tests/test_dadaquant_coder.py": "2606ffe10911d735670c836b7a8309f6d9e13276ee6d719dc072da4d02d38282",
