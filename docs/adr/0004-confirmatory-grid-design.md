@@ -32,12 +32,13 @@ The ablation table is the headline evidence, not the communication number.
 
 **Methodology.**
 
-- **One fixed configuration per dataset**, held across α. β–α regime dependence is
-  reported as a sensitivity study, never exploited in headline numbers.
-- **Paired seeds and a paired test**: every arm shares the same 3 seeds with
-  *identical partitions*; per-seed deltas and CIs are reported (paired t /
-  Wilcoxon). This cancels seed variance so ~3pp ablation deltas are detectable at
-  n = 3. The determinism this rests on is ADR-0006.
+- **One frozen FedMAQ setting**, held across datasets and α. Regime dependence is
+  reported as a sensitivity study and transfer failure as a finding, never used
+  to re-select a downstream configuration.
+- **Paired seeds, descriptive interpretation**: every arm shares the same three
+  seeds with *identical partitions*. Per-seed deltas, their mean, and their range
+  describe direction and stability; three seeds do not support an inferential
+  significance claim. The determinism this rests on is ADR-0006.
 - **Baseline parity is matched light tuning**: each baseline gets an equal small
   budget on its key hyperparameter, frozen before confirmation (ADR-0011).
 - **Hard explore/confirm freeze**: exploration is adaptive, single-seed, cheap, and
@@ -49,9 +50,9 @@ The ablation table is the headline evidence, not the communication number.
 **The grid.** CIFAR-10, CIFAR-100 and FEMNIST, **3 seeds × 100 rounds**.
 α ∈ {0.1, 1.0} for the CIFAR datasets (severe and moderate extremes; intermediate
 values dropped to cut runs); FEMNIST uses writer partitioning and has no α.
-Exploration and freeze happen on **CIFAR-10 as primary**, transferring to
-CIFAR-100/FEMNIST with a verification spot-check; per-dataset re-freeze only if
-transfer fails, documented as a finding. The ablation is an additive ladder
+Exploration and freeze happen on **CIFAR-10 as primary**, transferring the frozen
+setting to CIFAR-100/FEMNIST. Transfer failure is documented as a finding and
+does not permit a per-dataset re-freeze. The ablation is an additive ladder
 (narrative) plus leave-one-out (rigorous attribution), run on CIFAR-10 at both
 skews only.
 
@@ -93,18 +94,16 @@ identically configured on both sides of that contrast, so the contrast holds it
 fixed rather than pricing it. The arm that prices distillation is Configuration 5
 (`fedmaq_no_kd`).
 
-At `c_unit = 512` MB, `floor(8192 / 512) = 16`, which equals `fedmaq.yaml`'s
+At `c_unit = 1024` MB, `floor(16384 / 1024) = 16`, which equals `fedmaq.yaml`'s
 `q_max`; the Tier-2 target is itself clamped to `q_max`, so `min(Q_k^max, q_hat)
 = q_hat` for every client. The Tier-1 ceiling does not merely stop *varying* — it
 never binds at all. The arm is FedMAQ in the memory-blind condition, which is
 Ablation Configuration 2, and the two assign **identical bit-widths**.
 
-**The arm is kept at 8192 MB and reframed.** Lowering capacity until Tier-1 binds
-uniformly was rejected: over half the sampled `U(2048, 16384)` population already
-sits above the binding threshold, so every binding uniform value lies below the
-population's central tendency and would confound uniformity of capacity with a
-reduction in it. Deleting the arm was rejected as unwinding four chapters of
-accounting to save 3% of the budget and lose a real measurement.
+**The arm is set to 16384 MB and reframed.** This is the smallest value under the
+current calibration that makes the clamp non-binding at `q_max = 16`. It is the
+upper endpoint of the variable-capacity law, not a central-tendency control. Its
+purpose is to price memory blindness on FedMAQ itself.
 
 Its independent content is the **coding regime**, not the condition: the ablation
 runs pipeline-free while every headline comparison runs with error compensation
@@ -123,6 +122,9 @@ localizes the difference to the pipeline.
   silently going false.
 - Never set `post_process` in an algorithm config. Decide it where the comparison
   is defined.
+- Ordinary FedPAQ never receives FedMAQ's post-processing pipeline. The separately
+  coded FedPAQ-pipeline matrix is a diagnostic control and is reported as such,
+  not counted as an additional baseline algorithm.
 - The paired-seed methodology is load-bearing for every ablation claim; anything
   that breaks partition determinism (ADR-0006) invalidates the design, not just a
   run.

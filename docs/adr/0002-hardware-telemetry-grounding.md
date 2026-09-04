@@ -1,6 +1,6 @@
 # ADR-0002: Late-2023 Hardware Grounding for Simulation Telemetry
 
-- **Status**: Accepted (Revised 2026-07-22; amended 2026-08-08 — see §2)
+- **Status**: Accepted (Revised 2026-07-22; amended 2026-08-08 and 2026-09-04)
 - **Date**: 2026-07-22
 - **Authors**: Antigravity & Research Team
 - **Decider(s)**: Thesis Committee & Lead Researcher
@@ -19,23 +19,23 @@ Audit review identified that `200.0 samples/sec` overestimates edge client CPU t
 
 1. **Temporal Alignment**: Hardware specs for edge clients, central server, and wireless links must reflect contemporaneous releases (Late-2023 era).
 2. **Mathematical Rigor**: Compute throughput values ($v_{\text{client}}$, $v_{\text{server}}$) must be derived directly from model FLOP counts ($F_{\text{model}}$) and hardware performance characteristics ($P_{\text{device}}$) with explicit sustained-efficiency factors.
-3. **Physical Hardware Grounding**: Memory capacity tiers ($c_k \sim \mathcal{U}(2048, 16384)$ MB) must align cleanly with real physical single-board computer configurations.
+3. **Explicit abstraction boundary**: The continuous memory signal and L40S-derived cost constants are analytical references. They must not be represented as the physical client fleet or as the A100 execution allocation.
 
 ---
 
 ## Technical Specification & Decision
 
-We standardize the physical simulation environment on a **Late-2023 Edge-Cloud Ecosystem**:
+We standardize the analytical cost model on a **Late-2023 Edge-Cloud Reference Ecosystem**:
 
 ```
  ┌────────────────────────────────────────────────────────┐
  │           Edge Client Fleet (Oct 2023)                 │
  │  Raspberry Pi 5 (BCM2712 Quad Cortex-A76 @ 2.4 GHz)    │
- │  RAM: 2GB (4-bit) / 4GB (8-bit) / 8GB (16-bit) / 16GB  │
+ │  Modeled RAM: continuous U(2048, 16384) MB             │
  └──────────────────────────┬─────────────────────────────┘
                             │ Dual-Band 802.11ac Wi-Fi (10 Mbps)
  ┌──────────────────────────▼─────────────────────────────┐
- │           Central FL Server (Late 2023)                │
+ │      Analytical Server Reference (Late 2023)           │
  │  24-Core Intel Xeon 5th Gen (Emerald Rapids)           │
  │  1x NVIDIA L40S (48GB GDDR6 VRAM, 91.6 FP32 TFLOPS)    │
  │  64 GB DDR5-4800 ECC Registered RAM                    │
@@ -45,11 +45,7 @@ We standardize the physical simulation environment on a **Late-2023 Edge-Cloud E
 ### 1. Edge Clients: Raspberry Pi 5 Series (Released Oct 2023)
 
 - **Processor**: Broadcom BCM2712 Quad-Core 64-bit Arm Cortex-A76 @ 2.4 GHz.
-- **Memory Tiers ($c_{\text{unit}} = 512$ MB)**:
-  - **2048 MB (2 GB RAM)**: $Q_k^{\max} = \lfloor 2048 / 512 \rfloor = 4$-bit max precision (Raspberry Pi 5 2GB)
-  - **4096 MB (4 GB RAM)**: $Q_k^{\max} = \lfloor 4096 / 512 \rfloor = 8$-bit max precision (Raspberry Pi 5 4GB)
-  - **8192 MB (8 GB RAM)**: $Q_k^{\max} = \lfloor 8192 / 512 \rfloor = 16$-bit max precision (Raspberry Pi 5 8GB)
-  - **16384 MB (16 GB RAM)**: $Q_k^{\max} = \lfloor 16384 / 512 \rfloor = 32$-bit max precision (Raspberry Pi 5 16GB, FP32)
+- **Modeled memory capacity**: $c_k\sim\mathcal U(2048,16384)$ MB is continuous, not a draw from discrete Raspberry Pi product tiers. With $c_{\text{unit}}=1024$ MB, the raw integer cap $\lfloor c_k/c_{\text{unit}}\rfloor$ spans 2--15 because the upper endpoint is excluded. The memory value is an algorithm input that limits transmission precision; it does not allocate physical tensors, cause dropout, or add an independent compute-slowdown term.
 - **Wireless Network**: Integrated Dual-Band **802.11ac Wi-Fi®**. Sustained application-layer transfer speed is set to **`bandwidth_mbps: 10.0`**, representing realistic edge wireless link speeds under multi-client channel contention and distance path loss. 802.11ac theoretical single-stream max is 433 Mbps; real-world per-client throughput under 10-client contention is typically 5–20 Mbps. 10 Mbps is the most commonly adopted value in FL simulation literature (Li et al., 2020; Reisizadeh et al., 2020).
 
 ### 2. Client Training Compute Throughput ($v_{\text{client}}$)
@@ -110,7 +106,7 @@ neither is to be, ADR-0010's freeze governing `conf/` downstream of it. The dive
 in a comment and never in a value. **This ADR governs — do not edit those comments to
 chase it.**
 
-### 3. FL Server Hardware: High-Density Data Center Node (Late 2023)
+### 3. Analytical server reference: high-density data center node (Late 2023)
 
 - **CPU**: 24-Core Intel Xeon 5th Gen (Emerald Rapids, e.g. Xeon Gold 5515+ / 6548Y @ 2.1–3.7 GHz, released Dec 2023).
 - **GPU**: 1× NVIDIA L40S Universal Data Center GPU (48GB GDDR6 VRAM, 91.6 FP32 TFLOPS, 864 GB/s memory bandwidth, released Aug 2023).
@@ -154,17 +150,23 @@ The KD formula counts "sample-teacher passes" (predominantly forward-only infere
 
 #### `q_max = 16` (Tier-2 interpolation cap)
 
-The Tier-2 soft quality target interpolates $\hat{q} \in [q_{\min}, q_{\max}] = [1, 16]$. This means the quality formulation **never assigns FP32 precision** — the highest precision the soft target can request is 16-bit (FP16). Only the Tier-1 hard cap ($Q_k^{\max} = \lfloor c_k / c_{\text{unit}} \rfloor$) can structurally yield 32-bit, but since the final precision is $\min(\text{Tier-1}, \text{Tier-2})$ and Tier-2 caps at 16, no client transmits at FP32.
+The Tier-2 soft quality target interpolates $\hat{q} \in [q_{\min}, q_{\max}] = [2, 16]$. The variable-capacity model cannot realize 16-bit transmission: its raw cap is at most 15, and floor-snapping 9--15 onto the permissible ladder yields 8. The 16-bit endpoint is realized only by the 16384 MB uniform-memory control, for which the raw cap is exactly 16.
 
 **Rationale**: FP16→FP32 precision gains are marginal for FL model accuracy (local SGD gradient noise already exceeds FP16 quantization noise), while FP32 doubles per-client communication cost. This is standard in mixed-precision FL and quantization-aware training literature.
 
-**Consequence**: 8GB and 16GB Pi 5 clients are **functionally identical** in achievable precision — both max out at 16-bit via the `q_max` bound.
+**Consequence**: capacity is a continuous simulated signal rather than a discrete hardware tier. Binding is determined jointly by the raw cap, the Tier-2 target, and the permissible ladder and must be reported from telemetry.
 
-#### `bit_widths = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]` (Permissible precision set)
+#### `bit_widths = [2, 3, 4, 5, 6, 7, 8, 16]` (Permissible precision set)
 
-The set includes every integer 1–8 plus jumps to 16 and 32. The gap between 8 and 16 means a raw $\hat{q}$ of (e.g.) 12.3 snaps down to 8-bit via `_snap_floor`.
+The set includes every integer 2--8 plus a jump to 16. The gap between 8 and 16 means a raw $\hat{q}$ of, for example, 12.3 snaps down to 8-bit via `_snap_floor`.
 
-**Rationale**: This set is **hardware-aligned** — real quantization formats with silicon support are power-of-2 (INT4, INT8, FP16, FP32). Including fine granularity at 1–8 bits captures the most impactful precision range for resource-constrained edge devices, while the 8→16→32 jumps reflect the actual hardware precision landscape. This is standard practice in mixed-precision quantization literature (HAWQ, HAQ, MBQ).
+**Rationale**: Fine granularity from 2--8 bits exposes the resource-constrained range, while 16 bits supplies a standard half-precision endpoint. One-bit and 32-bit transmission are outside the registered replacement protocol.
+
+### Modeled hardware versus execution hardware
+
+The L40S specification grounds the analytical server-throughput constant. It is not a claim that the campaign physically executes on an L40S. Reported runs execute on the canonical allocation documented in `docs/agents/execution-model.md`: an NVIDIA A100 40 GB PCIe GPU with dual Xeon Platinum 8276 processors and 64 GB of shared RAM. Execution hardware affects physical runtime and capacity for concurrent simulators but does not change the frozen analytical telemetry constants. Both identities must be reported separately.
+
+The per-client gradient-norm probe is computed centrally from the server's private access to the registered client batch. It adds server computation but no simulated client--server payload. This is an explicit model boundary, not an uncounted wire message.
 
 ---
 

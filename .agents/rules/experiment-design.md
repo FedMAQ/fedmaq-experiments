@@ -25,7 +25,7 @@ sweep. Rationale for each verdict: [ADR-0005](../../docs/adr/0005-baseline-stack
 | FedProx | Seminal control | Li et al., 2020 | `fedprox.yaml` | 🟢 |
 | FedPAQ | Pure quantization | Reisizadeh et al., 2020 | `fedpaq.yaml` | 🟢 |
 | DAdaQuant | Pure quantization | Hönig et al., 2022 | `dadaquant.yaml` | 🟢 |
-| FedDistill | Pure KD | Jeong et al. | `feddistill.yaml` | 🟢 |
+| FedDistill+ | Distillation-augmented parameter sharing | Zhu et al., 2021 | `feddistill.yaml` | 🟢 |
 | FedKD | Hybrid Q+KD | Wu et al., 2022 | `fedkd.yaml` | 🟢 |
 | ~~FedMD~~ | Pure KD | Li et al., 2019 | `fedmd.yaml` | ⚫ dropped |
 | ~~CFD~~ | Hybrid Q+KD | Sattler et al., 2022 | `cfd.yaml` | ⚫ dropped |
@@ -34,7 +34,7 @@ sweep. Rationale for each verdict: [ADR-0005](../../docs/adr/0005-baseline-stack
 Update this table when adding or porting a baseline.
 
 **Tuned constants** are frozen behind the `pre-registration` tag and carried by
-the manuscript's Table 4.1 — FedProx `mu: 0.01` and FedDistill `reg_alpha: 0.5`
+the manuscript's Table 4.1 — FedProx `mu: 0.01` and FedDistill+ `reg_alpha: 0.5`
 moved off their published values during Stage 1b; FedPAQ, DAdaQuant and FedKD
 retained theirs. See [ADR-0011](../../docs/adr/0011-baseline-matched-tuning.md).
 

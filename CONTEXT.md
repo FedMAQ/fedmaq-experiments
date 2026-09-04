@@ -73,7 +73,7 @@ The current names are the manuscript's canonical Greek symbols and their aligned
 The power-mean family uses `p` and one `omega`; the historical v1 `gamma1`/`gamma2` names remain only when describing that frozen record. Do not rename manuscript symbols toward retired config keys.
 
 **Bit-width**:
-A discrete value from the permissible set $\mathcal{Q} = \{1,2,3,4,5,6,7,8,16,32\}$ — never an arbitrary continuous integer.
+A discrete value from the permissible set $\mathcal{Q} = \{2,3,4,5,6,7,8,16\}$ — never an arbitrary continuous integer. Under variable capacity, raw caps 9--15 floor-snap to 8; the 16-bit endpoint is realized by the uniform-memory control.
 
 **Tier 1 / Tier 2**:
 FedMAQ's two-tier precision scaling design. Tier 1 is the hard feasibility constraint from client memory ($Q_k^{max}$), computed as a separate `min()` clamp in code, never blended into the soft quality signal. Tier 2 is the soft quality optimization (signal, target, formulation) layered on top and floored by Tier 1's cap.
@@ -87,7 +87,9 @@ Implemented in `e547b50`; plotted by `scripts/memory_ceiling.py`.
 
 **Tier 1 ceiling** ($Q_k^{max}$):
 The per-client bit-width cap `max(1, floor(c_k / c_unit))` derived from the
-client's modelled memory budget, exposed without changing the assigned `q`.
+client's modelled memory budget, exposed without changing the assigned `q`. The
+registered replacement domain yields raw caps 2--15, so its effective lower
+result remains 2 even though the executable guard is 1.
 Logged as `algorithm/fedmaq/{avg,min,max,std}_q_k_max`.
 _Avoid_: memory ceiling (bare — ambiguous with host VRAM, below)
 
@@ -346,7 +348,9 @@ _Avoid_: iso-byte budget in general prose.
 Planning labels only. They do **not** enter manuscript prose; use the existing v1
 part-names and **the FedMAQ-v2 server-KD repair study** for v2.
 
-**FedDistill vs. the v2 literature's "FedKD"**:
-This project's baseline table names **Jeong et al. as FedDistill**. A v2 source calls
-that work **FedKD**, colliding with this project's **FedKD baseline** and the v2
-candidate **FedKT**. Cite by author and year whenever the v2 literature is intended.
+**FedDistill+ vs. the v2 literature's "FedKD"**:
+This project's active baseline is **FedDistill+ (Zhu et al., 2021)**, which exchanges
+model parameters and label-wise logits. Some v2 literature instead calls Jeong et
+al.'s 2018 federated-distillation method **FedKD**, colliding with this project's
+**FedKD baseline (Wu et al., 2022)** and the v2 candidate **FedKT**. Cite by author
+and year whenever the v2 literature is intended.
