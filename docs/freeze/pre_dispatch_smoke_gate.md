@@ -63,7 +63,7 @@ This checks:
 
 ## 4. Paste-Ready Candidate Re-Declaration Command (Author Action)
 
-Execute the following paste-ready PowerShell command to generate `docs/freeze/assurance-envelope-2026-09-04.json` with the current git commit revision:
+Run this from the author's local workspace, not JupyterHub: it needs `fedmaq-literature` and `fedmaq-manuscript` checked out as siblings of `fedmaq-experiments` (as they are on the author's machine) and network access to fetch each repository's published `main`, neither of which the JupyterHub box provides. Execute the following paste-ready PowerShell command from `fedmaq-experiments` to generate `docs/freeze/assurance-envelope-2026-09-04.json` with the synchronized revisions of all three pipeline-readiness repositories:
 
 ```powershell
 uv run python -c "
@@ -71,9 +71,50 @@ import json, subprocess, sys
 from pathlib import Path
 from fedmaq.core.run_identity import config_sha256
 
-commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-if subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip():
-    raise SystemExit('working tree is dirty; this declaration would assert clean_tree falsely')
+repo_specs = {
+    'fedmaq-experiments': {
+        'path': Path('.'),
+        'canonical_identity': 'https://github.com/FedMAQ/fedmaq-experiments',
+        'role': 'remediated pipeline implementation, configuration, dispatch, tests'
+    },
+    'fedmaq-literature': {
+        'path': Path('../fedmaq-literature'),
+        'canonical_identity': 'https://github.com/FedMAQ/fedmaq-literature',
+        'role': 'curated method and protocol knowledge'
+    },
+    'fedmaq-manuscript': {
+        'path': Path('../fedmaq-manuscript'),
+        'canonical_identity': 'https://github.com/FedMAQ/fedmaq-manuscript',
+        'role': 'thesis method, protocol, and reporting claims'
+    }
+}
+
+def git(repo, *args):
+    return subprocess.check_output(
+        ['git', '-C', str(repo), *args], text=True
+    ).strip()
+
+revision_vector = {}
+for name, spec in repo_specs.items():
+    repo = spec['path']
+    git(repo, 'rev-parse', '--show-toplevel')
+    if git(repo, 'status', '--porcelain'):
+        raise SystemExit('%s working tree is dirty; refusing to assert clean_tree' % name)
+    revision = git(repo, 'rev-parse', 'HEAD')
+    remote_url = git(repo, 'remote', 'get-url', 'origin').removesuffix('.git')
+    if remote_url != spec['canonical_identity']:
+        raise SystemExit('%s origin is %s, expected %s' % (name, remote_url, spec['canonical_identity']))
+    live_main = git(repo, 'ls-remote', 'origin', 'refs/heads/main').split()[0]
+    if revision != live_main:
+        raise SystemExit('%s HEAD %s is not published origin/main %s' % (name, revision, live_main))
+    revision_vector[name] = {
+        'canonical_identity': spec['canonical_identity'],
+        'revision': revision,
+        'clean_tree': True,
+        'role': spec['role']
+    }
+
+commit = revision_vector['fedmaq-experiments']['revision']
 out = Path('docs/freeze/assurance-envelope-2026-09-04.json')
 if out.exists():
     raise SystemExit(f'{out} already exists; refusing to overwrite a sealed envelope')
@@ -92,14 +133,7 @@ envelope = {
         'execution_issue': 'FedMAQ/fedmaq-experiments#100'
     },
     'content_hash': {'algorithm': 'sha256', 'value': None},
-    'revision_vector': {
-        'fedmaq-experiments': {
-            'canonical_identity': 'https://github.com/FedMAQ/fedmaq-experiments',
-            'revision': commit,
-            'clean_tree': True,
-            'role': 'remediated pipeline implementation, configuration, dispatch, tests'
-        }
-    },
+    'revision_vector': revision_vector,
     'candidate': {
         'repository': 'fedmaq-experiments',
         'revision': commit,
@@ -115,7 +149,7 @@ envelope = {
 digest = config_sha256(envelope)
 envelope['content_hash']['value'] = digest
 out.write_text(json.dumps(envelope, indent=2) + '\n', encoding='utf-8')
-print(f'Wrote {out} pinned to {commit}')
+print(f'Wrote {out} with experiments candidate {commit}')
 print(f'content_hash {digest}')
 "
 ```
