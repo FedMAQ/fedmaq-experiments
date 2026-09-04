@@ -164,7 +164,7 @@ The set includes every integer 2--8 plus a jump to 16. The gap between 8 and 16 
 
 ### Modeled hardware versus execution hardware
 
-The L40S specification grounds the analytical server-throughput constant. It is not a claim that the campaign physically executes on an L40S. Reported runs execute on the canonical allocation documented in `docs/agents/execution-model.md`: an NVIDIA A100 40 GB PCIe GPU with dual Xeon Platinum 8276 processors and 64 GB of shared RAM. Execution hardware affects physical runtime and capacity for concurrent simulators but does not change the frozen analytical telemetry constants. Both identities must be reported separately.
+The L40S specification grounds the analytical server-throughput constant. It is not a claim that the campaign physically executes on an L40S. The canonical allocation is documented in `docs/agents/execution-model.md` and manuscript Section 4.3.4 rather than repeated here. Execution hardware affects physical runtime and capacity for concurrent simulators but does not change the frozen analytical telemetry constants. The analytical reference and the execution allocation must be reported separately.
 
 The per-client gradient-norm probe is computed centrally from the server's private access to the registered client batch. It adds server computation but no simulated client--server payload. This is an explicit model boundary, not an uncounted wire message.
 
