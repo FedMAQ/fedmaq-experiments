@@ -8,7 +8,7 @@
       "regimes": {
         "fedmaq": {
           "phases": [
-            "explore"
+            "formal"
           ],
           "post_process": [
             true

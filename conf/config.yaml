@@ -79,7 +79,7 @@ hydra:
 # it. Each run carries a `variant` because the canonical output path keys on the
 # algorithm config, not the run label, and all five are algorithm=fedmaq.
 #
-# Ablation study (§4.3.7), 7 net-new leave-one-out arms, both alpha, 3 seeds.
+# Ablation study (§4.3.7), 6 net-new leave-one-out arms, both alpha, 3 seeds.
 # Dispatch it through its matrix file, which carries the regime constraints:
 #   uv run python scripts/run_matrix.py --matrix ablation
 #

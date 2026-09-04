@@ -55,5 +55,5 @@ matrix_contracts:
   fedpaq_pipeline: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: cf994fb4ab93c37a8d6da926ad4270987e8c5d01b480d00b3055f0770906bdbd}
   fedpaq_pipeline_cifar100: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 9fd47583db13646ae1a7bf583b4cc563f1e7b4a04315610cb99e6316f6facb99}
   fedpaq_pipeline_femnist: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: 3581a7ed8c3fec8a598c7f73ec7684c007c4ad8753256970f5af1799369e4248}
-  memory_sensitivity: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 12, sha256: 528417263084bf8830014d038837f4333aa68bd9c158451ffa0b445a86736f18}
+  memory_sensitivity: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 12, sha256: dafaab00c23d29b6dc8d5b5bbc7cd1061c2fd99d2f322e2d81bd248b09cad78e}
   uniform_memory_control: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 0e52e8dec7421985314e249889a4067c27613ff2daf419175bb3c38be3f19a20}
