@@ -55,16 +55,18 @@ Give the user commands that:
 3. Preserve existing generated directories outside the repository. Common paths
    are `logs/`, `outputs/`, and `scripts/analysis_output/`; never use `git
    clean` for this workflow.
-4. Keep command logs outside the repository. The FedMAQ manifest recognizes
+4. Keep command logs outside the repository in an evidence directory named
+   `~/fedmaq-<stage>-<short-commit>-EVIDENCE` (for example,
+   `~/fedmaq-golden-fbe27a2-EVIDENCE`). The FedMAQ manifest recognizes
    `outputs/` and `scripts/analysis_output/` as generated artifacts, but a
-   `logs/` directory is a source-tree change for provenance purposes.
+   `logs/` directory inside the repository is a source-tree change for provenance purposes.
 
 Preparation is complete only when the intended commits are available remotely,
 the checkout has no modified tracked files or unknown source artifacts, and the
-evidence directory is outside the repository.
+evidence directory is established outside the repository.
 
 The detached state from `git switch --detach <commit>` is appropriate for
-experiments. The candidate must be available from the remote before starting.
+experiments and avoids local branch drift on the runner.
 
 ## Run the release gate
 
@@ -75,13 +77,15 @@ gate rather than failing it.
 ```bash
 cd ~/fedmaq-experiments
 git fetch origin --prune
-mkdir -p ~/fedmaq-golden-EVIDENCE
+SHORT_SHA=$(git rev-parse --short CANDIDATE_SHA)
+EVIDENCE_DIR=~/fedmaq-golden-${SHORT_SHA}-EVIDENCE
+mkdir -p "${EVIDENCE_DIR}"
 
 git switch --detach CANDIDATE_SHA
-git rev-parse HEAD | tee ~/fedmaq-golden-EVIDENCE/00-candidate-commit.txt
-git status --short --branch | tee ~/fedmaq-golden-EVIDENCE/01-tree-state.txt
+git rev-parse HEAD | tee "${EVIDENCE_DIR}/00-candidate-commit.txt"
+git status --short --branch | tee "${EVIDENCE_DIR}/01-tree-state.txt"
 uv run python scripts/golden_diff.py repeatability \
-  2>&1 | tee ~/fedmaq-golden-EVIDENCE/02-repeatability.log
+  2>&1 | tee "${EVIDENCE_DIR}/02-repeatability.log"
 ```
 
 This runs every algorithm in `GOLDEN_SET` twice, so budget roughly double a
@@ -94,15 +98,19 @@ Only when a ticket asks for old-to-new change classification. Do not remove the
 capture outputs between `capture` and `transition`.
 
 ```bash
+SHORT_SHA=$(git rev-parse --short CANDIDATE_SHA)
+EVIDENCE_DIR=~/fedmaq-transition-${SHORT_SHA}-EVIDENCE
+mkdir -p "${EVIDENCE_DIR}"
+
 git switch --detach BASELINE_SHA
-git rev-parse HEAD | tee ~/fedmaq-golden-EVIDENCE/10-baseline-commit.txt
+git rev-parse HEAD | tee "${EVIDENCE_DIR}/10-baseline-commit.txt"
 uv run python scripts/golden_diff.py capture \
-  2>&1 | tee ~/fedmaq-golden-EVIDENCE/11-capture.log
+  2>&1 | tee "${EVIDENCE_DIR}/11-capture.log"
 
 git switch --detach CANDIDATE_SHA
-git rev-parse HEAD | tee ~/fedmaq-golden-EVIDENCE/12-candidate-commit.txt
+git rev-parse HEAD | tee "${EVIDENCE_DIR}/12-candidate-commit.txt"
 uv run python scripts/golden_diff.py transition \
-  2>&1 | tee ~/fedmaq-golden-EVIDENCE/13-transition.log
+  2>&1 | tee "${EVIDENCE_DIR}/13-transition.log"
 ```
 
 `scripts/golden_diff.py` clears each target and the known persistent model state
