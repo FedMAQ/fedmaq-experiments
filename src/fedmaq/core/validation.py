@@ -182,7 +182,9 @@ def validate_run_evidence(
                                     f"identity mismatch on seed: path={parsed.seed} "
                                     f"vs manifest={run_info.get('seed')}"
                                 )
-                            if (parsed.variant or "") != (run_info.get("variant") or ""):
+                            if run_info.get("variant") is not None and (
+                                parsed.variant or ""
+                            ) != run_info.get("variant"):
                                 errors.append(
                                     f"identity mismatch on variant: path={parsed.variant!r} "
                                     f"vs manifest={run_info.get('variant')!r}"

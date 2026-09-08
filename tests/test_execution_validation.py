@@ -690,3 +690,29 @@ def test_validation_rejects_mismatched_partition_cache_digest(tmp_path: Path):
     result = validate_run_evidence(run_dir, repo_root=tmp_path)
     assert any("partition cache digest mismatch" in err for err in result.errors)
     assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)
+
+
+def test_validation_accepts_manifest_without_variant(tmp_path: Path):
+    """Evidence validation must accept real runs where manifest omits variant."""
+    run_dir = _create_synthetic_run(tmp_path, variant="mu1p0")
+    manifest_path = run_dir / MANIFEST_FILENAME
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del data["run"]["variant"]
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert not any("variant" in err for err in result.errors)
+    assert is_run_evidence_complete(run_dir, repo_root=tmp_path)
+
+
+def test_validation_rejects_mismatched_variant(tmp_path: Path):
+    """Evidence validation must reject runs whose manifest variant conflicts with path."""
+    run_dir = _create_synthetic_run(tmp_path, variant="mu1p0")
+    manifest_path = run_dir / MANIFEST_FILENAME
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data["run"]["variant"] = "mu0p1"
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = validate_run_evidence(run_dir, repo_root=tmp_path)
+    assert any("identity mismatch on variant" in err for err in result.errors)
+    assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)
