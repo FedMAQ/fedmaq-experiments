@@ -52,7 +52,7 @@ computed at `src/fedmaq/core/telemetry.py:255-259` and
 `src/fedmaq/core/strategy.py:242-259`:
 
 ```python
-client_sim_time = max(round_delays)   # max over the round's sampled clients
+client_sim_time = max(round_delays)  # max over the round's sampled clients
 server_sim_time = strategy.hook.server_sim_time(...)
 round_time = client_sim_time + server_sim_time
 ```
