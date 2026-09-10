@@ -1,9 +1,8 @@
 name: dadaquant
 psi: 0.9
-# Hönig et al. (2022) set phi to 1/10th of the number of rounds -- a rule, not a
-# constant. At R=100 that is 10, not the 5 this file used to carry. If R changes,
-# re-derive rather than reusing this number. Manuscript §4.3.2, Table 4.1.
-phi: 10
+# Hönig et al. (2022) set phi to 1/10th of the number of rounds (10 at R=100).
+# Revised: phi updated to 1 following Stage A baseline_tuning_wide (cleared noise margin by +3.81pp on MobileNetV2GN).
+phi: 1
 # UNITS: DAdaQuant's q counts quantization levels PER SIGN (codes in [-q, q],
 # hence 2q+1 levels and ceil(log2(2q+1)) bits per element). FedPAQ's q and
 # FedMAQ's q_min/q_max are true BIT-WIDTHS. The three configs use the same key
