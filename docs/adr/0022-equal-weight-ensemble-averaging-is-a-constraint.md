@@ -12,7 +12,7 @@ argue directly against this:
 
 - **AE-KD** (du-2020) frames plain averaging as the `C = 1/M` endpoint of a
   weighted multi-objective formulation and argues for solving the weighting.
-- **Selective-FD** (shao-2024) argues part of the ensemble should be dropped,
+- **Selective-FD** (shao-2023) argues part of the ensemble should be dropped,
   showing that under one-class-per-client skew, two data-free baselines that
   consume the ensemble unfiltered collapse to the independent-learning floor.
 
