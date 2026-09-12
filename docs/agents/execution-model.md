@@ -181,6 +181,13 @@ are recorded separately and are not part of this scientific total.
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in
   `tests/test_config_and_dispatch.py`. See [ADR-0004](../adr/0004-confirmatory-grid-design.md).
+  `baseline_tuning_wide` is a partial exception: it ships `post_process: false` in
+  every algorithm config (per-file default) but overrides it to `true` for
+  FedMAQ's four `q_max` arms specifically, not the whole matrix — every other
+  baseline in that file runs with it off. Enforced by
+  `test_wide_baseline_tuning_adds_fedmaq_and_four_challengers`
+  (`tests/test_config_and_dispatch.py:700-749`). See
+  [ADR-0011](../adr/0011-baseline-matched-tuning.md).
 - **Prefer `--skip_completed` for recovery.** It re-dispatches only runs missing a
   final-round `final_global_model.pt`, so a sweep that lost tasks 57 and 91 is
   repaired by one re-invocation with no index arithmetic. `--start_at N` still exists
