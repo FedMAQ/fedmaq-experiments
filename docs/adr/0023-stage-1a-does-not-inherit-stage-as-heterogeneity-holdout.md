@@ -25,6 +25,15 @@ selection axis fixed, before any Stage-1a cell was dispatched — it is itself a
 pre-registered decision, just one that #110 correctly observes was never
 written down at the ADR level.
 
+This ADR-level transcription itself lands while the currently-dispatched
+84-cell Stage-1a sweep is still in flight, after #110's own acceptance
+criterion asked for a decision recorded before Stage 1a executes. That
+criterion is met at the level that actually governs the outcome — the rule
+was fixed pre-dispatch, in `resolve_power_mean_degree` and in `execution-
+model.md` — but not at the ADR level, and this document does not claim
+otherwise. No result from any dispatched Stage-1a cell has been read in
+writing it; the record is late, not informed by outcomes.
+
 ## Decision
 
 ### Keep the existing selection rule; do not extend Stage A's holdout to it
@@ -93,3 +102,21 @@ here, not on the spot.
   determine `selected_p`, that is a new decision requiring a code change to
   `resolve_power_mean_degree` and its own ADR — not an implication of this
   one.
+- `scripts/select_power_mean.py:48` certifies closure against the single
+  `power_mean_design` group in `power_mean_expected_runs.json`, all-or-nothing
+  (`closure_certificate`, `scripts/analysis.py:1446`). That manifest now lists
+  126 cells, so `select_power_mean.py` refuses to run selection until all 126
+  are present — the already-dispatched 84 do not unlock a verdict on their
+  own. Concretely: the currently-running 84-cell sweep finishing is not
+  sufficient to produce a Stage-1a selection; the new 42 alpha=0.3 cells must
+  also be dispatched and complete first. There is no partial-closure path
+  that resolves the original 84 ahead of the rest.
+- Stage 1b's own closure check (`scripts/select_omega.py:74`) certifies only
+  its own 12-cell `power_mean_omega` group and does not re-certify Stage 1a,
+  so it is not gated by the widened manifest. `resolve_power_mean_omega`
+  (`scripts/analysis.py:2153-2183`) mirrors `resolve_power_mean_degree`
+  exactly — it reads only `entries[0.1]`/`entries[1.0]` from a generic
+  per-`(dataset, alpha)` grouping — so the alpha=0.3 cells Stage 1b reuses
+  from Stage 1a's `omega=0.5` rows are ignored by omega resolution the same
+  way, confirmed by reading both functions in full rather than inferred from
+  symmetry.
