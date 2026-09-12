@@ -153,5 +153,18 @@ here, not on the spot.
   manifest. A reader who checks out that tag will find 84 cells, not 126 —
   the gate document's prose and the tagged commit now disagree, and this ADR
   is the record of why: the widening is a post-Gate-1 amendment disclosed
-  here, not a retroactive
-  rewrite of what the tag itself froze.
+  here, not a retroactive rewrite of what the tag itself froze.
+- This ADR is the "new labelled exploration amendment" Gate 2's principle
+  calls for, applied one gate earlier; it is not accompanied by a new git
+  tag. Two tags in this repo's history (`pre-registration-manifest-fix`,
+  `pre-registration-fedkd-fix`) share the `pre-registration-*` prefix but are
+  not precedent for one here: both predate this widening by a month
+  (2026-08-10, versus `9b8f3fe`'s 2026-09-13) and both mark ordinary bugfixes
+  (manifest-cleanliness exclusion, FedKD teacher-state isolation) rather than
+  a post-freeze design change. No tag in this repo has ever marked a
+  post-Gate-1 amendment, so there is no naming convention to follow. The
+  amendment's label is this ADR together with `9b8f3fe`; a new tag is
+  declined because `pre-registration-stage1a` must keep meaning what it
+  meant for the 84 cells already dispatched under the 84-cell design — the
+  42 new cells and those 84 are governed by different designs, and one ref
+  cannot mark both without misrepresenting one of them.
