@@ -34,6 +34,24 @@ model.md` — but not at the ADR level, and this document does not claim
 otherwise. No result from any dispatched Stage-1a cell has been read in
 writing it; the record is late, not informed by outcomes.
 
+This also collides with an earlier freeze. The `pre-registration-stage1a` tag
+(`5be987c`, 2026-09-11) already exists on this branch, cut two days before
+this widening (`9b8f3fe`, 2026-09-13), and it froze the 84-cell
+`power_mean_design` manifest — not the 126-cell one this ADR describes.
+`docs/agents/execution-model.md`'s Gate 1 step was edited by the same commit
+that widened the matrix to read "expected 126-cell manifest," describing what
+should be frozen going forward, not what the existing tagged commit actually
+froze. Gate 2 states the operative principle for a post-freeze material
+change: "it is not folded silently into the frozen campaign"
+(`execution-model.md:154`). The same principle applies here, one gate
+earlier: the 42 new alpha=0.3 cells are dispatched under a design that
+changed after the tagged pre-registration commit, not before it. This
+paragraph is that disclosure, made instead of re-tagging — moving
+`pre-registration-stage1a` to a later commit would rewrite, after the fact,
+what "before Stage 1a executes" meant for the 84 cells already run against
+the original design. The tag stays where it is, as the record of what was
+actually frozen when; this ADR is the amendment layered on top of it.
+
 ## Decision
 
 ### Keep the existing selection rule; do not extend Stage A's holdout to it
@@ -120,3 +138,11 @@ here, not on the spot.
   from Stage 1a's `omega=0.5` rows are ignored by omega resolution the same
   way, confirmed by reading both functions in full rather than inferred from
   symmetry.
+- `docs/agents/execution-model.md`'s Gate 1 step now describes "the expected
+  126-cell manifest" as what gets frozen, but the actual `pre-registration-
+  stage1a` tag (`5be987c`, 2026-09-11) predates this widening (`9b8f3fe`,
+  2026-09-13) and froze the original 84-cell manifest. A reader who checks
+  out that tag will find 84 cells, not 126 — the gate document's prose and
+  the tagged commit now disagree, and this ADR is the record of why: the
+  widening is a post-Gate-1 amendment disclosed here, not a retroactive
+  rewrite of what the tag itself froze.
