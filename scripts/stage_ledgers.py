@@ -37,7 +37,7 @@ SCIENTIFIC_STAGES: dict[str, tuple[str, ...]] = {
     ),
 }
 ASSURANCE_MATRICES = ("ci_test", "mobilenetv2_smoke_50r")
-EXPECTED_COUNTS = {"matched_tuning": 145, "stage_1a": 84, "stage_1b": 12, "downstream": 174}
+EXPECTED_COUNTS = {"matched_tuning": 145, "stage_1a": 126, "stage_1b": 12, "downstream": 174}
 EXECUTION_OUTPUTS = {
     "golden_transition": "outputs/golden/step2_transition",
     "golden_repeatability": "outputs/golden/step2_repeatability",

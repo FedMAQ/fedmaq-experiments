@@ -14,6 +14,7 @@ seeds: [0, 42, 123]
 heterogeneities:
   - dirichlet_alpha_0.1
   - dirichlet_alpha_1.0
+  - dirichlet_alpha_0.3
 
 runs:
   - alg: power_mean

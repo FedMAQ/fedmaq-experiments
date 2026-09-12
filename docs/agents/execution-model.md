@@ -113,7 +113,7 @@ arms.
 ### Gate 1 — `pre-registration-stage1a`
 
 6. Freeze the audited code, corrected byte instrument, widened-tuning verdicts,
-   baseline table, `power_mean_design` matrix, expected 84-cell manifest, and Stage-1
+   baseline table, `power_mean_design` matrix, expected 126-cell manifest, and Stage-1
    selection rule. Re-run `just check`, the expected-run generator in check mode, and
    the current-code golden compare, then tag that exact pushed commit
    `pre-registration-stage1a`.
@@ -121,14 +121,21 @@ arms.
 No reported replacement cell may precede this tag. Earlier provisional tags do not
 authorize this campaign.
 
-### Stage 1a — Power-mean degree and structural controls (84 reported cells)
+### Stage 1a — Power-mean degree and structural controls (126 reported cells)
 
 7. `--matrix power_mean_design`. It contains the seven degree settings at
    `omega=0.5`, the resource-only control, and six structural-rule settings across
-   two skews and three seeds.
-8. Run `scripts/select_power_mean.py`. It refuses an incomplete closure certificate
-   and resolves skew disagreement through the severe-skew rule. Record the selected
-   `p`; do not edit any Stage-1a row after observing the result.
+   three skews (`dirichlet_alpha` 0.1, 0.3, 1.0) and three seeds.
+8. Run `scripts/select_power_mean.py`. Selection itself is unchanged from the
+   original design: it refuses an incomplete closure certificate and resolves
+   disagreement between the two selection skews (0.1, 1.0) through the
+   severe-skew rule, which always selects the alpha=0.1 winner and uses
+   alpha=1.0 only to label the outcome `agreement` or `severe-skew tie-break`.
+   The added `alpha=0.3` cells sit outside `benchmark_grid`'s reporting grid and
+   do not feed the selection rule; they report, as a robustness check, whether
+   the alpha=0.1-selected `p` also wins at a skew the downstream tables never
+   see. Record the selected `p`; do not edit any Stage-1a row after observing
+   the result.
 
 ### Stage 1b — Selected-p omega follow-up (12 reported cells)
 

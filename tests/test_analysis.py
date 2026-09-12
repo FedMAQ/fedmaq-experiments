@@ -1805,13 +1805,13 @@ def test_power_mean_selectors_reject_test_split_data(tmp_path):
         select_power_mean_omega_iso_byte([run], selected_p=1.0)
 
 
-def test_power_mean_recut_expected_set_has_all_96_identities():
+def test_power_mean_recut_expected_set_has_all_138_identities():
     groups = expected_identities(POWER_MEAN_RECUT_MATRICES)
 
     design = groups[POWER_MEAN_DESIGN_GROUP]
-    assert design["count"] == 84
-    assert len(set(design["runs"])) == 84
-    assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 42
+    assert design["count"] == 126
+    assert len(set(design["runs"])) == 126
+    assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 63
 
     omega = groups[POWER_MEAN_OMEGA_GROUP]
     assert omega["count"] == 12

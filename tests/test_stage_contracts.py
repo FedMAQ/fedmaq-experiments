@@ -70,10 +70,10 @@ def test_ledgers_have_required_counts_and_are_disjoint() -> None:
     ledgers = _manifest("stage_ledgers.json")
     scientific = ledgers["scientific"]
     stages = scientific["stages"]
-    assert scientific["total_cell_count"] == 415
+    assert scientific["total_cell_count"] == 457
     assert {name: stages[name]["cell_count"] for name in stages} == {
         "matched_tuning": 145,
-        "stage_1a": 84,
+        "stage_1a": 126,
         "stage_1b": 12,
         "downstream": 174,
     }

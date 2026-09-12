@@ -1384,7 +1384,7 @@ def test_power_mean_config_and_design_matrix_are_a_clean_recut_boundary():
     )
     assert matrix["phase"] == "explore"
     assert len(matrix["runs"]) == 14
-    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 84
+    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 126
 
     power_mean_ps = {
         override.partition("=")[2]
