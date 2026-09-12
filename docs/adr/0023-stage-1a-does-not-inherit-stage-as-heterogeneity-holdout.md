@@ -35,9 +35,16 @@ otherwise. No result from any dispatched Stage-1a cell has been read in
 writing it; the record is late, not informed by outcomes.
 
 This also collides with an earlier freeze. The `pre-registration-stage1a` tag
-(`5be987c`, 2026-09-11) already exists on this branch, cut two days before
-this widening (`9b8f3fe`, 2026-09-13), and it froze the 84-cell
-`power_mean_design` manifest — not the 126-cell one this ADR describes.
+is an annotated tag pointing at `11934ba` (2026-09-11), not at the tag
+object's own hash (`5be987c`) — confirmed with `git rev-parse
+pre-registration-stage1a^{commit}`. That commit, `11934ba`, is the same
+commit that read Stage A's widened-tuning verdicts into `conf/algorithm/
+{fedprox,feddistill,dadaquant}.yaml`, the act at issue in #107. The Gate-1
+freeze and the verdict-application commit are one and the same commit, not
+two independent timelines. `11934ba` was cut two days before this widening
+(`9b8f3fe`, 2026-09-13), and it froze the 84-cell `power_mean_design`
+manifest — not the 126-cell one this ADR describes, confirmed by checking out
+`docs/recut/power_mean_expected_runs.json` at that commit directly.
 `docs/agents/execution-model.md`'s Gate 1 step was edited by the same commit
 that widened the matrix to read "expected 126-cell manifest," describing what
 should be frozen going forward, not what the existing tagged commit actually
@@ -140,9 +147,11 @@ here, not on the spot.
   symmetry.
 - `docs/agents/execution-model.md`'s Gate 1 step now describes "the expected
   126-cell manifest" as what gets frozen, but the actual `pre-registration-
-  stage1a` tag (`5be987c`, 2026-09-11) predates this widening (`9b8f3fe`,
-  2026-09-13) and froze the original 84-cell manifest. A reader who checks
-  out that tag will find 84 cells, not 126 — the gate document's prose and
-  the tagged commit now disagree, and this ADR is the record of why: the
-  widening is a post-Gate-1 amendment disclosed here, not a retroactive
+  stage1a` tag points at `11934ba` (2026-09-11) — the same commit that
+  applied Stage A's verdicts and triggered #107's lateness — which predates
+  this widening (`9b8f3fe`, 2026-09-13) and froze the original 84-cell
+  manifest. A reader who checks out that tag will find 84 cells, not 126 —
+  the gate document's prose and the tagged commit now disagree, and this ADR
+  is the record of why: the widening is a post-Gate-1 amendment disclosed
+  here, not a retroactive
   rewrite of what the tag itself froze.
