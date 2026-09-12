@@ -30,7 +30,7 @@ tuning:
   fedprox:
     knob: mu
     paper_default_variant: mu1p0
-    adopted_variant: mu0p01
+    adopted_variant: mu1p0
     values: {mu0p001: 0.001, mu0p01: 0.01, mu0p1: 0.1, mu1p0: 1.0, mu10p0: 10.0}
   fedpaq:
     knob: q
@@ -41,12 +41,12 @@ tuning:
   dadaquant:
     knob: phi
     paper_default_variant: phi10
-    adopted_variant: phi10
+    adopted_variant: phi1
     values: {phi1: 1, phi5: 5, phi10: 10, phi20: 20, phi40: 40}
   feddistill:
     knob: reg_alpha
     paper_default_variant: a1p0
-    adopted_variant: a0p5
+    adopted_variant: a1p0
     values: {a0p1: 0.1, a0p5: 0.5, a1p0: 1.0, a2p0: 2.0, a4p0: 4.0}
   fedkd:
     knob: tmax

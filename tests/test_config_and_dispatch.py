@@ -748,6 +748,27 @@ def test_wide_baseline_tuning_adds_fedmaq_and_four_challengers():
             assert not post_process
 
 
+def test_wide_baseline_tuning_adopted_variant_matches_shipped_config():
+    """``tuning.<algo>.adopted_variant`` is provenance metadata read by
+    scripts/analysis.py for reporting, not a computational input -- but it must
+    still name the value each algorithm actually ships, or the report labels a
+    baseline as tuned to a reference cell that was never run. This caught a
+    real drift (fedprox, feddistill, dadaquant) resolved alongside this test."""
+    matrix = _matrix("baseline_tuning_wide")
+    for algorithm, spec in matrix["tuning"].items():
+        adopted_variant = spec["adopted_variant"]
+        assert adopted_variant in spec["values"], (
+            f"{algorithm}.adopted_variant={adopted_variant!r} is not a key in "
+            f"{algorithm}.values={spec['values']!r}"
+        )
+        shipped = _algorithm_cfg(algorithm)[spec["knob"]]
+        assert float(spec["values"][adopted_variant]) == float(shipped), (
+            f"{algorithm}.adopted_variant={adopted_variant!r} names "
+            f"{spec['values'][adopted_variant]!r} but conf/algorithm/{algorithm}.yaml "
+            f"ships {spec['knob']}={shipped!r} -- update adopted_variant to match."
+        )
+
+
 @pytest.mark.parametrize(
     "matrix_name",
     [
