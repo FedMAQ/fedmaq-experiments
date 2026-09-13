@@ -60,9 +60,10 @@ _COMPRESSOR_HOOKS: dict[
         q=int(alg_cfg.get("q_min", 1)),
         rng=rng,
     ),
-    # FedMAQ's q is a true bit-width from the manuscript's discrete set
-    # {1,...,8,16,32} (see compute_fedmaq_q_k_t), so it must use FedPAQ's
-    # bit-width-faithful symmetric quantizer.
+    # FedMAQ's q is a true bit-width from the permissible set
+    # {2, 3, 4, 5, 6, 7, 8, 16} (see DEFAULT_BIT_WIDTHS in
+    # core/quantization_planner.py, the single source of truth), so it must
+    # use FedPAQ's bit-width-faithful symmetric quantizer.
     # Dispatch below overrides this with FedMAQPostProcessCompressionHook when
     # ``alg_cfg["post_process"]`` is true (primary benchmarking grid only).
     "fedmaq": lambda alg_cfg, rng, state: FedPAQCompressionHook(
