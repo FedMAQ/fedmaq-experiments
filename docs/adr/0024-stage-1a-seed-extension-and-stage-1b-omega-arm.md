@@ -74,6 +74,15 @@ significance would require roughly 37 seeds. Five seeds buys a better point esti
 genuine chance the winner changes. It does not buy significance, and this ADR does not
 license any later document to claim it did.
 
+**What the 42 cells actually buy, stated in advance.** Twenty-eight of them (7 arms × 2
+seeds × the two selecting heterogeneities) feed `resolve_power_mean_degree`; the remaining
+fourteen deepen the alpha=0.3 contrast, which by ADR-0023 does not select. Of the
+twenty-eight, the alpha=1.0 half should be expected to move little: that cell is already
+numerically degenerate — four degrees return an identical float at seed 123 — and seeds 7
+and 21 are likely degenerate there too. The extension's real work is therefore the fourteen
+alpha=0.1 cells that determine `selected_p`, and the fourteen alpha=0.3 cells that sharpen
+the one sign-consistent signal the sweep produced. If the verdict moves, it moves there.
+
 ### D2 — Adding a fresh `omega=0.5` arm at the Stage-1a seeds is rejected as a no-op
 
 ADR-0021 D2 has Stage 1b sweep `omega ∈ {0.25, 0.75}` at the selected `p` while "reusing
@@ -119,11 +128,20 @@ table, and the real fork is named.
   `scripts/analysis_output/power_mean_degree_{selection,resolution}.json` were committed
   before this ADR's matrix edit: once the manifest widens, those two files can no longer be
   regenerated, and `scripts/select_omega.py:22` reads the resolution by default.
-- **The already-run 126 cells are not perturbed and do not re-run.** Scoring is per-seed:
-  the iso-byte budget is `budget_by_seed[seed]`, set by the cheapest arm within that seed
-  (`scripts/analysis.py:1588-1650`); the global `budget_mb` scalar is used only for
-  `setter` reporting. Adding seeds 7 and 21 adds entries to that map without altering the
-  existing three. Closure matching is by `identity_key`
+- **The already-run 126 cells are not perturbed and do not re-run.** Scoring is per-seed,
+  verified by reading `select_power_mean_degree_iso_byte` itself rather than the
+  structurally similar function above it: `b_star = min(seed_terminal_mbs.values())` is
+  computed *inside* the `for seed in common_seeds` loop, over the seven degree variants at
+  that seed, and interpolation uses that same per-seed `b_star`
+  (`scripts/analysis.py:1842-1856`). The report's top-level `budget_mb` is
+  `min(budget_by_seed.values())` (`scripts/analysis.py:1936`) and is descriptive only — no
+  score is interpolated at it. Because D1 changes the seed set and not the variant set, the
+  `b_star` of seeds 0, 42, and 123 is computed over the identical seven terminal byte counts
+  as before, so those 126 scores are reproduced exactly rather than re-derived against a
+  budget the new seeds could lower. Adding seeds 7 and 21 adds entries to that map without
+  altering the existing three. Had the budget been a single global scalar, the extension
+  would have silently re-scored every completed cell; it is not, and this paragraph records
+  that being checked before dispatch rather than assumed. Closure matching is by `identity_key`
   (`src/fedmaq/core/run_identity.py:83-95`), which carries dataset, group, config, variant,
   alpha, formulation, and seed but **no canonical index** — so the index shift from
   interleaving new seeds into the expansion does not orphan any completed run.

@@ -177,9 +177,12 @@ field. That protocol position is unchanged. Its content should not be softened:
 - `p0.5` ranks **7th of 7** on cell mean, and 6th, 7th, 6th per seed. It does not win a
   single seed.
 - The comparisons against it are sign-consistent across all three seeds and carry the
-  largest \(|t|\) values in the sweep: \(p_{-1} - p_{0.5}\) gives \(+0.0257\) at
-  \(t = 3.83\); \(p_{-0.5} - p_{0.5}\) gives \(+0.0240\) at \(t = 3.08\);
-  \(p_{0} - p_{0.5}\) gives \(+0.0087\) at \(t = 5.01\).
+  largest *effects* in the sweep: \(p_{-1} - p_{0.5}\) gives \(+0.0257\) at
+  \(t = 3.83\) and \(p_{-0.5} - p_{0.5}\) gives \(+0.0240\) at \(t = 3.08\). The case rests
+  on those two. \(p_{0} - p_{0.5}\) also runs the same way, at \(+0.0087\), and its
+  \(t = 5.01\) is listed only for completeness: on a margin that small the statistic is
+  driven by a near-zero paired standard deviation, exactly the artifact §3.3 discounts at
+  \(t = 5.57\), and it earns no more weight here than it was given there.
 
 The earlier draft described this as "slightly higher mean accuracies … within the
 overlapping noise bounds." That is not supportable: unlike every margin favoring
