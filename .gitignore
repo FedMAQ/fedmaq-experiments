@@ -3,6 +3,7 @@ data/
 .data_partitions/
 /experiments/
 multirun/
+outputs_stash/
 # outputs/ is not ignored wholesale -- see the grid-results block at the end of
 # this file. A `dir/` rule stops git descending, which makes re-inclusion of
 # anything beneath it impossible regardless of later negations.

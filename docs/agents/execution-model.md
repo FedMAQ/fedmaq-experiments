@@ -213,3 +213,13 @@ are recorded separately and are not part of this scientific total.
 - **Check system RAM headroom** before Flower simulations, not just VRAM.
 - **Dry-run first.** On a shared host this is the cheapest way to catch a wrong
   `experiment=` or output path.
+- **Keep `outputs/` strictly canonical; stash scratch/smoke/golden outside `outputs/`.**
+  `discover_runs` (`scripts/analysis.py`) globs `outputs/**/.hydra/config.yaml`.
+  Any run directory under `outputs/` that fails `parse_run_directory` (i.e. does not
+  strictly match the 7-segment taxonomy
+  `outputs/<phase>/<dataset_model>/<experiment_group>/<algorithm__variant>/<heterogeneity>/seed_<seed>`)
+  is flagged as `non_canonical` by `closure_certificate` and fails the closure gate.
+  On the JupyterHub execution host, historical scratch directories are kept in
+  `outputs_stash/` at the repository root (`outputs_stash/golden/`,
+  `outputs_stash/quarantine/`, `outputs_stash/smoke/`). Do not move them back into
+  `outputs/`.
