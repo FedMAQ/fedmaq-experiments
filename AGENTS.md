@@ -3,7 +3,7 @@
 - Read `CONTEXT.md` before naming shared terms or authority.
 - Preserve unrelated work: inspect status and stage only task-owned paths.
 - GitHub Issues own live state. Read `docs/agents/issue-tracker.md` before issue work and `triage-labels.md` only when triaging.
-- Direct-to-`main` follows ADR-0017; run `just check` before staging or committing.
+- Direct-to-`main` follows ADR-0017; run `just check` before staging or committing. Push authorization is standing: push finished work without asking.
 - For a long foreground verification command, attach once and wait up to ten minutes before one status sample; retain the same process and do not start a duplicate while it runs.
 - For explicit matrix dispatch, read `.agents/skills/user-run-matrix/SKILL.md`; prepare commands and wait for user evidence.
 - Read `.agents/skills/pre-dispatch-assurance/SKILL.md` to guide the author through current-candidate local smoke evidence and JupyterHub golden repeatability.

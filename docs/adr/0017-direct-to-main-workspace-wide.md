@@ -57,3 +57,22 @@ it does not need editing.
 - If a repo later gets meaningful automated CI (tests that actually gate
   merges) or a second contributor, that repo should revisit this ADR rather
   than silently drift back to PRs.
+
+## Amendment (2026-09-14): the push authorization is standing
+
+This ADR said to push straight to `main` but never said whether an agent may
+do so on its own. Agents default to confirming an outward-facing action each
+time, so in practice every push stopped for approval — approval the author
+granted every time, having already granted it in this ADR.
+
+**The author's push authorization is standing.** An agent pushes finished work
+to `main` without asking, in every repo in the workspace. Withdrawing it for a
+particular change is the author's call, stated at the time.
+
+The pre-push discipline above is unchanged and is what makes this safe: commit
+clean, and run the repo's own check first. The gate was always the check and
+the diff, never the pause to ask.
+
+Each `AGENTS.md` carries this authorization inline rather than by reference,
+because an agent decides whether to push from what is already in its context
+and will not read this ADR first.
