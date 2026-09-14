@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "report_type": "power_mean_degree_resolution",
+  "data": {
+    "dataset": "cifar10",
+    "selected_p": 0.5,
+    "omega": 0.5,
+    "alpha_0.1_winner": "p0.5",
+    "alpha_1.0_winner": "p0.5",
+    "rule": "agreement"
+  }
+}
