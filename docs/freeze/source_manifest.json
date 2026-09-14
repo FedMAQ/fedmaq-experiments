@@ -99,7 +99,7 @@
     "scripts/verify_smoke_evidence.py": "87cdcc352f86dff263e0a7747d19840956dab0b8264ec8407cba635d7039514d",
     "scripts/verify_tier1_binding_sweep.py": "bdf4963639cdb1dfe3fc5620f75a45d9f6581b732231311726e469872bd355ab",
     "src/fedmaq/__init__.py": "2056cb8c7aea7c33e55ed60d87c08c438586df60434d96c400337cc4e17b14f7",
-    "src/fedmaq/baselines/__init__.py": "696a8ea67f654765f8aeda69bc803747aac0a5c3da27b410892cab6d85dd5369",
+    "src/fedmaq/baselines/__init__.py": "cb9f9daa242fde3f10636e34ac642d5f6fd482b67d5fd14ea4e286452f9e9516",
     "src/fedmaq/baselines/compression.py": "6321d3c1eb9559189d7776518d34af0d6b16ad9316d1137124894d89b1983948",
     "src/fedmaq/baselines/dadaquant_coder.py": "e68e19d052c09d9465b8d5f6c7aa8684ae6ce0a95c271cc90df6f428045c068f",
     "src/fedmaq/baselines/postprocess.py": "616d7dcc6a7e5be69d7f8ef41c515c94d24a565b02a201c68b4a6dd449793d31",
