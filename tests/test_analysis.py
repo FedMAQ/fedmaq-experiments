@@ -1805,13 +1805,22 @@ def test_power_mean_selectors_reject_test_split_data(tmp_path):
         select_power_mean_omega_iso_byte([run], selected_p=1.0)
 
 
-def test_power_mean_recut_expected_set_has_all_138_identities():
+def test_power_mean_recut_expected_set_has_all_180_identities():
+    """ADR-0024 deepens the seven degree arms to five seeds while the F0/F3/F4
+    controls stay at three. The asymmetry is the design, not drift: 7 x 5 x 3
+    degree cells plus 7 x 3 x 3 control cells."""
     groups = expected_identities(POWER_MEAN_RECUT_MATRICES)
 
     design = groups[POWER_MEAN_DESIGN_GROUP]
-    assert design["count"] == 126
-    assert len(set(design["runs"])) == 126
-    assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 63
+    assert design["count"] == 168
+    assert len(set(design["runs"])) == 168
+    assert sum("|fpower_mean|" in identity for identity in design["runs"]) == 105
+
+    # The deepening seeds reach the degree arms only.
+    for extension_seed in ("|s7", "|s21"):
+        reached = [identity for identity in design["runs"] if identity.endswith(extension_seed)]
+        assert len(reached) == 21
+        assert all("|fpower_mean|" in identity for identity in reached)
 
     omega = groups[POWER_MEAN_OMEGA_GROUP]
     assert omega["count"] == 12

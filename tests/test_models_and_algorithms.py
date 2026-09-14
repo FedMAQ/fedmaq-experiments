@@ -1384,7 +1384,16 @@ def test_power_mean_config_and_design_matrix_are_a_clean_recut_boundary():
     )
     assert matrix["phase"] == "explore"
     assert len(matrix["runs"]) == 14
-    assert len(matrix["runs"]) * len(matrix["heterogeneities"]) * len(matrix["seeds"]) == 126
+    # Per ADR-0024 the seed count is no longer uniform across arms: the seven
+    # degree arms carry a five-seed override while the controls keep the
+    # matrix-level three, so the cell count is a sum, not a single product.
+    hets = len(matrix["heterogeneities"])
+    deep = [run for run in matrix["runs"] if "seeds" in run]
+    shallow = [run for run in matrix["runs"] if "seeds" not in run]
+    assert len(deep) == 7 and len(shallow) == 7
+    assert all(run["seeds"] == [0, 42, 123, 7, 21] for run in deep)
+    assert matrix["seeds"] == [0, 42, 123]
+    assert len(deep) * hets * 5 + len(shallow) * hets * 3 == 168
 
     power_mean_ps = {
         override.partition("=")[2]
