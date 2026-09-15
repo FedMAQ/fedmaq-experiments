@@ -177,6 +177,13 @@ are recorded separately and are not part of this scientific total.
   with `./.venv/bin/python scripts/run_matrix.py --matrix <name>`. Every confirmatory run
   has a matrix file; if you find yourself hand-typing a `--multirun` for one, the file
   is missing and should be written instead.
+- **Push notifications on JupyterHub dispatch.** Wrap long-running allocation dispatches
+  with `./scripts/notify_run.sh`:
+  `./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> -o ...`
+  The wrapper streams console output live and sends start, completion, or urgent failure
+  alerts to an authenticated ntfy.sh topic. It reads `NTFY_TOPIC` and `NTFY_TOKEN` from
+  `.env`. If either is unset, it fails fast to prevent unmonitored sweeps. Test
+  connectivity with `./scripts/notify_run.sh --test` before long runs.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in
