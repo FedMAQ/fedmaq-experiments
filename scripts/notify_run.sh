@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# scripts/notify_run.sh
-#
-# Execution wrapper for long-running FedMAQ commands and sweeps on JupyterHub.
-# Streams output live to the console while sending start, success, or failure
-# push notifications to an authenticated ntfy.sh topic.
-# ==============================================================================
 
-set -eu
+set -euo pipefail
 
-# Load environment variables from .env if present
 if [ -f ".env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -32,7 +24,7 @@ ntfy.sh topic.
 
 Requirements:
   NTFY_TOPIC and NTFY_TOKEN must be set in your .env file or environment.
-    NTFY_TOPIC="fedmaq-thesis-bunyi"
+    NTFY_TOPIC="your_ntfy_topic"
     NTFY_TOKEN="tk_..."
 
 Options:
@@ -45,31 +37,43 @@ Examples:
 EOF
 }
 
-# Handle help
-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+if [ $# -eq 0 ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     show_help
-    exit 0
+    [ $# -eq 0 ] && exit 1 || exit 0
 fi
 
-# Validate credentials fail-fast
 if [ -z "${NTFY_TOPIC:-}" ] || [ -z "${NTFY_TOKEN:-}" ]; then
     echo "[notify_run] ERROR: NTFY_TOPIC or NTFY_TOKEN is not set." >&2
     echo "[notify_run] Please set them in your .env file or environment:" >&2
-    echo "  NTFY_TOPIC=\"fedmaq-thesis-bunyi\"" >&2
+    echo "  NTFY_TOPIC=\"your_ntfy_topic\"" >&2
     echo "  NTFY_TOKEN=\"tk_...\"" >&2
     exit 1
 fi
 
-# Handle self-test mode
+HOST="$(hostname 2>/dev/null || echo "unknown-host")"
+
+send_ntfy() {
+    local title="$1"
+    local priority="$2"
+    local tags="$3"
+    local body="$4"
+
+    curl -s -f -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
+        -H "Authorization: Bearer ${NTFY_TOKEN}" \
+        -H "Title: ${title}" \
+        -H "Priority: ${priority}" \
+        -H "Tags: ${tags}" \
+        -d "${body}" >/dev/null 2>&1 || true
+}
+
 if [ "${1:-}" = "--test" ]; then
-    HOST="$(hostname 2>/dev/null || echo "unknown-host")"
     echo "[notify_run] Dispatching test notification to https://ntfy.sh/${NTFY_TOPIC}..."
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
         -H "Authorization: Bearer ${NTFY_TOKEN}" \
         -H "Title: FedMAQ: Test Notification" \
         -H "Priority: default" \
         -H "Tags: bell,white_check_mark" \
-        -d "Self-test notification from ${HOST} at $(date)")
+        -d "Test notification from ${HOST} at $(date)")
 
     if [ "$HTTP_CODE" = "200" ]; then
         echo "[notify_run] SUCCESS: received HTTP 200 from ntfy.sh."
@@ -78,12 +82,6 @@ if [ "${1:-}" = "--test" ]; then
         echo "[notify_run] ERROR: ntfy.sh returned HTTP ${HTTP_CODE}. Check NTFY_TOPIC and NTFY_TOKEN." >&2
         exit 1
     fi
-fi
-
-if [ $# -eq 0 ]; then
-    echo "[notify_run] ERROR: No command specified." >&2
-    show_help >&2
-    exit 1
 fi
 
 format_duration() {
@@ -100,24 +98,17 @@ format_duration() {
     fi
 }
 
-HOST="$(hostname 2>/dev/null || echo "unknown-host")"
 START_TIME_HUMAN="$(date 2>/dev/null || echo "now")"
 START_SEC="$(date +%s)"
 CMD_STR="$*"
 
-# Dispatch start notification
-curl -s -f -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
-    -H "Authorization: Bearer ${NTFY_TOKEN}" \
-    -H "Title: FedMAQ: Run Started" \
-    -H "Priority: low" \
-    -H "Tags: rocket" \
-    -d "Host: ${HOST}
+send_ntfy "FedMAQ: Run Started" "low" "rocket" "Host: ${HOST}
 Started: ${START_TIME_HUMAN}
-Command: ${CMD_STR}" >/dev/null 2>&1 || true
+Command: ${CMD_STR}"
 
 LOG_FILE=$(mktemp /tmp/fedmaq_run_XXXXXX.log 2>/dev/null || echo "/tmp/fedmaq_run_$$.log")
+trap 'rm -f "$LOG_FILE"' EXIT INT TERM
 
-# Stream live output while capturing to temporary log
 set +e
 "$@" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
@@ -128,14 +119,9 @@ DURATION_SEC=$((END_SEC - START_SEC))
 DURATION_STR="$(format_duration "$DURATION_SEC")"
 
 if [ "$EXIT_CODE" -eq 0 ]; then
-    curl -s -f -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
-        -H "Authorization: Bearer ${NTFY_TOKEN}" \
-        -H "Title: FedMAQ: Run Succeeded" \
-        -H "Priority: default" \
-        -H "Tags: white_check_mark" \
-        -d "Host: ${HOST}
+    send_ntfy "FedMAQ: Run Succeeded" "default" "white_check_mark" "Host: ${HOST}
 Duration: ${DURATION_STR}
-Command: ${CMD_STR}" >/dev/null 2>&1 || true
+Command: ${CMD_STR}"
 else
     ERROR_TAIL=""
     if [ -f "$LOG_FILE" ]; then
@@ -154,13 +140,7 @@ Error tail (last 15 lines):
 ${ERROR_TAIL}"
     fi
 
-    curl -s -f -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
-        -H "Authorization: Bearer ${NTFY_TOKEN}" \
-        -H "Title: FedMAQ: Run FAILED (Exit ${EXIT_CODE})" \
-        -H "Priority: urgent" \
-        -H "Tags: x,warning" \
-        -d "${FAIL_MSG}" >/dev/null 2>&1 || true
+    send_ntfy "FedMAQ: Run FAILED (Exit ${EXIT_CODE})" "urgent" "x,warning" "${FAIL_MSG}"
 fi
 
-rm -f "$LOG_FILE"
 exit "$EXIT_CODE"
