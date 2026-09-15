@@ -67,3 +67,15 @@ Log to WandB for every run:
 6. **Convergence stability — accuracy vs. rounds *and* accuracy vs. transmitted
    bytes.** The second curve is not optional: it is the primary comparison axis
    for every selection verdict ([ADR-0012](../../docs/adr/0012-formulation-selection-and-the-iso-byte-amendment.md)).
+
+## Paired-seed selection statistics
+
+**Count exact zeros in the paired differences before reporting a paired t.**
+With \(n-1\) of \(n\) differences exactly zero, \(t \equiv 1\) identically for
+any \(n\), independent of the nonzero difference's magnitude — the statistic
+carries no effect-size information. A high tie count more generally caps the
+achievable \(t\). This is degeneracy, distinct from significance: sign
+inconsistency across seeds (some seeds favor one arm, some the other) is a
+separate, non-degenerate failure mode — genuinely computed, genuinely
+inconclusive — not weaker evidence but evidence of a different kind. Worked
+instance: [2026-09-14 Stage 1a power-mean selection analysis](../../docs/research/2026-09-14-stage1a-power-mean-selection-analysis.md#3-behavioral-observations).
