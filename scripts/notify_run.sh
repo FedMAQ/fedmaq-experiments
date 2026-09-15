@@ -14,6 +14,8 @@ elif [ -f "$(dirname "$0")/../.env" ]; then
     set +a
 fi
 
+NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+
 show_help() {
     cat << 'EOF'
 Usage: ./scripts/notify_run.sh [--test] <command> [args...]
@@ -58,28 +60,23 @@ send_ntfy() {
     local tags="$3"
     local body="$4"
 
-    curl -s -f -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
+    curl -s -o /dev/null -w "%{http_code}" -X POST "${NTFY_SERVER}/${NTFY_TOPIC}" \
         -H "Authorization: Bearer ${NTFY_TOKEN}" \
         -H "Title: ${title}" \
         -H "Priority: ${priority}" \
         -H "Tags: ${tags}" \
-        -d "${body}" >/dev/null 2>&1 || true
+        -d "${body}" 2>/dev/null || echo "000"
 }
 
 if [ "${1:-}" = "--test" ]; then
-    echo "[notify_run] Dispatching test notification to https://ntfy.sh/${NTFY_TOPIC}..."
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://ntfy.sh/${NTFY_TOPIC}" \
-        -H "Authorization: Bearer ${NTFY_TOKEN}" \
-        -H "Title: FedMAQ: Test Notification" \
-        -H "Priority: default" \
-        -H "Tags: bell,white_check_mark" \
-        -d "Test notification from ${HOST} at $(date)")
+    echo "[notify_run] Dispatching test notification to ${NTFY_SERVER}/${NTFY_TOPIC}..."
+    HTTP_CODE=$(send_ntfy "FedMAQ: Test Notification" "default" "bell,white_check_mark" "Test notification from ${HOST} at $(date)")
 
     if [ "$HTTP_CODE" = "200" ]; then
-        echo "[notify_run] SUCCESS: received HTTP 200 from ntfy.sh."
+        echo "[notify_run] SUCCESS: received HTTP 200 from ${NTFY_SERVER}."
         exit 0
     else
-        echo "[notify_run] ERROR: ntfy.sh returned HTTP ${HTTP_CODE}. Check NTFY_TOPIC and NTFY_TOKEN." >&2
+        echo "[notify_run] ERROR: ${NTFY_SERVER} returned HTTP ${HTTP_CODE}. Check NTFY_TOPIC and NTFY_TOKEN." >&2
         exit 1
     fi
 fi
@@ -104,7 +101,7 @@ CMD_STR="$*"
 
 send_ntfy "FedMAQ: Run Started" "low" "rocket" "Host: ${HOST}
 Started: ${START_TIME_HUMAN}
-Command: ${CMD_STR}"
+Command: ${CMD_STR}" >/dev/null
 
 LOG_FILE=$(mktemp /tmp/fedmaq_run_XXXXXX.log 2>/dev/null || echo "/tmp/fedmaq_run_$$.log")
 trap 'rm -f "$LOG_FILE"' EXIT INT TERM
@@ -121,7 +118,7 @@ DURATION_STR="$(format_duration "$DURATION_SEC")"
 if [ "$EXIT_CODE" -eq 0 ]; then
     send_ntfy "FedMAQ: Run Succeeded" "default" "white_check_mark" "Host: ${HOST}
 Duration: ${DURATION_STR}
-Command: ${CMD_STR}"
+Command: ${CMD_STR}" >/dev/null
 else
     ERROR_TAIL=""
     if [ -f "$LOG_FILE" ]; then
@@ -140,7 +137,7 @@ Error tail (last 15 lines):
 ${ERROR_TAIL}"
     fi
 
-    send_ntfy "FedMAQ: Run FAILED (Exit ${EXIT_CODE})" "urgent" "x,warning" "${FAIL_MSG}"
+    send_ntfy "FedMAQ: Run FAILED (Exit ${EXIT_CODE})" "urgent" "x,warning" "${FAIL_MSG}" >/dev/null
 fi
 
 exit "$EXIT_CODE"
