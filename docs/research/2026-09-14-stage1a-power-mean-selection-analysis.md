@@ -281,18 +281,20 @@ that has partially survived a doubling of \(n\), not because it has reached sign
    sits on the *disagreement* between two seeds (21 and 123) that individually swing the mean
    by roughly \(\pm 0.06\), an order of magnitude larger than the cell's own margin. Neither
    shape supports treating the selecting margin as a stable estimate.
-3. **Winner's curse into Stage 1b — now the primary open item.** `selected_p` was chosen as
-   the maximum over seven arms, so the \((p = 0.5, \omega = 0.5)\) cells are upward-biased
-   estimates of their own performance. ADR-0021 D2 has Stage 1b reuse those exact cells while
-   adding \(\omega \in \{0.25, 0.75\}\), and `scripts/analysis.py:1987` breaks ties
-   neutral-first (\(\omega = 0.5\) preferred), so the reused arm enters Stage 1b with an
-   advantage that has nothing to do with \(\omega\). [ADR-0024](../adr/0024-stage-1a-seed-extension-and-stage-1b-omega-arm.md) D2 named the fork —
-   disclose the bias in prose, or redraw all three \(\omega\) arms at seeds outside
-   \(\{0, 7, 21, 42, 123\}\) — but explicitly **deferred the choice until D1 resolves**,
-   since deciding it against a \(\hat{p}\) that might not survive the extension would have
-   been wasted motion. D1 has now resolved (this document, at \(n=5\)) without changing
-   \(\hat{p}\), so the deferred choice is unblocked and is the one substantive decision this
-   document's finalization does not itself make.
+3. **Winner's curse into Stage 1b — now resolved as a disclosure obligation.**
+   `selected_p` was chosen as the maximum over seven arms, so the \((p = 0.5, \omega = 0.5)\)
+   cells are upward-biased estimates of their own performance. ADR-0021 D2 has Stage 1b reuse
+   those exact cells while adding \(\omega \in \{0.25, 0.75\}\), and `scripts/analysis.py:1987`
+   breaks ties neutral-first (\(\omega = 0.5\) preferred), so the reused arm enters Stage 1b
+   with an advantage that has nothing to do with \(\omega\). [ADR-0024](../adr/0024-stage-1a-seed-extension-and-stage-1b-omega-arm.md)
+   D2 named the fork — disclose the bias in prose, or redraw all three \(\omega\) arms at
+   seeds outside \(\{0, 7, 21, 42, 123\}\) — and deferred the choice until D1 resolved.
+   D1 has resolved (this document, at \(n=5\)) without changing \(\hat{p}\).
+   [ADR-0026](../adr/0026-stage-1b-omega-winners-curse-disclosed-not-redrawn.md) resolves D2
+   against a fresh-seed redraw, on budget grounds, and instead binds every future presentation
+   of the Stage 1b \(\omega\) verdict to disclose the bias and the tie rule above, so that an
+   \(\hat{\omega} = 0.5\) outcome is read as the structurally expected result of a comparison
+   tilted toward it, not as evidence for \(\omega = 0.5\).
 4. **Interpretation outrunning evidence.** The mechanisms in §3.1 are plausible and are
    consistent with the two reporting skews, but §3.4 shows the ladder does not order the same
    way at every heterogeneity level. They are not established by this sweep.
@@ -301,22 +303,26 @@ that has partially survived a doubling of \(n\), not because it has reached sign
 
 ## 5. Operational Handoff to Stage 1b
 
-[ADR-0024](../adr/0024-stage-1a-seed-extension-and-stage-1b-omega-arm.md) D1, the \(n=5\) extension this document reports, has now resolved: `selected_p`
-does not change. That unblocks the `algorithm.p=` write-in for
-`conf/matrix/power_mean_omega.yaml` in principle. **Stage 1b still cannot dispatch**,
-because ADR-0024 D2, the \(\omega\) winner's-curse question (§4.3), remains open by design —
-D2 was deliberately deferred until D1 resolved, and now that it has, D2's fork (disclose the
-bias in prose, or redraw all three \(\omega\) arms at seeds outside
-\(\{0, 7, 21, 42, 123\}\)) is the operative gate before any Stage 1b cell runs.
+[ADR-0024](../adr/0024-stage-1a-seed-extension-and-stage-1b-omega-arm.md) D1, the \(n=5\) extension this document reports, has resolved: `selected_p`
+does not change. [ADR-0026](../adr/0026-stage-1b-omega-winners-curse-disclosed-not-redrawn.md)
+has resolved ADR-0024 D2, the \(\omega\) winner's-curse question (§4.3): the Stage-1a
+\(\omega = 0.5\) cells are reused, not redrawn at fresh seeds, and the reuse's bias is
+disclosed rather than removed. Both decisions this document's finalization deferred are
+therefore settled. **Stage 1b dispatch itself remains separately gated**: the
+`algorithm.p=` write-in into `conf/matrix/power_mean_omega.yaml` and the accompanying
+`matrix_contracts.power_mean_omega.sha256` re-registration in
+`conf/protocol/replacement-v1.yaml:50` are authorized in principle by ADR-0024 D1 and
+ADR-0026, but the write-in itself, and Stage 1b dispatch, each require their own explicit
+authorization per `AGENTS.md`'s frozen-config clause — ADR-0026 does not perform either.
 
 1. **Matrix materialization**: `conf/matrix/power_mean_omega.yaml` still carries the
    `algorithm.p=???` placeholder. Writing in the resolved \(\hat{p}\) invalidates
    `matrix_contracts.power_mean_omega.sha256` in `conf/protocol/replacement-v1.yaml:50`;
-   the contract must be re-registered in the same commit as the write-in. This can proceed
-   independently of D2.
-2. **The \(\omega = 0.5\) arm**: whether Stage 1b reuses the Stage-1a cells or runs fresh
-   ones at unused seeds is the D2 decision itself, not settled by this document. §4.3 is the
-   reason it is open.
+   the contract must be re-registered in the same commit as the write-in, pending explicit
+   authorization to make that change.
+2. **The \(\omega = 0.5\) arm**: Stage 1b reuses the Stage-1a cells (ADR-0026 D1); the
+   disclosure obligation this carries (ADR-0026 D2) must accompany every future
+   presentation of the Stage 1b \(\omega\) verdict.
 3. **Host layout**: non-canonical directories on JupyterHub remain preserved in
    `outputs_stash/` at repo root, leaving `outputs/` strictly canonical.
 
