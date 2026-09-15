@@ -47,7 +47,7 @@ selection_domains:
 matrix_contracts:
   baseline_tuning_wide: {stage: matched_tuning, split: val, ledger: scientific, rounds: 100, cell_count: 145, sha256: 41a4456817dd410f6685feabcce0e8600e36d1489d3bdf7c80e6a208b26603c0}
   power_mean_design: {stage: stage_1a, split: val, ledger: scientific, rounds: 100, cell_count: 168, sha256: ca023c6e6e43b9ba3b643e27dd49000be2f1de4a03e8d76e5ebd8af877496f37}
-  power_mean_omega: {stage: stage_1b, split: val, ledger: scientific, rounds: 100, cell_count: 12, sha256: bc52de88469d84645b09749d08b152d91818b3eb46278914cf275ad13866cda9}
+  power_mean_omega: {stage: stage_1b, split: val, ledger: scientific, rounds: 100, cell_count: 12, sha256: ccafcbbead38430a8697a5a64256430e250fe4bcb7c8cf7a4a48a32ea94bbac3}
   benchmark_grid: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 42, sha256: 0ff37127405a3b11d7c00c537782d258fff9c7213acb0f1eecc61262a3f13617}
   benchmark_grid_cifar100: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 42, sha256: af27fe122b5b84f82601a283185c9641e74e2773907a080f54df9503cac58d5f}
   benchmark_grid_femnist: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 21, sha256: 6c5ae4801c28cae3055ef8f743da894e297b30d08680d1a657748cc6e9ebe85b}

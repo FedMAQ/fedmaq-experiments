@@ -29,20 +29,20 @@ runs:
     label: power-mean-omega-0.25
     variant: omega0.25
     overrides:
-      # PRE-DISPATCH PLACEHOLDER. `???` composes to OmegaConf MISSING, so a subscript
-      # read of `algorithm.p` raises -- but only a subscript: `.get("p", 0.0)` returns
-      # 0.0 silently. The read that actually refuses this matrix is the planner's
-      # (scripts/matrix_planner.py: unresolved_selection). Do not substitute a plausible
-      # default the way the freeze-confirm matrix does: `_power_mean_base.yaml` defaults
-      # `p: 0`, itself a Stage-1a candidate, so a forgotten edit would dispatch all 12
-      # cells at the wrong compensation degree, indistinguishable on disk -- the identity
-      # key does not encode `p`. ADR-0021 D2; issue #96.
-      - algorithm.p=???
+      # `p=0.5` is `selected_p` from Stage 1a (ADR-0024 D1), written in explicitly rather
+      # than left to `_power_mean_base.yaml`'s `p: 0` default -- that default is itself a
+      # Stage-1a candidate, so a forgotten write-in would have dispatched all 12 cells at
+      # the wrong compensation degree, indistinguishable on disk, since the identity key
+      # does not encode `p`. This was `???` (fail-closed placeholder) until the write-in;
+      # see `scripts/matrix_planner.py:unresolved_selection` for that mechanism.
+      # ADR-0021 D2; ADR-0024 D1; ADR-0026 (the reused omega=0.5 cell below is disclosed
+      # as winner's-curse biased, not redrawn); issue #96.
+      - algorithm.p=0.5
       - algorithm.omega=0.25
   - alg: power_mean
     label: power-mean-omega-0.75
     variant: omega0.75
     overrides:
-      # PRE-DISPATCH PLACEHOLDER, fail-closed -- see the omega=0.25 run above.
-      - algorithm.p=???
+      # `p=0.5` -- see the omega=0.25 run above.
+      - algorithm.p=0.5
       - algorithm.omega=0.75

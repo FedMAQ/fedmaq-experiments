@@ -1937,13 +1937,15 @@ def test_dispatch_plans_normally_once_the_selection_is_written_in(tmp_path):
     ]
 
 
-def test_the_two_pre_selection_matrices_refuse_to_dispatch_today():
-    """Expected to fail the moment the author resolves either matrix -- that is the
-    signal to delete this test, not to weaken the guard.
+def test_the_remaining_pre_selection_matrix_refuses_to_dispatch_today():
+    """`power_mean_omega` left this guard when ADR-0024 D1 / ADR-0026 resolved its
+    `algorithm.p=???` write-in. Expected to fail the moment the author resolves
+    `pass3_freeze_confirm` too -- that is the signal to delete this test, not to
+    weaken the guard.
     """
     from scripts.matrix_planner import plan_matrix
 
-    for name in ("power_mean_omega", "pass3_freeze_confirm"):
+    for name in ("pass3_freeze_confirm",):
         path = Path(CONF_DIR) / "matrix" / f"{name}.yaml"
         with pytest.raises(ValueError, match="unresolved"):
             plan_matrix(path, OmegaConf.load(path))
