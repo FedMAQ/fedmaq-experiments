@@ -308,18 +308,18 @@ does not change. [ADR-0026](../adr/0026-stage-1b-omega-winners-curse-disclosed-n
 has resolved ADR-0024 D2, the \(\omega\) winner's-curse question (§4.3): the Stage-1a
 \(\omega = 0.5\) cells are reused, not redrawn at fresh seeds, and the reuse's bias is
 disclosed rather than removed. Both decisions this document's finalization deferred are
-therefore settled. **Stage 1b dispatch itself remains separately gated**: the
-`algorithm.p=` write-in into `conf/matrix/power_mean_omega.yaml` and the accompanying
+therefore settled. ADR-0024 D1 and ADR-0026 authorized the `algorithm.p=` write-in into
+`conf/matrix/power_mean_omega.yaml` and the accompanying
 `matrix_contracts.power_mean_omega.sha256` re-registration in
-`conf/protocol/replacement-v1.yaml:50` are authorized in principle by ADR-0024 D1 and
-ADR-0026, but the write-in itself, and Stage 1b dispatch, each require their own explicit
-authorization per `AGENTS.md`'s frozen-config clause — ADR-0026 does not perform either.
+`conf/protocol/replacement-v1.yaml:50` in principle; both received their own explicit
+authorization per `AGENTS.md`'s frozen-config clause and landed in the same commit.
+**Stage 1b dispatch itself remains separately gated** — ADR-0026 does not perform that
+authorization.
 
-1. **Matrix materialization**: `conf/matrix/power_mean_omega.yaml` still carries the
-   `algorithm.p=???` placeholder. Writing in the resolved \(\hat{p}\) invalidates
-   `matrix_contracts.power_mean_omega.sha256` in `conf/protocol/replacement-v1.yaml:50`;
-   the contract must be re-registered in the same commit as the write-in, pending explicit
-   authorization to make that change.
+1. **Matrix materialization**: `conf/matrix/power_mean_omega.yaml` now carries
+   `algorithm.p=0.5` in place of the `algorithm.p=???` placeholder. The write-in
+   invalidated `matrix_contracts.power_mean_omega.sha256`, which was re-registered in
+   `conf/protocol/replacement-v1.yaml:50` in the same commit.
 2. **The \(\omega = 0.5\) arm**: Stage 1b reuses the Stage-1a cells (ADR-0026 D1); the
    disclosure obligation this carries (ADR-0026 D2) must accompany every future
    presentation of the Stage 1b \(\omega\) verdict.
