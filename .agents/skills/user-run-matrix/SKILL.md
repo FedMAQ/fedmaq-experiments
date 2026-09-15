@@ -19,7 +19,7 @@ interprets results; the user runs every experiment on the intended checkout.
        uv run python scripts/run_matrix.py --matrix <name> --dry_run
 
    Then provide the live dispatch command wrapped with `./scripts/notify_run.sh`
-   (e.g., `./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> ...`)
+   (e.g., `./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> --run_timeout_seconds 7200 ...`)
    only after the user has reviewed the plan. Read [the execution model](../../../docs/agents/execution-model.md)
    for the checkout interpreter and allocation-specific Ray overrides; use the
    checkout's documented interpreter when `uv` is unavailable.

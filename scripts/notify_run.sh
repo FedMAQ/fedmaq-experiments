@@ -15,19 +15,24 @@ elif [ -f "$(dirname "$0")/../.env" ]; then
 fi
 
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+NTFY_HEARTBEAT_SEC="${NTFY_HEARTBEAT_SEC:-3600}"
 
 show_help() {
     cat << 'EOF'
 Usage: ./scripts/notify_run.sh [--test] <command> [args...]
 
 Wraps any long-running command, streaming live output to the console while
-dispatching start, success, or failure push notifications to an authenticated
-ntfy.sh topic.
+dispatching start, heartbeat, success, or failure push notifications to an
+authenticated, high-entropy ntfy.sh topic.
 
 Requirements:
   NTFY_TOPIC and NTFY_TOKEN must be set in your .env file or environment.
-    NTFY_TOPIC="your_ntfy_topic"
+    NTFY_TOPIC="fedmaq-thesis-bunyi-secret123"
     NTFY_TOKEN="tk_..."
+
+Optional Environment Variables:
+  NTFY_SERVER         Base URL of the ntfy server (default: https://ntfy.sh).
+  NTFY_HEARTBEAT_SEC  Interval for progress heartbeats in seconds (default: 3600; 0 to disable).
 
 Options:
   --test        Send a test notification to verify credentials and connectivity.
@@ -35,7 +40,7 @@ Options:
 
 Examples:
   ./scripts/notify_run.sh --test
-  ./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix baseline_tuning_wide -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4
+  ./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix baseline_tuning_wide --run_timeout_seconds 7200 -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4
 EOF
 }
 
@@ -46,8 +51,8 @@ fi
 
 if [ -z "${NTFY_TOPIC:-}" ] || [ -z "${NTFY_TOKEN:-}" ]; then
     echo "[notify_run] ERROR: NTFY_TOPIC or NTFY_TOKEN is not set." >&2
-    echo "[notify_run] Please set them in your .env file or environment:" >&2
-    echo "  NTFY_TOPIC=\"your_ntfy_topic\"" >&2
+    echo "[notify_run] Please set an unguessable high-entropy topic in .env or environment:" >&2
+    echo "  NTFY_TOPIC=\"fedmaq-thesis-bunyi-secret123\"" >&2
     echo "  NTFY_TOKEN=\"tk_...\"" >&2
     exit 1
 fi
@@ -104,7 +109,30 @@ Started: ${START_TIME_HUMAN}
 Command: ${CMD_STR}" >/dev/null
 
 LOG_FILE=$(mktemp /tmp/fedmaq_run_XXXXXX.log 2>/dev/null || echo "/tmp/fedmaq_run_$$.log")
-trap 'rm -f "$LOG_FILE"' EXIT INT TERM
+HEARTBEAT_PID=""
+
+cleanup() {
+    if [ -n "${HEARTBEAT_PID:-}" ]; then
+        kill "$HEARTBEAT_PID" 2>/dev/null || true
+        wait "$HEARTBEAT_PID" 2>/dev/null || true
+    fi
+    rm -f "$LOG_FILE"
+}
+trap cleanup EXIT INT TERM
+
+if [ "${NTFY_HEARTBEAT_SEC}" -gt 0 ] 2>/dev/null; then
+    (
+        while true; do
+            sleep "${NTFY_HEARTBEAT_SEC}"
+            ELAPSED_NOW=$(( $(date +%s) - START_SEC ))
+            DURATION_NOW="$(format_duration "$ELAPSED_NOW")"
+            send_ntfy "FedMAQ: Run Heartbeat" "min" "heartbeat,hourglass_flowing_sand" "Host: ${HOST}
+Elapsed: ${DURATION_NOW}
+Command: ${CMD_STR}" >/dev/null
+        done
+    ) &
+    HEARTBEAT_PID=$!
+fi
 
 set +e
 "$@" 2>&1 | tee "$LOG_FILE"

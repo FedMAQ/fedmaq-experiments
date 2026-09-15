@@ -179,11 +179,13 @@ are recorded separately and are not part of this scientific total.
   is missing and should be written instead.
 - **Push notifications on JupyterHub dispatch.** Wrap long-running allocation dispatches
   with `./scripts/notify_run.sh`:
-  `./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> -o ...`
-  The wrapper streams console output live and sends start, completion, or urgent failure
-  alerts to an authenticated ntfy.sh topic. It reads `NTFY_TOPIC` and `NTFY_TOKEN` from
-  `.env`. If either is unset, it fails fast to prevent unmonitored sweeps. Test
-  connectivity with `./scripts/notify_run.sh --test` before long runs.
+  `./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> --run_timeout_seconds 7200 -o ...`
+  The wrapper streams console output live, emits periodic hourly progress heartbeats,
+  and sends start, completion, or urgent failure alerts. On public `ntfy.sh`, set
+  `NTFY_TOPIC` to an unguessable high-entropy secret name to ensure topic privacy.
+  To prevent silent Ray or GPU deadlocks from hanging indefinitely, always pass
+  `--run_timeout_seconds` (e.g. 7200) to `run_matrix.py` so wedged cells get killed
+  and alerted. Verify connectivity with `./scripts/notify_run.sh --test` before long runs.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in
