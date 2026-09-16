@@ -11,7 +11,7 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 - **Rationale**: The assurance envelope `docs/freeze/assurance-envelope-2026-08-29.json` was pinned to candidate commit `d804b7f`, covering 146 files under the pre-remediation architecture. The remediation tickets (#96, #97, #98, #99, #100) modified core runtime, telemetry, manifests, partitions, algorithms, and configurations within `scope.include`.
 - **Impact**: Under ADR-0015 and the Gate 7 invalidation matrix (`docs/freeze/verify_gate_7.py`), any modification within `scope.include` invalidates Gates 1, 3, 4, and 6.
-- **Protocol**: Re-declaring the candidate is an author action. The author executes the paste-ready script in Section 4 below to generate `docs/freeze/assurance-envelope-2026-09-04.json` pinned to the candidate commit.
+- **Protocol**: Re-declaring the candidate is an author action. The author executes the paste-ready script in Section 4 below to generate a fresh dated assurance envelope pinned to the candidate commit. The script refuses to overwrite an existing envelope.
 
 ---
 
@@ -19,7 +19,7 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 Per repository rules, agents do not run experiments at any scale. The author executes the following 5 fast, CPU-only ($R=2$, $K=2$, `experiment.client_gpus=0`) cells in PowerShell:
 
-**Re-run required before this gate can be called clear.** The evidence under `outputs/smoke/` was captured at commit `9bfca9e` and has never been re-captured at any later candidate. Section 1's own rule settles it without a file census: a single commit touching any path matched by `scope.include` invalidates this evidence, several such commits have landed since `9bfca9e`, and that holds regardless of the Cell 5 syntax fix. The authoritative scope is the `scope.include` patterns in `docs/freeze/source_manifest.json`; neither a file list nor a count is restated here, because a stale copy of either reads as authority, and a bare `git diff --name-only` does not filter by that scope. All 5 cells need re-capture at whatever candidate is current when the gate is run, not just Cell 5.
+Candidate-specific smoke status lives in Issue #100 and the relevant dated assurance envelope. The `9bfca9e` evidence is historical and must not be used to qualify a new candidate. Before dispatch, recapture all five cells at the exact candidate commit and record the result in a new envelope. Any source or config change after capture invalidates the gate and requires a new capture.
 
 ```powershell
 # 1. FedMAQ (Calibrated c_unit=1024, post-processing enabled, power-mean base)
@@ -63,11 +63,12 @@ This checks:
 
 ## 4. Paste-Ready Candidate Re-Declaration Command (Author Action)
 
-Run this from the author's local workspace, not JupyterHub: it needs `fedmaq-literature` and `fedmaq-manuscript` checked out as siblings of `fedmaq-experiments` (as they are on the author's machine) and network access to fetch each repository's published `main`, neither of which the JupyterHub box provides. Execute the following paste-ready PowerShell command from `fedmaq-experiments` to generate `docs/freeze/assurance-envelope-2026-09-04.json` with the synchronized revisions of all three pipeline-readiness repositories:
+Run this from the author's local workspace, not JupyterHub: it needs `fedmaq-literature` and `fedmaq-manuscript` checked out as siblings of `fedmaq-experiments` (as they are on the author's machine) and network access to fetch each repository's published `main`, neither of which the JupyterHub box provides. Execute the following paste-ready PowerShell command from `fedmaq-experiments` to generate `docs/freeze/assurance-envelope-<YYYY-MM-DD>.json` with the synchronized revisions of all three pipeline-readiness repositories:
 
 ```powershell
 uv run python -c "
 import json, subprocess, sys
+from datetime import date
 from pathlib import Path
 from fedmaq.core.run_identity import config_sha256
 
@@ -115,7 +116,8 @@ for name, spec in repo_specs.items():
     }
 
 commit = revision_vector['fedmaq-experiments']['revision']
-out = Path('docs/freeze/assurance-envelope-2026-09-04.json')
+decl_date = date.today().isoformat()
+out = Path(f'docs/freeze/assurance-envelope-{decl_date}.json')
 if out.exists():
     raise SystemExit(f'{out} already exists; refusing to overwrite a sealed envelope')
 freeze = subprocess.run([sys.executable, 'scripts/check_freeze.py', '--check'], capture_output=True, text=True)
@@ -123,10 +125,10 @@ if freeze.returncode != 0:
     raise SystemExit('freeze certificate is not current; state_at_candidate would be false:\n' + freeze.stderr)
 envelope = {
     'schema_version': 1,
-    'envelope_id': 'fedmaq-pipeline-assurance-2026-09-04',
-    'created_at': '2026-09-04',
+    'envelope_id': f'fedmaq-pipeline-assurance-{decl_date}',
+    'created_at': decl_date,
     'created_by': 'thesis author (pre-dispatch candidate re-declaration)',
-    'canonical_location': 'fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-04.json',
+    'canonical_location': f'fedmaq-experiments:docs/freeze/assurance-envelope-{decl_date}.json',
     'purpose': 'Immutable, content-hashed record binding the pre-dispatch pipeline candidate across experiment, literature, and manuscript repositories. Covers the remediation closing #96, #97, #98, #99, and #100, and the subsequent pre-freeze assurance landing tracked at #92.',
     'specification': {
         'specification_issue': 'FedMAQ/fedmaq-experiments#92',
@@ -137,7 +139,7 @@ envelope = {
     'candidate': {
         'repository': 'fedmaq-experiments',
         'revision': commit,
-        'pinned_on': '2026-09-04',
+        'pinned_on': decl_date,
         'pin_semantics': 'Pre-dispatch candidate: remediation #96-#100 plus the pre-freeze assurance landing (#92)'
     },
     'freeze_certificate': {

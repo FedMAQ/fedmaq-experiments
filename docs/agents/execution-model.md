@@ -113,7 +113,7 @@ arms.
 ### Gate 1 — `pre-registration-stage1a`
 
 6. Freeze the audited code, corrected byte instrument, widened-tuning verdicts,
-   baseline table, `power_mean_design` matrix, expected 126-cell manifest, and Stage-1
+   baseline table, `power_mean_design` matrix, expected 168-cell manifest, and Stage-1
    selection rule. Re-run `just check`, the expected-run generator in check mode, and
    the current-code golden compare, then tag that exact pushed commit
    `pre-registration-stage1a`.
@@ -121,11 +121,12 @@ arms.
 No reported replacement cell may precede this tag. Earlier provisional tags do not
 authorize this campaign.
 
-### Stage 1a — Power-mean degree and structural controls (126 reported cells)
+### Stage 1a — Power-mean degree and structural controls (168 reported cells)
 
 7. `--matrix power_mean_design`. It contains the seven degree settings at
    `omega=0.5`, the resource-only control, and six structural-rule settings across
-   three skews (`dirichlet_alpha` 0.1, 0.3, 1.0) and three seeds.
+   three skews (`dirichlet_alpha` 0.1, 0.3, 1.0). Each degree setting uses five
+   registered seeds; the resource-only and structural-rule arms use three seeds.
 8. Run `scripts/select_power_mean.py`. Selection itself is unchanged from the
    original design: it refuses an incomplete closure certificate and resolves
    disagreement between the two selection skews (0.1, 1.0) through the
@@ -164,8 +165,9 @@ authorize this campaign.
 14. `--matrix uniform_memory_control`, contributing six cells, plus the registered
     FedPAQ pipeline and memory-sensitivity matrices.
 
-The full scientific workload is therefore 415 cells: 145 matched-tuning cells,
-96 formulation cells, and 174 downstream confirmation cells. Assurance executions
+The full scientific workload is therefore 499 cells: 145 matched-tuning cells,
+168 Stage-1a formulation cells, 12 Stage-1b ω cells, and 174 downstream confirmation
+cells. Assurance executions
 are recorded separately and are not part of this scientific total.
 
 ---
