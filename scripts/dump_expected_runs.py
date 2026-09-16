@@ -84,6 +84,13 @@ MEMORY_SENSITIVITY_SNAPSHOT_PATH = (
     REPO_ROOT / "docs" / "recut" / "memory_sensitivity_expected_runs.json"
 )
 
+# ``expected_runs.json`` is the closure record for the superseded v1 campaign,
+# not a mutable description of the selected downstream configuration. Its rows
+# retain the historical Formulation 2 identity even after Gate 2 writes the
+# selected power-mean family into fedmaq.yaml. The active downstream ledger and
+# its dedicated expected sets are composed from the selected configuration.
+LEGACY_IDENTITY_MATRICES = frozenset(REPORTABLE_MATRICES)
+
 
 def _load_matrix(name: str) -> dict:
     return OmegaConf.to_container(OmegaConf.load(MATRIX_DIR / f"{name}.yaml"), resolve=True)
@@ -115,6 +122,7 @@ def expected_identities(matrix_names: tuple[str, ...] = REPORTABLE_MATRICES) -> 
         for name in matrix_names:
             matrix = _load_matrix(name)
             experiment = matrix.get("experiment")
+            historical_fedmaq_formulation = matrix.get("identity", {}).get("fedmaq_formulation")
             for spec in expand_matrix(matrix, name):
                 alpha, formulation, post_process = resolved(
                     spec["dataset"],
@@ -123,6 +131,22 @@ def expected_identities(matrix_names: tuple[str, ...] = REPORTABLE_MATRICES) -> 
                     spec["algorithm_config"],
                     tuple(spec["overrides"]),
                 )
+                formulation_override = any(
+                    str(override).startswith("algorithm.formulation=")
+                    for override in spec["overrides"]
+                )
+                if (
+                    spec["algorithm_config"] == "fedmaq"
+                    and historical_fedmaq_formulation is not None
+                    and not formulation_override
+                ):
+                    formulation = historical_fedmaq_formulation
+                elif (
+                    name in LEGACY_IDENTITY_MATRICES
+                    and spec["algorithm_config"].startswith("fedmaq")
+                    and not formulation_override
+                ):
+                    formulation = 2
                 group = groups.setdefault(
                     spec["experiment_group"],
                     {"matrices": [], "regimes": {}, "runs": []},

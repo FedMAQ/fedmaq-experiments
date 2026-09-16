@@ -1731,10 +1731,10 @@ def test_downstream_ablation_arms_preserve_identical_quantizer_decisions(arm):
 
 
 def test_power_mean_base_and_fedmaq_configs_agree_on_shared_keys():
-    """Assert _power_mean_base.yaml and fedmaq.yaml agree on all shared keys.
+    """Assert the selected FedMAQ config inherits every non-selection setting.
 
-    Key sets must differ only by formulation and the two exponents (gamma1, gamma2),
-    and all shared values must be equal. Must fail if either file's memory unit is changed alone.
+    The Stage 1a base retains its p=0 exploratory candidate, while fedmaq.yaml
+    carries the selected p=0.5. All other shared settings must remain equal.
     """
     fedmaq_cfg = OmegaConf.to_container(
         OmegaConf.load(Path(CONF_DIR) / "algorithm" / "fedmaq.yaml"), resolve=True
@@ -1755,8 +1755,11 @@ def test_power_mean_base_and_fedmaq_configs_agree_on_shared_keys():
         f"_power_mean_base.yaml has keys not in fedmaq.yaml: {base_keys - fedmaq_keys}"
     )
 
-    # All shared keys must have equal values
-    for k in base_keys:
+    assert power_mean_base_cfg["p"] == 0
+    assert fedmaq_cfg["p"] == 0.5
+
+    # All shared non-selection keys must have equal values.
+    for k in base_keys - {"p"}:
         assert fedmaq_cfg[k] == power_mean_base_cfg[k], (
             f"Config discrepancy on shared key {k!r}: "
             f"fedmaq.yaml={fedmaq_cfg[k]!r} vs _power_mean_base.yaml={power_mean_base_cfg[k]!r}"

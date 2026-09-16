@@ -149,9 +149,12 @@ authorize this campaign.
 
 ### Gate 2 — selected formulation and downstream manifest
 
-11. Freeze the selected pair, resolved configs, ablation arm diffs, and the complete
-    174-cell downstream manifest. Run `just check`, manifest checks, and the golden
-    compare, then tag the exact pushed commit before any downstream cell runs.
+11. Commit both Stage 1 resolution reports, then run
+    `uv run python scripts/verify_gate_2.py` to bind them to the resolved FedMAQ
+    configuration. Freeze that verified pair, resolved configs, ablation arm diffs,
+    and the complete 174-cell downstream manifest. Run `just check`, manifest checks,
+    and the golden compare, then tag the exact pushed commit before any downstream cell
+    runs.
     A material change after this gate opens a new labelled exploration amendment; it
     is not folded silently into the frozen campaign.
 

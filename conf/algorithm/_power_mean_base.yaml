@@ -9,7 +9,7 @@ resource_aware: true
 kappa: 1.0
 tau_g: 0.5
 tau_n: 0.5
-p: 0
+p: 0  # Stage 1a exploratory default; downstream uses fedmaq.yaml's selected p=0.5
 omega: 0.5
 
 temperature: 1.0

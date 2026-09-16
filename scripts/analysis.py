@@ -330,6 +330,8 @@ class PowerMeanStageOneB:
     omegas_by_variant: dict[str, float]
     candidate_omegas: tuple[float, ...]
     seeds: frozenset[int]
+    dataset: str
+    selection_alphas: frozenset[float]
 
 
 @cache
@@ -363,6 +365,11 @@ def power_mean_stage_one_b() -> PowerMeanStageOneB:
         omegas_by_variant=omegas_by_variant,
         candidate_omegas=(0.25, 0.5, 0.75),
         seeds=seed_sets[0] if seed_sets else frozenset({0, 42, 123}),
+        dataset=str(matrix["dataset"]),
+        selection_alphas=frozenset(
+            float(str(heterogeneity).rsplit("_", 1)[-1])
+            for heterogeneity in matrix["heterogeneities"]
+        ),
     )
 
 
@@ -2014,6 +2021,8 @@ def select_power_mean_omega_iso_byte(
         p_val: float | str | None = None
 
         if r.experiment_group == stage_1b.experiment_group:
+            if r.dataset != stage_1b.dataset or r.alpha not in stage_1b.selection_alphas:
+                continue
             omega_val = stage_1b.omegas_by_variant.get(r.variant)
             p_val = p_norm
             if omega_val is not None and not p_matches(r, p_norm):
@@ -2022,6 +2031,14 @@ def select_power_mean_omega_iso_byte(
                     f"but selected p={p_norm!r}"
                 )
         elif r.experiment_group == stage_1b.stage_1a_group:
+            # Stage 1a also includes extension seeds and a non-selecting alpha=0.3
+            # robustness arm. Stage 1b may reuse only its registered shared subset.
+            if (
+                r.dataset != stage_1b.dataset
+                or r.alpha not in stage_1b.selection_alphas
+                or r.seed not in stage_1b.seeds
+            ):
+                continue
             stage_1a = power_mean_stage_one()
             if r.variant in stage_1a.degrees_by_variant:
                 p_cand = stage_1a.degrees_by_variant[r.variant]
@@ -2214,7 +2231,7 @@ def verify_gate_2_preconditions(
     selected_omega = stage_1b_verdict.get("selected_omega")
     if selected_p is None or selected_omega is None:
         raise ValueError("Gate 2 requires resolved Stage 1a p and Stage 1b omega verdicts")
-    if formulation != "power_mean" and formulation != 2:
+    if formulation != "power_mean":
         raise ValueError(f"Gate 2 expected a power-mean FedMAQ formulation, found {formulation!r}")
 
     actual_p = algorithm.get("p")

@@ -74,7 +74,7 @@ This checks:
 
 ## 4. Paste-Ready Candidate Re-Declaration Command (Author Action)
 
-Run this from the author's local workspace, not JupyterHub: it needs `fedmaq-literature` and `fedmaq-manuscript` checked out as siblings of `fedmaq-experiments` (as they are on the author's machine) and network access to fetch each repository's published `main`, neither of which the JupyterHub box provides. Execute the following paste-ready PowerShell command from `fedmaq-experiments` to generate `docs/freeze/assurance-envelope-<YYYY-MM-DD>.json` with the synchronized revisions of all three pipeline-readiness repositories:
+Run this from the author's local workspace, not JupyterHub: it needs `fedmaq-literature` and `fedmaq-manuscript` checked out as siblings of `fedmaq-experiments` (as they are on the author's machine) and network access to fetch each repository's published `main`, neither of which the JupyterHub box provides. Execute the following paste-ready PowerShell command from `fedmaq-experiments` to generate a non-overwriting `docs/freeze/assurance-envelope-<YYYY-MM-DD>[-N].json` with the synchronized revisions of all three pipeline-readiness repositories:
 
 ```powershell
 uv run python -c "
@@ -129,17 +129,19 @@ for name, spec in repo_specs.items():
 commit = revision_vector['fedmaq-experiments']['revision']
 decl_date = date.today().isoformat()
 out = Path(f'docs/freeze/assurance-envelope-{decl_date}.json')
-if out.exists():
-    raise SystemExit(f'{out} already exists; refusing to overwrite a sealed envelope')
+suffix = 2
+while out.exists():
+    out = Path(f'docs/freeze/assurance-envelope-{decl_date}-{suffix}.json')
+    suffix += 1
 freeze = subprocess.run([sys.executable, 'scripts/check_freeze.py', '--check'], capture_output=True, text=True)
 if freeze.returncode != 0:
     raise SystemExit('freeze certificate is not current; state_at_candidate would be false:\n' + freeze.stderr)
 envelope = {
     'schema_version': 1,
-    'envelope_id': f'fedmaq-pipeline-assurance-{decl_date}',
+    'envelope_id': f'fedmaq-pipeline-assurance-{out.stem.removeprefix("assurance-envelope-")}',
     'created_at': decl_date,
     'created_by': 'thesis author (pre-dispatch candidate re-declaration)',
-    'canonical_location': f'fedmaq-experiments:docs/freeze/assurance-envelope-{decl_date}.json',
+    'canonical_location': f'fedmaq-experiments:{out.as_posix()}',
     'purpose': 'Immutable, content-hashed record binding the pre-dispatch pipeline candidate across experiment, literature, and manuscript repositories. Covers the remediation closing #96, #97, #98, #99, and #100, and the subsequent pre-freeze assurance landing tracked at #92.',
     'specification': {
         'specification_issue': 'FedMAQ/fedmaq-experiments#92',

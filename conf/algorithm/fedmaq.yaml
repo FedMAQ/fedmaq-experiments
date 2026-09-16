@@ -16,14 +16,11 @@ resource_aware: true  # Tier-1 ceiling active. False only in the §4.3.7 ablatio
 # Tier 2 soft quality formulation selection
 # 0: Resource-Only Hard Cap, 1: Linear Sum, 2: Multiplicative, 3: Gradient-Primary, 4: Threshold-Based
 #
-# FROZEN 2 — Decision 84. The §4.3.6 formulation study's verdict under the
-# Decision 83 amended criterion (accuracy at the minimum common cumulative-MB
-# budget): Formulation 2 wins the severe skew by 2.1pp and Rule 2
-# (`divergence_severe_skew_breaks`) breaks the α=1.0 near-tie in its favour.
-# This REPLACED the long-standing default of 3, which won only under the
-# superseded bytes-to-target rule while finishing last on accuracy.
-# Do not revert this to 3 to match an older doc; the docs are what is stale.
-formulation: 2
+# FROZEN POWER-MEAN — Stage 1a selected p=0.5 and Stage 1b then selected the
+# balanced omega=0.5 at both registered validation skews. Gate 2 must bind the
+# downstream campaign to this pair; the historical Formulation 2 setting remains
+# archived evidence only and must not be restored for a downstream dispatch.
+formulation: power_mean
 
 # Formulation-specific parameters
 gamma1: 0.5      # Alternative 1 & 2 (gradient weight)
@@ -31,8 +28,8 @@ gamma2: 0.5      # Alternative 1 & 2 (dataset size weight)
 kappa: 1.0  # Formulation 3 (dataset size modulator strength)
 tau_g: 0.5       # Alternative 4 (gradient norm threshold)
 tau_n: 0.5       # Alternative 4 (dataset size threshold)
-p: 0             # Power-mean family degree (ADR-0021 D4; p=0 is geometric/Formulation 2)
-omega: 0.5       # Power-mean state-signal weight (ADR-0021 D4; omega=0.5 is balanced center)
+p: 0.5           # Stage 1a selected compensation degree
+omega: 0.5       # Stage 1b selected balanced state-signal weight
 
 # Server-side Knowledge Distillation settings (§3.5)
 # T — generalized softmax temperature. 1.0 is a DECISION, not the code default

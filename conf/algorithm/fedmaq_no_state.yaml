@@ -1,24 +1,9 @@
 # Ablation Configuration 4 (manuscript §4.3.7): FedMAQ minus state awareness.
 #
-# THIS IS NO LONGER THE FALLBACK ARM (Decision 84). It was, for as long as
-# fedmaq.yaml froze on Formulation 3: that form makes the gradient norm a
-# multiplicative primary term carrying no weight of its own, so it could not
-# express the removal of state awareness at any parameter setting, and the arm
-# had to run on Formulation 1 (gamma1 = 0) and anchor against the formulation
-# study's Formulation 1 runs rather than against Configuration 7.
-#
-# The §4.3.6 study froze Formulation 2, which carries an exponent on each signal,
-# so the removal is now expressible in place: gamma1 = 0 sends the gradient term
-# to g~^0 = 1 and leaves q_hat = q_min + (q_max - q_min)*n~^gamma2. The arm is
-# nested like every other, the formulation override is gone, and the parity
-# anchor reverts to Configuration 7 -- which also frees the six formulation-study
-# Formulation 1 runs from doing double duty as an anchor.
-#
-# NO RENORMALIZATION of the surviving gamma2. Under Formulation 1 it was forced:
-# gamma2*n~ caps at 0.5, so the surviving signal could not reach q_max without
-# lifting gamma2 to 1.0. Multiplicatively, n~^0.5 already spans [0, 1], so lifting
-# it would change only the response curvature and add a second difference. Across
-# both Formulation 2 (gamma1=0) and power-mean (omega=0, ADR-0021 D4), the removal is exact.
+# The frozen power-mean formulation removes state awareness exactly at omega=0,
+# which retains only data richness. gamma1=0 is retained solely so the archived
+# historical Formulation 2 contrast remains reconstructable; it is inert under
+# the selected formulation and is not an additional downstream removal.
 
 #
 # INHERITS full FedMAQ and states only its removal, so the frozen refinement
@@ -29,6 +14,6 @@ defaults:
   - fedmaq
   - _self_
 
-gamma1: 0.0                # <-- Formulation 2 removal: g~^0 = 1 (removes state signal)
-omega: 0.0                 # <-- Power-mean removal (ADR-0021 D4): weights data signal, removes state signal
+gamma1: 0.0                # Historical Formulation 2 reconstruction only; inert for power_mean
+omega: 0.0                 # Selected power-mean removal: retains data, removes state
 

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -16,6 +17,7 @@ from fedmaq.core.run_identity import identity_key
 from scripts.common import expand_matrix
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CONF_DIR = REPO_ROOT / "conf"
 MATRIX_DIR = REPO_ROOT / "conf" / "matrix"
 LEDGER_PATH = REPO_ROOT / "docs" / "recut" / "stage_ledgers.json"
 SCHEMA_VERSION = 1
@@ -54,6 +56,39 @@ def _load(name: str) -> dict[str, Any]:
 
 def _ids(matrix: dict[str, Any], name: str, stage: str) -> list[str]:
     tasks = expand_matrix(matrix, name)
+    formulations: dict[tuple[str, str | None, str, str, tuple[str, ...]], object] = {}
+
+    with initialize_config_dir(config_dir=str(CONF_DIR), version_base="1.3"):
+        for task in tasks:
+            algorithm_config = str(task["algorithm_config"])
+            overrides = tuple(str(value) for value in task["overrides"])
+            key = (
+                str(task["dataset"]),
+                str(matrix.get("experiment")) if matrix.get("experiment") else None,
+                str(task["heterogeneity"]),
+                algorithm_config,
+                overrides,
+            )
+            if key not in formulations:
+                selections = [
+                    f"dataset={key[0]}",
+                    f"heterogeneity={key[2]}",
+                    f"algorithm={algorithm_config}",
+                ]
+                if key[1]:
+                    selections.append(f"experiment={key[1]}")
+                cfg = compose(config_name="config", overrides=selections + list(overrides))
+                historical_fedmaq_formulation = matrix.get("identity", {}).get("fedmaq_formulation")
+                formulations[key] = (
+                    historical_fedmaq_formulation
+                    if (
+                        stage == "matched_tuning"
+                        and algorithm_config == "fedmaq"
+                        and historical_fedmaq_formulation is not None
+                    )
+                    else cfg.algorithm.get("formulation")
+                )
+
     return [
         identity_key(
             dataset=str(task["dataset"]),
@@ -61,7 +96,15 @@ def _ids(matrix: dict[str, Any], name: str, stage: str) -> list[str]:
             algorithm_config=str(task["algorithm_config"]),
             variant=str(task["variant"]),
             alpha=_alpha(task),
-            formulation=2 if task["algorithm_config"] == "fedmaq" else None,
+            formulation=formulations[
+                (
+                    str(task["dataset"]),
+                    str(matrix.get("experiment")) if matrix.get("experiment") else None,
+                    str(task["heterogeneity"]),
+                    str(task["algorithm_config"]),
+                    tuple(str(value) for value in task["overrides"]),
+                )
+            ],
             seed=int(task["seed"]),
         )
         + f"|stage={stage}|split={task['split']}"

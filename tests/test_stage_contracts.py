@@ -9,6 +9,7 @@ import pandas as pd
 
 from scripts.golden_diff import repeatability_report, transition_diagnostic
 from scripts.run_assurance_fixtures import run_analysis_fixture
+from scripts.stage_ledgers import build_ledgers
 from tests.run_fixtures import run_fedmaq_q_transition_fixture
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,20 @@ def test_ledgers_have_required_counts_and_are_disjoint() -> None:
         cell_id for matrix in assurance["matrices"].values() for cell_id in matrix["cell_ids"]
     }
     assert scientific_ids.isdisjoint(assurance_ids)
+
+
+def test_downstream_ledger_carries_the_selected_power_mean_identity() -> None:
+    """Gate 2 must not label downstream FedMAQ rows as the retired formulation."""
+    ledgers = build_ledgers()
+    matched_tuning_ids = ledgers["scientific"]["stages"]["matched_tuning"]["cell_ids"]
+    downstream_ids = ledgers["scientific"]["stages"]["downstream"]["cell_ids"]
+    historical_fedmaq_ids = [cell_id for cell_id in matched_tuning_ids if "|fedmaq|" in cell_id]
+    fedmaq_ids = [cell_id for cell_id in downstream_ids if "|fedmaq" in cell_id]
+
+    assert historical_fedmaq_ids
+    assert all("|f2|" in cell_id for cell_id in historical_fedmaq_ids)
+    assert fedmaq_ids
+    assert all("|fpower_mean|" in cell_id for cell_id in fedmaq_ids)
 
 
 def test_transition_is_diagnostic_and_never_pass_eligible(tmp_path: Path) -> None:

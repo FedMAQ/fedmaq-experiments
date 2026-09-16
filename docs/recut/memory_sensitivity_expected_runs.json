@@ -19,18 +19,18 @@
         }
       },
       "runs": [
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|f2|s0",
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|f2|s123",
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|f2|s42",
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|f2|s0",
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|f2|s123",
-        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|f2|s42",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|f2|s0",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|f2|s123",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|f2|s42",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|f2|s0",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|f2|s123",
-        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|f2|s42"
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|fpower_mean|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|fpower_mean|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a0.1|fpower_mean|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|fpower_mean|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|fpower_mean|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit2048|a1.0|fpower_mean|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|fpower_mean|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|fpower_mean|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a0.1|fpower_mean|s42",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|fpower_mean|s0",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|fpower_mean|s123",
+        "cifar10|memory_sensitivity|fedmaq|cunit512|a1.0|fpower_mean|s42"
       ],
       "count": 12
     }

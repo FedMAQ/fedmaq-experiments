@@ -40,7 +40,7 @@
 # The five arms below are the ONLY formulation candidates. scripts/analysis.py
 # scopes them by this file's `experiment_group`, because the exploration
 # factorial, the R=100 confirmation, the conditional recheck and the grid all
-# dispatch `algorithm=fedmaq` and fedmaq.yaml carries `formulation: 2` -- so on
+# historically dispatched `algorithm=fedmaq` under Formulation 2 -- so on
 # algorithm and formulation alone they are indistinguishable from a candidate
 # here. The grid's rows are the dangerous ones: they run with post_process=true,
 # and pooling them into Formulation 3's cell would credit the incumbent formula

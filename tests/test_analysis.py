@@ -50,6 +50,7 @@ from analysis import (
     select_winner,
     select_winner_iso_byte,
     sustained_crossing,
+    verify_gate_2_preconditions,
     write_baseline_tuning_plots,
 )
 from common import get_canonical_output_dir
@@ -1687,6 +1688,26 @@ def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tm
                 r1b.p = selected_p
                 runs.append(r1b)
 
+    # Stage 1a also records its five-seed extension and a non-selecting alpha=0.3
+    # robustness arm. Neither belongs to the registered Stage 1b comparison: only
+    # the shared alpha={0.1, 1.0}, seed={0, 42, 123} subset supplies omega=0.5.
+    for alpha, seeds in ((0.1, (7, 21)), (1.0, (7, 21)), (0.3, stage_1b.seeds)):
+        for seed in seeds:
+            extra = _write_run(
+                tmp_path,
+                "fedmaq",
+                "power_mean",
+                seed,
+                [0.4, 0.6, 0.75],
+                [5.0, 10.0, 15.0],
+                group=POWER_MEAN_DESIGN_GROUP,
+                alpha=alpha,
+                variant="p-1",
+            )
+            extra.algorithm_config = stage_1a.algorithm_config
+            extra.p = selected_p
+            runs.append(extra)
+
     selection = select_power_mean_omega_iso_byte(runs, selected_p=selected_p)
     assert selection["cifar10_alpha_0.1"]["selected_p"] == -1.0
     # Neutral-first tie-break selects 0.5 when accuracies are identical
@@ -1698,6 +1719,51 @@ def test_power_mean_omega_selection_joins_stage1a_and_neutral_first_tie_break(tm
     assert resolution["selected_p"] == -1.0
     assert resolution["selected_omega"] == 0.5
     assert resolution["rule"] == "agreement"
+
+
+def test_gate_2_requires_the_selected_power_mean_formulation():
+    """The former Formulation 2 may never satisfy the downstream selection gate."""
+    stage_1a = {"selected_p": 0.5}
+    stage_1b = {"selected_omega": 0.5}
+
+    with pytest.raises(ValueError, match="expected a power-mean"):
+        verify_gate_2_preconditions({"formulation": 2, "p": 0.5, "omega": 0.5}, stage_1a, stage_1b)
+
+    verified = verify_gate_2_preconditions(
+        {"formulation": "power_mean", "p": 0.5, "omega": 0.5}, stage_1a, stage_1b
+    )
+    assert verified["verified"] is True
+
+
+def test_gate_2_verifier_reads_both_selection_reports(tmp_path):
+    """The handoff verifier must use report provenance, not pasted verdict values."""
+    from scripts.verify_gate_2 import verify_gate_2_selection
+
+    stage_1a = tmp_path / "stage1a.json"
+    stage_1a.write_text(
+        json.dumps(
+            {
+                "report_type": "power_mean_degree_resolution",
+                "data": {"selected_p": 0.5},
+            }
+        ),
+        encoding="utf-8",
+    )
+    stage_1b = tmp_path / "stage1b.json"
+    stage_1b.write_text(
+        json.dumps(
+            {
+                "report_type": "power_mean_omega_resolution",
+                "data": {"selected_omega": 0.5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    verified = verify_gate_2_selection(stage_1a, stage_1b)
+    assert verified["formulation"] == "power_mean"
+    assert verified["p"] == 0.5
+    assert verified["omega"] == 0.5
 
 
 def test_power_mean_omega_selection_rejects_missing_manifest_p(tmp_path):
