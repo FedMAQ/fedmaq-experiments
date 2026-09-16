@@ -19,7 +19,7 @@ NTFY_HEARTBEAT_SEC="${NTFY_HEARTBEAT_SEC:-3600}"
 
 show_help() {
     cat << 'EOF'
-Usage: ./scripts/notify_run.sh [--test] <command> [args...]
+Usage: bash ./scripts/notify_run.sh [--test] <command> [args...]
 
 Wraps any long-running command, streaming live output to the console while
 dispatching start, heartbeat, success, or failure push notifications to an
@@ -39,8 +39,8 @@ Options:
   -h, --help    Show this help message.
 
 Examples:
-  ./scripts/notify_run.sh --test
-  ./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix baseline_tuning_wide --run_timeout_seconds 7200 -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4
+  bash ./scripts/notify_run.sh --test
+  bash ./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix baseline_tuning_wide --run_timeout_seconds 7200 -o ray.temp_dir=/tmp/ray-cjb -o ray.object_store_gb=4
 EOF
 }
 

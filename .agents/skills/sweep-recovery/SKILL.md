@@ -18,7 +18,7 @@ prepared for the user; recovery is not inferred from a missing local output.
   invocation rewrites the status file.
 - Re-run the same matrix with `--skip_completed` after a dry run. It keys off
   each run's final-round checkpoint and fills arbitrary gaps; it is the default
-  recovery path. Wrap live allocation commands with `./scripts/notify_run.sh`
+  recovery path. Wrap live allocation commands with `bash ./scripts/notify_run.sh`
   per [the execution model](../../../docs/agents/execution-model.md).
 - Use `--start_at N` only when intentionally resuming the canonical list from
   index N after reviewing the dry-run plan. It assumes no completed task before
