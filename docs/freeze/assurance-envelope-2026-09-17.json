@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "envelope_id": "fedmaq-pipeline-assurance-2026-09-17",
+  "created_at": "2026-09-17",
+  "created_by": "thesis author (pre-dispatch candidate re-declaration)",
+  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-17.json",
+  "purpose": "Immutable, content-hashed record binding the pre-dispatch pipeline candidate across experiment, literature, and manuscript repositories. Covers the remediation closing #96, #97, #98, #99, and #100, and the subsequent pre-freeze assurance landing tracked at #92.",
+  "specification": {
+    "specification_issue": "FedMAQ/fedmaq-experiments#92",
+    "execution_issue": "FedMAQ/fedmaq-experiments#100"
+  },
+  "content_hash": {
+    "algorithm": "sha256",
+    "value": "0a4fc854c19f4c32c7dec35d23b2bc668d10ff2b00dfaaf99e022f6443797b0b"
+  },
+  "revision_vector": {
+    "fedmaq-experiments": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
+      "revision": "94d44c1079ff4e7f505ebabc005fd38ea8602d08",
+      "clean_tree": true,
+      "role": "remediated pipeline implementation, configuration, dispatch, tests"
+    },
+    "fedmaq-literature": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-literature",
+      "revision": "2e121cd1c564face719c8d74d54ad871a6545f4b",
+      "clean_tree": true,
+      "role": "curated method and protocol knowledge"
+    },
+    "fedmaq-manuscript": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-manuscript",
+      "revision": "5336205cb58942df2bef79d7acc930106bd964ab",
+      "clean_tree": true,
+      "role": "thesis method, protocol, and reporting claims"
+    }
+  },
+  "candidate": {
+    "repository": "fedmaq-experiments",
+    "revision": "94d44c1079ff4e7f505ebabc005fd38ea8602d08",
+    "pinned_on": "2026-09-17",
+    "pin_semantics": "Pre-dispatch candidate: remediation #96-#100 plus the pre-freeze assurance landing (#92)"
+  },
+  "freeze_certificate": {
+    "path": "docs/freeze/source_manifest.json",
+    "schema_version": 1,
+    "state_at_candidate": "current"
+  }
+}
