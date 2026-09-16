@@ -12,8 +12,11 @@ interprets results; the user runs every experiment on the intended checkout.
 
 ## Prepare
 
-1. Read the current matrix file under `conf/matrix/` and confirm the intended
-   checkout, exact commit, stage, and output group with the user.
+1. Read the relevant execution Issue and any dated assurance envelope it names,
+   then the current matrix file under `conf/matrix/`. Confirm the intended
+   checkout, exact commit, stage, and output group with the user. When the Issue
+   names an already sealed exact candidate, dispatch it detached; a later
+   documentation-only `main` commit does not replace that candidate.
 2. Emit a portable dry-run command before the dispatch command. Use the current runner:
 
        uv run python scripts/run_matrix.py --matrix <name> --dry_run

@@ -3,10 +3,10 @@
 How FedMAQ experiments are executed: where runs happen, in what order, and the
 operational controls that keep a sweep recoverable.
 
-**This file is durable reference, not state.** It carries no run counts and no
-"done/pending" markers — those move, and every one of them lives in the pinned
-dispatch-state Issue. If you need to know what has actually run, read that Issue or
-ask for the relevant matrix's `sweep_status.json`. Do not add status here.
+**This file is durable reference, not state.** It carries no completed/pending
+counts or "done/pending" markers — those move, and every one of them lives in the
+pinned dispatch-state Issue. If you need to know what has actually run, read that
+Issue or ask for the relevant matrix's `sweep_status.json`. Do not add status here.
 
 > **Provenance.** This was `docs/RUNBOOK.md` until 2026-08-07. It moved and was
 > rewritten in the same commit, so `git log --follow` does not traverse the rename —

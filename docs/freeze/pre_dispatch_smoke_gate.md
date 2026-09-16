@@ -1,6 +1,13 @@
 # Pre-Dispatch Smoke Gate and Candidate Re-Declaration Protocol (#100)
 
-This document records the pre-dispatch smoke gate protocol, assurance envelope invalidation analysis, and author re-declaration procedure required for closing Issue #100 prior to full-matrix dispatch (#93).
+This document records the reusable pre-dispatch smoke and assurance-envelope
+re-declaration procedure established for Issue #100. It is not a live readiness
+record.
+
+Before proposing any stage command, read the relevant execution Issue and its dated
+assurance envelope. If they name a sealed envelope for the exact candidate, preserve
+and verify that evidence, then proceed through the matrix handoff. Use this document's
+smoke and re-declaration steps only for a new, missing, or invalidated candidate.
 
 ---
 
@@ -19,7 +26,11 @@ This document records the pre-dispatch smoke gate protocol, assurance envelope i
 
 Per repository rules, agents do not run experiments at any scale. The author executes the following 5 fast, CPU-only ($R=2$, $K=2$, `experiment.client_gpus=0`) cells in PowerShell:
 
-Candidate-specific smoke status lives in Issue #100 and the relevant dated assurance envelope. The `9bfca9e` evidence is historical and must not be used to qualify a new candidate. Before dispatch, recapture all five cells at the exact candidate commit and record the result in a new envelope. Any source or config change after capture invalidates the gate and requires a new capture.
+Candidate-specific smoke status lives in the relevant execution Issue and dated
+assurance envelope. The `9bfca9e` evidence is historical and must not be used to
+qualify a new candidate. For a new or invalidated candidate, recapture all five cells
+at the exact commit and record the result in a new envelope. Any source or config
+change after capture invalidates the gate and requires a new capture.
 
 ```powershell
 # 1. FedMAQ (Calibrated c_unit=1024, post-processing enabled, power-mean base)
