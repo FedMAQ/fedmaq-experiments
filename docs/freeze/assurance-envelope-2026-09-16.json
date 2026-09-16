@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "envelope_id": "fedmaq-pipeline-assurance-2026-09-16",
+  "created_at": "2026-09-16",
+  "created_by": "thesis author (pre-dispatch candidate re-declaration)",
+  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-16.json",
+  "purpose": "Immutable, content-hashed record binding the pre-dispatch pipeline candidate across experiment, literature, and manuscript repositories. Covers the remediation closing #96, #97, #98, #99, and #100, and the subsequent pre-freeze assurance landing tracked at #92.",
+  "specification": {
+    "specification_issue": "FedMAQ/fedmaq-experiments#92",
+    "execution_issue": "FedMAQ/fedmaq-experiments#100"
+  },
+  "content_hash": {
+    "algorithm": "sha256",
+    "value": "b442c70b02227ed5e194d234780aead0803fc48bc133e08fa484b3008ef225ad"
+  },
+  "revision_vector": {
+    "fedmaq-experiments": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
+      "revision": "73c85acfae372dc2e49f8655cce91f0551675a99",
+      "clean_tree": true,
+      "role": "remediated pipeline implementation, configuration, dispatch, tests"
+    },
+    "fedmaq-literature": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-literature",
+      "revision": "b368d016ec1b9d405f21c5ed42644b06e5ee0d77",
+      "clean_tree": true,
+      "role": "curated method and protocol knowledge"
+    },
+    "fedmaq-manuscript": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-manuscript",
+      "revision": "5336205cb58942df2bef79d7acc930106bd964ab",
+      "clean_tree": true,
+      "role": "thesis method, protocol, and reporting claims"
+    }
+  },
+  "candidate": {
+    "repository": "fedmaq-experiments",
+    "revision": "73c85acfae372dc2e49f8655cce91f0551675a99",
+    "pinned_on": "2026-09-16",
+    "pin_semantics": "Pre-dispatch candidate: remediation #96-#100 plus the pre-freeze assurance landing (#92), re-declared after the JupyterHub golden repeatability gate passed at this commit"
+  },
+  "freeze_certificate": {
+    "path": "docs/freeze/source_manifest.json",
+    "schema_version": 1,
+    "state_at_candidate": "current"
+  }
+}
