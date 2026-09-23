@@ -4,6 +4,14 @@
 amended 2026-09-13 ([#107](https://github.com/FedMAQ/fedmaq-experiments/issues/107))
 **Supersedes**: `docs/DECISIONS.md` Decisions 67, 73, 81, 87 (file deleted; see ADR-0014)
 
+**Post-campaign qualification (2026-09-23).** The tuning verdicts below
+remain historical execution decisions. They do not validate FedKD's
+downstream numerical results: three severe-skew runs later produced
+nonfinite test losses. FedKD is excluded from the first-study primary
+comparison pending the bounded forensics and separate v2 reentry gate in
+ADR-0016. Earlier architectural explanations for its low accuracy are
+hypotheses, not established diagnoses.
+
 ## Current amendment — widened reporting stage before Stage 1a
 
 The current campaign uses `conf/matrix/baseline_tuning_wide.yaml`. Each tunable

@@ -15,9 +15,11 @@ authoritative over any prose describing them.
 
 ## Baseline stack
 
-Implement under `src/fedmaq/baselines/`. Six baselines plus FedMAQ; the two
-dropped entries keep their code for reproducibility and are excluded from every
-sweep. Rationale for each verdict: [ADR-0005](../../docs/adr/0005-baseline-stack-membership.md).
+Implement under `src/fedmaq/baselines/`. Six baselines plus FedMAQ were
+executed in the replacement campaign; FedKD is excluded from its primary
+comparison. The two dropped entries keep their code for reproducibility and
+are excluded from every sweep. Rationale:
+[ADR-0005](../../docs/adr/0005-baseline-stack-membership.md).
 
 | Algorithm | Group | Paper | Config | Status |
 | --- | --- | --- | --- | :-: |
@@ -26,21 +28,24 @@ sweep. Rationale for each verdict: [ADR-0005](../../docs/adr/0005-baseline-stack
 | FedPAQ | Pure quantization | Reisizadeh et al., 2020 | `fedpaq.yaml` | 🟢 |
 | DAdaQuant | Pure quantization | Hönig et al., 2022 | `dadaquant.yaml` | 🟢 |
 | FedDistill+ | Distillation-augmented parameter sharing | Zhu et al., 2021 | `feddistill.yaml` | 🟢 |
-| FedKD | Hybrid Q+KD | Wu et al., 2022 | `fedkd.yaml` | 🟢 |
+| FedKD | Hybrid low-rank compression + KD | Wu et al., 2022 | `fedkd.yaml` | ⚠️ first-study comparison excluded |
 | ~~FedMD~~ | Pure KD | Li et al., 2019 | `fedmd.yaml` | ⚫ dropped |
 | ~~CFD~~ | Hybrid Q+KD | Sattler et al., 2022 | `cfd.yaml` | ⚫ dropped |
 | FedMAQ | Proposed | Bunyi et al., 2026 | `fedmaq.yaml` | 🟢 |
 
 Update this table when adding or porting a baseline.
 
-**Tuned constants** are frozen behind the `pre-registration` tag and carried by
-the manuscript's Table 4.1 — FedProx `mu: 0.01` and FedDistill+ `reg_alpha: 0.5`
-moved off their published values during Stage 1b; FedPAQ, DAdaQuant and FedKD
-retained theirs. See [ADR-0011](../../docs/adr/0011-baseline-matched-tuning.md).
+**Tuned constants.** Read the shipped values from `conf/algorithm/` and the
+replacement Stage-A verdicts from
+[ADR-0011](../../docs/adr/0011-baseline-matched-tuning.md). Historical
+Stage-1b tuning values are superseded for this campaign.
 
-**FedKD's absolute accuracy sits well below the other baselines. That is
-architectural** — a width-0.5 student against a full-size teacher — **not a bug
-and not a tuning failure.**
+**FedKD first-study validity.** The replacement campaign produced nonfinite
+test losses in three CIFAR-10 severe-skew seeds. Treat the FedKD arm as
+attempted but excluded from the first-study primary comparison; do not
+attribute the failure to architecture or implementation until the bounded
+forensics in [ADR-0016](../../docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md)
+are complete. Its code and evidence remain available for diagnosis.
 
 **FedMD is excluded from smoke and regression sweeps.** Keep it out of
 `conf/matrix/*.yaml` and out of `scripts/golden_diff.py`'s default `GOLDEN_SET`;

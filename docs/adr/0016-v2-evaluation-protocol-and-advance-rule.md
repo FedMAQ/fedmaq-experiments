@@ -1,7 +1,44 @@
 # ADR-0016: FedMAQ-v2 evaluation protocol, advance rule, and analysis isolation
 
-**Status**: Accepted
+**Status**: Amended 2026-09-23; original dispatch design suspended
 **Date**: 2026-08-17
+
+## 2026-09-23 post-campaign amendment
+
+The completed 499-cell replacement campaign is the first reported study. Its
+artifacts and registered selection are preserved; no campaign-wide rerun is
+planned. The observed FedKD nonfinite test losses make that arm invalid for
+the first-study primary comparison. Report its attempted runs and the
+post-run exclusion transparently, without treating a suspected implementation
+cause as established. Full provenance closure and paired analysis are still
+required before numerical conclusions are promoted to thesis claims.
+
+FedMAQ-v2 now has two separately controlled branches. One investigates
+server-side KD repair against a no-KD anchor while holding the replacement
+campaign's selected power-mean configuration (p=0.5, omega=0.5) and other
+non-KD factors fixed. The other investigates the no-KD-centered method and
+non-KD changes justified by the first-study analysis; those changes must not
+be combined with KD repair in a comparison intended to isolate KD's effect.
+The exact candidate families, matrices, advance gates, and fresh-seed design
+will be registered before any v2 dispatch. The original pilot, screen,
+confirmatory counts, thresholds, and six-baseline roster below are historical
+design, **not authorization to dispatch**.
+
+FedKD may re-enter a future comparison only after bounded code/trace/paper
+forensics and an exact-candidate stability gate. The local smoke gate must
+cover all three previously nonfinite CIFAR-10 alpha=0.1 seeds beyond round 9;
+the author-run preflight must then finish 100 rounds on those same seeds using
+the exact frozen v2 candidate. A failure keeps FedKD excluded without
+blocking either FedMAQ-v2 branch. Neither gate retroactively rescues the
+first-study FedKD arm.
+
+The first-study communication scalar remains the one common cumulative-byte
+budget across the compared runs in a condition, as registered in ADR-0012;
+accuracy-versus-cumulative-bytes curves are primary. The per-seed, pairwise
+budget below is a proposed v2-specific instrument and must never silently
+replace the first-study scalar. Any sensitivity analysis using it must be
+labelled separately. Preserve first-study and v2 artifacts and analysis
+namespaces independently.
 
 ## Context
 
@@ -24,7 +61,7 @@ against the recovered plan text (`fedmaq-experiments#15`, unedited since
 creation) for consistency; nothing here contradicts it, and the two closed
 gaps are additions, not revisions.
 
-## Decision
+## Original decision (historical; superseded for v2 dispatch)
 
 ### Scope and preservation
 
@@ -169,7 +206,7 @@ equal-weight server-KD path on CIFAR-10 specifically — it does not falsify
 KD generally, and the first pass never combines repair mechanisms. Shared
 terms are `CONTEXT.md` in the thesis root.
 
-## Consequences
+## Original consequences (historical except the dated amendment below)
 
 - `fedmaq-manuscript#9` and `#16` close against this record; the plan no
   longer lives only in `fedmaq-experiments#15` and a Windows temp file.
@@ -177,6 +214,8 @@ terms are `CONTEXT.md` in the thesis root.
   evidence that the advance rule and the v1/v2 boundary were both followed,
   not just designed. A freeze or v2 analyzer change that cannot produce them
   has not actually closed this ADR's requirements.
-- Any future change to a threshold, tie-break, or interpolation rule in this
-  protocol is a new ADR, not an edit to this one — consistent with ADR-0010's
-  rule that a pre-registered branch is never silently altered after the fact.
+- The original design required a new ADR for protocol changes. The dated
+  2026-09-23 amendment instead records the author's explicit post-campaign,
+  pre-v2-dispatch revision in this ADR. No v2 result has been produced under
+  the historical thresholds, so the next exact registration must be visible
+  here before dispatch rather than silently changing a running branch.

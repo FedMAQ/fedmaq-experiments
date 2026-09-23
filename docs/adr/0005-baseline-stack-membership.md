@@ -3,6 +3,13 @@
 **Status**: Accepted · 2026-07-16 through 2026-07-24
 **Supersedes**: `docs/DECISIONS.md` Decisions 21–26, 45, 49 (file deleted; see ADR-0014)
 
+**Post-campaign qualification (2026-09-23).** The membership decision below
+records the baseline stack that was executed, not the valid primary-analysis
+roster. FedKD remains in the 499-cell execution ledger but is excluded from
+the first-study primary comparison after nonfinite losses in three severe-skew
+runs. Earlier statements attributing its low accuracy solely to architecture
+are no longer supported. See ADR-0016 for the separate forensics and v2 gate.
+
 ## Context
 
 The thesis proposal named eight baselines. Two were dropped after implementation

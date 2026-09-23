@@ -306,51 +306,46 @@ freeze plus claim-support review. This is the only state that licenses a
 scientific conclusion in prose.
 _Avoid_: **the results are frozen** as shorthand for "the runs finished"
 
-### Server-KD Repair Study
+### Post-campaign study boundaries
 
-The v2 terminology is defined here; the protocol itself is
-[ADR-0016](docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md). Run state and results
-live in Issues and evidence owners.
+The protocol decisions live in
+[ADR-0016](docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md); this is
+terminology, not dispatch authority.
+
+**First reported study**:
+The completed replacement campaign, whose attempted FedKD arm remains in the
+execution ledger but is excluded from the primary comparison after nonfinite
+losses. Its results require separate evidence and results closure.
+_Avoid_: treating provisional v1 runs or a later FedKD repair as part of this study
 
 **FedMAQ-v2**:
-The separately versioned exploratory study that changes only server-side KD, every non-KD
-factor locked to v1. Not a successor: v1's artifacts, configs and protocol are preserved
-untouched.
+A separately versioned follow-up with two independently controlled branches:
+server-side KD repair and no-KD-centered non-KD changes. Its candidates and
+comparison rule await pre-dispatch registration.
 _Avoid_: FedMAQ 2.0, FedMAQ-next, **the v2 fix** (presupposes the outcome)
 
-**Server-KD repair**:
-One of the five candidate families, never combined within a pass. `no_kd` is the mandatory
-anchor and is **itself a repair** — removing the mechanism is the trivial one, not the
-absence of a treatment. This is what keeps a no-advance outcome a finding rather than an
-empty result.
-_Avoid_: **the winning repair** before a freeze artifact records one
+**KD-repair branch**:
+Server-side KD variants compared with a no-KD anchor while the replacement
+power-mean selection and all non-KD factors are held fixed.
+_Avoid_: attributing a combined KD and non-KD change to KD alone
 
-**Candidate repair family**:
-The five are **this thesis's own exploration design**, not five families drawn from the
-literature — `no_kd` is one of them and no paper proposes it. Exactly one,
-**quality-weighted server ensemble distillation**, has corroborated prior art; the
-manuscript's *Ensemble Teacher Weighting* subsection is its survey home. The other
-candidate dispositions are historical evidence, not a literature taxonomy.
-_Avoid_: **the five repair families in the literature** (four of them are not)
+**No-KD-centered branch**:
+A separate follow-up that tests non-KD changes justified by the first-study
+analysis against a no-KD-centered control.
+_Avoid_: treating its candidates as selected before the paired analysis
 
-**Paired per-seed byte budget** ($B^*_s$):
-The v2 scalar head-to-head. For a paired comparison and seed $s$, the minimum of the two
-same-seed terminal cumulative-byte budgets, defined independently per pair; both curves are
-scored there by linear interpolation within each curve's own observed inclusive range, never
-extrapolated. **v2-only.**
-
-**Not the minimum common cumulative-MB budget above.** The two are distinct: one
-is read across compared arms, while this v2-only budget is read per pair and seed
-by interpolation. Do not substitute one for the other.
-_Avoid_: iso-byte budget in general prose.
+**FedKD reentry**:
+Optional inclusion of a repaired FedKD baseline in v2 only after its separate
+stability gate; it does not restore first-study comparison validity.
+_Avoid_: treating a later passing preflight as retroactive evidence
 
 **Study 1 / Study 2**:
-Planning labels only. They do **not** enter manuscript prose; use the existing v1
-part-names and **the FedMAQ-v2 server-KD repair study** for v2.
+Planning labels only. In manuscript prose, name the replacement campaign and
+the separately registered FedMAQ-v2 branches directly.
 
 **FedDistill+ vs. the v2 literature's "FedKD"**:
 This project's active baseline is **FedDistill+ (Zhu et al., 2021)**, which exchanges
 model parameters and label-wise logits. Some v2 literature instead calls Jeong et
 al.'s 2018 federated-distillation method **FedKD**, colliding with this project's
-**FedKD baseline (Wu et al., 2022)** and the v2 candidate **FedKT**. Cite by author
-and year whenever the v2 literature is intended.
+**FedKD baseline (Wu et al., 2022)** and the historically considered **FedKT**
+candidate. Cite by author and year whenever the v2 literature is intended.
