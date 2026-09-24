@@ -191,6 +191,28 @@ are recorded separately and are not part of this scientific total.
   To prevent silent Ray or GPU deadlocks from hanging indefinitely, always pass
   `--run_timeout_seconds` (e.g. 7200) to `run_matrix.py` so wedged cells get killed
   and alerted. Verify connectivity with `bash ./scripts/notify_run.sh --test` before long runs.
+  The heartbeat never outlives the wrapped command, and it never holds the caller's
+  stdout or stderr open, so `notify_run.sh ... | tee log` returns once the run finishes.
+- **One sweep per output group and per host's Ray.** `run_matrix.py` takes two OS locks
+  (`scripts/run_guard.py`) before its first Ray cleanup:
+  - One lock is on `<group>/sweep_status.lock`, or `sweep_status.shard-I-of-N.lock`
+    for a shard.
+  - The other is a per-user host lock, `fedmaq-ray-<user>.lock`, in the system temp
+    dir or `$FEDMAQ_LOCK_DIR`.
+
+  The host lock is not per `ray.temp_dir`. `ray stop` and the raylet/GCS/plasma
+  force-kill hit every Ray the user owns, so they cannot be scoped to one temp dir.
+  A second sweep on the same group or host exits at once, naming the holder's PID,
+  and cleans nothing up. `golden_diff.py` takes the same host lock.
+
+  Each `scripts/run.py` also locks its own run dir with `.fedmaq-run.lock`. The
+  kernel releases every lock when its holder exits, even after a crash, so a leftover
+  lockfile is not an error. Never delete a lockfile to force a start.
+- **Runs do not resume mid-flight.** A run always starts at round 1.
+  `scripts/run.py` refuses a run dir whose `experiment_log.jsonl` or
+  `v2_diagnostic.jsonl` already holds records, so two attempts never interleave in
+  one file. The dry run marks such cells `WILL REFUSE`. To rerun a failed cell,
+  first copy its dir outside the group, then move the dir aside.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in

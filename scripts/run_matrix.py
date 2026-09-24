@@ -21,6 +21,7 @@ from scripts.common import kill_ray_processes
 from scripts.matrix_executor import TIMEOUT_RETURNCODE as _TIMEOUT_RETURNCODE
 from scripts.matrix_executor import MatrixExecutor
 from scripts.matrix_planner import MatrixPlan, plan_matrix
+from scripts.run_guard import LockHeldError, prior_evidence, sweep_locks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,6 +119,8 @@ def _print_dry_run(plan: MatrixPlan, executor: MatrixExecutor) -> None:
     for position, task in enumerate(plan.tasks, 1):
         reason = executor.skip_reason(task)
         skip_mark = f" (SKIPPED: {reason})" if reason else ""
+        if not reason and prior_evidence(task.output_dir):
+            skip_mark = " (WILL REFUSE: holds an earlier attempt's records; move it aside)"
         print(
             f"\nTask {task.canonical_index}/{len(plan.canonical_tasks)} "
             f"(shard position {position}/{len(plan.tasks)}) [{task.label}]{skip_mark}"
@@ -177,7 +180,13 @@ def main() -> None:
         _print_dry_run(plan, executor)
         return
 
-    result = executor.execute()
+    # Both locks are taken before the executor's first Ray cleanup, so a refused
+    # sweep kills nothing that belongs to the live one.
+    try:
+        with sweep_locks(plan.status_path):
+            result = executor.execute()
+    except LockHeldError as exc:
+        raise SystemExit(f"[run_matrix] {exc}") from exc
     logger.info("Sweep status written to %s", plan.status_path)
     if result["abort_reason"] is not None:
         raise SystemExit(1)

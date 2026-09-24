@@ -21,6 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.common import build_run_command, kill_ray_processes
+from scripts.run_guard import LockHeldError, ray_cleanup_lock
 
 GOLDEN_SET: list[str] = [
     "fedavg",
@@ -288,7 +289,11 @@ def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in operations:
         print(f"Usage: {Path(sys.argv[0]).name} [{', '.join(operations)}]")
         raise SystemExit(1)
-    operations[sys.argv[1]]()
+    try:
+        with ray_cleanup_lock(f"golden_diff {sys.argv[1]}"):
+            operations[sys.argv[1]]()
+    except LockHeldError as exc:
+        raise SystemExit(f"[golden_diff] {exc}") from exc
 
 
 if __name__ == "__main__":

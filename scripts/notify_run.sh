@@ -121,16 +121,24 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ "${NTFY_HEARTBEAT_SEC}" -gt 0 ] 2>/dev/null; then
+    # The heartbeat must not outlive the run: its output goes to /dev/null so an
+    # orphan cannot hold the caller's pipe open, and on TERM it kills its own
+    # in-flight sleep, which `kill "$HEARTBEAT_PID"` alone would leave running.
     (
+        SLEEP_PID=""
+        trap '[ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null; exit 0' TERM INT
         while true; do
-            sleep "${NTFY_HEARTBEAT_SEC}"
+            sleep "${NTFY_HEARTBEAT_SEC}" &
+            SLEEP_PID=$!
+            wait "$SLEEP_PID"
+            SLEEP_PID=""
             ELAPSED_NOW=$(( $(date +%s) - START_SEC ))
             DURATION_NOW="$(format_duration "$ELAPSED_NOW")"
             send_ntfy "FedMAQ: Run Heartbeat" "min" "heartbeat,hourglass_flowing_sand" "Host: ${HOST}
 Elapsed: ${DURATION_NOW}
 Command: ${CMD_STR}" >/dev/null
         done
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     HEARTBEAT_PID=$!
 fi
 

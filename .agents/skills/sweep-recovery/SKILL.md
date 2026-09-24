@@ -16,6 +16,12 @@ prepared for the user; recovery is not inferred from a missing local output.
   original logs outside the checkout before choosing a rerun. Read `state`,
   `failed_indices`, each failure command, and `abort_reason`; the next
   invocation rewrites the status file.
+- Before any rerun, preserve each failed cell's run dir outside the group, then
+  move that dir aside. A run refuses to append to an earlier attempt's
+  `experiment_log.jsonl` or `v2_diagnostic.jsonl`, and the dry run marks those
+  cells `WILL REFUSE`.
+- If a sweep refuses because a lock is held, the named PID is a live sweep. Do not
+  delete the lockfile, and do not start Ray cleanup around it.
 - Re-run the same matrix with `--skip_completed` after a dry run. It keys off
   each run's final-round checkpoint and fills arbitrary gaps; it is the default
   recovery path. Wrap live allocation commands with `bash ./scripts/notify_run.sh`
