@@ -1983,3 +1983,46 @@ def test_every_registered_matrix_either_matches_its_contract_or_is_pre_selection
                 plan_matrix(path, OmegaConf.load(path))
         else:
             validate_matrix_against_protocol(name, matrix, len(expand_matrix(matrix, name)))
+
+
+def _composed_first_task(plan):
+    """Compose the first planned command as ``scripts/run.py`` would receive it."""
+    command = plan.tasks[0].command_list
+    overrides = [
+        arg
+        for arg in command[command.index("scripts/run.py") + 1 :]
+        if not arg.startswith("hydra.")
+    ]
+    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
+        return compose(config_name="config", overrides=overrides)
+
+
+def _protocol_probe_matrix(runs: list[dict]) -> dict:
+    return {**_planner_probe_matrix(runs), "protocol_stage": "matched_tuning", "split": "val"}
+
+
+@pytest.mark.parametrize("row_override", ["split=test", "protocol_stage=downstream"])
+def test_a_matrix_row_cannot_displace_its_matrix_protocol_keys(tmp_path, row_override):
+    """Hydra is last-wins, so the matrix's regime must be emitted after row overrides."""
+    from scripts.matrix_planner import plan_matrix
+
+    matrix = _protocol_probe_matrix(
+        [{"alg": "fedavg", "label": "row", "overrides": [row_override]}]
+    )
+    cfg = _composed_first_task(plan_matrix(tmp_path / "probe.yaml", matrix))
+
+    assert (cfg.protocol_stage, cfg.split) == ("matched_tuning", "val")
+
+
+def test_a_host_override_cannot_displace_the_matrix_protocol_keys(tmp_path):
+    """A command-line override reaches the planner first, so the matrix's regime still wins."""
+    from scripts.matrix_planner import plan_matrix
+
+    plan = plan_matrix(
+        tmp_path / "probe.yaml",
+        _protocol_probe_matrix([{"alg": "fedavg", "label": "row"}]),
+        overrides=["split=test", "protocol_stage=downstream"],
+    )
+    cfg = _composed_first_task(plan)
+
+    assert (cfg.protocol_stage, cfg.split) == ("matched_tuning", "val")

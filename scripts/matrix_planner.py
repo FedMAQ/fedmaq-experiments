@@ -210,13 +210,13 @@ def plan_matrix(
             seed=spec["seed"],
             client_gpus=client_gpus,
             target_dir=output_dir,
-            # Host overrides precede matrix overrides so a row's declared regime
-            # cannot be displaced by a command-line convenience flag.
+            # Hydra is last-wins. The matrix's protocol keys come last so neither a
+            # command-line flag nor a row override can displace its declared regime.
             overrides=[
                 *overrides,
+                *spec["overrides"],
                 f"protocol_stage={spec['protocol_stage']}",
                 f"split={spec['split']}",
-                *spec["overrides"],
             ],
             experiment=experiment,
         )
