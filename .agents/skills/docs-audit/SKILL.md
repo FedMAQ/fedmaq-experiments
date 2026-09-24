@@ -1,15 +1,22 @@
 ---
 name: docs-audit
 description: >-
-  Run the read-only six-repository context validator after an agent-context
-  migration and report structural drift plus semantic candidates; it never edits.
+  Reproduce the historical August 2026 six-repository context migration audit
+  against its recorded workspace state; do not use it to assess current policy.
 ---
 
 # Docs Audit
 
-Use this model-invoked skill for an agent-context audit or post-migration check.
-It routes to the read-only validator established by #77; semantic candidates
-remain for human disposition.
+Use this model-invoked skill only to reproduce the August 2026 migration audit
+against its recorded workspace state. It routes to the read-only validator
+established by #77; semantic candidates remain for human disposition. It is not
+a current-state check.
+
+**Historical scope:** This validator and inventory record the August 2026
+migration. On 2026-09-24, the thesis author retired repository-local
+`CONTEXT.md` glossaries and `docs/agents/domain.md` routing. The inventory is
+preserved as migration evidence and no longer describes desired state. Do not
+run the validator against current checkouts.
 
 The authoritative inventory and boundary are
 [the inventory](../../../docs/agents/context-modernization-inventory.json). The

@@ -8,7 +8,7 @@ directory with `results.md` (tabular data, Hydra config paths) and `comments.md`
 their `conf/matrix/*.yaml` header, which is authoritative, and their execution state
 lives in the pinned dispatch-state Issue. Registering them here too would be a second
 tracker for the same fact, which is what this registry's rule exists to prevent — see
-`CONTEXT.md` § Working conventions.
+the [issue-tracker guidance](../agents/issue-tracker.md).
 
 | Experiment | Directory | Description |
 | :-- | :-- | :-- |
