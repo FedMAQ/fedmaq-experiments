@@ -82,6 +82,15 @@ def _probe_sweep(tmp_path: Path, monkeypatch, experiment_group: str = "lock_prob
     return tmp_path / "outputs" / "smoke" / "cifar10_mobilenetv2" / experiment_group
 
 
+def _planned_cells(tmp_path: Path, experiment_group: str = "lock_probe") -> list[Path]:
+    from omegaconf import OmegaConf
+
+    from scripts.matrix_planner import plan_matrix
+
+    matrix = tmp_path / "conf" / "matrix" / f"{experiment_group}.yaml"
+    return [task.output_dir for task in plan_matrix(matrix, OmegaConf.load(matrix)).tasks]
+
+
 def _drive_sweep(monkeypatch, experiment_group: str = "lock_probe") -> dict[str, list]:
     import scripts.run_matrix as run_matrix
 
@@ -118,10 +127,32 @@ def test_a_sweep_refuses_while_another_sweep_owns_this_hosts_ray(tmp_path, monke
     _probe_sweep(tmp_path, monkeypatch)
     hold_lock(run_guard.ray_host_lock_path())
 
+    effects: dict[str, list] = {}
     with pytest.raises(SystemExit) as refusal:
-        _drive_sweep(monkeypatch)
+        effects = _drive_sweep(monkeypatch)
 
     assert "Ray cleanup on this host" in str(refusal.value.code)
+    assert effects == {}
+
+
+def test_a_sweep_refuses_a_cell_with_an_earlier_attempts_records(tmp_path, monkeypatch):
+    import scripts.run_matrix as run_matrix
+
+    group_dir = _probe_sweep(tmp_path, monkeypatch)
+    cleanups: list[int] = []
+    monkeypatch.setattr(run_matrix, "kill_ray_processes", lambda: cleanups.append(1))
+    cell_dirs = [path for path in _planned_cells(tmp_path)]
+    cell_dirs[0].mkdir(parents=True)
+    (cell_dirs[0] / "v2_diagnostic.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "lock_probe"])
+
+    with pytest.raises(SystemExit) as refusal:
+        run_matrix.main()
+
+    assert "earlier attempt" in str(refusal.value.code)
+    assert str(cell_dirs[0]) in str(refusal.value.code)
+    assert cleanups == []
+    assert not (group_dir / "sweep_status.json").exists()
 
 
 def test_a_sweep_runs_and_releases_its_locks(tmp_path, monkeypatch):
@@ -173,6 +204,8 @@ def test_a_run_directory_admits_one_writer(tmp_path, hold_lock):
 def test_run_py_refuses_before_the_simulation_starts(tmp_path):
     earlier = "{}\n"
     (tmp_path / "v2_diagnostic.jsonl").write_text(earlier, encoding="utf-8")
+    (tmp_path / ".hydra").mkdir()
+    (tmp_path / ".hydra" / "config.yaml").write_text("earlier: attempt\n", encoding="utf-8")
 
     result = subprocess.run(
         [sys.executable, "scripts/run.py", f"hydra.run.dir={tmp_path.as_posix()}"],
@@ -186,20 +219,50 @@ def test_run_py_refuses_before_the_simulation_starts(tmp_path):
     assert "earlier attempt" in result.stderr
     assert not (tmp_path / "run_manifest.json").exists()
     assert (tmp_path / "v2_diagnostic.jsonl").read_text(encoding="utf-8") == earlier
+    # Hydra would rewrite these and open run.log before the task function runs.
+    assert (tmp_path / ".hydra" / "config.yaml").read_text(encoding="utf-8") == "earlier: attempt\n"
+    assert not (tmp_path / ".hydra" / "overrides.yaml").exists()
+    assert not (tmp_path / "run.log").exists()
+
+
+_STUBBED_RUN_PY = (
+    "import runpy, sys\n"
+    "from pathlib import Path\n"
+    "import fedmaq.simulation\n"
+    "from hydra.core.hydra_config import HydraConfig\n"
+    "def stub(cfg):\n"
+    "    out = Path(HydraConfig.get().runtime.output_dir)\n"
+    "    (out / 'stub_ran.txt').write_text(str(out), encoding='utf-8')\n"
+    "fedmaq.simulation.run = stub\n"
+    "sys.argv = ['scripts/run.py', *sys.argv[1:]]\n"
+    "runpy.run_path('scripts/run.py', run_name='__main__')\n"
+)
+
+
+def test_run_py_runs_in_the_directory_it_guarded(tmp_path):
+    run_dir = tmp_path / "cell"
+
+    result = subprocess.run(
+        [sys.executable, "-c", _STUBBED_RUN_PY, f"hydra.run.dir={run_dir.as_posix()}"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert Path((run_dir / "stub_ran.txt").read_text(encoding="utf-8")) == run_dir.resolve()
+    assert (run_dir / ".hydra" / "config.yaml").is_file()
+    assert (run_dir / run_guard.RUN_LOCK_FILENAME).is_file()
 
 
 def test_dry_run_flags_a_cell_that_would_refuse(tmp_path, monkeypatch, capsys):
     import scripts.run_matrix as run_matrix
 
     group_dir = _probe_sweep(tmp_path, monkeypatch)
-    from omegaconf import OmegaConf
-
-    from scripts.matrix_planner import plan_matrix
-
-    matrix = tmp_path / "conf" / "matrix" / "lock_probe.yaml"
-    (cell,) = plan_matrix(matrix, OmegaConf.load(matrix)).tasks
-    cell.output_dir.mkdir(parents=True)
-    (cell.output_dir / "experiment_log.jsonl").write_text("{}\n", encoding="utf-8")
+    (cell_dir,) = _planned_cells(tmp_path)
+    cell_dir.mkdir(parents=True)
+    (cell_dir / "experiment_log.jsonl").write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["run_matrix.py", "--matrix", "lock_probe", "--dry_run"])
 
     run_matrix.main()

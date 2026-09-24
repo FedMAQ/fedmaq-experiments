@@ -204,15 +204,25 @@ are recorded separately and are not part of this scientific total.
   force-kill hit every Ray the user owns, so they cannot be scoped to one temp dir.
   A second sweep on the same group or host exits at once, naming the holder's PID,
   and cleans nothing up. `golden_diff.py` takes the same host lock.
+  A full sweep and a shard lock different status files. On one host the Ray lock
+  still keeps them apart. On hosts that share a filesystem, never run both over
+  one group.
 
-  Each `scripts/run.py` also locks its own run dir with `.fedmaq-run.lock`. The
-  kernel releases every lock when its holder exits, even after a crash, so a leftover
-  lockfile is not an error. Never delete a lockfile to force a start.
+  Each `scripts/run.py` also locks its own run dir with `.fedmaq-run.lock`. It takes
+  that lock before Hydra writes `.hydra/` or the job log. The kernel releases every
+  lock when its holder exits, even after a crash, so a leftover lockfile is not an
+  error. Never delete a lockfile to force a start.
+
+  A standalone `run.py` does not take the host Ray lock. Sweep children hold the
+  sweep's lock, so taking it there would deadlock. As a result, a live sweep's
+  cleanup can still kill a manual run on the same host. Do not start manual runs
+  beside a sweep.
 - **Runs do not resume mid-flight.** A run always starts at round 1.
   `scripts/run.py` refuses a run dir whose `experiment_log.jsonl` or
   `v2_diagnostic.jsonl` already holds records, so two attempts never interleave in
-  one file. The dry run marks such cells `WILL REFUSE`. To rerun a failed cell,
-  first copy its dir outside the group, then move the dir aside.
+  one file. The dry run marks such cells `WILL REFUSE`, and a real sweep lists them
+  and exits before it dispatches or cleans up anything. To rerun a failed cell, first
+  copy its dir outside the group, then move the dir aside.
 - **`post_process` follows the comparison partner, not the algorithm.** ON for the
   three `benchmark_grid*` files and `uniform_memory_control`; OFF for
   `formulation_study` and every `ablation` arm. Both directions are enforced in

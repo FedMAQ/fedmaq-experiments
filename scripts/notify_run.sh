@@ -65,7 +65,7 @@ send_ntfy() {
     local tags="$3"
     local body="$4"
 
-    curl -s -o /dev/null -w "%{http_code}" -X POST "${NTFY_SERVER}/${NTFY_TOPIC}" \
+    curl -s --max-time 20 -o /dev/null -w "%{http_code}" -X POST "${NTFY_SERVER}/${NTFY_TOPIC}" \
         -H "Authorization: Bearer ${NTFY_TOKEN}" \
         -H "Title: ${title}" \
         -H "Priority: ${priority}" \
@@ -124,9 +124,10 @@ if [ "${NTFY_HEARTBEAT_SEC}" -gt 0 ] 2>/dev/null; then
     # The heartbeat must not outlive the run: its output goes to /dev/null so an
     # orphan cannot hold the caller's pipe open, and on TERM it kills its own
     # in-flight sleep, which `kill "$HEARTBEAT_PID"` alone would leave running.
+    # curl is capped by --max-time, so a TERM during a send still returns promptly.
     (
         SLEEP_PID=""
-        trap '[ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null; exit 0' TERM INT
+        trap '[ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null; exit 0' TERM
         while true; do
             sleep "${NTFY_HEARTBEAT_SEC}" &
             SLEEP_PID=$!

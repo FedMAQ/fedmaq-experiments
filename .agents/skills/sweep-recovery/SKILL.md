@@ -18,8 +18,8 @@ prepared for the user; recovery is not inferred from a missing local output.
   invocation rewrites the status file.
 - Before any rerun, preserve each failed cell's run dir outside the group, then
   move that dir aside. A run refuses to append to an earlier attempt's
-  `experiment_log.jsonl` or `v2_diagnostic.jsonl`, and the dry run marks those
-  cells `WILL REFUSE`.
+  `experiment_log.jsonl` or `v2_diagnostic.jsonl`. The dry run marks those cells
+  `WILL REFUSE`, and the sweep lists them and exits before it dispatches anything.
 - If a sweep refuses because a lock is held, the named PID is a live sweep. Do not
   delete the lockfile, and do not start Ray cleanup around it.
 - Re-run the same matrix with `--skip_completed` after a dry run. It keys off

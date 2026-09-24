@@ -22,7 +22,7 @@ import socket
 import sys
 import tempfile
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO
@@ -114,7 +114,10 @@ def exclusive_lock(path: Path, purpose: str) -> Iterator[None]:
             stream.flush()
             yield
         finally:
-            _unlock(stream)
+            # close() below releases the lock anyway; an unlock error must not
+            # mask the body's exception.
+            with suppress(OSError):
+                _unlock(stream)
     finally:
         stream.close()
 

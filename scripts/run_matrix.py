@@ -181,9 +181,23 @@ def main() -> None:
         return
 
     # Both locks are taken before the executor's first Ray cleanup, so a refused
-    # sweep kills nothing that belongs to the live one.
+    # sweep kills nothing that belongs to the live one. Cells that would refuse to
+    # append are caught here, under the lock, rather than as per-cell failures that
+    # count toward --max_consecutive_failures.
     try:
         with sweep_locks(plan.status_path):
+            refusing = [
+                task.output_dir
+                for task in plan.tasks
+                if not executor.skip_reason(task) and prior_evidence(task.output_dir)
+            ]
+            if refusing:
+                listed = "\n  ".join(str(path) for path in refusing)
+                raise SystemExit(
+                    "[run_matrix] Refusing to start: these run directories hold an "
+                    f"earlier attempt's records:\n  {listed}\n"
+                    "Preserve and move each aside, then rerun."
+                )
             result = executor.execute()
     except LockHeldError as exc:
         raise SystemExit(f"[run_matrix] {exc}") from exc
