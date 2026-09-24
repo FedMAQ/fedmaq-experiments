@@ -162,6 +162,25 @@ class StandardFit(ClientFitStrategy):
         }
         if "q" in config:
             fit_metrics["q"] = int(config["q"])
+        if (
+            client.config.get("v2_diagnostic", {}).get("enabled", False)
+            and alg_config.get("name") == "fedmaq"
+        ):
+            raw_sq = 0.0
+            error_sq = 0.0
+            for original, updated, reconstructed in zip(
+                parameters, updated_params, reconstructed_params, strict=True
+            ):
+                raw_delta = updated.astype(np.float64) - original.astype(np.float64)
+                reconstructed_delta = reconstructed.astype(np.float64) - original.astype(np.float64)
+                raw_sq += float(np.sum(raw_delta * raw_delta))
+                difference = raw_delta - reconstructed_delta
+                error_sq += float(np.sum(difference * difference))
+            fit_metrics["v2_raw_update_norm"] = raw_sq**0.5
+            fit_metrics["v2_raw_to_reconstructed_norm"] = error_sq**0.5
+            residual_norm = getattr(client.compressor_hook, "diagnostic_residual_norm", None)
+            if callable(residual_norm):
+                fit_metrics["v2_corrected_quantization_residual_norm"] = residual_norm()
         fit_metrics.update(self._extra_fit_metrics(report))
         attach_payloads_if_enabled(client, fit_metrics, report.payloads)
 

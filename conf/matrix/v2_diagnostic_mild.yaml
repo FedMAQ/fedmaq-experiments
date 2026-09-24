@@ -1,0 +1,28 @@
+# Matched exploratory counterpart to v2_diagnostic_severe.yaml. This seed was
+# selected after reviewing V1 and cannot support a new average-effect claim.
+phase: diagnostic
+stage: downstream
+protocol_stage: downstream
+split: val
+ledger: diagnostic
+experiment_group: v2_diagnostic_mild
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [42]
+heterogeneities: [dirichlet_alpha_1.0]
+
+runs:
+  - alg: fedmaq
+    label: full-fedmaq
+    overrides:
+      - algorithm.post_process=true
+      - +v2_diagnostic.enabled=true
+      - +v2_diagnostic.rounds=[1,2,3,5,10,20,40,60,80,100]
+  - alg: fedmaq_no_kd
+    label: no-kd
+    overrides:
+      - algorithm.post_process=true
+      - +v2_diagnostic.enabled=true
+      - +v2_diagnostic.rounds=[1,2,3,5,10,20,40,60,80,100]

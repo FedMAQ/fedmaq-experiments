@@ -13,6 +13,7 @@ from flwr.common import (
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
+from torch.utils.data import DataLoader
 
 from fedmaq.core.config_defaults import resolve_experiment_config, resolve_run_context
 from fedmaq.core.quantization_planner import (
@@ -22,7 +23,9 @@ from fedmaq.core.strategy_hooks import StrategyHook, get_strategy_hook
 from fedmaq.core.strategy_hooks.dadaquant import (
     compute_dadaquant_client_q,  # noqa: F401 — re-exported for backward compatibility
 )
+from fedmaq.core.strategy_hooks.fedmaq import FedMAQHook
 from fedmaq.core.telemetry import TelemetryManager
+from fedmaq.core.v2_diagnostic import V2DiagnosticObserver
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +170,8 @@ class TelemetryFedAvg(FedAvg):
         client_indices_dict: dict[str, list[int]] | None = None,
         public_indices: list[int] | None = None,
         split: str | None = None,
+        diagnostic_validation_loader: DataLoader | None = None,
+        diagnostic_proxy_loader: DataLoader | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -189,6 +194,31 @@ class TelemetryFedAvg(FedAvg):
 
         # Instantiate the per-algorithm strategy hook
         self.hook: StrategyHook = get_strategy_hook(self.alg_name, config)
+
+        diagnostic_cfg = config.get("v2_diagnostic", {})
+        self._v2_diagnostic: V2DiagnosticObserver | None = None
+        if diagnostic_cfg.get("enabled", False):
+            if (
+                self.alg_name != "fedmaq"
+                or self.split != "val"
+                or diagnostic_validation_loader is None
+                or diagnostic_proxy_loader is None
+                or not isinstance(self.hook, FedMAQHook)
+            ):
+                raise ValueError("V2 diagnostic requires FedMAQ and both server loaders on val")
+            if config.get("algorithm", {}).get("soft_voting", False):
+                raise ValueError("V2 diagnostic currently measures only uniform teacher pooling")
+            context = resolve_run_context(config)
+            self._v2_diagnostic = V2DiagnosticObserver(
+                log_dir=telemetry_manager.log_dir,
+                dataset_name=context.dataset_name,
+                num_classes=context.num_classes,
+                device=context.device,
+                validation_loader=diagnostic_validation_loader,
+                proxy_loader=diagnostic_proxy_loader,
+                observed_rounds=[int(value) for value in diagnostic_cfg["rounds"]],
+                temperature=float(config["algorithm"]["temperature"]),
+            )
 
         # Declare this hook's metric keys so the CSV header stays stable even
         # when a key only appears starting round 1 (e.g. FedMAQ grad-norm stats).
@@ -281,6 +311,8 @@ class TelemetryFedAvg(FedAvg):
         else:
             aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
 
+        parameter_average = aggregated_parameters
+
         aggregated_parameters, metrics = self.hook.aggregate_fit(
             self, server_round, results, failures, aggregated_parameters, metrics
         )
@@ -288,6 +320,24 @@ class TelemetryFedAvg(FedAvg):
         round_time, round_total_bytes = self.telemetry_manager.record_fit_round(
             self, server_round, results, aggregated_parameters
         )
+
+        if (
+            self._v2_diagnostic is not None
+            and parameter_average is not None
+            and aggregated_parameters is not None
+        ):
+            assert isinstance(self.hook, FedMAQHook)
+            observer_seconds = self._v2_diagnostic.observe(
+                server_round=server_round,
+                parameter_average=parameter_average,
+                post_kd=aggregated_parameters,
+                results=results,
+                plan=self.hook.diagnostic_plan,
+                cumulative_bytes=self.telemetry_manager.cumulative_bytes + round_total_bytes,
+                round_bytes=round_total_bytes,
+                post_process=bool(self.hook.alg_cfg.get("post_process", False)),
+            )
+            self.telemetry_manager.exclude_observer_time(observer_seconds)
 
         if not results:
             return aggregated_parameters, metrics

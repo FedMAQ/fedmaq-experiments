@@ -69,6 +69,16 @@ class FedMAQPostProcessCompressionHook(CompressionHook):
     def levels(self) -> int:
         return symmetric_levels(self.q)
 
+    def diagnostic_residual_norm(self) -> float:
+        """L2 norm of the stored corrected-update quantization residual."""
+        record = self._state.get(_RESIDUAL_KEY)
+        if not isinstance(record, ArrayRecord):
+            return 0.0
+        return float(
+            sum(float(np.sum(arr.astype(np.float64) ** 2)) for arr in record.to_numpy_ndarrays())
+            ** 0.5
+        )
+
     def compress(self, deltas: list[np.ndarray]) -> tuple[list[np.ndarray], UploadReport]:
         """Apply error feedback and diff coding, then return the upload report."""
         residual_record = self._state.get(_RESIDUAL_KEY)

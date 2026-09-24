@@ -376,6 +376,10 @@ class TelemetryManager:
             return self._last_snapshot
         return RoundSnapshot(round_client_metrics=self._last_snapshot.round_client_metrics)
 
+    def exclude_observer_time(self, elapsed_seconds: float) -> None:
+        """Keep opt-in diagnostic work out of the next method wall-time interval."""
+        self._last_wall_ts += elapsed_seconds
+
     def log(
         self,
         round_num: int,

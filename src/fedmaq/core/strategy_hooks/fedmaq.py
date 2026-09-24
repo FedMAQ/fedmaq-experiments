@@ -65,6 +65,11 @@ class FedMAQHook(StrategyHook):
         self._ema_params: list[np.ndarray] | None = None
         self._last_round_kd_metrics: dict[str, float] = {}
 
+    @property
+    def diagnostic_plan(self) -> QuantPlan:
+        """Expose this round's assignments to the opt-in read-only observer."""
+        return self._current_plan
+
     def configure_fit(
         self,
         strategy: TelemetryFedAvg,

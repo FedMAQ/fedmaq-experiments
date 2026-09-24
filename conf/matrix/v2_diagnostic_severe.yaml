@@ -1,0 +1,29 @@
+# Exploratory, author-run V1-to-V2 diagnosis. It is not a registered V2 treatment.
+# A downstream-stage run on validation is deliberately non-promotable under the
+# replacement protocol. The scientific V1 matrix/config files remain untouched.
+phase: diagnostic
+stage: downstream
+protocol_stage: downstream
+split: val
+ledger: diagnostic
+experiment_group: v2_diagnostic_severe
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [123]
+heterogeneities: [dirichlet_alpha_0.1]
+
+runs:
+  - alg: fedmaq
+    label: full-fedmaq
+    overrides:
+      - algorithm.post_process=true
+      - +v2_diagnostic.enabled=true
+      - +v2_diagnostic.rounds=[1,2,3,5,10,20,40,60,80,100]
+  - alg: fedmaq_no_kd
+    label: no-kd
+    overrides:
+      - algorithm.post_process=true
+      - +v2_diagnostic.enabled=true
+      - +v2_diagnostic.rounds=[1,2,3,5,10,20,40,60,80,100]

@@ -101,6 +101,7 @@ def test_error_feedback_carries_quantization_error_into_next_round():
     np.testing.assert_allclose(out_r1[0], [1.0, 3 / 7], atol=1e-6)
     residual = state.get("fedmaq_postprocess_residual").to_numpy_ndarrays()[0]
     np.testing.assert_allclose(residual, [0.0, 0.4 - 3 / 7], atol=1e-6)
+    assert hook.diagnostic_residual_norm() == pytest.approx(np.linalg.norm(residual))
 
     out_r2, _ = hook.compress([d.copy()])
     d_fb2 = d + residual

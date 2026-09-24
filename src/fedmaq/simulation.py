@@ -370,6 +370,8 @@ class SimulationApplications:
                 client_indices_dict=plan.client_indices_dict,
                 public_indices=plan.public_indices,
                 split=plan.split,
+                diagnostic_validation_loader=val_loader,
+                diagnostic_proxy_loader=public_loader,
                 fraction_fit=plan.client_fraction,
                 fraction_evaluate=0.0,
                 min_fit_clients=max(1, int(plan.num_clients * plan.client_fraction)),

@@ -122,6 +122,7 @@ class QuantPlan:
     grad_norms: list[float]
     client_q_max: dict[str, float] = field(default_factory=dict)
     client_q_hat: dict[str, float] = field(default_factory=dict)
+    client_grad_norms: dict[str, float] = field(default_factory=dict)
     tier1_enabled: bool = True
     bit_widths: tuple[int, ...] = DEFAULT_BIT_WIDTHS
 
@@ -363,6 +364,7 @@ class QuantizationPlanner:
         return QuantPlan(
             client_q=client_q,
             grad_norms=grad_norms,
+            client_grad_norms=dict(zip(client_cids, grad_norms, strict=True)),
             client_q_max=client_q_max,
             client_q_hat=client_q_hat,
             tier1_enabled=qp.resource_aware,
