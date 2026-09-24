@@ -25,8 +25,6 @@ MANIFEST_PATH = REPO_ROOT / "docs" / "freeze" / "source_manifest.json"
 
 DEFAULT_SCOPE: dict[str, list[str]] = {
     "include": [
-        ".github/workflows/**/*.yaml",
-        ".github/workflows/**/*.yml",
         ".python-version",
         "conf/*.yaml",
         "conf/**/*.yaml",

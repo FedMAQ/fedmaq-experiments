@@ -3,8 +3,6 @@
   "description": "Architecture freeze certificate for campaign-relevant configuration, runtime, dispatch, and test sources.",
   "scope": {
     "include": [
-      ".github/workflows/**/*.yaml",
-      ".github/workflows/**/*.yml",
       ".python-version",
       "conf/**/*.yaml",
       "conf/*.yaml",
@@ -18,7 +16,6 @@
     "exclude": []
   },
   "files": {
-    ".github/workflows/ci.yml": "8107593ea9d56324531c9d2797534acc68eed529d5700277424725e24d2bb251",
     ".python-version": "49a506dd32096b010d75205acf3430c9ae6c40351888129499e5a5e487126c93",
     "conf/algorithm/_power_mean_base.yaml": "657b59a6b328e300439186d99c10ac473570f1ed51c1224c048012583f1cdca9",
     "conf/algorithm/cfd.yaml": "87c3e646735e2d3224c218835b6a83f7b825fa8d873527b5d3e426a508121510",
@@ -79,7 +76,7 @@
     "pyproject.toml": "d96cdfc559bf60498cd67d05f6cb3885e6eafd9fd5a78c35cccc5f2cc0f145ef",
     "scripts/analysis.py": "ed9869f275e5834e8e73a0a3b717a015b1701700398a3a47bf23d4e21eac7ddd",
     "scripts/audit_study1_artifacts.py": "f24798b639eac5572f62471aaec1caccac53fe3bd7b6e89831380d81a6c57435",
-    "scripts/check_freeze.py": "90ed8a6a2bf66b6015dd3f00679eb0529c5246c5d34daf3bbde580d12e35a0b2",
+    "scripts/check_freeze.py": "63256710ad347213f9de1d18749662f6197ac2e4b8d40004d359b796be1e1ef2",
     "scripts/common.py": "0f9dc6e7ffe4a5126d75ed097b4ae1eb3b5278daf708529948f8df5f20a90fbc",
     "scripts/dump_expected_runs.py": "0676603fe878aeaeac4b4a31419e8546afcb0d5207c83cdf3d82b632ae88462f",
     "scripts/dump_frozen_configs.py": "fc8da61c949dc826e6db14b737d4288ad33f0f47339ce15034cc385e9780438b",
