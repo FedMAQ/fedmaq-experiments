@@ -1,0 +1,175 @@
+# KD-repair screen, CIFAR-100 part (120 runs). Registered by ADR-0028, items 2-4;
+# that ADR, not this header, owns the design, the advance rule, and the claim rule.
+#
+# Three files make up the 300-run screen: v2_kd_screen_cifar10.yaml (120),
+# v2_kd_screen_cifar100.yaml (120), and v2_kd_screen_femnist.yaml (60). They share
+# the five first-study conditions, seeds 0/42/123, the validation split, and one run
+# list. The screen is exploratory; it selects each family's entrant for confirmation.
+#
+# fedmaq_no_kd is the reference every repair must beat. fedmaq is unrepaired KD, run
+# descriptively. Each other arm is fedmaq with exactly one repair family enabled, and
+# a family's three arms are listed in its registered tie order (first wins a tie).
+# docs/research/2026-09-25-v2-kd-screen-settings.md records each setting's rationale and the guard
+# family's proxy-label disclosure. conf/protocol/replacement-v1.yaml pins this file's
+# resolved hash; any edit voids the registration.
+phase: v2_kd
+stage: v2_kd_screen
+protocol_stage: v2_kd_screen
+split: val
+ledger: scientific
+experiment_group: v2_kd_screen
+dataset: cifar100
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedmaq_no_kd
+    label: fedmaq_no_kd
+    overrides:
+      - algorithm.post_process=true
+  - alg: fedmaq
+    label: fedmaq
+    overrides:
+      - algorithm.post_process=true
+  # schedule
+  - alg: fedmaq
+    variant: sched_r1to40
+    label: kd_sched_r1to40
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.schedule.enabled=true
+      - +algorithm.kd_repair.schedule.start=1
+      - +algorithm.kd_repair.schedule.stop=40
+  - alg: fedmaq
+    variant: sched_r1to20
+    label: kd_sched_r1to20
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.schedule.enabled=true
+      - +algorithm.kd_repair.schedule.start=1
+      - +algorithm.kd_repair.schedule.stop=20
+  - alg: fedmaq
+    variant: sched_r25ramp10
+    label: kd_sched_r25ramp10
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.schedule.enabled=true
+      - +algorithm.kd_repair.schedule.start=25
+      - +algorithm.kd_repair.schedule.ramp_rounds=10
+  # temperature
+  - alg: fedmaq
+    variant: temp_t2
+    label: kd_temp_t2
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.temperature.enabled=true
+      - +algorithm.kd_repair.temperature.value=2.0
+  - alg: fedmaq
+    variant: temp_t0p5
+    label: kd_temp_t0p5
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.temperature.enabled=true
+      - +algorithm.kd_repair.temperature.value=0.5
+  - alg: fedmaq
+    variant: temp_t4
+    label: kd_temp_t4
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.temperature.enabled=true
+      - +algorithm.kd_repair.temperature.value=4.0
+  # teacher_selection
+  - alg: fedmaq
+    variant: select_h0p90
+    label: kd_select_h0p90
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_selection.enabled=true
+      - +algorithm.kd_repair.teacher_selection.threshold=0.9
+  - alg: fedmaq
+    variant: select_h0p75
+    label: kd_select_h0p75
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_selection.enabled=true
+      - +algorithm.kd_repair.teacher_selection.threshold=0.75
+  - alg: fedmaq
+    variant: select_h0p60
+    label: kd_select_h0p60
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_selection.enabled=true
+      - +algorithm.kd_repair.teacher_selection.threshold=0.6
+  # teacher_weighting
+  - alg: fedmaq
+    variant: weight_b0p5
+    label: kd_weight_b0p5
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_weighting.enabled=true
+      - +algorithm.kd_repair.teacher_weighting.beta=0.5
+  - alg: fedmaq
+    variant: weight_b1
+    label: kd_weight_b1
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_weighting.enabled=true
+      - +algorithm.kd_repair.teacher_weighting.beta=1.0
+  - alg: fedmaq
+    variant: weight_b2
+    label: kd_weight_b2
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.teacher_weighting.enabled=true
+      - +algorithm.kd_repair.teacher_weighting.beta=2.0
+  # guard
+  - alg: fedmaq
+    variant: guard_m0
+    label: kd_guard_m0
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.guard.enabled=true
+      - +algorithm.kd_repair.guard.margin=0.0
+  - alg: fedmaq
+    variant: guard_m0p01
+    label: kd_guard_m0p01
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.guard.enabled=true
+      - +algorithm.kd_repair.guard.margin=0.01
+  - alg: fedmaq
+    variant: guard_m0p05
+    label: kd_guard_m0p05
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.guard.enabled=true
+      - +algorithm.kd_repair.guard.margin=0.05
+  # class_balanced
+  - alg: fedmaq
+    variant: classbal_soft0p3
+    label: kd_classbal_soft0p3
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.class_balanced.enabled=true
+      - +algorithm.kd_repair.class_balanced.mode=soft
+      - +algorithm.kd_repair.class_balanced.floor=0.3
+  - alg: fedmaq
+    variant: classbal_soft0p1
+    label: kd_classbal_soft0p1
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.class_balanced.enabled=true
+      - +algorithm.kd_repair.class_balanced.mode=soft
+      - +algorithm.kd_repair.class_balanced.floor=0.1
+  - alg: fedmaq
+    variant: classbal_hard
+    label: kd_classbal_hard
+    overrides:
+      - algorithm.post_process=true
+      - +algorithm.kd_repair.class_balanced.enabled=true
+      - +algorithm.kd_repair.class_balanced.mode=hard

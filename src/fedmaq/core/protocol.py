@@ -22,6 +22,7 @@ PROTOCOL_STAGES = frozenset(
         "assurance",
         "v2_confirm",
         "v2_fedkd_preflight",
+        "v2_kd_screen",
     }
 )
 _PROTOCOL_PATH = Path(__file__).resolve().parents[3] / "conf" / "protocol" / "replacement-v1.yaml"
