@@ -35,6 +35,8 @@ DEFAULT_CELL_SPECS = (
     SmokeCellSpec("feddistill", Path("feddistill"), "test", family="feddistill"),
     SmokeCellSpec("ablation_no_data", Path("ablation_no_data"), "test", family="fedmaq"),
     SmokeCellSpec("val_split", Path("val_split"), "val", family="fedmaq"),
+    # ADR-0016 2026-09-25: the exact V2 candidate, fedmaq_no_kd with post_process=true.
+    SmokeCellSpec("no_kd_post", Path("no_kd_post"), "test", family="fedmaq"),
 )
 
 
