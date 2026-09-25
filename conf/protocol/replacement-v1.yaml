@@ -42,6 +42,13 @@ stages:
     selection_data: validation_only
     reserved_test: true
     split: val
+  # KD-repair confirmation (ADR-0028, item 5): the screen's advanced repairs, fixed
+  # FedKD, and any control reruns on the V2 seeds. Consumes the frozen screen verdicts
+  # and selects nothing, so it reads test.
+  v2_kd_confirm:
+    selection_data: frozen_validation_verdicts
+    reserved_test: true
+    split: test
 wire_protocol: packed_wire_v1
 historical_artifacts_promotable: false
 
