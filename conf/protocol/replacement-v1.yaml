@@ -30,6 +30,12 @@ stages:
     selection_data: frozen_validation_verdicts
     reserved_test: true
     split: test
+  # FedKD smoke gate 2 (ADR-0028, item 6): the fixed FedKD on the three first-study
+  # cells that went nonfinite. Selects nothing; its verdict is finite or not.
+  v2_fedkd_preflight:
+    selection_data: frozen_validation_verdicts
+    reserved_test: true
+    split: test
 wire_protocol: packed_wire_v1
 historical_artifacts_promotable: false
 
@@ -69,3 +75,4 @@ matrix_contracts:
   v2_confirm_cifar10: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 60, sha256: cb41148cc29bd7251a8ca4617c79a199a0e3a7e13fa88e7a572fc6796529245c}
   v2_confirm_cifar100: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 60, sha256: 94dc39cf9fdfbe616c4e8890a6cbcbaf9c2d429fdf45576d55073aa2e539251f}
   v2_confirm_femnist: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 30, sha256: c7481c7e4bd01ea6f4c1c41174eb7ec6745c3b813df4f2bb4790555a3cdd9829}
+  v2_fedkd_preflight: {stage: v2_fedkd_preflight, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: a2d459120076963eb2e7d080d23b409fcb9e5d744ae43d3e3772f0402f12d405}

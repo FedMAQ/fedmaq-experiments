@@ -49,3 +49,29 @@ def test_v2_output_namespace_is_disjoint_from_every_other_matrix() -> None:
         assert matrix.get("phase") != "v2", path.name
         assert matrix.get("experiment_group") != "v2_confirm", path.name
         assert matrix.get("protocol_stage") != "v2_confirm", path.name
+
+
+def test_fedkd_preflight_is_the_three_failed_cells_with_only_the_detach_changed() -> None:
+    """ADR-0028 item 6, gate 2: the first-study FedKD arm plus the detach, nothing else."""
+    from scripts.common import expand_matrix
+
+    matrix = _load(MATRIX_DIR / "v2_fedkd_preflight.yaml")
+    assert (matrix["stage"], matrix["protocol_stage"], matrix["split"]) == (
+        "v2_fedkd_preflight",
+        "v2_fedkd_preflight",
+        "test",
+    )
+    assert (matrix["dataset"], matrix["total_rounds"]) == ("cifar10", 100)
+    specs = expand_matrix(matrix, "v2_fedkd_preflight")
+    assert sorted(spec["seed"] for spec in specs) == [0, 42, 123]
+    for spec in specs:
+        assert (spec["algorithm_config"], spec["heterogeneity"]) == ("fedkd", "dirichlet_alpha_0.1")
+        assert spec["overrides"] == ["+algorithm.detach_kl_targets=true"]
+
+
+def test_fedkd_preflight_output_namespace_is_its_own() -> None:
+    for path in MATRIX_DIR.glob("*.yaml"):
+        matrix = _load(path)
+        owns = path.stem == "v2_fedkd_preflight"
+        assert (matrix.get("experiment_group") == "v2_fedkd_preflight") is owns, path.name
+        assert (matrix.get("protocol_stage") == "v2_fedkd_preflight") is owns, path.name

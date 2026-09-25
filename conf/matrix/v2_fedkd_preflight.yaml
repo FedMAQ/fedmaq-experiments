@@ -1,0 +1,31 @@
+# FedKD smoke gate 2: 100-round hub preflight of the fixed FedKD (3 runs). Registered
+# by ADR-0028, item 6; that ADR, not this header, owns the gate and its failure rule.
+#
+# These are the three first-study cells that went nonfinite: CIFAR-10 at alpha=0.1,
+# seeds 123, 0 and 42, on the test split. The only change from the first-study FedKD
+# arm is +algorithm.detach_kl_targets=true; tmax stays at its Stage A value in
+# conf/algorithm/fedkd.yaml. The gate passes only when every round of all three runs
+# is finite. Until it passes, no other FedKD cell dispatches.
+#
+# Phase v2_kd and experiment_group v2_fedkd_preflight keep these outputs apart from the
+# first-study and v2_confirm trees. conf/protocol/replacement-v1.yaml pins this file's
+# resolved hash; any edit voids the registration.
+phase: v2_kd
+stage: v2_fedkd_preflight
+protocol_stage: v2_fedkd_preflight
+split: test
+ledger: scientific
+experiment_group: v2_fedkd_preflight
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [123, 0, 42]
+heterogeneities:
+  - dirichlet_alpha_0.1
+
+runs:
+  - alg: fedkd
+    label: fedkd_detached
+    overrides:
+      - +algorithm.detach_kl_targets=true

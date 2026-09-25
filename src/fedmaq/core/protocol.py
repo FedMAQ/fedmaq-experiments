@@ -14,7 +14,15 @@ REPLACEMENT_PROTOCOL = "replacement-v1"
 HISTORICAL_PROTOCOL = "historical-v1"
 PROTOCOL_SCHEMA_VERSION = 1
 PROTOCOL_STAGES = frozenset(
-    {"matched_tuning", "stage_1a", "stage_1b", "downstream", "assurance", "v2_confirm"}
+    {
+        "matched_tuning",
+        "stage_1a",
+        "stage_1b",
+        "downstream",
+        "assurance",
+        "v2_confirm",
+        "v2_fedkd_preflight",
+    }
 )
 _PROTOCOL_PATH = Path(__file__).resolve().parents[3] / "conf" / "protocol" / "replacement-v1.yaml"
 
