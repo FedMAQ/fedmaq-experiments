@@ -27,6 +27,14 @@ KD_REPAIR_FAMILIES: tuple[str, ...] = (
     "class_balanced",
 )
 
+# Families whose rule the seam applies; any other enabled family is refused.
+IMPLEMENTED_KD_REPAIR_FAMILIES: frozenset[str] = frozenset({"schedule", "temperature"})
+
+_FAMILY_SETTINGS: dict[str, frozenset[str]] = {
+    "schedule": frozenset({"start", "stop", "ramp_rounds"}),
+    "temperature": frozenset({"value"}),
+}
+
 
 @dataclass(frozen=True)
 class KDRepairConfig:
@@ -68,7 +76,56 @@ def resolve_kd_repair(alg_cfg: Mapping[str, Any]) -> KDRepairConfig:
         return KDRepairConfig()
     family = enabled[0]
     settings = {k: v for k, v in group[family].items() if k != "enabled"}
+    _check_settings(family, settings)
     return KDRepairConfig(family=family, settings=settings)
+
+
+def _check_settings(family: str, settings: Mapping[str, Any]) -> None:
+    allowed = _FAMILY_SETTINGS.get(family)
+    if allowed is None:
+        return
+    unknown = sorted(set(settings) - allowed)
+    if unknown:
+        raise ValueError(f"KD-repair {family} has unknown settings {unknown}")
+    if family == "schedule":
+        start = int(settings.get("start", 1))
+        stop = settings.get("stop")
+        ramp = int(settings.get("ramp_rounds", 1))
+        if start < 1 or ramp < 1 or (stop is not None and int(stop) < start):
+            raise ValueError(
+                "KD-repair schedule needs 1 <= start <= stop and ramp_rounds >= 1, "
+                f"got {dict(settings)}"
+            )
+    elif family == "temperature":
+        if "value" not in settings or not float(settings["value"]) > 0.0:
+            raise ValueError(f"KD-repair temperature needs a positive value, got {dict(settings)}")
+
+
+def schedule_weight(settings: Mapping[str, Any], server_round: int) -> float:
+    """KD weight of ``server_round`` (1-based) under the schedule family.
+
+    KD is off before ``start`` and after ``stop`` (both inclusive bounds of the
+    window). Over the first ``ramp_rounds`` rounds from ``start`` the weight rises
+    linearly, ``(server_round - start + 1) / ramp_rounds``, and then stays at 1.
+    ``start=1`` with no ``stop`` and no ramp is KD in every round.
+    """
+    start = int(settings.get("start", 1))
+    stop = settings.get("stop")
+    ramp = int(settings.get("ramp_rounds", 1))
+    if server_round < start or (stop is not None and server_round > int(stop)):
+        return 0.0
+    return min(1.0, (server_round - start + 1) / ramp)
+
+
+def kd_temperature(repair: KDRepairConfig, alg_cfg: Mapping[str, Any]) -> float:
+    """Distillation temperature of the pass: the temperature family's value, else the frozen one.
+
+    The value softens teachers and student alike, and the KD loss keeps its T^2
+    rescaling (Hinton et al.), so gradient magnitudes stay comparable across T.
+    """
+    if repair.family == "temperature":
+        return float(repair.settings["value"])
+    return float(alg_cfg.get("temperature", 1.0))
 
 
 def validate_kd_repair_config(config: Mapping[str, Any]) -> KDRepairConfig:
@@ -76,15 +133,17 @@ def validate_kd_repair_config(config: Mapping[str, Any]) -> KDRepairConfig:
     return resolve_kd_repair(resolve_algorithm_config(config))
 
 
-def unrepaired_telemetry(
+def kd_repair_telemetry(
     num_teachers: int,
     *,
     kd_weight: float,
     server_sim_time: float,
+    temperature: float = 1.0,
 ) -> dict[str, float]:
-    """Per-round repair telemetry describing plain ensemble KD.
+    """Per-round KD-repair telemetry of one distillation pass.
 
-    ``kd_weight`` is 1 when the distillation pass ran and 0 when it was skipped.
+    ``kd_weight`` is the weight of the distilled student in the returned parameters:
+    1 for a full pass, 0 when the pass was skipped, and in between on a schedule ramp.
     """
     equal_weight = 1.0 / num_teachers if num_teachers > 0 else 0.0
     return {
@@ -95,6 +154,7 @@ def unrepaired_telemetry(
         "kd_skipped_batches": 0.0,
         "kd_guard_accept": 1.0,
         "kd_server_sim_time": float(server_sim_time),
+        "kd_temperature": float(temperature),
     }
 
 

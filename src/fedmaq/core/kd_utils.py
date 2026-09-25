@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +19,13 @@ from flwr.common.typing import FitRes
 from flwr.server.client_proxy import ClientProxy
 from torch.utils.data import DataLoader
 
-from fedmaq.core.kd_repair import resolve_kd_repair, unrepaired_telemetry
+from fedmaq.core.kd_repair import (
+    IMPLEMENTED_KD_REPAIR_FAMILIES,
+    kd_repair_telemetry,
+    kd_temperature,
+    resolve_kd_repair,
+    schedule_weight,
+)
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 from fedmaq.core.partitioning import get_server_loaders
 
@@ -188,17 +195,34 @@ def distill_ensemble_into_global(
     This routine is the single seam of the ADR-0028 KD-repair families. It receives
     the server round and the participants' class counts (``class_counts[i]`` belongs
     to ``results[i]``), reads the arm's ``kd_repair`` group, and reports per-round
-    repair telemetry. No family is implemented yet, so an enabled family is refused;
-    with every family off the pass is plain ensemble KD.
+    repair telemetry. With every family off the pass is plain ensemble KD. The
+    schedule family weights the distilled student by round (a zero weight skips the
+    pass); the temperature family replaces the distillation temperature. Families
+    that are not implemented yet are refused.
 
     Returns the updated ``Parameters`` and a dictionary of KD metrics. Falls back to
     ``aggregated_parameters`` and skip metrics when there are no loadable teachers,
     no public set, or an error occurs.
     """
     repair = resolve_kd_repair(alg_cfg)
-    if repair.family is not None:
+    if repair.family is not None and repair.family not in IMPLEMENTED_KD_REPAIR_FAMILIES:
         raise NotImplementedError(f"KD-repair family {repair.family!r} is not implemented")
-    del server_round, class_counts  # consumed by the repair families once they land
+    del class_counts  # consumed by the class-balanced family once it lands
+
+    temperature = kd_temperature(repair, alg_cfg)
+    kd_weight = 1.0
+    if repair.family == "schedule":
+        if server_round is None:
+            raise ValueError("The KD-repair schedule family needs the server round")
+        kd_weight = schedule_weight(repair.settings, server_round)
+    if kd_weight == 0.0:
+        return aggregated_parameters, {
+            "dropped_teachers": 0.0,
+            "kd_skipped": 1.0,
+            **kd_repair_telemetry(
+                len(results), kd_weight=0.0, server_sim_time=0.0, temperature=temperature
+            ),
+        }
 
     kd_epochs = int(alg_cfg.get("kd_epochs", 1))
     if num_public_samples is None:
@@ -243,7 +267,9 @@ def distill_ensemble_into_global(
         return aggregated_parameters, {
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 1.0,
-            **unrepaired_telemetry(len(teachers), kd_weight=0.0, server_sim_time=kd_time),
+            **kd_repair_telemetry(
+                len(teachers), kd_weight=0.0, server_sim_time=kd_time, temperature=temperature
+            ),
         }
 
     try:
@@ -254,7 +280,7 @@ def distill_ensemble_into_global(
             student_model=student_model,
             teachers=teachers,
             public_loader=public_loader,
-            temperature=float(alg_cfg.get("temperature", 1.0)),
+            temperature=temperature,
             learning_rate=float(alg_cfg.get("server_kd_lr", 0.01)),
             momentum=float(alg_cfg.get("server_kd_momentum", 0.9)),
             epochs=kd_epochs,
@@ -263,7 +289,10 @@ def distill_ensemble_into_global(
             entropy_weight_scale=float(alg_cfg.get("entropy_weight", 1.0)),
             precision_weight_scale=float(alg_cfg.get("precision_weight", 1.0)),
         )
-        updated = ndarrays_to_parameters(get_model_parameters(student_model))
+        distilled = get_model_parameters(student_model)
+        if kd_weight < 1.0:
+            distilled = _blend(parameters_to_ndarrays(aggregated_parameters), distilled, kd_weight)
+        updated = ndarrays_to_parameters(distilled)
         logger.info(
             f"Server-side KD: successfully distilled knowledge from {len(teachers)} teacher models."
         )
@@ -271,7 +300,9 @@ def distill_ensemble_into_global(
             "server_kd_loss": kd_loss,
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 0.0,
-            **unrepaired_telemetry(len(teachers), kd_weight=1.0, server_sim_time=kd_time),
+            **kd_repair_telemetry(
+                len(teachers), kd_weight=kd_weight, server_sim_time=kd_time, temperature=temperature
+            ),
         }
     except (ValueError, RuntimeError):
         # F6: shape/config bug in the KD pass — fail loud, don't return an
@@ -282,5 +313,23 @@ def distill_ensemble_into_global(
         return aggregated_parameters, {
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 1.0,
-            **unrepaired_telemetry(len(teachers), kd_weight=0.0, server_sim_time=kd_time),
+            **kd_repair_telemetry(
+                len(teachers), kd_weight=0.0, server_sim_time=kd_time, temperature=temperature
+            ),
         }
+
+
+def _blend(
+    aggregated: list[np.ndarray], distilled: list[np.ndarray], weight: float
+) -> list[np.ndarray]:
+    """``aggregated + weight * (distilled - aggregated)`` per floating array.
+
+    Integer buffers (BatchNorm's ``num_batches_tracked``) keep the distilled value.
+    """
+    blended = []
+    for before, after in zip(aggregated, distilled, strict=True):
+        if np.issubdtype(after.dtype, np.floating):
+            blended.append((before + weight * (after - before)).astype(after.dtype))
+        else:
+            blended.append(after)
+    return blended
