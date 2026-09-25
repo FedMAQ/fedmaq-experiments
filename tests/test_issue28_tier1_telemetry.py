@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from fedmaq.core.kd_repair import KD_REPAIR_TELEMETRY_KEYS
 from fedmaq.core.quantization_planner import (
     DEFAULT_BIT_WIDTHS,
     QuantizationPlanner,
@@ -289,6 +290,16 @@ def test_hook_metric_keys_declares_histogram_columns():
     for b in DEFAULT_BIT_WIDTHS:
         assert f"algorithm/fedmaq/q_count_{b}" in keys
         assert f"algorithm/fedmaq/q_hat_count_{b}" in keys
+
+
+def test_hook_metric_keys_declares_kd_repair_columns_only_with_kd():
+    kd = set(FedMAQHook({"algorithm": {"name": "fedmaq", "kd_epochs": 1}}).metric_keys())
+    no_kd = set(FedMAQHook({"algorithm": {"name": "fedmaq", "kd_epochs": 0}}).metric_keys())
+
+    expected = {f"algorithm/fedmaq/{key}" for key in KD_REPAIR_TELEMETRY_KEYS}
+    assert len(expected) == 8
+    assert expected <= kd
+    assert not expected & no_kd
 
 
 def test_telemetry_manager_freezes_histogram_columns_into_header(tmp_path, monkeypatch):

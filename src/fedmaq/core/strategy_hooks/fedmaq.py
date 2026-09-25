@@ -20,7 +20,7 @@ from fedmaq.core.config_defaults import (
     resolve_algorithm_config,
     resolve_run_context,
 )
-from fedmaq.core.kd_repair import resolve_kd_repair
+from fedmaq.core.kd_repair import KD_REPAIR_TELEMETRY_KEYS, resolve_kd_repair
 from fedmaq.core.kd_utils import (
     apply_student_ema,
     distill_ensemble_into_global,
@@ -239,6 +239,8 @@ class FedMAQHook(StrategyHook):
         for b in bit_widths:
             keys.append(f"algorithm/fedmaq/q_count_{b}")
             keys.append(f"algorithm/fedmaq/q_hat_count_{b}")
+        if int(self.alg_cfg.get("kd_epochs", 1)) > 0:
+            keys.extend(f"algorithm/fedmaq/{key}" for key in KD_REPAIR_TELEMETRY_KEYS)
         return keys
 
     def server_sim_time(

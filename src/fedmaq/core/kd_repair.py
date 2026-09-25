@@ -356,6 +356,12 @@ def kd_repair_telemetry(
     }
 
 
+# The per-round fields every distillation pass reports, in logging order.
+KD_REPAIR_TELEMETRY_KEYS: tuple[str, ...] = tuple(
+    kd_repair_telemetry(1, kd_weight=1.0, server_sim_time=0.0)
+)
+
+
 def participant_class_counts(
     partition_ids: Sequence[int],
     client_indices: Mapping[Any, Sequence[int]],
