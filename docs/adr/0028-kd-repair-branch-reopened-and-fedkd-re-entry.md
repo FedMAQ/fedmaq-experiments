@@ -32,7 +32,7 @@ No other baseline has a demonstrated defect. Two literature-adherence audits alr
    - class-balanced KD.
 
    No two mechanisms are combined in this pass.
-3. **The one-seed pilot is replaced by a direct screen.** It runs all 18 settings plus a no-KD+pipeline reference over the five first-study conditions, on seeds 0, 42 and 123, on the validation split. The screen is exploratory.
+3. **The one-seed pilot is replaced by a direct screen.** It runs all 18 settings plus a no-KD+pipeline reference over the five first-study conditions, on seeds 0, 42 and 123, on the validation split. A full-FedMAQ+pipeline reference also runs there, descriptive only, so each repair can be read against unrepaired KD. The screen is exploratory.
 4. **The advance rule has no cap.** Every family's best setting advances if both hold:
    - it beats no-KD by ≥ 1.0 pp in at least one priority cell (CIFAR-10 α=1.0 or FEMNIST);
    - it is no worse than −1.0 pp in every other condition.
@@ -40,7 +40,10 @@ No other baseline has a demonstrated defect. Two literature-adherence audits alr
    The multiplicity is handled by disclosure and a pre-declared choice, not by a cap:
    - the thesis reports how many repairs reached confirmation, with each one's paired 95% interval;
    - the recommended configuration is the confirmed repair with the largest worst-case priority-cell margin over no-KD.
-5. **Confirmation runs on the V2 seeds (19, 37, 73, 101, 131) on the test split.** It uses the ADR-0016 V2 claim margins plus a ≥ −1.0 pp margin against no-KD.
+5. **Confirmation runs on the V2 seeds (19, 37, 73, 101, 131) on the test split.** A repair's claim holds only when its five-seed paired means meet every margin below:
+   - it beats no-KD by ≥ 1.0 pp in at least one priority cell;
+   - it is no worse than −1.0 pp against no-KD in the other priority cell;
+   - it meets the ADR-0016 V2 margins (≥ −1.0 pp against each of FedAvg, FedPAQ, FedPAQ+pipeline and DAdaQuant) in both priority cells.
    - The `v2_confirm` runs serve as paired controls if JupyterHub golden repeatability is bit-exact at the repair commit. Otherwise the controls rerun.
    - The repairs are selected on other seeds and another split, so this is their first look at these seeds.
    - The seed-exclusivity guard in `tests/test_v2_registration.py` widens to admit the new stages and nothing else.
