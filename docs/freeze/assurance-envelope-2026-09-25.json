@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "envelope_id": "fedmaq-pipeline-assurance-2026-09-25",
+  "created_at": "2026-09-25",
+  "created_by": "Claude agent under the author's 2026-09-25 delegation",
+  "canonical_location": "fedmaq-experiments:docs/freeze/assurance-envelope-2026-09-25.json",
+  "purpose": "V2 no-KD confirmation dispatch (150 runs, ADR-0016 design)",
+  "specification": {
+    "specification_issue": "FedMAQ/fedmaq-experiments#120",
+    "execution_issue": "FedMAQ/fedmaq-experiments#123"
+  },
+  "content_hash": {
+    "algorithm": "sha256",
+    "value": "086bdd4439822ca21939e987f1d15741355c9c96fe02c1130811652951ce42f1"
+  },
+  "revision_vector": {
+    "fedmaq-experiments": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-experiments",
+      "revision": "6664d70fe5ea341bc22e18145204d01bf59f19f5",
+      "clean_tree": true,
+      "role": "remediated pipeline implementation, configuration, dispatch, tests"
+    },
+    "fedmaq-literature": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-literature",
+      "revision": "3d88b056a48894504761aac6306b8789bda75a98",
+      "clean_tree": true,
+      "role": "curated method and protocol knowledge"
+    },
+    "fedmaq-manuscript": {
+      "canonical_identity": "https://github.com/FedMAQ/fedmaq-manuscript",
+      "revision": "39921cafccbc7bf600f7889b952696dbcbb929a3",
+      "clean_tree": true,
+      "role": "thesis method, protocol, and reporting claims"
+    }
+  },
+  "candidate": {
+    "repository": "fedmaq-experiments",
+    "revision": "6664d70fe5ea341bc22e18145204d01bf59f19f5",
+    "pinned_on": "2026-09-25",
+    "pin_semantics": "6664d70 is the frozen V2 dispatch candidate: local smoke (all stages, verify passed) and hub golden repeatability (9/9 algorithms bit-exact) both ran on this exact commit"
+  },
+  "freeze_certificate": {
+    "path": "docs/freeze/source_manifest.json",
+    "schema_version": 1,
+    "state_at_candidate": "current"
+  }
+}
