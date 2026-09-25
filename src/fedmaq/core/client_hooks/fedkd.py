@@ -35,6 +35,35 @@ def inverse_task_loss_weight(
     return 1.0 / (student_task_loss + teacher_task_loss + 1e-6)
 
 
+def mutual_kl_terms(
+    outputs_s: torch.Tensor,
+    outputs_t: torch.Tensor,
+    temperature: float,
+    *,
+    detach_targets: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the T^2-scaled (teacher->student, student->teacher) KL terms.
+
+    With ``detach_targets`` off, gradient also flows through each KL target, as
+    the first study ran it. A target probability that underflows to zero then
+    gives ``KLDivLoss`` a NaN gradient, which is the FedKD divergence of
+    ADR-0028. Turning it on treats each target as a constant; the FedKD paper
+    does not say which reading it uses, so the switch is a disclosed adaptation.
+    """
+    kl_criterion = nn.KLDivLoss(reduction="batchmean")
+    outputs_s_log_soft = F.log_softmax(outputs_s / temperature, dim=1)
+    outputs_t_log_soft = F.log_softmax(outputs_t / temperature, dim=1)
+    outputs_s_soft = F.softmax(outputs_s / temperature, dim=1)
+    outputs_t_soft = F.softmax(outputs_t / temperature, dim=1)
+    if detach_targets:
+        outputs_s_soft = outputs_s_soft.detach()
+        outputs_t_soft = outputs_t_soft.detach()
+
+    kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
+    kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
+    return kl_t_to_s, kl_s_to_t
+
+
 class FedKDFit(ClientFitStrategy):
     """FedKD: joint student-teacher training with mutual KL distillation.
 
@@ -80,8 +109,10 @@ class FedKDFit(ClientFitStrategy):
             momentum=momentum,
         )
         ce_criterion = nn.CrossEntropyLoss()
-        kl_criterion = nn.KLDivLoss(reduction="batchmean")
         temperature = float(alg_config.get("temperature", 2.0))
+        # Read without a yaml default so the first-study and V2 FedKD configs keep
+        # their resolved hashes; a matrix row sets it with a ``+`` override.
+        detach_targets = bool(alg_config.get("detach_kl_targets", False))
 
         client.model.train()
         teacher_model.train()
@@ -106,13 +137,9 @@ class FedKDFit(ClientFitStrategy):
                 loss_s_task = ce_criterion(outputs_s, labels)
                 loss_t_task = ce_criterion(outputs_t, labels)
 
-                outputs_s_log_soft = F.log_softmax(outputs_s / temperature, dim=1)
-                outputs_t_log_soft = F.log_softmax(outputs_t / temperature, dim=1)
-                outputs_s_soft = F.softmax(outputs_s / temperature, dim=1)
-                outputs_t_soft = F.softmax(outputs_t / temperature, dim=1)
-
-                kl_t_to_s = kl_criterion(outputs_s_log_soft, outputs_t_soft) * (temperature**2)
-                kl_s_to_t = kl_criterion(outputs_t_log_soft, outputs_s_soft) * (temperature**2)
+                kl_t_to_s, kl_s_to_t = mutual_kl_terms(
+                    outputs_s, outputs_t, temperature, detach_targets=detach_targets
+                )
 
                 inverse_loss_weight = inverse_task_loss_weight(loss_s_task, loss_t_task)
                 loss_kd_s = kl_t_to_s * inverse_loss_weight
