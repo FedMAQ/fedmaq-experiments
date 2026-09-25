@@ -19,12 +19,14 @@ from fedmaq.core.config_defaults import (
     resolve_algorithm_config,
     resolve_run_context,
 )
+from fedmaq.core.kd_repair import resolve_kd_repair
 from fedmaq.core.kd_utils import (
     apply_student_ema,
     distill_ensemble_into_global,
     kd_server_sim_time,
 )
 from fedmaq.core.models import get_model
+from fedmaq.core.strategy_hooks._partition import results_class_counts
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -50,6 +52,7 @@ class FedAvgKDHook(StrategyHook):
         self.batch_size = self._run_context.batch_size
         self.device = self._run_context.device
         self.alg_cfg = resolve_algorithm_config(config)
+        self._kd_repair = resolve_kd_repair(self.alg_cfg)
         self._ema_params: list[Any] | None = None
         self._last_round_kd_metrics: dict[str, float] = {}
 
@@ -75,6 +78,14 @@ class FedAvgKDHook(StrategyHook):
         if aggregated_parameters is None:
             return aggregated_parameters, metrics
 
+        class_counts = (
+            results_class_counts(results, strategy, self.dataset_name, self.num_classes)
+            if self._kd_repair.needs_class_counts
+            else None
+        )
+        num_public = self._run_context.num_public_samples
+        if num_public is None:
+            num_public = require_num_public_samples(self._config)
         # FedAvgKD uses the standard model for both teacher and student.
         aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
             model_factory=get_model,
@@ -86,6 +97,10 @@ class FedAvgKDHook(StrategyHook):
             batch_size=self.batch_size,
             alg_cfg=self.alg_cfg,
             device=self.device,
+            server_round=server_round,
+            class_counts=class_counts,
+            num_public_samples=num_public,
+            server_compute_speed=self._run_context.server_compute_speed,
         )
 
         # Student EMA is quantization-independent, so §4.3.7's refinement parity

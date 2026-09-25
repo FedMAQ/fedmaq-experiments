@@ -95,3 +95,24 @@ def partition_dataset_size(
         f"Partition ID {pid} not found in client_indices_dict. Defaulting size to {default}."
     )
     return default
+
+
+def results_class_counts(
+    results: list[tuple[ClientProxy, Any]],
+    strategy: TelemetryFedAvg,
+    dataset_name: str,
+    num_classes: int,
+) -> list[list[int]]:
+    """Label histogram of each result's partition, in ``results`` order.
+
+    Loads the training labels on every call, so a hook asks for this only when
+    its KD-repair family reads class counts.
+    """
+    from fedmaq.core.kd_repair import participant_class_counts
+    from fedmaq.core.partitioning import get_dataset_labels, load_dataset
+
+    if strategy.client_indices_dict is None:
+        raise RuntimeError("class counts need the strategy's client index map")
+    labels = get_dataset_labels(load_dataset(dataset_name, train=True))
+    pids = [resolve_partition_id(client, strategy) for client, _ in results]
+    return participant_class_counts(pids, strategy.client_indices_dict, labels, num_classes)

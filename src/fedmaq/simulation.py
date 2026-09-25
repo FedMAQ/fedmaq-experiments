@@ -24,6 +24,7 @@ from fedmaq.core.checkpoint import write_final_global_model
 from fedmaq.core.client import GenericClient, get_loss_hook
 from fedmaq.core.client_manager import SeededPartitionClientManager
 from fedmaq.core.evaluation import evaluate_fedmd_ensemble, evaluate_global_model
+from fedmaq.core.kd_repair import validate_kd_repair_config
 from fedmaq.core.manifest import write_run_manifest
 from fedmaq.core.models import (
     DEVICE,
@@ -469,6 +470,7 @@ class SimulationBuilder:
             logger.info(f"GPU (CUDA) detected. Using device: {torch.cuda.get_device_name(0)}")
 
         self.cfg_dict = cast(dict[str, Any], OmegaConf.to_container(self.cfg, resolve=True))
+        validate_kd_repair_config(self.cfg_dict)
         logger.info(f"Running simulation with config:\n{OmegaConf.to_yaml(self.cfg)}")
 
         self.alg_name: str = self.cfg.algorithm.name

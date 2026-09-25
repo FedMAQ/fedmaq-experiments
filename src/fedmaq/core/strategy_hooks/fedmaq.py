@@ -20,6 +20,7 @@ from fedmaq.core.config_defaults import (
     resolve_algorithm_config,
     resolve_run_context,
 )
+from fedmaq.core.kd_repair import resolve_kd_repair
 from fedmaq.core.kd_utils import (
     apply_student_ema,
     distill_ensemble_into_global,
@@ -33,7 +34,7 @@ from fedmaq.core.quantization_planner import (
     _snap_floor,
     inject_client_q,
 )
-from fedmaq.core.strategy_hooks._partition import resolve_partition_id
+from fedmaq.core.strategy_hooks._partition import resolve_partition_id, results_class_counts
 from fedmaq.core.strategy_hooks.base import StrategyHook
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ class FedMAQHook(StrategyHook):
         self.batch_size = self._run_context.batch_size
         self.device = self._run_context.device
         self.alg_cfg = alg_cfg
+        self._kd_repair = resolve_kd_repair(alg_cfg)
         alg_name = alg_cfg.get("name", "fedmaq")
         self._planner = QuantizationPlanner(alg_name, get_server_model_factory(alg_name))
         self._current_plan: QuantPlan = QuantPlan(client_q={}, grad_norms=[])
@@ -122,6 +124,14 @@ class FedMAQHook(StrategyHook):
                 )
                 teacher_bit_widths.append(q_val)
 
+        class_counts = (
+            results_class_counts(results, strategy, ctx.dataset_name, ctx.num_classes)
+            if self._kd_repair.needs_class_counts
+            else None
+        )
+        num_public = ctx.num_public_samples
+        if num_public is None:
+            num_public = require_num_public_samples(self._config)
         aggregated_parameters, self._last_round_kd_metrics = distill_ensemble_into_global(
             model_factory=model_fn,
             aggregated_parameters=aggregated_parameters,
@@ -133,6 +143,10 @@ class FedMAQHook(StrategyHook):
             alg_cfg=alg_cfg,
             device=ctx.device,
             teacher_bit_widths=teacher_bit_widths,
+            server_round=server_round,
+            class_counts=class_counts,
+            num_public_samples=num_public,
+            server_compute_speed=ctx.server_compute_speed,
         )
 
         if aggregated_parameters is not None:

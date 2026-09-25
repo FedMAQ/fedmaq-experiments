@@ -18,6 +18,7 @@ from flwr.common.typing import FitRes
 from flwr.server.client_proxy import ClientProxy
 from torch.utils.data import DataLoader
 
+from fedmaq.core.kd_repair import resolve_kd_repair, unrepaired_telemetry
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 from fedmaq.core.partitioning import get_server_loaders
 
@@ -170,6 +171,11 @@ def distill_ensemble_into_global(
     alg_cfg: dict[str, Any],
     device: torch.device,
     teacher_bit_widths: list[int] | None = None,
+    *,
+    server_round: int | None = None,
+    class_counts: list[list[int]] | None = None,
+    num_public_samples: int | None = None,
+    server_compute_speed: float = 0.0,
 ) -> tuple[Parameters, dict[str, float]]:
     """Refine an aggregated global model via ensemble server-side KD.
 
@@ -179,10 +185,32 @@ def distill_ensemble_into_global(
     parameters, then the teacher ensemble is distilled into the student over the
     server's public dataset.
 
+    This routine is the single seam of the ADR-0028 KD-repair families. It receives
+    the server round and the participants' class counts (``class_counts[i]`` belongs
+    to ``results[i]``), reads the arm's ``kd_repair`` group, and reports per-round
+    repair telemetry. No family is implemented yet, so an enabled family is refused;
+    with every family off the pass is plain ensemble KD.
+
     Returns the updated ``Parameters`` and a dictionary of KD metrics. Falls back to
-    ``aggregated_parameters`` and empty metrics when there are no loadable teachers,
+    ``aggregated_parameters`` and skip metrics when there are no loadable teachers,
     no public set, or an error occurs.
     """
+    repair = resolve_kd_repair(alg_cfg)
+    if repair.family is not None:
+        raise NotImplementedError(f"KD-repair family {repair.family!r} is not implemented")
+    del server_round, class_counts  # consumed by the repair families once they land
+
+    kd_epochs = int(alg_cfg.get("kd_epochs", 1))
+    if num_public_samples is None:
+        num_public_samples = len(public_indices) if public_indices is not None else 0
+    # Same units as the hooks' KD term in server_sim_time: every result counts as a teacher.
+    kd_time = kd_server_sim_time(
+        num_public=num_public_samples,
+        kd_epochs=kd_epochs,
+        num_teachers=len(results),
+        server_compute_speed=server_compute_speed,
+    )
+
     student_model = model_factory(dataset_name, num_classes)
     student_model.to(device)
     set_model_parameters(student_model, parameters_to_ndarrays(aggregated_parameters))
@@ -215,6 +243,7 @@ def distill_ensemble_into_global(
         return aggregated_parameters, {
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 1.0,
+            **unrepaired_telemetry(len(teachers), kd_weight=0.0, server_sim_time=kd_time),
         }
 
     try:
@@ -228,7 +257,7 @@ def distill_ensemble_into_global(
             temperature=float(alg_cfg.get("temperature", 1.0)),
             learning_rate=float(alg_cfg.get("server_kd_lr", 0.01)),
             momentum=float(alg_cfg.get("server_kd_momentum", 0.9)),
-            epochs=int(alg_cfg.get("kd_epochs", 1)),
+            epochs=kd_epochs,
             device=device,
             teacher_bit_widths=actual_bit_widths,
             entropy_weight_scale=float(alg_cfg.get("entropy_weight", 1.0)),
@@ -242,6 +271,7 @@ def distill_ensemble_into_global(
             "server_kd_loss": kd_loss,
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 0.0,
+            **unrepaired_telemetry(len(teachers), kd_weight=1.0, server_sim_time=kd_time),
         }
     except (ValueError, RuntimeError):
         # F6: shape/config bug in the KD pass — fail loud, don't return an
@@ -252,4 +282,5 @@ def distill_ensemble_into_global(
         return aggregated_parameters, {
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 1.0,
+            **unrepaired_telemetry(len(teachers), kd_weight=0.0, server_sim_time=kd_time),
         }
