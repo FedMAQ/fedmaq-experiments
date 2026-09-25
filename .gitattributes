@@ -1,0 +1,3 @@
+# Check out text as LF on every platform, so a file hash taken from a working copy
+# matches its git blob and the hub checkout.
+* text=auto eol=lf
