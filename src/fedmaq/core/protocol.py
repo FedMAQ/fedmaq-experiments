@@ -21,6 +21,7 @@ PROTOCOL_STAGES = frozenset(
         "downstream",
         "assurance",
         "v2_confirm",
+        "v2_fedkd_first_study",
         "v2_fedkd_preflight",
         "v2_kd_confirm",
         "v2_kd_screen",

@@ -77,6 +77,61 @@ def test_fedkd_preflight_output_namespace_is_its_own() -> None:
         assert (matrix.get("protocol_stage") == "v2_fedkd_preflight") is owns, path.name
 
 
+FIRST_STUDY_MATRICES = (
+    "v2_fedkd_first_study_cifar10",
+    "v2_fedkd_first_study_cifar100",
+    "v2_fedkd_first_study_femnist",
+)
+
+
+def test_fedkd_first_study_is_the_other_twelve_cells_with_only_the_detach_changed() -> None:
+    """ADR-0028 item 6: the first-study FedKD arm on its grid, less the preflight cells."""
+    from scripts.common import expand_matrix
+
+    first_study = {
+        (spec["dataset"], spec["heterogeneity"], spec["seed"]): spec
+        for name in ("benchmark_grid", "benchmark_grid_cifar100", "benchmark_grid_femnist")
+        for spec in expand_matrix(_load(MATRIX_DIR / f"{name}.yaml"), name)
+        if spec["algorithm_config"] == "fedkd"
+    }
+    preflight = {
+        (spec["dataset"], spec["heterogeneity"], spec["seed"])
+        for spec in expand_matrix(
+            _load(MATRIX_DIR / "v2_fedkd_preflight.yaml"), "v2_fedkd_preflight"
+        )
+    }
+    cells = set()
+    for name in FIRST_STUDY_MATRICES:
+        matrix = _load(MATRIX_DIR / f"{name}.yaml")
+        assert (matrix["phase"], matrix["experiment_group"]) == ("v2_kd", "v2_fedkd_first_study")
+        assert (matrix["stage"], matrix["protocol_stage"], matrix["split"]) == (
+            "v2_fedkd_first_study",
+            "v2_fedkd_first_study",
+            "test",
+        )
+        for spec in expand_matrix(matrix, name):
+            key = (spec["dataset"], spec["heterogeneity"], spec["seed"])
+            source = first_study[key]
+            assert (spec["model"], spec["total_rounds"]) == (source["model"], 100), key
+            assert spec["algorithm_config"] == "fedkd", key
+            assert spec["overrides"] == [
+                *source["overrides"],
+                "+algorithm.detach_kl_targets=true",
+            ], key
+            cells.add(key)
+    assert len(first_study) == 15
+    assert cells == set(first_study) - preflight
+    assert len(cells) == 12
+
+
+def test_fedkd_first_study_output_namespace_is_its_own() -> None:
+    for path in MATRIX_DIR.glob("*.yaml"):
+        matrix = _load(path)
+        owns = path.stem in FIRST_STUDY_MATRICES
+        assert (matrix.get("experiment_group") == "v2_fedkd_first_study") is owns, path.name
+        assert (matrix.get("protocol_stage") == "v2_fedkd_first_study") is owns, path.name
+
+
 SCREEN_MATRICES = ("v2_kd_screen_cifar10", "v2_kd_screen_cifar100", "v2_kd_screen_femnist")
 
 

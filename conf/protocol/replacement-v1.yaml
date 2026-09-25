@@ -36,6 +36,12 @@ stages:
     selection_data: frozen_validation_verdicts
     reserved_test: true
     split: test
+  # FedKD first-study rerun (ADR-0028, item 6): the fixed FedKD on the twelve other
+  # first-study cells, after the preflight passes. Selects nothing; a post-hoc row.
+  v2_fedkd_first_study:
+    selection_data: frozen_validation_verdicts
+    reserved_test: true
+    split: test
   # KD-repair screen (ADR-0028, items 2-4): selects each family's entrant on
   # validation data, on the first-study seeds, before confirmation reads test.
   v2_kd_screen:
@@ -89,6 +95,9 @@ matrix_contracts:
   v2_confirm_cifar100: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 60, sha256: 94dc39cf9fdfbe616c4e8890a6cbcbaf9c2d429fdf45576d55073aa2e539251f}
   v2_confirm_femnist: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 30, sha256: c7481c7e4bd01ea6f4c1c41174eb7ec6745c3b813df4f2bb4790555a3cdd9829}
   v2_fedkd_preflight: {stage: v2_fedkd_preflight, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: a2d459120076963eb2e7d080d23b409fcb9e5d744ae43d3e3772f0402f12d405}
+  v2_fedkd_first_study_cifar10: {stage: v2_fedkd_first_study, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: 749808293d1b9bbc7b83ed1af808f49e555b7a87fbf8a7a25e2d1fa970a5f0be}
+  v2_fedkd_first_study_cifar100: {stage: v2_fedkd_first_study, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 31bdc688e7dcb399c2c302d91c1f2816e0ab65d23cc2fc46c68ac1944b51be08}
+  v2_fedkd_first_study_femnist: {stage: v2_fedkd_first_study, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: 3cba3b3fa7fb9510a4dfd8990e4acd7ba7f0f2ed74b3f13f41508ee4ebf58675}
   v2_kd_screen_cifar10: {stage: v2_kd_screen, split: val, ledger: scientific, rounds: 100, cell_count: 120, sha256: 2c74bafdcb68893793435e31eaafb6cf1ae2c594d59423295542618b862c2c13}
   v2_kd_screen_cifar100: {stage: v2_kd_screen, split: val, ledger: scientific, rounds: 100, cell_count: 120, sha256: c37944068140ff679c02543f58918f0fcfa2ec667a0a811ffb232223f30bbd17}
   v2_kd_screen_femnist: {stage: v2_kd_screen, split: val, ledger: scientific, rounds: 100, cell_count: 60, sha256: 535150abe679d51b1d5b56679403eba43a28321aa1522620c80663cb5dca6e17}
