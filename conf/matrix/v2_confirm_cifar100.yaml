@@ -1,0 +1,46 @@
+# FedMAQ-v2 confirmatory grid, CIFAR-100 part (60 runs). Registered in ADR-0016's
+# 2026-09-25 section; that section, not this header, owns the design and claim rule.
+#
+# Three files make up the 150-run grid: v2_confirm_cifar10.yaml (60),
+# v2_confirm_cifar100.yaml (60), and v2_confirm_femnist.yaml (30). All three share
+# phase v2 and experiment_group v2_confirm, so no V2 run writes into a first-study
+# output tree. Seeds 19/37/73/101/131 have never run in any repo matrix; 131 replaces
+# ADR-0016's original seed 7, which baseline_tuning_wide consumed.
+#
+# fedmaq_no_kd is the candidate. fedmaq is the KD-contrast control and differs only in
+# kd_epochs. fedpaq_pipeline gives the candidate's coding pipeline to FedPAQ, so the
+# quantized comparison cannot favor the candidate through the pipeline alone.
+# conf/protocol/replacement-v1.yaml pins this file's resolved hash; any edit voids the
+# registration.
+phase: v2
+stage: v2_confirm
+protocol_stage: v2_confirm
+split: test
+ledger: scientific
+experiment_group: v2_confirm
+dataset: cifar100
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [19, 37, 73, 101, 131]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedmaq_no_kd
+    label: fedmaq_no_kd
+    overrides:
+      - algorithm.post_process=true
+  - alg: fedmaq
+    label: fedmaq
+    overrides:
+      - algorithm.post_process=true
+  - alg: fedavg
+    label: fedavg
+  - alg: fedpaq
+    label: fedpaq
+  - alg: fedpaq_pipeline
+    label: fedpaq_pipeline
+  - alg: dadaquant
+    label: dadaquant

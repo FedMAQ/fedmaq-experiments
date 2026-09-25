@@ -1,7 +1,158 @@
 # ADR-0016: FedMAQ-v2 evaluation protocol, advance rule, and analysis isolation
 
-**Status**: Amended 2026-09-23; original dispatch design suspended
+**Status**: V2 registered 2026-09-25 (no-KD confirmation); historical design superseded
 **Date**: 2026-08-17
+
+## 2026-09-25 V2 registration
+
+This section is the exact pre-dispatch V2 protocol. It supersedes every
+historical stage, count, roster, and threshold below. It follows the #119
+nomination (`fedmaq-experiments#119`) and the #120 draft
+(`fedmaq-experiments#120`). The agent adopted it under the author's
+2026-09-25 delegation:
+
+> "continue with #120 and once done with 120, don't stop working if more
+> tickets/things can be addressed, no need to ask me things if you have an
+> idea. again you have full freedom to do whatever needed in the jupyterhub
+> instance or my local machine for any fedmaq tasks worth doing after these
+> tickets."
+
+Every choice marked *delegated* below was the agent's under that delegation.
+Each stays reversible until the first V2 scientific cell is dispatched. After
+that, the registration is fixed, and changing it takes a new dated section
+here plus a new stage name.
+
+### Candidate and branches
+
+- **Candidate:** `fedmaq_no_kd` with `algorithm.post_process=true`. Its
+  resolved configuration differs from full FedMAQ only in `kd_epochs` (0
+  versus 1). p=0.5, omega=0.5, the bit-width set, the Tier-1 ceiling, the
+  quantizer and client training all stay frozen from the first study.
+- **KD-repair branch:** closed. The #119 exploratory pilot bounds a KD repair
+  by the ensemble-minus-average gap. In the no-KD priority cell that gap was
+  0.2 pp at the terminal budget, against the 1.0 pp margin the historical
+  rule required.
+  - This bound is exploratory: one seed per regime, validation split. It
+    decides where to spend compute, not what is true of KD.
+  - Reopening KD needs a new registration with loss, calibration, or an
+    early-budget scalar as a *primary* endpoint.
+- **Non-KD branch:** none nominated. A later aggregation or drift change needs
+  its own registration and never combines with KD repair.
+- **FedKD:** excluded from V2 (*delegated*). The optional re-entry gate is not
+  attempted. Its forensics (`fedmaq-experiments#118`) may continue, and
+  re-entry needs a new registration.
+
+### Matrices and seeds
+
+- **Matrices:** `conf/matrix/v2_confirm_cifar10.yaml` (60 runs),
+  `v2_confirm_cifar100.yaml` (60) and `v2_confirm_femnist.yaml` (30), 150
+  runs in all, 100 rounds each.
+- **Protocol stage:** `v2_confirm` in `conf/protocol/replacement-v1.yaml`.
+  - The stage's `matrix_contracts` pin each matrix's resolved sha256 and cell
+    count.
+  - Adding the stage left every first-study stage's preregistration hash
+    unchanged. All 499 first-study manifests still pass
+    `is_promotable_manifest`.
+- **Arms** (*delegated*), each on every condition and seed:
+  - `fedmaq_no_kd` + pipeline: the candidate.
+  - `fedmaq` + pipeline: the KD-contrast control.
+  - `fedavg`.
+  - `fedpaq`.
+  - `fedpaq_pipeline`: FedPAQ with the candidate's coding pipeline, so the
+    pipeline alone cannot carry the comparison.
+  - `dadaquant`.
+  - FedProx and FedDistill+ are dropped. FedProx is an uncompressed reference
+    that FedAvg already covers. FedDistill+ tests logit sharing, which the
+    V2 question does not address.
+- **Conditions** (*delegated*): CIFAR-10 at α 0.1 and 1.0, CIFAR-100 at α 0.1
+  and 1.0, and FEMNIST. These are the first study's five conditions.
+  - The historical corroborative CIFAR-10 α=0.5 cell is dropped. It never
+    bound a decision, and no α=0.5 partition config exists.
+- **Seeds:** 19, 37, 73, 101 and 131, on the test split, used once.
+  - 131 replaces the historical seed 7 (*delegated*), because
+    `baseline_tuning_wide` ran seed 7 during matched tuning.
+  - `tests/test_v2_registration.py` asserts that no other matrix runs a V2
+    seed, and that no other matrix writes to the `v2` phase or the
+    `v2_confirm` group.
+
+### Scalar and curves
+
+Accuracy-versus-cumulative-bidirectional-bytes curves
+(`communication/cumulative_bytes`) are primary. The V2 scalar is the paired
+per-seed iso-byte accuracy, computed under the Evaluation protocol rules
+below:
+- `B*_s` is the minimum of the two same-seed terminal budgets.
+- Interpolation is linear, inside each curve's own observed range only.
+- For duplicate byte points, keep the later round.
+- Decreasing bytes block the cell.
+- A curve that does not bracket `B*_s` blocks the cell.
+
+This scalar is V2-only. It is never compared with or substituted for the
+ADR-0012 first-study one-common-budget scalar.
+
+### Claim rule
+
+- **Priority cells:** CIFAR-10 α=1.0 and FEMNIST.
+- **Pass condition:** for each comparator, take the mean over the five seeds
+  of the paired delta (candidate minus comparator) at each seed's `B*_s`.
+  The claim holds in a priority cell only when that mean is ≥ −1.0 pp
+  against FedAvg, and ≥ −1.0 pp against each of FedPAQ, FedPAQ+pipeline and
+  DAdaQuant. The per-comparator form fixes the historical "higher of the
+  arm means" wording, because each pair has its own budget.
+- **Verdict:** V2 supports competitive accuracy for the candidate only when
+  both priority cells pass. Otherwise the claim is not supported, and the
+  thesis reports that.
+- **Nature of the rule:** a practical recovery criterion, not a formal
+  non-inferiority test.
+
+### Descriptive reporting
+
+None of these items is a gate.
+- **Every comparison:**
+  - Report seed-level paired deltas.
+  - Report the two-sided 95% paired Student-t interval (n=5, df=4).
+- **Every condition:** report each cell individually, including the three
+  non-priority conditions.
+- **KD contrast:** candidate minus full FedMAQ, reported paired and
+  descriptively in all five conditions.
+- **Secondary endpoints** (*delegated*): all descriptive; none reopens the KD
+  branch.
+  - Test loss and macro-F1 at `B*_s`, interpolated identically to accuracy.
+  - Round-100 accuracy.
+  - Terminal cumulative bytes.
+  - Cumulative simulated time.
+  - Calibration is not logged and is not an endpoint.
+
+### Blocking and retries
+
+- **What blocks scoring:** a comparison in a condition blocks when any of
+  its five seeds lacks either of the following:
+  - a clean `run_manifest.json` that passes `is_promotable_manifest`, at the
+    pinned dispatch commit;
+  - a finished 100-round log.
+- **Infrastructure failure:** the process dies before its final record (for
+  example preemption, OOM or a lock refusal). Retry it once with the
+  identical command. That retry is not a second test-split look, and the
+  retry is recorded.
+- **Scientific outcome:** a finished run with nonfinite loss or collapsed
+  accuracy is a result. It is reported and never retried.
+
+### Assurance before the first V2 cell
+
+1. **Analyzer:** the V2 analyzer lands in `fedmaq-analyses` under the
+   isolation requirements below. Its commit and sha256 are pinned on the
+   dispatch ticket.
+2. **Local smoke:** the local smoke gate passes at the dispatch commit, with
+   one added cell for the exact candidate (`fedmaq_no_kd`,
+   `post_process=true`).
+3. **Envelope:** the assurance envelope is re-declared at the dispatch
+   commit. The `6b348a0` pilot evidence does not carry over.
+4. **Golden repeatability:** JupyterHub golden repeatability passes
+   bit-exactly at the dispatch commit.
+5. **Dry runs:** dry runs of all three matrices match this section: 150
+   tasks, the `v2` namespace, and seeds 19/37/73/101/131.
+6. **Dispatch:** runs go through the sweep runner under the #122 output-group
+   and host Ray locks, one matrix at a time.
 
 ## 2026-09-23 post-campaign amendment
 

@@ -23,6 +23,13 @@ stages:
     selection_data: none
     reserved_test: false
     split: none
+  # FedMAQ-v2 confirmation (ADR-0016, 2026-09-25). Consumes the first study's
+  # frozen validation verdicts and selects nothing, so it reads test like downstream
+  # but carries its own stage name, contract, and preregistration hash.
+  v2_confirm:
+    selection_data: frozen_validation_verdicts
+    reserved_test: true
+    split: test
 wire_protocol: packed_wire_v1
 historical_artifacts_promotable: false
 
@@ -33,7 +40,9 @@ selection_domains:
   # Registered base for every scientific matrix. baseline_tuning_wide alone
   # extends it to [0, 42, 123, 7, 21], these three first, because matched tuning
   # budgets 29 arms x 5 seeds = 145 cells; scripts/stage_manifest.py enforces
-  # that five-seed tuple for Stage A. No other stage extends the base.
+  # that five-seed tuple for Stage A. v2_confirm replaces the base with fresh
+  # seeds [19, 37, 73, 101, 131], pinned by its matrix hashes below; this list stays
+  # unchanged because every stage's preregistration hash covers it.
   seeds: [0, 42, 123]
   # Bit-width histogram bins (q_count_b, q_hat_count_b), not a swept axis: no
   # matrix sweeps a key of this name, and the swept algorithm.q reaches 32,
@@ -57,3 +66,6 @@ matrix_contracts:
   fedpaq_pipeline_femnist: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 3, sha256: 3581a7ed8c3fec8a598c7f73ec7684c007c4ad8753256970f5af1799369e4248}
   memory_sensitivity: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 12, sha256: dafaab00c23d29b6dc8d5b5bbc7cd1061c2fd99d2f322e2d81bd248b09cad78e}
   uniform_memory_control: {stage: downstream, split: test, ledger: scientific, rounds: 100, cell_count: 6, sha256: 0e52e8dec7421985314e249889a4067c27613ff2daf419175bb3c38be3f19a20}
+  v2_confirm_cifar10: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 60, sha256: cb41148cc29bd7251a8ca4617c79a199a0e3a7e13fa88e7a572fc6796529245c}
+  v2_confirm_cifar100: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 60, sha256: 94dc39cf9fdfbe616c4e8890a6cbcbaf9c2d429fdf45576d55073aa2e539251f}
+  v2_confirm_femnist: {stage: v2_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 30, sha256: c7481c7e4bd01ea6f4c1c41174eb7ec6745c3b813df4f2bb4790555a3cdd9829}
