@@ -178,7 +178,7 @@ def main() -> int:
     if args.write:
         manifest = build_manifest()
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
-        MANIFEST_PATH.write_text(_render(manifest), encoding="utf-8")
+        MANIFEST_PATH.write_text(_render(manifest), encoding="utf-8", newline="\n")
         print(f"wrote {MANIFEST_PATH.relative_to(REPO_ROOT)} ({len(manifest['files'])} files)")
         return 0
 

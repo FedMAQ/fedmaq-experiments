@@ -22,15 +22,38 @@ def _seeds(matrix: dict) -> set[int]:
     return seeds
 
 
+# ADR-0028 item 5: the KD-repair confirmation reuses the V2 seeds; no other stage may.
+V2_SEED_STAGES = ("v2_confirm", "v2_kd_confirm")
+
+
+def _v2_seed_violation(matrix: dict) -> str | None:
+    """Why ``matrix`` breaks V2 seed exclusivity, or ``None`` when it keeps it."""
+    seeds = _seeds(matrix)
+    if matrix.get("protocol_stage") in V2_SEED_STAGES:
+        return None if seeds == V2_SEEDS else f"runs seeds {sorted(seeds)}, not the V2 seeds"
+    overlap = seeds & V2_SEEDS
+    return f"runs V2 confirmation seed(s) {sorted(overlap)}" if overlap else None
+
+
 def test_v2_seeds_have_never_run_in_any_other_matrix() -> None:
     """A seed any earlier matrix used may have shaped a selection or a reading."""
     others = [path for path in MATRIX_DIR.glob("*.yaml") if path.stem not in V2_MATRICES]
     assert others
     for name in V2_MATRICES:
-        assert _seeds(_load(MATRIX_DIR / f"{name}.yaml")) == V2_SEEDS
-    for path in others:
-        overlap = _seeds(_load(path)) & V2_SEEDS
-        assert not overlap, f"{path.name} runs V2 confirmation seed(s) {sorted(overlap)}"
+        assert _load(MATRIX_DIR / f"{name}.yaml")["protocol_stage"] == "v2_confirm"
+    for path in MATRIX_DIR.glob("*.yaml"):
+        violation = _v2_seed_violation(_load(path))
+        assert violation is None, f"{path.name} {violation}"
+
+
+def test_v2_seed_guard_admits_the_kd_confirmation_and_no_other_stage() -> None:
+    assert (
+        _v2_seed_violation({"protocol_stage": "v2_kd_confirm", "seeds": sorted(V2_SEEDS)}) is None
+    )
+    assert _v2_seed_violation({"protocol_stage": "v2_kd_confirm", "seeds": [19, 37]})
+    for stage in ("v2_kd_screen", "v2_fedkd_preflight", "v2_fedkd_first_study", "benchmark", None):
+        assert _v2_seed_violation({"protocol_stage": stage, "seeds": [0, 19]}), stage
+        assert _v2_seed_violation({"protocol_stage": stage, "runs": [{"seeds": [131]}]}), stage
 
 
 def test_v2_output_namespace_is_disjoint_from_every_other_matrix() -> None:
