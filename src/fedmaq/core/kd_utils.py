@@ -23,6 +23,10 @@ from fedmaq.core.kd_repair import (
     IMPLEMENTED_KD_REPAIR_FAMILIES,
     TeacherWeighter,
     TeacherWeightStats,
+    class_balance_weights,
+    class_weight_telemetry,
+    guard_accepts,
+    guard_margin,
     kd_repair_telemetry,
     kd_temperature,
     resolve_kd_repair,
@@ -97,6 +101,7 @@ def run_server_side_kd(
     precision_weight_scale: float = 1.0,
     teacher_weighter: TeacherWeighter | None = None,
     weight_stats: TeacherWeightStats | None = None,
+    class_weights: torch.Tensor | None = None,
 ) -> float:
     """Run server-side knowledge distillation to transfer ensemble knowledge to student model.
 
@@ -107,7 +112,13 @@ def run_server_side_kd(
     per-teacher weights for each batch, which multiply into the ensemble weights;
     equal weights leave the target untouched, and None skips the batch. Each
     batch's weights are recorded in ``weight_stats``.
+
+    ``class_weights`` (the class-balanced family) gives per-class teacher weights
+    [T, C]: each class's ensemble probability is its class-weighted teacher mean,
+    and the target is then renormalized over classes.
     """
+    if class_weights is not None:
+        class_weights = class_weights.to(device)
     optimizer = torch.optim.SGD(student_model.parameters(), lr=learning_rate, momentum=momentum)
     kl_criterion = nn.KLDivLoss(reduction="batchmean")
 
@@ -156,11 +167,28 @@ def run_server_side_kd(
                     combined = entropy_weights * precision_weights  # [T, B]
                     if reweight is not None:
                         combined = combined * reweight.unsqueeze(1)
-                    combined = combined / (
-                        combined.sum(dim=0, keepdim=True) + eps
-                    )  # normalize over teachers
+                    if class_weights is not None:
+                        per_class = combined.unsqueeze(2) * class_weights.unsqueeze(1)  # [T, B, C]
+                        per_class = per_class / (per_class.sum(dim=0, keepdim=True) + eps)
+                        teacher_soft_preds = (preds_stack * per_class).sum(dim=0)
+                        teacher_soft_preds = teacher_soft_preds / teacher_soft_preds.sum(
+                            dim=1, keepdim=True
+                        )
+                    else:
+                        combined = combined / (
+                            combined.sum(dim=0, keepdim=True) + eps
+                        )  # normalize over teachers
 
-                    teacher_soft_preds = (preds_stack * combined.unsqueeze(2)).sum(dim=0)  # [B, C]
+                        teacher_soft_preds = (preds_stack * combined.unsqueeze(2)).sum(
+                            dim=0
+                        )  # [B, C]
+                elif class_weights is not None:
+                    teacher_soft_preds = (
+                        torch.stack(teacher_soft_preds_list) * class_weights.unsqueeze(1)
+                    ).sum(dim=0)
+                    teacher_soft_preds = teacher_soft_preds / teacher_soft_preds.sum(
+                        dim=1, keepdim=True
+                    )
                 elif reweight is not None:
                     teacher_soft_preds = (
                         torch.stack(teacher_soft_preds_list) * reweight.view(-1, 1, 1)
@@ -174,6 +202,22 @@ def run_server_side_kd(
             batches += 1
 
     return loss_sum / batches if batches > 0 else 0.0
+
+
+def proxy_cross_entropy(model: nn.Module, loader: DataLoader, device: torch.device) -> float:
+    """Mean labelled cross-entropy of ``model`` over ``loader``, in eval mode.
+
+    The guard family's score. It reads the proxy labels, which assumes a labelled
+    public proxy, a stronger assumption than FedDF-style unlabelled distillation.
+    """
+    model.eval()
+    total, count = 0.0, 0
+    with torch.no_grad():
+        for images, labels in loader:
+            logits = model(images.to(device))
+            total += float(F.cross_entropy(logits, labels.to(device), reduction="sum"))
+            count += int(labels.shape[0])
+    return total / count if count > 0 else 0.0
 
 
 def kd_server_sim_time(
@@ -225,8 +269,11 @@ def distill_ensemble_into_global(
     schedule family weights the distilled student by round (a zero weight skips the
     pass); the temperature family replaces the distillation temperature; the
     teacher selection and weighting families reweight the ensemble per batch, and a
-    pass whose every batch they skip counts as skipped. Families that are not
-    implemented yet are refused.
+    pass whose every batch they skip counts as skipped. The guard family scores the
+    pre-KD average and the distilled student by labelled proxy cross-entropy and
+    returns the average unless the student beats it by the margin. The
+    class-balanced family weights each teacher's per-class soft labels by its
+    client's class share relative to the global share.
 
     Returns the updated ``Parameters`` and a dictionary of KD metrics. Falls back to
     ``aggregated_parameters`` and skip metrics when there are no loadable teachers,
@@ -235,7 +282,8 @@ def distill_ensemble_into_global(
     repair = resolve_kd_repair(alg_cfg)
     if repair.family is not None and repair.family not in IMPLEMENTED_KD_REPAIR_FAMILIES:
         raise NotImplementedError(f"KD-repair family {repair.family!r} is not implemented")
-    del class_counts  # consumed by the class-balanced family once it lands
+    if repair.needs_class_counts and (class_counts is None or len(class_counts) != len(results)):
+        raise ValueError("The KD-repair class_balanced family needs one class histogram per result")
 
     temperature = kd_temperature(repair, alg_cfg)
     kd_weight = 1.0
@@ -271,6 +319,7 @@ def distill_ensemble_into_global(
     set_model_parameters(student_model, parameters_to_ndarrays(aggregated_parameters))
 
     teachers: list[nn.Module] = []
+    teacher_counts: list[list[int]] = []
     actual_bit_widths: list[int] | None = [] if teacher_bit_widths is not None else None
     dropped_teachers = 0
     for i, (_, fit_res) in enumerate(results):
@@ -280,6 +329,8 @@ def distill_ensemble_into_global(
             teacher.eval()
             teacher.to(device)
             teachers.append(teacher)
+            if class_counts is not None:
+                teacher_counts.append(list(class_counts[i]))
             if actual_bit_widths is not None:
                 assert teacher_bit_widths is not None
                 actual_bit_widths.append(teacher_bit_widths[i])
@@ -303,6 +354,12 @@ def distill_ensemble_into_global(
             ),
         }
 
+    class_weights = None
+    if repair.family == "class_balanced":
+        class_weights = class_balance_weights(
+            teacher_counts, str(repair.settings["mode"]), float(repair.settings.get("floor", 0.0))
+        )
+
     try:
         public_loader, _, _ = get_server_loaders(
             dataset_name, public_indices, batch_size=batch_size
@@ -321,8 +378,13 @@ def distill_ensemble_into_global(
             precision_weight_scale=float(alg_cfg.get("precision_weight", 1.0)),
             teacher_weighter=weighter,
             weight_stats=weight_stats,
+            class_weights=class_weights,
         )
-        weight_telemetry = weight_stats.telemetry() if weight_stats is not None else {}
+        weight_telemetry: dict[str, Any] = (
+            weight_stats.telemetry() if weight_stats is not None else {}
+        )
+        if class_weights is not None:
+            weight_telemetry = class_weight_telemetry(class_weights)
         if weight_stats is not None and weight_stats.weighted_batches == 0:
             return aggregated_parameters, {
                 "dropped_teachers": float(dropped_teachers),
@@ -335,6 +397,33 @@ def distill_ensemble_into_global(
                     **weight_telemetry,
                 ),
             }
+        margin = guard_margin(repair)
+        if margin is not None:
+            average_model = model_factory(dataset_name, num_classes)
+            set_model_parameters(average_model, parameters_to_ndarrays(aggregated_parameters))
+            average_model.to(device)
+            ce_before = proxy_cross_entropy(average_model, public_loader, device)
+            ce_after = proxy_cross_entropy(student_model, public_loader, device)
+            guard_metrics = {
+                "kd_guard_proxy_ce_before": ce_before,
+                "kd_guard_proxy_ce_after": ce_after,
+            }
+            if not guard_accepts(margin, ce_before, ce_after):
+                return aggregated_parameters, {
+                    "server_kd_loss": kd_loss,
+                    "dropped_teachers": float(dropped_teachers),
+                    "kd_skipped": 0.0,
+                    **guard_metrics,
+                    **kd_repair_telemetry(
+                        len(teachers),
+                        kd_weight=0.0,
+                        server_sim_time=kd_time,
+                        temperature=temperature,
+                        guard_accept=False,
+                    ),
+                }
+        else:
+            guard_metrics = {}
         distilled = get_model_parameters(student_model)
         if kd_weight < 1.0:
             distilled = _blend(parameters_to_ndarrays(aggregated_parameters), distilled, kd_weight)
@@ -346,6 +435,7 @@ def distill_ensemble_into_global(
             "server_kd_loss": kd_loss,
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 0.0,
+            **guard_metrics,
             **kd_repair_telemetry(
                 len(teachers),
                 kd_weight=kd_weight,

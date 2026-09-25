@@ -1,4 +1,5 @@
-"""The KD-repair seam (#126) and its schedule, temperature (#127), and teacher families (#129)."""
+"""The KD-repair seam (#126) and its schedule, temperature (#127), teacher (#129), guard
+(#131), and class-balanced (#132) families."""
 
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from fedmaq.core import kd_utils
 from fedmaq.core.kd_repair import (
     KD_REPAIR_FAMILIES,
+    class_balance_weights,
+    guard_accepts,
     participant_class_counts,
     resolve_kd_repair,
     schedule_weight,
@@ -164,17 +167,18 @@ def test_unknown_family_is_refused():
 
 def test_single_family_resolves_with_its_settings():
     repair = resolve_kd_repair(
-        {"kd_repair": {"class_balanced": {"enabled": True, "power": 0.5}, "guard": {}}}
+        {"kd_repair": {"class_balanced": {"enabled": True, "mode": "hard"}, "guard": {}}}
     )
     assert repair.family == "class_balanced"
-    assert dict(repair.settings) == {"power": 0.5}
+    assert dict(repair.settings) == {"mode": "hard"}
     assert repair.needs_class_counts
 
 
-def test_unimplemented_family_is_refused(public_loader):
-    alg_cfg = {**ALG_CFG, "kd_repair": {"guard": {"enabled": True}}}
-    with pytest.raises(NotImplementedError, match="guard"):
-        _seam(_results(2), alg_cfg)
+@pytest.mark.parametrize("class_counts", [None, [[1, 2, 3, 4]]])
+def test_class_balanced_without_one_histogram_per_result_fails_loud(public_loader, class_counts):
+    alg_cfg = {**ALG_CFG, "kd_repair": {"class_balanced": {"enabled": True, "mode": "hard"}}}
+    with pytest.raises(ValueError, match="class_balanced"):
+        _seam(_results(2), alg_cfg, class_counts=class_counts)
 
 
 def test_participant_class_counts_follow_partition_order():
@@ -467,3 +471,197 @@ def test_selection_and_weighting_together_are_refused():
     }
     with pytest.raises(ValueError, match="one repair family per arm"):
         validate_kd_repair_config(config)
+
+
+# Guard family (#131). The proxy labels decide whether KD helps: labelling each public
+# sample with the teacher ensemble's argmax rewards the distilled student, and
+# labelling it with the pre-KD average's own argmax penalizes it.
+
+
+def _labelled_loader(monkeypatch, labeller):
+    generator = torch.Generator().manual_seed(7)
+    images = torch.randn(NUM_PUBLIC, 6, generator=generator)
+    dataset = TensorDataset(images, labeller(images))
+
+    def loaders(*_args, **_kwargs):
+        return DataLoader(dataset, batch_size=8, shuffle=False), None, None
+
+    monkeypatch.setattr(kd_utils, "get_server_loaders", loaders)
+
+
+def _argmax_of(*weight_seeds: int):
+    def labeller(images: torch.Tensor) -> torch.Tensor:
+        probs = 0
+        for seed in weight_seeds:
+            model = _factory("toy", NUM_CLASSES)
+            set_model_parameters(model, _weights(seed))
+            with torch.no_grad():
+                probs = probs + torch.softmax(model(images), dim=1)
+        return probs.argmax(dim=1)
+
+    return labeller
+
+
+TEACHER_LABELS = _argmax_of(10, 11)  # the two teachers of _results(2)
+AVERAGE_LABELS = _argmax_of(1)  # the pre-KD average the seam starts from
+
+
+def _guard(margin: float) -> dict:
+    return {**ALG_CFG, "kd_repair": {"guard": {"enabled": True, "margin": margin}}}
+
+
+def _same(parameters, expected) -> bool:
+    return all(
+        np.array_equal(got, want)
+        for got, want in zip(parameters_to_ndarrays(parameters), expected, strict=True)
+    )
+
+
+def test_guard_without_margin_is_bit_identical(public_loader):
+    results = _results(3)
+    updated, metrics = _seam(results, _guard(-float("inf")))
+    assert _same(updated, _reference(results, ALG_CFG))
+    assert metrics["kd_guard_accept"] == 1.0
+    assert "kd_guard_proxy_ce_before" not in metrics
+
+
+@pytest.mark.parametrize("margin", [0.0, 0.01, 0.05])
+def test_guard_accepts_a_student_that_fits_the_proxy_labels(monkeypatch, margin):
+    _labelled_loader(monkeypatch, TEACHER_LABELS)
+    results = _results(2)
+    updated, metrics = _seam(results, _guard(margin))
+    assert metrics["kd_guard_proxy_ce_after"] <= (1 - 0.05) * metrics["kd_guard_proxy_ce_before"]
+    assert metrics["kd_guard_accept"] == 1.0
+    assert metrics["kd_applied_weight"] == 1.0
+    assert _same(updated, _reference(results, ALG_CFG))
+
+
+@pytest.mark.parametrize("margin", [0.0, 0.01, 0.05])
+def test_guard_rejects_a_student_that_misfits_the_proxy_labels(monkeypatch, margin):
+    _labelled_loader(monkeypatch, AVERAGE_LABELS)
+    updated, metrics = _seam(_results(2), _guard(margin))
+    assert metrics["kd_guard_proxy_ce_after"] > metrics["kd_guard_proxy_ce_before"]
+    assert metrics["kd_guard_accept"] == 0.0
+    assert metrics["kd_applied_weight"] == 0.0
+    assert metrics["kd_skipped"] == 0.0
+    assert _same(updated, _weights(1))
+
+
+def test_guard_margin_flips_the_decision_at_the_observed_gain(monkeypatch):
+    _labelled_loader(monkeypatch, TEACHER_LABELS)
+    _, metrics = _seam(_results(2), _guard(0.0))
+    gain = 1 - metrics["kd_guard_proxy_ce_after"] / metrics["kd_guard_proxy_ce_before"]
+    _, below = _seam(_results(2), _guard(gain * 0.99))
+    _, above = _seam(_results(2), _guard(gain * 1.01))
+    assert (below["kd_guard_accept"], above["kd_guard_accept"]) == (1.0, 0.0)
+
+
+def test_guard_rule_on_hand_built_scores():
+    assert guard_accepts(0.0, 2.0, 2.0)
+    assert guard_accepts(0.05, 2.0, 1.89)
+    assert not guard_accepts(0.05, 2.0, 1.91)
+    assert not guard_accepts(0.0, 2.0, 2.01)
+
+
+@pytest.mark.parametrize("settings", [{}, {"margin": 1.0}, {"margin": 0.01, "metric": "acc"}])
+def test_bad_guard_settings_are_refused(settings):
+    with pytest.raises(ValueError, match="guard"):
+        resolve_kd_repair({"kd_repair": {"guard": {"enabled": True, **settings}}})
+
+
+# Class-balanced family (#132). The two teachers of _results(2) split the classes: the
+# first client holds classes 0 and 1, the second classes 2 and 3.
+
+CLASS_SETTINGS = {
+    "hard mask": {"mode": "hard"},
+    "soft, floor 0.1": {"mode": "soft", "floor": 0.1},
+    "soft, floor 0.3": {"mode": "soft", "floor": 0.3},
+}
+SPLIT_COUNTS = [[10, 10, 0, 0], [0, 0, 10, 10]]
+
+
+def _class_balanced(settings: dict) -> dict:
+    return {**ALG_CFG, "kd_repair": {"class_balanced": {"enabled": True, **settings}}}
+
+
+@pytest.mark.parametrize("bit_widths", [None, [8, 4, 2]])
+@pytest.mark.parametrize("name", list(CLASS_SETTINGS))
+def test_class_balanced_with_uniform_shares_is_bit_identical(public_loader, bit_widths, name):
+    results = _results(3)
+    counts = [[5, 5, 5, 5], [2, 2, 2, 2], [5, 5, 5, 5]]
+    updated, metrics = _seam(
+        results, _class_balanced(CLASS_SETTINGS[name]), bit_widths, class_counts=counts
+    )
+    assert _same(updated, _reference(results, ALG_CFG, bit_widths))
+    assert metrics["kd_effective_teachers"] == 3.0
+
+
+@pytest.mark.parametrize("bit_widths", [None, [8, 4]])
+def test_class_balanced_moves_the_student_toward_the_hard_mask(public_loader, bit_widths):
+    # Unrepaired, floor 0.3, floor 0.1, hard: each step gives a teacher less say over
+    # the classes its client never held, so the student lands closer to the hard mask.
+    results = _results(2)
+    hard, _ = _seam(
+        results, _class_balanced(CLASS_SETTINGS["hard mask"]), bit_widths, class_counts=SPLIT_COUNTS
+    )
+    hard = parameters_to_ndarrays(hard)
+    distances = [_distance(_reference(results, ALG_CFG, bit_widths), hard)]
+    for name in ("soft, floor 0.3", "soft, floor 0.1"):
+        updated, _ = _seam(
+            results, _class_balanced(CLASS_SETTINGS[name]), bit_widths, class_counts=SPLIT_COUNTS
+        )
+        distances.append(_distance(parameters_to_ndarrays(updated), hard))
+    assert distances == sorted(distances, reverse=True) and len(set(distances)) == 3
+    assert distances[-1] > 0.0
+
+
+def test_class_balanced_telemetry_reports_the_class_weights(public_loader):
+    _, hard = _seam(_results(2), _class_balanced({"mode": "hard"}), class_counts=SPLIT_COUNTS)
+    assert hard["kd_effective_teachers"] == 1.0
+    assert (hard["kd_teacher_weight_min"], hard["kd_teacher_weight_max"]) == (0.0, 1.0)
+    _, soft = _seam(
+        _results(2), _class_balanced({"mode": "soft", "floor": 0.3}), class_counts=SPLIT_COUNTS
+    )
+    assert soft["kd_teacher_weight_max"] == pytest.approx(2.0 / 2.3)
+    assert 1.0 < soft["kd_effective_teachers"] < 2.0
+
+
+def test_class_balance_weights_on_hand_built_counts():
+    assert class_balance_weights(SPLIT_COUNTS, "hard").tolist() == [
+        [1.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 1.0],
+    ]
+    soft = class_balance_weights(SPLIT_COUNTS, "soft", 0.1)
+    assert soft[:, 0].tolist() == pytest.approx([2.0 / 2.1, 0.1 / 2.1])
+    assert class_balance_weights([[3, 1, 2, 4]] * 2, "hard") is None
+    assert class_balance_weights([[3, 1, 2, 4], [6, 2, 4, 8]], "soft", 0.3) is None
+
+
+@pytest.mark.parametrize("mode, floor", [("hard", 0.0), ("soft", 0.1)])
+def test_class_balance_weights_edge_cases(mode, floor):
+    # The first teacher never saw class 1, and no teacher saw class 2.
+    counts = [[10, 0, 0, 5], [0, 10, 0, 5]]
+    weights = class_balance_weights(counts, mode, floor)
+    assert weights.sum(dim=0).tolist() == pytest.approx([1.0] * NUM_CLASSES)
+    assert weights[0, 1] < weights[1, 1]
+    assert weights[:, 2].tolist() == [0.5, 0.5]
+    assert weights[:, 3].tolist() == [0.5, 0.5]
+    if mode == "hard":
+        assert weights[0, 1] == 0.0
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {},
+        {"mode": "hard", "floor": 0.1},
+        {"mode": "soft"},
+        {"mode": "soft", "floor": 0.0},
+        {"mode": "soft", "floor": 1.5},
+        {"mode": "mask"},
+        {"mode": "hard", "power": 0.5},
+    ],
+)
+def test_bad_class_balanced_settings_are_refused(settings):
+    with pytest.raises(ValueError, match="class_balanced"):
+        resolve_kd_repair({"kd_repair": {"class_balanced": {"enabled": True, **settings}}})

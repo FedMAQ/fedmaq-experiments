@@ -30,15 +30,15 @@ KD_REPAIR_FAMILIES: tuple[str, ...] = (
 )
 
 # Families whose rule the seam applies; any other enabled family is refused.
-IMPLEMENTED_KD_REPAIR_FAMILIES: frozenset[str] = frozenset(
-    {"schedule", "temperature", "teacher_selection", "teacher_weighting"}
-)
+IMPLEMENTED_KD_REPAIR_FAMILIES: frozenset[str] = frozenset(KD_REPAIR_FAMILIES)
 
 _FAMILY_SETTINGS: dict[str, frozenset[str]] = {
     "schedule": frozenset({"start", "stop", "ramp_rounds"}),
     "temperature": frozenset({"value"}),
     "teacher_selection": frozenset({"threshold"}),
     "teacher_weighting": frozenset({"beta"}),
+    "guard": frozenset({"margin"}),
+    "class_balanced": frozenset({"mode", "floor"}),
 }
 
 # Maps one batch's teacher predictions [T, B, C] to per-teacher weights [T] that sum
@@ -118,6 +118,18 @@ def _check_settings(family: str, settings: Mapping[str, Any]) -> None:
         if "beta" not in settings or not float(settings["beta"]) >= 0.0:
             raise ValueError(
                 f"KD-repair teacher_weighting needs a non-negative beta, got {dict(settings)}"
+            )
+    elif family == "guard":
+        if "margin" not in settings or not float(settings["margin"]) < 1.0:
+            raise ValueError(f"KD-repair guard needs a margin below 1, got {dict(settings)}")
+    elif family == "class_balanced":
+        mode = settings.get("mode")
+        hard = mode == "hard" and "floor" not in settings
+        soft = mode == "soft" and 0.0 < float(settings.get("floor", 0.0)) <= 1.0
+        if not (hard or soft):
+            raise ValueError(
+                "KD-repair class_balanced needs mode 'hard', or mode 'soft' with a floor "
+                f"in (0, 1], got {dict(settings)}"
             )
 
 
@@ -206,6 +218,67 @@ def teacher_weighter(repair: KDRepairConfig) -> TeacherWeighter | None:
     return None
 
 
+def class_balance_weights(
+    class_counts: Sequence[Sequence[int]], mode: str, floor: float = 0.0
+) -> torch.Tensor | None:
+    """Per-class teacher weights [T, C] of class-balanced KD, or None when they are uniform.
+
+    Each teacher's weight for class c follows its client's share of c relative to the
+    global share: ``mode="hard"`` keeps only teachers that have seen c, and
+    ``mode="soft"`` uses ``max(floor, share / global_share)``. Each class's weights
+    are normalized over teachers. A class no teacher has seen falls back to equal
+    weights, and uniform class shares give equal weights everywhere, which is the
+    unmasked ensemble (None).
+    """
+    counts = torch.as_tensor(class_counts, dtype=torch.float64)
+    global_counts = counts.sum(dim=0)
+    if mode == "hard":
+        weights = (counts > 0).to(torch.float64)
+    else:
+        shares = counts / counts.sum(dim=1, keepdim=True).clamp_min(1.0)
+        global_shares = global_counts / global_counts.sum().clamp_min(1.0)
+        relative = shares / global_shares.clamp_min(torch.finfo(torch.float64).tiny)
+        weights = relative.clamp_min(floor)
+    weights[:, global_counts == 0] = 1.0
+    if torch.all(weights == weights[:1]):
+        return None
+    weights = weights / weights.sum(dim=0, keepdim=True)
+    return weights.to(torch.float32)
+
+
+def class_weight_telemetry(weights: torch.Tensor) -> dict[str, float]:
+    """Overrides for :func:`kd_repair_telemetry` from a class-balanced weight matrix [T, C].
+
+    The effective teacher count is the class mean of ``1 / sum(w^2)``.
+    """
+    return {
+        "effective_teachers": float((1.0 / (weights**2).sum(dim=0)).mean()),
+        "weight_min": float(weights.min()),
+        "weight_max": float(weights.max()),
+    }
+
+
+def guard_accepts(margin: float, proxy_ce_before: float, proxy_ce_after: float) -> bool:
+    """Keep the student if its proxy CE is at most ``(1 - margin)`` times the average's.
+
+    The margin is relative, so 0.01 asks for a 1% lower labelled proxy
+    cross-entropy than the pre-KD average; a margin of 0 accepts ties.
+    """
+    return proxy_ce_after <= (1.0 - margin) * proxy_ce_before
+
+
+def guard_margin(repair: KDRepairConfig) -> float | None:
+    """The guard family's relative margin, or None when the pass is unguarded.
+
+    A margin of -inf accepts every pass, so it is unguarded too and never
+    evaluates the proxy set.
+    """
+    if repair.family != "guard":
+        return None
+    margin = float(repair.settings["margin"])
+    return None if margin == -math.inf else margin
+
+
 @dataclass
 class TeacherWeightStats:
     """Per-batch teacher weights of one pass, summarized into repair telemetry."""
@@ -257,6 +330,7 @@ def kd_repair_telemetry(
     weight_min: float | None = None,
     weight_max: float | None = None,
     skipped_batches: float = 0.0,
+    guard_accept: bool = True,
 ) -> dict[str, float]:
     """Per-round KD-repair telemetry of one distillation pass.
 
@@ -264,7 +338,8 @@ def kd_repair_telemetry(
     1 for a full pass, 0 when the pass was skipped, and in between on a schedule ramp.
     The teacher-weight fields default to an equal-weight ensemble; the selection and
     weighting families pass their per-batch summary instead, where the effective
-    teacher count is the batch mean of ``1 / sum(w^2)``.
+    teacher count is the batch mean of ``1 / sum(w^2)``. ``guard_accept`` is false
+    only when the guard family rejected the distilled student.
     """
     equal_weight = 1.0 / num_teachers if num_teachers > 0 else 0.0
     return {
@@ -275,7 +350,7 @@ def kd_repair_telemetry(
         "kd_teacher_weight_min": float(equal_weight if weight_min is None else weight_min),
         "kd_teacher_weight_max": float(equal_weight if weight_max is None else weight_max),
         "kd_skipped_batches": float(skipped_batches),
-        "kd_guard_accept": 1.0,
+        "kd_guard_accept": 1.0 if guard_accept else 0.0,
         "kd_server_sim_time": float(server_sim_time),
         "kd_temperature": float(temperature),
     }
