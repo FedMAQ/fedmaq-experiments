@@ -21,10 +21,13 @@ from torch.utils.data import DataLoader
 
 from fedmaq.core.kd_repair import (
     IMPLEMENTED_KD_REPAIR_FAMILIES,
+    TeacherWeighter,
+    TeacherWeightStats,
     kd_repair_telemetry,
     kd_temperature,
     resolve_kd_repair,
     schedule_weight,
+    teacher_weighter,
 )
 from fedmaq.core.models import get_model_parameters, set_model_parameters
 from fedmaq.core.partitioning import get_server_loaders
@@ -92,11 +95,18 @@ def run_server_side_kd(
     teacher_bit_widths: list[int] | None = None,
     entropy_weight_scale: float = 1.0,
     precision_weight_scale: float = 1.0,
+    teacher_weighter: TeacherWeighter | None = None,
+    weight_stats: TeacherWeightStats | None = None,
 ) -> float:
     """Run server-side knowledge distillation to transfer ensemble knowledge to student model.
 
     The student is updated in-place via SGD minimising KL divergence against the
     soft-label average of all teacher outputs.
+
+    ``teacher_weighter`` (the selection and weighting repair families) returns
+    per-teacher weights for each batch, which multiply into the ensemble weights;
+    equal weights leave the target untouched, and None skips the batch. Each
+    batch's weights are recorded in ``weight_stats``.
     """
     optimizer = torch.optim.SGD(student_model.parameters(), lr=learning_rate, momentum=momentum)
     kl_criterion = nn.KLDivLoss(reduction="batchmean")
@@ -113,6 +123,16 @@ def run_server_side_kd(
                 for teacher in teachers:
                     t_out = teacher(images)
                     teacher_soft_preds_list.append(F.softmax(t_out / temperature, dim=1))
+
+                reweight = None
+                if teacher_weighter is not None:
+                    repair_weights = teacher_weighter(torch.stack(teacher_soft_preds_list))
+                    if weight_stats is not None:
+                        weight_stats.record(repair_weights)
+                    if repair_weights is None:
+                        continue
+                    if not torch.all(repair_weights == repair_weights[0]):
+                        reweight = repair_weights
 
                 if teacher_bit_widths is not None:
                     # Per-sample entropy weighting + precision scaling
@@ -134,11 +154,17 @@ def run_server_side_kd(
                     )  # [T, 1]
 
                     combined = entropy_weights * precision_weights  # [T, B]
+                    if reweight is not None:
+                        combined = combined * reweight.unsqueeze(1)
                     combined = combined / (
                         combined.sum(dim=0, keepdim=True) + eps
                     )  # normalize over teachers
 
                     teacher_soft_preds = (preds_stack * combined.unsqueeze(2)).sum(dim=0)  # [B, C]
+                elif reweight is not None:
+                    teacher_soft_preds = (
+                        torch.stack(teacher_soft_preds_list) * reweight.view(-1, 1, 1)
+                    ).sum(dim=0)
                 else:
                     teacher_soft_preds = torch.stack(teacher_soft_preds_list).mean(dim=0)
 
@@ -197,8 +223,10 @@ def distill_ensemble_into_global(
     to ``results[i]``), reads the arm's ``kd_repair`` group, and reports per-round
     repair telemetry. With every family off the pass is plain ensemble KD. The
     schedule family weights the distilled student by round (a zero weight skips the
-    pass); the temperature family replaces the distillation temperature. Families
-    that are not implemented yet are refused.
+    pass); the temperature family replaces the distillation temperature; the
+    teacher selection and weighting families reweight the ensemble per batch, and a
+    pass whose every batch they skip counts as skipped. Families that are not
+    implemented yet are refused.
 
     Returns the updated ``Parameters`` and a dictionary of KD metrics. Falls back to
     ``aggregated_parameters`` and skip metrics when there are no loadable teachers,
@@ -234,6 +262,9 @@ def distill_ensemble_into_global(
         num_teachers=len(results),
         server_compute_speed=server_compute_speed,
     )
+
+    weighter = teacher_weighter(repair)
+    weight_stats = TeacherWeightStats() if weighter is not None else None
 
     student_model = model_factory(dataset_name, num_classes)
     student_model.to(device)
@@ -288,7 +319,22 @@ def distill_ensemble_into_global(
             teacher_bit_widths=actual_bit_widths,
             entropy_weight_scale=float(alg_cfg.get("entropy_weight", 1.0)),
             precision_weight_scale=float(alg_cfg.get("precision_weight", 1.0)),
+            teacher_weighter=weighter,
+            weight_stats=weight_stats,
         )
+        weight_telemetry = weight_stats.telemetry() if weight_stats is not None else {}
+        if weight_stats is not None and weight_stats.weighted_batches == 0:
+            return aggregated_parameters, {
+                "dropped_teachers": float(dropped_teachers),
+                "kd_skipped": 1.0,
+                **kd_repair_telemetry(
+                    len(teachers),
+                    kd_weight=0.0,
+                    server_sim_time=kd_time,
+                    temperature=temperature,
+                    **weight_telemetry,
+                ),
+            }
         distilled = get_model_parameters(student_model)
         if kd_weight < 1.0:
             distilled = _blend(parameters_to_ndarrays(aggregated_parameters), distilled, kd_weight)
@@ -301,7 +347,11 @@ def distill_ensemble_into_global(
             "dropped_teachers": float(dropped_teachers),
             "kd_skipped": 0.0,
             **kd_repair_telemetry(
-                len(teachers), kd_weight=kd_weight, server_sim_time=kd_time, temperature=temperature
+                len(teachers),
+                kd_weight=kd_weight,
+                server_sim_time=kd_time,
+                temperature=temperature,
+                **weight_telemetry,
             ),
         }
     except (ValueError, RuntimeError):

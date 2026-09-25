@@ -1,4 +1,4 @@
-"""The KD-repair seam (#126) and its schedule and temperature families (#127)."""
+"""The KD-repair seam (#126) and its schedule, temperature (#127), and teacher families (#129)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ from fedmaq.core.kd_repair import (
     participant_class_counts,
     resolve_kd_repair,
     schedule_weight,
+    select_teachers,
     validate_kd_repair_config,
+    weight_teachers,
 )
 from fedmaq.core.kd_utils import distill_ensemble_into_global, run_server_side_kd
 from fedmaq.core.models import get_model_parameters, set_model_parameters
@@ -331,6 +333,135 @@ def test_schedule_and_temperature_together_are_refused():
             "kd_repair": {
                 "schedule": {"enabled": True, "start": 1, "stop": 20},
                 "temperature": {"enabled": True, "value": 2.0},
+            },
+        }
+    }
+    with pytest.raises(ValueError, match="one repair family per arm"):
+        validate_kd_repair_config(config)
+
+
+def _scaled_results(*scales_and_seeds: tuple[float, int]) -> list[tuple[object, FitRes]]:
+    """Teachers whose logits are scaled: a large scale is confident, a small one near uniform."""
+    status = Status(code=Code.OK, message="")
+    return [
+        (object(), FitRes(status, ndarrays_to_parameters([w * s for w in _weights(seed)]), 5, {}))
+        for s, seed in scales_and_seeds
+    ]
+
+
+SHARP, FLAT = (200.0, 10), (0.01, 11)
+
+
+@pytest.mark.parametrize("bit_widths", [None, [8, 4, 2]])
+@pytest.mark.parametrize(
+    "family, settings",
+    [("teacher_selection", {"threshold": 1.0}), ("teacher_weighting", {"beta": 0.0})],
+)
+def test_teacher_repair_no_op_is_bit_identical(public_loader, bit_widths, family, settings):
+    results = _results(3)
+    updated, metrics = _seam(results, _repair(family, **settings), bit_widths)
+    expected = _reference(results, ALG_CFG, bit_widths)
+    for got, want in zip(parameters_to_ndarrays(updated), expected, strict=True):
+        assert np.array_equal(got, want)
+    assert metrics["kd_effective_teachers"] == pytest.approx(3.0)
+    assert metrics["kd_skipped_batches"] == 0.0
+
+
+@pytest.mark.parametrize("threshold", [0.60, 0.75, 0.90])
+def test_selection_keeps_only_the_confident_teacher(public_loader, threshold):
+    results = _scaled_results(SHARP, FLAT)
+    updated, metrics = _seam(results, _repair("teacher_selection", threshold=threshold))
+    got = parameters_to_ndarrays(updated)
+    assert all(
+        np.array_equal(g, w) for g, w in zip(got, _reference(results[:1], ALG_CFG), strict=True)
+    )
+    assert _distance(got, _reference(results, ALG_CFG)) > 0.0
+    assert metrics["kd_effective_teachers"] == 1.0
+    assert metrics["kd_teacher_weight_min"] == 0.0
+    assert metrics["kd_teacher_weight_max"] == 1.0
+    assert metrics["kd_skipped_batches"] == 0.0
+    assert metrics["kd_skipped"] == 0.0
+
+
+def test_selection_skips_batches_with_no_confident_teacher(public_loader):
+    results = _scaled_results(FLAT, (0.01, 12))
+    updated, metrics = _seam(results, _repair("teacher_selection", threshold=0.60))
+    for got, want in zip(parameters_to_ndarrays(updated), _weights(1), strict=True):
+        assert np.array_equal(got, want)
+    assert metrics["kd_skipped"] == 1.0
+    assert metrics["kd_applied_weight"] == 0.0
+    assert metrics["kd_skipped_batches"] == (NUM_PUBLIC // 8) * ALG_CFG["kd_epochs"]
+    assert metrics["kd_effective_teachers"] == 0.0
+    assert metrics["kd_teacher_weight_min"] == metrics["kd_teacher_weight_max"] == 0.0
+
+
+def test_weighting_downweights_the_outlier_as_beta_grows(public_loader):
+    # Two agreeing teachers and one outlier; the more beta, the closer the student
+    # lands to distilling the agreeing pair alone.
+    results = _scaled_results((3.0, 10), (3.0, 10), (3.0, 11))
+    agreeing = _reference(results[:2], ALG_CFG)
+    distances, outlier_weights = [], []
+    for beta in (0.0, 0.5, 1.0, 2.0):
+        updated, metrics = _seam(results, _repair("teacher_weighting", beta=beta))
+        distances.append(_distance(parameters_to_ndarrays(updated), agreeing))
+        outlier_weights.append(metrics["kd_teacher_weight_min"])
+        assert metrics["kd_effective_teachers"] <= 3.0
+    assert distances == sorted(distances, reverse=True) and len(set(distances)) == 4
+    assert outlier_weights[0] == pytest.approx(1.0 / 3)
+    assert outlier_weights == sorted(outlier_weights, reverse=True)
+
+
+@pytest.mark.parametrize("beta", [0.5, 1.0, 2.0])
+def test_two_teachers_always_tie_under_weighting(public_loader, beta):
+    # Leave-one-out JS is symmetric for two teachers, so the rule cannot separate them;
+    # the two divergences differ only by float rounding.
+    results = _scaled_results(SHARP, FLAT)
+    updated, metrics = _seam(results, _repair("teacher_weighting", beta=beta))
+    expected = _reference(results, ALG_CFG)
+    for got, want in zip(parameters_to_ndarrays(updated), expected, strict=True):
+        assert np.allclose(got, want, rtol=0.0, atol=1e-6)
+    assert metrics["kd_teacher_weight_min"] == pytest.approx(0.5)
+
+
+def test_weighting_edge_cases():
+    probs = torch.softmax(torch.randn(3, 5, 4, generator=torch.Generator().manual_seed(3)), dim=2)
+    assert weight_teachers(probs[:1], 2.0).tolist() == [1.0]
+    identical = probs[:1].expand(3, -1, -1)
+    assert torch.allclose(weight_teachers(identical, 2.0), torch.full((3,), 1.0 / 3))
+
+
+def test_selection_rule_on_hand_built_predictions():
+    confident = torch.tensor([[[0.97, 0.01, 0.01, 0.01]]])
+    uniform = torch.full((1, 1, 4), 0.25)
+    stack = torch.cat([confident, uniform])
+    assert select_teachers(stack, 0.6).tolist() == [1.0, 0.0]
+    assert select_teachers(stack, 1.0).tolist() == [0.5, 0.5]
+    assert select_teachers(uniform, 0.9) is None
+
+
+@pytest.mark.parametrize(
+    "family, settings",
+    [
+        ("teacher_selection", {}),
+        ("teacher_selection", {"threshold": 0.0}),
+        ("teacher_selection", {"threshold": 1.5}),
+        ("teacher_weighting", {}),
+        ("teacher_weighting", {"beta": -1.0}),
+        ("teacher_weighting", {"beta": 1.0, "loo": False}),
+    ],
+)
+def test_bad_teacher_repair_settings_are_refused(family, settings):
+    with pytest.raises(ValueError, match=family):
+        resolve_kd_repair({"kd_repair": {family: {"enabled": True, **settings}}})
+
+
+def test_selection_and_weighting_together_are_refused():
+    config = {
+        "algorithm": {
+            "name": "fedmaq",
+            "kd_repair": {
+                "teacher_selection": {"enabled": True, "threshold": 0.75},
+                "teacher_weighting": {"enabled": True, "beta": 1.0},
             },
         }
     }
