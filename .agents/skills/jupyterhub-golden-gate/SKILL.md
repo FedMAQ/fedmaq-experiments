@@ -6,8 +6,8 @@ description: Guide a user through the GPU golden assurance runs on this FedMAQ p
 # JupyterHub Golden Gate
 
 Use this skill for this FedMAQ repository when a user must run the user-run
-golden harness on JupyterHub. The agent prepares paste-ready commands; the
-user runs them and returns the evidence.
+golden harness on JupyterHub. The agent prepares the commands, runs them on the
+hub and collects the evidence.
 
 ## The two operations are not interchangeable
 
@@ -25,7 +25,7 @@ deliberately; running the wrong one is the most common failure of this workflow.
   difference is not a failure. Its reports carry `"pass": false` and
   `"pass_eligible": false` by construction. It needs two commits.
 
-Never run either operation on the local Windows rig. Bit-exactness is a property of
+Run both operations on the JupyterHub GPU host only. Bit-exactness is a property of
 the GPU host, and a local `repeatability` run would write a `PASS` report into the
 canonical path that only the host may produce.
 

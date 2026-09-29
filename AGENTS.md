@@ -7,7 +7,7 @@
 - GitHub Issues own live state. Read `docs/agents/issue-tracker.md` before issue work and `triage-labels.md` only when triaging.
 - Direct-to-`main` follows ADR-0017; run `just check` before staging or committing. Push authorization is standing: push finished work without asking.
 - For a long foreground verification command, attach once and wait up to ten minutes before one status sample; retain the same process and do not start a duplicate while it runs.
-- For explicit matrix dispatch, read `.agents/skills/user-run-matrix/SKILL.md`; prepare commands and wait for user evidence.
+- For explicit matrix dispatch, read `.agents/skills/user-run-matrix/SKILL.md`; agents dispatch and poll on the hub per `docs/agents/execution-model.md`.
 - Read `.agents/skills/pre-dispatch-assurance/SKILL.md` to guide the author through current-candidate local smoke evidence and JupyterHub golden repeatability.
 - Read `.agents/skills/jupyterhub-golden-gate/SKILL.md` for exact-commit golden assurance work.
 - Read `.agents/skills/sweep-recovery/SKILL.md` for failed runs or status recovery.

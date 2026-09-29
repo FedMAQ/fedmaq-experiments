@@ -16,16 +16,24 @@ Issue or ask for the relevant matrix's `sweep_status.json`. Do not add status he
 
 ## Execution model
 
-**Read this before the dispatch order below. An agent cannot run any of it.**
+**Read this before the dispatch order below.**
 
 - **Every reported run executes on the Linux datacenter allocation, reached through a
-  JupyterHub gateway only** — no SSH, no VM, no shell an agent can drive. Hardware and
-  software are specified in manuscript §4.3.4 (A100 40GB PCIe, dual Xeon Platinum
-  8276, 64 GB RAM, shared with co-tenants). **That section is canonical; do not
-  restate it in an ADR or a second registry.**
-- **Sweeps are a hand-off.** The agent emits paste-ready commands, the user runs them
-  in JupyterHub, the user pastes results back. Never write a plan step in which an
-  agent dispatches a sweep or polls for its completion.
+  JupyterHub gateway only** — no SSH, no VM. Hardware and software are specified in
+  the manuscript's Hardware and Software Specifications subsection (A100 40GB PCIe,
+  dual Xeon Platinum 8276, 64 GB RAM, shared with co-tenants). **That section is
+  canonical; do not restate it in an ADR or a second registry.**
+- **Agents drive the hub.** The user permits it freely and no longer runs operational
+  steps. Through the browser pane's JupyterLab tab (login is the user's session), an
+  agent creates a terminal over `api/terminals`, sends commands on its
+  `terminals/websocket/<name>` socket, and deletes the terminal afterwards. It may
+  dispatch sweeps, poll them, kill stray processes, fetch evidence and relaunch after
+  a cull. Launch long jobs with `setsid nohup ... &` so they outlive the terminal, and
+  inspect them with `pgrep -af`. Keep the hub URL, the user's email and the home path
+  out of commits, comments and manuscript text.
+- **Decisions stay with the user.** Agents drive the hub only within a plan the user
+  has confirmed; frozen configuration, freeze artifacts and scientific claims still
+  need explicit authorization (see `AGENTS.md`).
 - **`outputs/` being empty locally proves nothing.** Results live on the allocation.
   Do not infer which stages have run from the local filesystem.
 - **Experiments are not blocked on hardware.** The allocation exists and is in use.
@@ -36,17 +44,16 @@ Issue or ask for the relevant matrix's `sweep_status.json`. Do not add status he
   `.agents/rules/engineering.md` are scoped to it and apply nowhere else. It is
   far slower per round than the allocation and a first run also pays the
   dataset download and partition build, so size a local smoke's
-  `--run_timeout_seconds` at 3600 or more, never from allocation timings.
+  `--run_timeout_seconds` at 3600 or more, well above any allocation timing.
 
 ---
 
 ## Dispatch order
 
-**The order below is load-bearing, not a convenience.** Manuscript §4.5 states it,
-and running out of order costs runs rather than just time. Each matrix file's own
-header carries the reason it sits where it does; read it before dispatching that
-stage. **Per the execution model above, "dispatch" means handing the command to the
-user.**
+**The order below is load-bearing, not a convenience.** The manuscript's Experimental
+Protocol subsection (§4.3.1) states it, and running out of order costs runs rather
+than just time. Each matrix file's own header carries the reason it sits where it
+does; read it before dispatching that stage.
 
 ### Every dispatch on the allocation carries the Ray host flags
 
@@ -262,7 +269,7 @@ are recorded separately and are not part of this scientific total.
 - **The hub stops the user server 72 hours after launch, even mid-run.** Its idle
   culler runs with a max-age, so every `setsid nohup` job dies with the server and a
   multi-day chain cannot finish inside one server lifetime. It is a system setting;
-  do not try to change it. Recover through `sweep-recovery` and relaunch any waiting
+  treat it as fixed. Recover through `sweep-recovery` and relaunch any waiting
   follow-on chain script.
 - **Check system RAM headroom** before Flower simulations, not just VRAM.
 - **Dry-run first.** On a shared host this is the cheapest way to catch a wrong

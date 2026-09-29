@@ -7,8 +7,10 @@ disable-model-invocation: true
 # User-Run Matrix
 
 Use this explicitly invoked skill when the user wants to dispatch a matrix
-experiment or inspect its returned run evidence. The agent prepares commands and
-interprets results; the user runs every experiment on the intended checkout.
+experiment or inspect its run evidence. The agent prepares the commands, then
+dispatches and polls them on the hub itself
+([the execution model](../../../docs/agents/execution-model.md)) once the user has
+confirmed the checkout, commit, stage and dry-run plan, and interprets the results.
 
 ## Prepare
 

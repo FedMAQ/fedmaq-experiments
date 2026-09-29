@@ -31,7 +31,7 @@ Guide the author through the five CPU smoke cells and their verifier exactly as 
 
 ## JupyterHub GPU repeatability
 
-After local smoke evidence is valid for the same candidate, read and apply `../jupyterhub-golden-gate/SKILL.md`. Prepare the `repeatability` release-gate commands for the author on JupyterHub. Do not replace it with a transition diagnostic, and do not launch or poll the GPU process yourself.
+After local smoke evidence is valid for the same candidate, read and apply `../jupyterhub-golden-gate/SKILL.md`. Run the `repeatability` release gate on JupyterHub yourself and poll it to completion. Do not replace it with a transition diagnostic.
 
 ## Declare only from complete evidence
 
