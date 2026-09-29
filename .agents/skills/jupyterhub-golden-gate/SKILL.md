@@ -25,6 +25,10 @@ deliberately; running the wrong one is the most common failure of this workflow.
   difference is not a failure. Its reports carry `"pass": false` and
   `"pass_eligible": false` by construction. It needs two commits.
 
+Never run either operation on the local Windows rig. Bit-exactness is a property of
+the GPU host, and a local `repeatability` run would write a `PASS` report into the
+canonical path that only the host may produce.
+
 `compare` is a backward-compatible alias for `transition`. It does not perform
 the release gate. If a ticket or older handoff says "capture at BASELINE, compare
 at CANDIDATE, expect all diffs to pass," that instruction predates the split —

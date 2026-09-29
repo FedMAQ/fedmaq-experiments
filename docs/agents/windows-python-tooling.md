@@ -23,4 +23,6 @@ Substitute the package that owns the failing command when it is not `pytest`. Fo
 .venv\Scripts\python.exe -m ruff check .
 ```
 
+Run `ruff format` only on the files you changed; a whole-tree format rewrites unrelated files. A ` M` status with an empty `git diff` is a CRLF stat-cache artifact, not a change: prove it cosmetic with the manifest `--check` scripts that `just check` runs before staging anything.
+
 Treat `.venv` as generated state rather than source evidence. Prefer targeted launcher regeneration; it keeps the repair fast and avoids unnecessary scientific-package changes.

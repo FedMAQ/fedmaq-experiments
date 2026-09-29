@@ -33,7 +33,10 @@ Issue or ask for the relevant matrix's `sweep_status.json`. Do not add status he
 - **The local Windows rig is for smoke tests only** — matrix-runner `--dry_run`,
   pre-dispatch validation, config-composition checks. It is the validated fallback of
   §4.3.4, not where the grid runs. The Ray crash mitigations in
-  `.agents/rules/engineering.md` are scoped to it and apply nowhere else.
+  `.agents/rules/engineering.md` are scoped to it and apply nowhere else. It is
+  far slower per round than the allocation and a first run also pays the
+  dataset download and partition build, so size a local smoke's
+  `--run_timeout_seconds` at 3600 or more, never from allocation timings.
 
 ---
 
@@ -256,6 +259,11 @@ are recorded separately and are not part of this scientific total.
   carries `failed_indices` plus the label, exit code and full command of each failure.
   Read it before deciding what to re-run; it is scoped to one invocation and replaced
   on the next.
+- **The hub stops the user server 72 hours after launch, even mid-run.** Its idle
+  culler runs with a max-age, so every `setsid nohup` job dies with the server and a
+  multi-day chain cannot finish inside one server lifetime. It is a system setting;
+  do not try to change it. Recover through `sweep-recovery` and relaunch any waiting
+  follow-on chain script.
 - **Check system RAM headroom** before Flower simulations, not just VRAM.
 - **Dry-run first.** On a shared host this is the cheapest way to catch a wrong
   `experiment=` or output path.

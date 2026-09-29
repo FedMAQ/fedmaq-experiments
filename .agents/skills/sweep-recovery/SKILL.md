@@ -20,6 +20,10 @@ prepared for the user; recovery is not inferred from a missing local output.
   move that dir aside. A run refuses to append to an earlier attempt's
   `experiment_log.jsonl` or `v2_diagnostic.jsonl`. The dry run marks those cells
   `WILL REFUSE`, and the sweep lists them and exits before it dispatches anything.
+- If the lab shows "Server not running" after about 72 hours, the hub's max-age
+  culler killed every detached job. Relaunch the server, then recover each
+  interrupted cell as above and relaunch any waiting follow-on chain
+  ([the execution model](../../../docs/agents/execution-model.md)).
 - If a sweep refuses because a lock is held, the named PID is a live sweep. Do not
   delete the lockfile, and do not start Ray cleanup around it.
 - Re-run the same matrix with `--skip_completed` after a dry run. It keys off
