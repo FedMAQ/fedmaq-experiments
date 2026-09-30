@@ -47,6 +47,8 @@ _JSONL_REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
 }
 _SERVER_KD_LOSS_KEY = "algorithm/fedmaq/server_kd_loss"
 _KD_APPLIED_WEIGHT_KEY = "algorithm/fedmaq/kd_applied_weight"
+# The writer partition ignores alpha; its config keeps a placeholder alpha in the manifest.
+_WRITER_HETEROGENEITY = "femnist"
 
 
 def _kd_pass_skipped(record: dict[str, Any]) -> bool:
@@ -199,9 +201,13 @@ def validate_run_evidence(
                                     f"vs manifest={run_info.get('variant')!r}"
                                 )
                             alpha_val = run_info.get("alpha")
-                            if alpha_val is not None and not (
-                                parsed.heterogeneity_path.endswith(str(alpha_val))
-                                or f"alpha_{alpha_val}" in parsed.heterogeneity_path
+                            if (
+                                alpha_val is not None
+                                and parsed.heterogeneity_path != _WRITER_HETEROGENEITY
+                                and not (
+                                    parsed.heterogeneity_path.endswith(str(alpha_val))
+                                    or f"alpha_{alpha_val}" in parsed.heterogeneity_path
+                                )
                             ):
                                 errors.append(
                                     f"identity mismatch on alpha: path={parsed.heterogeneity_path} "

@@ -50,6 +50,7 @@ def _create_synthetic_run(
     alpha: float = 0.3,
     seed: int = 0,
     variant: str = "mu1p0",
+    heterogeneity: str | None = None,
     total_rounds: int = 100,
     split: str = "val",
     wire_protocol: str = "packed_wire_v1",
@@ -81,7 +82,7 @@ def _create_synthetic_run(
         model,
         group,
         algorithm,
-        f"dirichlet_alpha_{alpha}",
+        heterogeneity or f"dirichlet_alpha_{alpha}",
         seed,
         variant=variant,
     )
@@ -751,3 +752,21 @@ def test_fedmaq_run_missing_kd_loss_on_applied_rounds_fails_closed(tmp_path):
         extra_columns=_kd_columns(loss_missing_from=6, weight_zero_from=9),
     )
     assert not is_run_evidence_complete(run_dir, expected_rounds=10, repo_root=tmp_path)
+
+
+def test_writer_partition_run_ignores_placeholder_alpha(tmp_path):
+    """FEMNIST's writer partition keeps a placeholder alpha in the manifest; the path has none."""
+    run_dir = _create_synthetic_run(tmp_path, alpha=1.0, heterogeneity="femnist", total_rounds=10)
+    result = validate_run_evidence(run_dir, expected_rounds=10, repo_root=tmp_path)
+    assert result.is_complete is True, result.errors
+
+
+def test_dirichlet_run_with_wrong_alpha_still_fails(tmp_path):
+    """The alpha identity check keeps guarding Dirichlet directories."""
+    run_dir = _create_synthetic_run(tmp_path, alpha=0.3, total_rounds=10)
+    manifest = run_dir / "run_manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["run"]["alpha"] = 1.0
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    result = validate_run_evidence(run_dir, expected_rounds=10, repo_root=tmp_path)
+    assert any("identity mismatch on alpha" in e for e in result.errors)
