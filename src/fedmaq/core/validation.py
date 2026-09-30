@@ -45,6 +45,15 @@ _JSONL_REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
     "fedmaq": ("client/avg_train_loss", "algorithm/fedmaq/server_kd_loss"),
     "power_mean": ("client/avg_train_loss",),
 }
+_SERVER_KD_LOSS_KEY = "algorithm/fedmaq/server_kd_loss"
+_KD_APPLIED_WEIGHT_KEY = "algorithm/fedmaq/kd_applied_weight"
+
+
+def _kd_pass_skipped(record: dict[str, Any]) -> bool:
+    """A KD pass that applied zero weight (schedule off, all batches skipped) logs no loss."""
+    return record.get(_KD_APPLIED_WEIGHT_KEY) == 0.0
+
+
 _JSONL_REQUIRED_PREFIXES: dict[str, tuple[str, ...]] = {
     "fedmaq": ("algorithm/fedmaq/q_count_", "algorithm/fedmaq/q_hat_count_"),
 }
@@ -328,9 +337,17 @@ def validate_run_evidence(
                 # are commonly blank (for example round-secondary bytes on all
                 # non-DAdaQuant arms), so only their populated values are checked.
                 numeric_cols = df.select_dtypes(include=["number"]).columns
+                skipped_kd_rows = (
+                    df[_KD_APPLIED_WEIGHT_KEY].eq(0.0)
+                    if _KD_APPLIED_WEIGHT_KEY in df.columns
+                    else pd.Series(False, index=df.index)
+                )
                 for col in numeric_cols:
                     if df[col].isna().any() and not df[col].isna().all():
-                        nonzero_nan = df.loc[df["round"] != 0, col].isna().any()
+                        nan_rows = df[col].isna()
+                        if col == _SERVER_KD_LOSS_KEY:
+                            nan_rows &= ~skipped_kd_rows
+                        nonzero_nan = nan_rows[df["round"] != 0].any()
                         if nonzero_nan:
                             errors.append(
                                 f"telemetry column {col!r} contains non-finite values (NaN/Inf)"
@@ -424,9 +441,12 @@ def validate_run_evidence(
                     )
                     continue
                 if int(round_value) != 0:
-                    missing_analysis_keys = [
-                        key for key in required_jsonl_keys or () if key not in record
+                    readout_keys = [
+                        key
+                        for key in required_jsonl_keys or ()
+                        if not (key == _SERVER_KD_LOSS_KEY and _kd_pass_skipped(record))
                     ]
+                    missing_analysis_keys = [key for key in readout_keys if key not in record]
                     missing_analysis_prefixes = [
                         prefix
                         for prefix in required_jsonl_prefixes
@@ -438,7 +458,7 @@ def validate_run_evidence(
                             f"keys={missing_analysis_keys}, prefixes={missing_analysis_prefixes}"
                         )
                         continue
-                    analysis_values = [record[key] for key in required_jsonl_keys or ()] + [
+                    analysis_values = [record[key] for key in readout_keys] + [
                         record[key]
                         for prefix in required_jsonl_prefixes
                         for key in record

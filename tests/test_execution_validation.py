@@ -716,3 +716,38 @@ def test_validation_rejects_mismatched_variant(tmp_path: Path):
     result = validate_run_evidence(run_dir, repo_root=tmp_path)
     assert any("identity mismatch on variant" in err for err in result.errors)
     assert not is_run_evidence_complete(run_dir, repo_root=tmp_path)
+
+
+def _kd_columns(loss_missing_from: int, weight_zero_from: int) -> dict[str, list[float | None]]:
+    rounds = range(1, 11)
+    return {
+        "algorithm/fedmaq/server_kd_loss": [
+            None if r >= loss_missing_from else 0.1 for r in rounds
+        ],
+        "algorithm/fedmaq/kd_applied_weight": [
+            0.0 if r >= weight_zero_from else 1.0 for r in rounds
+        ],
+    }
+
+
+def test_fedmaq_run_with_skipped_kd_rounds_is_complete(tmp_path):
+    """Rounds whose KD pass applied zero weight log no server_kd_loss and stay valid."""
+    run_dir = _create_synthetic_run(
+        tmp_path,
+        algorithm="fedmaq",
+        total_rounds=10,
+        extra_columns=_kd_columns(loss_missing_from=6, weight_zero_from=6),
+    )
+    result = validate_run_evidence(run_dir, expected_rounds=10, repo_root=tmp_path)
+    assert result.is_complete is True, result.errors
+
+
+def test_fedmaq_run_missing_kd_loss_on_applied_rounds_fails_closed(tmp_path):
+    """A missing server_kd_loss on a round that applied KD weight is still an error."""
+    run_dir = _create_synthetic_run(
+        tmp_path,
+        algorithm="fedmaq",
+        total_rounds=10,
+        extra_columns=_kd_columns(loss_missing_from=6, weight_zero_from=9),
+    )
+    assert not is_run_evidence_complete(run_dir, expected_rounds=10, repo_root=tmp_path)
