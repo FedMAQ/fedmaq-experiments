@@ -46,6 +46,29 @@ Issue or ask for the relevant matrix's `sweep_status.json`. Do not add status he
   dataset download and partition build, so size a local smoke's
   `--run_timeout_seconds` at 3600 or more, well above any allocation timing.
 
+### Server lifetime and interrupted-cell recovery
+
+The allocation's culler was inspected directly: both `--timeout` and `--max-age`
+are 259200 seconds (72 hours), with `--cull-every=3600`. The hard age limit applies
+even while training or browser activity continues. Detached jobs survive a terminal
+closing, but not the user server being culled.
+
+Use the current user server's `started` timestamp from `/hub/api/user` to estimate
+the next hard-age threshold. Host `uptime` measures the shared machine and cannot
+date this server. Expect a culler pass after the threshold; the polling interval
+does not establish an exact shutdown minute. Recheck the current culler arguments
+if the allocation's configuration changes.
+
+After a cull, restart the user server and follow
+[sweep recovery](../../.agents/skills/sweep-recovery/SKILL.md) at the sealed candidate.
+Preserve status and logs before a rerun rewrites them. Give each interrupted cell
+its own `mktemp -d` destination outside the group, then move the cell into a new
+child path there. A seed basename plus second-resolution timestamp can collide
+across arms; `mv` can nest a cell in an existing directory or fail while leaving
+the original in place. Verify the source path is gone and the preserved records
+exist, then repeat the dry run until it lists no `WILL REFUSE` cells. Let the
+runner acquire its locks and perform Ray cleanup; a live lock is a running sweep.
+
 ---
 
 ## Dispatch order
