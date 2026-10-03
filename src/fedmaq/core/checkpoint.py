@@ -8,7 +8,7 @@ global model — but until 2026-07-30 nothing in this repo wrote that model to
 disk. A run ended at ``telemetry.finish()`` and its weights went out of scope
 with the process, leaving round-metric CSVs, the WandB run, and
 ``run_manifest.json`` as the only artifacts. The figure would have been
-unbuildable once the 183-run grid completed, and recoverable only by re-running
+unbuildable once the grid completed, and recoverable only by re-running
 CIFAR-10 at $\\alpha = 0.1$ for FedMAQ plus a quantized baseline.
 
 So every run now writes ``final_global_model.pt`` beside its telemetry. The

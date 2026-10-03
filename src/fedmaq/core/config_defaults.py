@@ -32,7 +32,7 @@ import torch
 # fallback, NOT the grid's value: every conf/algorithm/*.yaml that performs
 # server-side KD sets 5000.0 (MobileNetV2GN on the L40S), and
 # conf/experiment/femnist.yaml overrides to 10000.0 for SimpleCNN. Nothing in
-# the 183-run grid reaches this constant, because the only server-side
+# the frozen grid reaches this constant, because the only server-side
 # distiller is FedMAQ and every FedMAQ variant declares the key. It is kept at
 # 2000.0 because tests/test_timing_golden.py pins the pre-refactor number; do
 # not "align" it to 5000.0 without re-baselining those golden tests.

@@ -25,7 +25,7 @@ compute_samples_per_sec: 20.0  # Raspberry Pi 5 Quad Cortex-A76 @ 2.4GHz sustain
 
 # Telemetry settings
 #
-# Online so the 183-run grid is watchable while it runs on the datacenter
+# Online so the grid is watchable while it runs on the datacenter
 # allocation, where the alternative is reading a tee'd log over the JupyterHub
 # terminal. WandB is strictly a viewing surface: every reported result is
 # computed from this run's local ``experiment_log.csv``, and ``telemetry.log``
