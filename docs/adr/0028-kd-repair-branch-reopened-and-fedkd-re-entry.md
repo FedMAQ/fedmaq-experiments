@@ -2,6 +2,7 @@
 
 **Status**: Accepted · 2026-09-25
 **Amends**: ADR-0016, section "2026-09-25 V2 registration", bullets "KD-repair branch" and "FedKD". The `v2_confirm` stage it registered is unchanged.
+**Amended by**: ADR-0029 widens the item 5 seed-exclusivity guard to admit `v2_extension`.
 **Decided by**: the thesis author, in the 2026-09-25 decision interview.
 
 ## Context
