@@ -2,7 +2,7 @@
 
 **Status**: V2 registered 2026-09-25 (no-KD confirmation); historical design superseded
 **Date**: 2026-08-17
-**Amended by**: ADR-0028 reopens the KD-repair branch and readmits FedKD. `v2_confirm` is unchanged.
+**Amended by**: ADR-0028 reopens the KD-repair branch and readmits FedKD. ADR-0029 extends the first-study arms to the V2 seeds in a separate post-hoc stage. `v2_confirm` is unchanged.
 
 ## 2026-09-25 V2 registration
 
