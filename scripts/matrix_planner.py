@@ -25,7 +25,9 @@ REPO_MATRIX_DIR = (Path(__file__).resolve().parents[1] / "conf" / "matrix").reso
 # Closed set, because `expand_matrix` reads every run-spec key through `.get`: an
 # unrecognised key is silently ignored rather than rejected, so a misspelt
 # `pending_selection` would disarm the guard below with no signal.
-RUN_SPEC_KEYS = frozenset({"alg", "label", "overrides", "pending_selection", "seeds", "variant"})
+RUN_SPEC_KEYS = frozenset(
+    {"alg", "heterogeneities", "label", "overrides", "pending_selection", "seeds", "variant"}
+)
 
 
 @dataclass(frozen=True)

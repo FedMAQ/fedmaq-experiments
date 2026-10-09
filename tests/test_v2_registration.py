@@ -425,6 +425,15 @@ def test_v2_extension_registers_all_260_cells_and_fixed_conditions() -> None:
                 "uniform_memory_alpha_0.1",
                 "uniform_memory_alpha_1.0",
             }
+            from scripts.matrix_planner import plan_matrix
+
+            plan = plan_matrix(MATRIX_DIR / f"{name}.yaml", matrix)
+            planned_e5 = [task for task in plan.tasks if task.label.startswith("e5-")]
+            assert len(planned_e5) == 20
+            assert {task.heterogeneity for task in planned_e5} == {
+                "uniform_memory_alpha_0.1",
+                "uniform_memory_alpha_1.0",
+            }
         assert {task["seed"] for task in tasks} == V2_SEEDS
         assert all(
             task["phase"] == "v2_extension"
