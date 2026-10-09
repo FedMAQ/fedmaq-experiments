@@ -114,7 +114,7 @@ matrix_contracts:
   v2_kd_confirm_cifar10: {stage: v2_kd_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 10, sha256: 97522eec268f67aa9918337a6e0475e31a5ae215521551c12d96a6b92a550091}
   v2_kd_confirm_cifar100: {stage: v2_kd_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 10, sha256: b5018ad01c41e8f6a5bd5a12455d5b59a258e07274e2938effba400640fe4f49}
   v2_kd_confirm_femnist: {stage: v2_kd_confirm, split: test, ledger: scientific, rounds: 100, cell_count: 5, sha256: b78cd51ed309f6041ff0a4fe4e3fd2a7e8486897c48c2df9ee1916c1c3b4d725}
-  v2_extension_cifar10: {stage: v2_extension, split: test, ledger: scientific, rounds: 100, cell_count: 140, sha256: 739c634240e1a7b0d54df85ffc0cbf2ae984885bdb220c06089b318eb07f8dbc}
+  v2_extension_cifar10: {stage: v2_extension, split: test, ledger: scientific, rounds: 100, cell_count: 140, sha256: 471f9d0998e240b8be5a8f3071135f9f2dd934cc30ff7d303e6036b60fe51373}
   v2_extension_cifar100: {stage: v2_extension, split: test, ledger: scientific, rounds: 100, cell_count: 80, sha256: 53330100a0d97578741eedfdf2ac27db9eb2e1f2a25881a51450b19f4e1d3079}
   v2_extension_femnist: {stage: v2_extension, split: test, ledger: scientific, rounds: 100, cell_count: 40, sha256: 24fc9fe5de655d9ab928ecf485e85b3546eab367b4f163d05d5b6340b7923d3a}
   v2_n2_screen_femnist: {stage: v2_n2_screen, split: val, ledger: scientific, rounds: 100, cell_count: 9, sha256: ee6aa2ce6cf7a4d8ec6a758c757e6612c83b4865659fffc380761e40f9eea811}

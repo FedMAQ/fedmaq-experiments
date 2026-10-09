@@ -249,10 +249,20 @@ def expand_matrix(matrix: dict, matrix_name: str) -> list[dict]:
             if s not in all_seeds:
                 all_seeds.append(s)
 
+    matrix_heterogeneities = matrix.get("heterogeneities", ["dirichlet_alpha_0.1"])
+    heterogeneities = list(matrix_heterogeneities)
+    for run_item in runs_spec:
+        for het in run_item.get("heterogeneities", []):
+            if het not in heterogeneities:
+                heterogeneities.append(het)
+
     tasks: list[dict] = []
-    for het in matrix.get("heterogeneities", ["dirichlet_alpha_0.1"]):
+    for het in heterogeneities:
         for seed in all_seeds:
             for run_item in runs_spec:
+                run_heterogeneities = run_item.get("heterogeneities", matrix_heterogeneities)
+                if het not in run_heterogeneities:
+                    continue
                 if seed not in seeds_for(run_item):
                     continue
                 alg = run_item.get("alg")

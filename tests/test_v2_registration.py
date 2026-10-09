@@ -418,6 +418,13 @@ def test_v2_extension_registers_all_260_cells_and_fixed_conditions() -> None:
         tasks = expand_matrix(matrix, name)
         assert len(tasks) == expected_count
         validate_matrix_against_protocol(name, matrix, len(tasks))
+        if dataset == "cifar10":
+            e5_tasks = [task for task in tasks if task["label"].startswith("e5-")]
+            assert len(e5_tasks) == 20
+            assert {task["heterogeneity"] for task in e5_tasks} == {
+                "uniform_memory_alpha_0.1",
+                "uniform_memory_alpha_1.0",
+            }
         assert {task["seed"] for task in tasks} == V2_SEEDS
         assert all(
             task["phase"] == "v2_extension"
@@ -444,6 +451,22 @@ def test_v2_extension_registers_all_260_cells_and_fixed_conditions() -> None:
                 assert algorithm["post_process"] is (category in {"e4", "e5"}), run["label"]
                 if category == "e4":
                     assert algorithm["c_unit"] in {512.0, 2048.0}, run["label"]
+                if category == "e5":
+                    assert run["heterogeneities"] == [
+                        "uniform_memory_alpha_0.1",
+                        "uniform_memory_alpha_1.0",
+                    ]
+                    for heterogeneity in run["heterogeneities"]:
+                        uniform_cfg = compose(
+                            config_name="config",
+                            overrides=[
+                                f"dataset={dataset}",
+                                f"heterogeneity={heterogeneity}",
+                                f"algorithm={run['alg']}",
+                                *run.get("overrides", []),
+                            ],
+                        )
+                        assert uniform_cfg.heterogeneity.uniform_memory_mb == 16384
 
     assert extension_cells == 260
 

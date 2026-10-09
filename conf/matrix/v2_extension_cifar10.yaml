@@ -74,7 +74,9 @@ runs:
   # E5 uniform-memory control, pipeline on for both KD settings.
   - alg: fedmaq
     label: e5-fedmaq
+    heterogeneities: [uniform_memory_alpha_0.1, uniform_memory_alpha_1.0]
     overrides: [algorithm.post_process=true]
   - alg: fedmaq_no_kd
     label: e5-no-kd
+    heterogeneities: [uniform_memory_alpha_0.1, uniform_memory_alpha_1.0]
     overrides: [algorithm.post_process=true]
