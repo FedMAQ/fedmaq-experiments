@@ -1,0 +1,82 @@
+# Post-hoc descriptive extension (ADR-0029 item 1), CIFAR-10 part (140 cells).
+# E1 adds FedProx and FedDistill; E2 keeps the ablation pipeline off; E4 and E5
+# use the pipeline-on memory conditions. No result changes an existing verdict.
+phase: v2_extension
+stage: v2_extension
+protocol_stage: v2_extension
+split: test
+ledger: scientific
+experiment_group: v2_extension
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [19, 37, 73, 101, 131]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  # E1 benchmark extras.
+  - alg: fedprox
+    label: e1-fedprox
+  - alg: feddistill
+    label: e1-feddistill
+
+  # E2 ablation, Configurations 2–7, with the pipeline off as in ablation.yaml.
+  - alg: fedmaq_no_resource
+    label: e2-config2
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_data
+    label: e2-config3
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_state
+    label: e2-config4
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_kd
+    label: e2-config5
+    variant: e2-post-off
+    overrides: [algorithm.post_process=false]
+  - alg: fedavg_kd
+    label: e2-config6
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq
+    label: e2-config7
+    variant: e2-post-off
+    overrides: [algorithm.post_process=false]
+
+  # E4 memory sensitivity, pipeline on for both KD settings.
+  - alg: fedmaq
+    label: e4-cunit512-fedmaq
+    variant: cunit512
+    overrides:
+      - algorithm.c_unit=512.0
+      - algorithm.post_process=true
+  - alg: fedmaq_no_kd
+    label: e4-cunit512-no-kd
+    variant: cunit512
+    overrides:
+      - algorithm.c_unit=512.0
+      - algorithm.post_process=true
+  - alg: fedmaq
+    label: e4-cunit2048-fedmaq
+    variant: cunit2048
+    overrides:
+      - algorithm.c_unit=2048.0
+      - algorithm.post_process=true
+  - alg: fedmaq_no_kd
+    label: e4-cunit2048-no-kd
+    variant: cunit2048
+    overrides:
+      - algorithm.c_unit=2048.0
+      - algorithm.post_process=true
+
+  # E5 uniform-memory control, pipeline on for both KD settings.
+  - alg: fedmaq
+    label: e5-fedmaq
+    heterogeneities: [uniform_memory_alpha_0.1, uniform_memory_alpha_1.0]
+    overrides: [algorithm.post_process=true]
+  - alg: fedmaq_no_kd
+    label: e5-no-kd
+    heterogeneities: [uniform_memory_alpha_0.1, uniform_memory_alpha_1.0]
+    overrides: [algorithm.post_process=true]

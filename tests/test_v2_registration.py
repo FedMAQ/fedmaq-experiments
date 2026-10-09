@@ -23,7 +23,7 @@ def _seeds(matrix: dict) -> set[int]:
 
 
 # ADR-0028 item 5: the KD-repair confirmation reuses the V2 seeds; no other stage may.
-V2_SEED_STAGES = ("v2_confirm", "v2_kd_confirm")
+V2_SEED_STAGES = ("v2_confirm", "v2_kd_confirm", "v2_extension")
 
 
 def _v2_seed_violation(matrix: dict) -> str | None:
@@ -165,6 +165,24 @@ KD_CONFIRM_MATRICES = {
     ),
     "v2_kd_confirm_femnist": ("femnist", ["femnist"], 5),
 }
+
+V2_EXTENSION_MATRICES = {
+    "v2_extension_cifar10": (
+        "cifar10",
+        ["dirichlet_alpha_0.1", "dirichlet_alpha_1.0"],
+        140,
+        None,
+    ),
+    "v2_extension_cifar100": (
+        "cifar100",
+        ["dirichlet_alpha_0.1", "dirichlet_alpha_1.0"],
+        80,
+        None,
+    ),
+    "v2_extension_femnist": ("femnist", ["femnist"], 40, "femnist"),
+}
+N2_SCREEN_MATRIX = "v2_n2_screen_femnist"
+REGISTERED_SEEDS = {0, 7, 21, 42, 123, 19, 37, 73, 101, 131}
 
 # These are the pre-registration contracts present before v2_kd_confirm was added.
 # Keep them pinned so adding a new stage cannot silently bless edits to prior cells.
@@ -320,8 +338,11 @@ def test_kd_confirmation_registers_only_detached_fedkd_for_25_cells() -> None:
             assert algorithm["post_process"] is False
 
     assert len(all_tasks) == 25
-    assert set(protocol["matrix_contracts"]) == set(PREEXISTING_MATRIX_HASHES) | set(
-        KD_CONFIRM_MATRICES
+    assert set(protocol["matrix_contracts"]) == (
+        set(PREEXISTING_MATRIX_HASHES)
+        | set(KD_CONFIRM_MATRICES)
+        | set(V2_EXTENSION_MATRICES)
+        | {N2_SCREEN_MATRIX}
     )
 
 
@@ -338,3 +359,229 @@ def test_kd_confirmation_output_namespace_is_its_own() -> None:
         owns = path.stem in KD_CONFIRM_MATRICES
         assert (matrix.get("experiment_group") == "v2_kd_confirm") is owns, path.name
         assert (matrix.get("protocol_stage") == "v2_kd_confirm") is owns, path.name
+
+
+def test_v2_extension_registers_all_260_cells_and_fixed_conditions() -> None:
+    from hydra import compose, initialize_config_dir
+
+    from fedmaq.core.protocol import PROTOCOL_STAGES, validate_matrix_against_protocol
+    from scripts.common import expand_matrix
+
+    protocol = _load(MATRIX_DIR.parent / "protocol" / "replacement-v1.yaml")
+    assert {"v2_extension", "v2_n2_screen"} <= PROTOCOL_STAGES
+    assert protocol["stages"]["v2_extension"] == {
+        "selection_data": "frozen_validation_verdicts",
+        "reserved_test": True,
+        "split": "test",
+    }
+
+    extension_cells = 0
+    for name, (
+        dataset,
+        heterogeneities,
+        expected_count,
+        experiment,
+    ) in V2_EXTENSION_MATRICES.items():
+        matrix = _load(MATRIX_DIR / f"{name}.yaml")
+        assert (matrix["phase"], matrix["experiment_group"]) == (
+            "v2_extension",
+            "v2_extension",
+        )
+        assert (matrix["stage"], matrix["protocol_stage"], matrix["split"]) == (
+            "v2_extension",
+            "v2_extension",
+            "test",
+        )
+        assert matrix["ledger"] == "scientific"
+        assert (matrix["dataset"], matrix["heterogeneities"]) == (dataset, heterogeneities)
+        assert matrix.get("experiment") == experiment
+        assert matrix["total_rounds"] == 100
+        assert matrix["seeds"] == [19, 37, 73, 101, 131]
+
+        expected_labels = {"e1-fedprox", "e1-feddistill"}
+        expected_labels |= (
+            {f"e2-config{number}" for number in range(2, 8)}
+            if dataset == "cifar10"
+            else {f"e3-config{number}" for number in range(2, 8)}
+        )
+        if dataset == "cifar10":
+            expected_labels |= {
+                "e4-cunit512-fedmaq",
+                "e4-cunit512-no-kd",
+                "e4-cunit2048-fedmaq",
+                "e4-cunit2048-no-kd",
+                "e5-fedmaq",
+                "e5-no-kd",
+            }
+        assert {run["label"] for run in matrix["runs"]} == expected_labels
+
+        tasks = expand_matrix(matrix, name)
+        assert len(tasks) == expected_count
+        validate_matrix_against_protocol(name, matrix, len(tasks))
+        if dataset == "cifar10":
+            e5_tasks = [task for task in tasks if task["label"].startswith("e5-")]
+            assert len(e5_tasks) == 20
+            assert {task["heterogeneity"] for task in e5_tasks} == {
+                "uniform_memory_alpha_0.1",
+                "uniform_memory_alpha_1.0",
+            }
+            from scripts.matrix_planner import plan_matrix
+
+            plan = plan_matrix(MATRIX_DIR / f"{name}.yaml", matrix)
+            planned_e5 = [task for task in plan.tasks if task.label.startswith("e5-")]
+            assert len(planned_e5) == 20
+            assert {task.heterogeneity for task in planned_e5} == {
+                "uniform_memory_alpha_0.1",
+                "uniform_memory_alpha_1.0",
+            }
+        assert {task["seed"] for task in tasks} == V2_SEEDS
+        assert all(
+            task["phase"] == "v2_extension"
+            and task["stage"] == "v2_extension"
+            and task["protocol_stage"] == "v2_extension"
+            and task["split"] == "test"
+            and task["ledger"] == "scientific"
+            for task in tasks
+        )
+        extension_cells += len(tasks)
+
+        with initialize_config_dir(config_dir=str(MATRIX_DIR.parent), version_base="1.3"):
+            for run in matrix["runs"]:
+                selections = [
+                    f"dataset={dataset}",
+                    f"heterogeneity={heterogeneities[0]}",
+                    f"algorithm={run['alg']}",
+                ]
+                if experiment:
+                    selections.append(f"experiment={experiment}")
+                cfg = compose(config_name="config", overrides=selections + run.get("overrides", []))
+                algorithm = OmegaConf.to_container(cfg.algorithm, resolve=True)
+                category = run["label"].split("-", maxsplit=1)[0]
+                assert algorithm["post_process"] is (category in {"e4", "e5"}), run["label"]
+                if category == "e4":
+                    assert algorithm["c_unit"] in {512.0, 2048.0}, run["label"]
+                if category == "e5":
+                    assert run["heterogeneities"] == [
+                        "uniform_memory_alpha_0.1",
+                        "uniform_memory_alpha_1.0",
+                    ]
+                    for heterogeneity in run["heterogeneities"]:
+                        uniform_cfg = compose(
+                            config_name="config",
+                            overrides=[
+                                f"dataset={dataset}",
+                                f"heterogeneity={heterogeneity}",
+                                f"algorithm={run['alg']}",
+                                *run.get("overrides", []),
+                            ],
+                        )
+                        assert uniform_cfg.heterogeneity.uniform_memory_mb == 16384
+
+    assert extension_cells == 260
+
+
+def test_n2_screen_registers_three_p_values_and_reusable_reference() -> None:
+    from hydra import compose, initialize_config_dir
+
+    from fedmaq.core.protocol import validate_matrix_against_protocol
+    from scripts.common import expand_matrix
+
+    protocol = _load(MATRIX_DIR.parent / "protocol" / "replacement-v1.yaml")
+    assert protocol["stages"]["v2_n2_screen"] == {
+        "selection_data": "validation_only",
+        "reserved_test": True,
+        "split": "val",
+    }
+    matrix = _load(MATRIX_DIR / f"{N2_SCREEN_MATRIX}.yaml")
+    assert (matrix["phase"], matrix["experiment_group"]) == ("v2_n2_screen", "v2_n2_screen")
+    assert (matrix["stage"], matrix["protocol_stage"], matrix["split"]) == (
+        "v2_n2_screen",
+        "v2_n2_screen",
+        "val",
+    )
+    assert (matrix["dataset"], matrix["model"], matrix["experiment"]) == (
+        "femnist",
+        "simplecnn",
+        "femnist",
+    )
+    assert matrix["seeds"] == [0, 42, 123]
+    assert matrix["heterogeneities"] == ["femnist"]
+    assert matrix["total_rounds"] == 100
+    assert [run["label"] for run in matrix["runs"]] == [
+        "n2-p0p5",
+        "n2-p0",
+        "n2-pminus0p5",
+    ]
+
+    tasks = expand_matrix(matrix, N2_SCREEN_MATRIX)
+    assert len(tasks) == 9
+    validate_matrix_against_protocol(N2_SCREEN_MATRIX, matrix, len(tasks))
+    assert {task["seed"] for task in tasks} == {0, 42, 123}
+    assert all(
+        task["protocol_stage"] == "v2_n2_screen" and task["split"] == "val" for task in tasks
+    )
+
+    screen = _load(MATRIX_DIR / "v2_kd_screen_femnist.yaml")
+    screen_reference = {
+        task["seed"]: task
+        for task in expand_matrix(screen, "v2_kd_screen_femnist")
+        if task["label"] == "fedmaq_no_kd"
+    }
+    n2_reference = {task["seed"]: task for task in tasks if task["label"] == "n2-p0p5"}
+    assert set(screen_reference) == set(n2_reference) == {0, 42, 123}
+    assert all(
+        (screen_reference[seed]["dataset"], screen_reference[seed]["heterogeneity"])
+        == (n2_reference[seed]["dataset"], n2_reference[seed]["heterogeneity"])
+        for seed in screen_reference
+    )
+
+    with initialize_config_dir(config_dir=str(MATRIX_DIR.parent), version_base="1.3"):
+        for run, expected_p in zip(matrix["runs"], [0.5, 0.0, -0.5], strict=True):
+            cfg = compose(
+                config_name="config",
+                overrides=[
+                    "dataset=femnist",
+                    "heterogeneity=femnist",
+                    "algorithm=fedmaq_no_kd",
+                    "experiment=femnist",
+                    *run["overrides"],
+                ],
+            )
+            algorithm = OmegaConf.to_container(cfg.algorithm, resolve=True)
+            assert algorithm["p"] == expected_p
+            assert algorithm["kd_epochs"] == 0
+            assert algorithm["post_process"] is True
+
+        reference_run = next(run for run in screen["runs"] if run["label"] == "fedmaq_no_kd")
+        screen_cfg = compose(
+            config_name="config",
+            overrides=[
+                "dataset=femnist",
+                "heterogeneity=femnist",
+                "algorithm=fedmaq_no_kd",
+                "experiment=femnist",
+                *reference_run.get("overrides", []),
+            ],
+        )
+        n2_cfg = compose(
+            config_name="config",
+            overrides=[
+                "dataset=femnist",
+                "heterogeneity=femnist",
+                "algorithm=fedmaq_no_kd",
+                "experiment=femnist",
+                *matrix["runs"][0]["overrides"],
+            ],
+        )
+        assert OmegaConf.to_container(screen_cfg.algorithm, resolve=True) == OmegaConf.to_container(
+            n2_cfg.algorithm, resolve=True
+        )
+
+
+def test_fresh_seed_exclusion_is_derived_from_all_matrix_seeds() -> None:
+    registered: set[int] = set()
+    for path in MATRIX_DIR.glob("*.yaml"):
+        registered.update(_seeds(_load(path)))
+
+    assert registered == REGISTERED_SEEDS
+    assert ({0, 7, 19, 131, 2026} - registered) == {2026}

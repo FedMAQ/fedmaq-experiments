@@ -1,0 +1,44 @@
+# Post-hoc descriptive extension (ADR-0029 item 1), CIFAR-100 part (80 cells).
+# E1 adds FedProx and FedDistill; E3 runs ablation Configurations 2–7 with the
+# pipeline off. No result changes an existing verdict.
+phase: v2_extension
+stage: v2_extension
+protocol_stage: v2_extension
+split: test
+ledger: scientific
+experiment_group: v2_extension
+dataset: cifar100
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [19, 37, 73, 101, 131]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  # E1 benchmark extras.
+  - alg: fedprox
+    label: e1-fedprox
+  - alg: feddistill
+    label: e1-feddistill
+
+  # E3 ablation breadth, Configurations 2–7, pipeline off.
+  - alg: fedmaq_no_resource
+    label: e3-config2
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_data
+    label: e3-config3
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_state
+    label: e3-config4
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq_no_kd
+    label: e3-config5
+    overrides: [algorithm.post_process=false]
+  - alg: fedavg_kd
+    label: e3-config6
+    overrides: [algorithm.post_process=false]
+  - alg: fedmaq
+    label: e3-config7
+    overrides: [algorithm.post_process=false]
