@@ -1,0 +1,23 @@
+# Fixed-FedKD confirmation comparator, CIFAR-10 part (10 runs). Registered by
+# ADR-0028 item 6 and issue #140. Control reuse depends on the dispatch-commit
+# golden-repeatability result recorded at dispatch.
+phase: v2_kd
+stage: v2_kd_confirm
+protocol_stage: v2_kd_confirm
+split: test
+ledger: scientific
+experiment_group: v2_kd_confirm
+dataset: cifar10
+model: mobilenetv2
+total_rounds: 100
+client_gpus: 0.5
+seeds: [19, 37, 73, 101, 131]
+heterogeneities:
+  - dirichlet_alpha_0.1
+  - dirichlet_alpha_1.0
+
+runs:
+  - alg: fedkd
+    label: fedkd_detached
+    overrides:
+      - +algorithm.detach_kl_targets=true
