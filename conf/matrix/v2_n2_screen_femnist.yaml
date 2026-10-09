@@ -1,0 +1,38 @@
+# Post-hoc N2 screen (ADR-0029 item 3), FEMNIST validation split, 9 cells listed.
+# p=0.5 is the existing no-KD reference from v2_kd_screen_femnist. If the
+# dispatch-commit assurance permits reuse, dispatch only the p=0 and p=-0.5
+# labels; otherwise preserve the registered 9-cell plan and resolve the gate.
+phase: v2_n2_screen
+stage: v2_n2_screen
+protocol_stage: v2_n2_screen
+split: val
+ledger: scientific
+experiment_group: v2_n2_screen
+dataset: femnist
+model: simplecnn
+experiment: femnist
+total_rounds: 100
+client_gpus: 0.5
+seeds: [0, 42, 123]
+heterogeneities:
+  - femnist
+
+runs:
+  - alg: fedmaq_no_kd
+    label: n2-p0p5
+    variant: p0p5
+    overrides:
+      - algorithm.post_process=true
+      - algorithm.p=0.5
+  - alg: fedmaq_no_kd
+    label: n2-p0
+    variant: p0
+    overrides:
+      - algorithm.post_process=true
+      - algorithm.p=0.0
+  - alg: fedmaq_no_kd
+    label: n2-pminus0p5
+    variant: pminus0p5
+    overrides:
+      - algorithm.post_process=true
+      - algorithm.p=-0.5
