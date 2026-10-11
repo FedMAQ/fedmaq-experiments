@@ -16,9 +16,10 @@ authoritative over any prose describing them.
 ## Baseline stack
 
 Implement under `src/fedmaq/baselines/`. Six baselines plus FedMAQ were
-executed in the replacement campaign; FedKD is excluded from its primary
-comparison. The two dropped entries keep their code for reproducibility and
-are excluded from every sweep. Rationale:
+executed in the replacement campaign. Its original FedKD arm remains invalid
+and excluded from the sealed primary comparison; fixed FedKD is readmitted as
+a separately labelled post-hoc adaptation. The two dropped entries keep their
+code for reproducibility and are excluded from every sweep. Rationale:
 [ADR-0005](../../docs/adr/0005-baseline-stack-membership.md).
 
 | Algorithm | Group | Paper | Config | Status |
@@ -28,7 +29,7 @@ are excluded from every sweep. Rationale:
 | FedPAQ | Pure quantization | Reisizadeh et al., 2020 | `fedpaq.yaml` | 🟢 |
 | DAdaQuant | Pure quantization | Hönig et al., 2022 | `dadaquant.yaml` | 🟢 |
 | FedDistill+ | Distillation-augmented parameter sharing | Zhu et al., 2021 | `feddistill.yaml` | 🟢 |
-| FedKD | Hybrid low-rank compression + KD | Wu et al., 2022 | `fedkd.yaml` | ⚠️ first-study comparison excluded |
+| FedKD | Hybrid low-rank compression + KD | Wu et al., 2022 | `fedkd.yaml` | 🟢 adapted post-hoc arm; original arm invalid |
 | ~~FedMD~~ | Pure KD | Li et al., 2019 | `fedmd.yaml` | ⚫ dropped |
 | ~~CFD~~ | Hybrid Q+KD | Sattler et al., 2022 | `cfd.yaml` | ⚫ dropped |
 | FedMAQ | Proposed | Bunyi et al., 2026 | `fedmaq.yaml` | 🟢 |
@@ -40,12 +41,16 @@ replacement Stage-A verdicts from
 [ADR-0011](../../docs/adr/0011-baseline-matched-tuning.md). Historical
 Stage-1b tuning values are superseded for this campaign.
 
-**FedKD first-study validity.** The replacement campaign produced nonfinite
-test losses in three CIFAR-10 severe-skew seeds. Treat the FedKD arm as
-attempted but excluded from the first-study primary comparison; do not
-attribute the failure to architecture or implementation until the bounded
-forensics in [ADR-0016](../../docs/adr/0016-v2-evaluation-protocol-and-advance-rule.md)
-are complete. Its code and evidence remain available for diagnosis.
+**FedKD first-study validity.** The original replacement-campaign arm remains
+invalid after nonfinite test losses. The diagnosis traced the failure to
+gradients through zero-probability KL targets. The readmitted fixed arm uses
+`detach_kl_targets=true`, retains the selected Stage A `tmax`, and is
+pipeline-free. Report it separately as a post-hoc comparison beside the sealed
+first-study baselines, with round-100 and common-budget results and no efficacy
+claim. Disclose the detach as an adaptation whose detail the source paper leaves
+unspecified; it does not rehabilitate the original arm or replace the sealed
+primary tables. The gates and reporting boundary are authoritative in
+[ADR-0028](../../docs/adr/0028-kd-repair-branch-reopened-and-fedkd-re-entry.md).
 
 **FedMD is excluded from smoke and regression sweeps.** Keep it out of
 `conf/matrix/*.yaml` and out of `scripts/golden_diff.py`'s default `GOLDEN_SET`;
