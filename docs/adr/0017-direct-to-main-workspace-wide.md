@@ -1,6 +1,6 @@
 # ADR-0017: Direct-to-main across the workspace; the PR workflow is retired
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-0030](0030-school-delivery-workflow-replaces-direct-to-main.md) (2026-10-15)
 **Date**: 2026-08-25
 
 ## Context
