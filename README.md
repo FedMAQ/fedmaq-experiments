@@ -1,68 +1,40 @@
 # FedMAQ experiments
 
-Code, frozen configuration, and run machinery behind the FedMAQ study: a
-matched-budget evaluation of memory-bounded adaptive quantization and ensemble
-distillation in federated learning. FedMAQ is compared with FedAvg, FedPAQ,
-DAdaQuant, FedKD, and other baselines in simulated federated learning on
-CIFAR-10, CIFAR-100, and FEMNIST, using one shared byte-accounting layer so
-methods are compared at the same communication budget.
+Research code, frozen configurations, and run machinery for a thesis study of memory-bounded adaptive quantization and ensemble distillation in simulated federated learning. FedMAQ and the baselines share communication-byte accounting. The first study's configuration and the subsequent registered protocols are recorded in versioned configuration.
 
-Companion repositories (all under the [FedMAQ](https://github.com/FedMAQ)
-organization):
+The companion [analyses repository](https://github.com/FedMAQ/fedmaq-analyses) scores the archived runs; the [thesis manuscript](https://github.com/FedMAQ/fedmaq-manuscript) reports the findings.
 
-- `fedmaq-analyses`: scorers, tidy result tables, and figures computed from the
-  run evidence.
-- `fedmaq-manuscript`: the thesis text.
-- `fedmaq-journal-article`: the journal article.
+## Quick start
 
-## Layout
-
-| Path | Contents |
-| --- | --- |
-| `src/fedmaq/` | Simulation, baselines, quantization planner, byte accounting, evaluation |
-| `conf/` | Hydra configuration for algorithms, datasets, heterogeneity, and run matrices |
-| `scripts/` | Run, matrix-planning, freeze-check, and audit entry points |
-| `tests/` | Unit and fixture tests |
-| `docs/adr/` | Decision records for the method, protocol, and tooling |
-| `docs/freeze/` | Frozen configuration, expected-run ledger, and gate evidence |
-
-## Pre-registration
-
-The evaluation protocol was frozen before the confirmatory runs. The git tags
-`pre-registration`, `pre-registration-stage1a`, `pre-registration-fedkd-fix`,
-and `pre-registration-manifest-fix` mark the frozen states. `docs/freeze/`
-holds the machine-checked manifest, and `scripts/check_freeze.py --check`
-verifies that the working tree still matches it.
-
-## Setup and checks
-
-Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are required. Full
-training runs are practical only on a CUDA GPU; the test suite and small smoke
-runs do not need one.
+Requires Python 3.11 or newer, [uv](https://docs.astral.sh/uv/), and a host with CUDA resources for the configured client allocation.
 
 ```sh
 uv sync
-just check        # freeze, format, lint, typecheck, tests, generated artifacts, assurance
+uv run python scripts/run.py experiment=ci
 ```
 
-Without `just`, run the same steps with `uv run python -m pytest`,
-`uv run python -m ruff check .`, and `uv run python scripts/check_freeze.py --check`.
-How runs are dispatched and polled is described in
-`docs/agents/execution-model.md`.
+This runs a 2-round, 2-client CIFAR-10 FedAvg smoke check with Weights & Biases telemetry disabled. The run requests `client_gpus: 1.0` per simulated client and writes to `outputs/<date>/<time>/` by default. Use the registered matrices for study reproduction.
 
-## Data
+Formal and exploratory sweeps use declared matrix files through `uv run python scripts/run_matrix.py --matrix <name>`. See the [experiment guide](docs/experiments/README.md), [execution model](docs/agents/execution-model.md), and the registered matrix contracts in `conf/protocol/` before choosing a matrix. Do not treat every file in `conf/matrix/` as a current confirmatory run.
 
-Datasets are downloaded by the loaders on first use and are not stored in this
-repository. The full run evidence behind the reported results (per-run logs,
-metrics, and sweep status files, with SHA-256 checksums) will be archived on
-Zenodo. DOI: to be added once the archive is published.
+## Data and evidence
 
-## License
+The loaders fetch CIFAR-10, CIFAR-100, MNIST, and Fashion-MNIST on demand through torchvision. FEMNIST uses the LEAF writer-partitioned dataset; when its files are absent, the loader fetches and unpacks the LEAF archive, then caches prepared arrays under `data/femnist_leaf/`. Generated partition indices are cached under `.data_partitions/`. These inputs and caches are not included in the Git checkout.
 
-The code is released under the [Apache License 2.0](LICENSE). The CIFAR-10,
-CIFAR-100, and FEMNIST datasets keep their own licenses and terms.
+Matrix runs use `outputs/<phase>/<dataset_model>/<experiment_group>/<algorithm__variant>/<heterogeneity>/seed_<seed>/`. The checkout does not contain a complete versioned run-evidence archive or a linked Zenodo record. Reproducing the study's existing analysis requires supplied per-run metric logs (`experiment_log.csv`), Hydra configuration snapshots (`.hydra/config.yaml`), and `run_manifest.json` files under those paths. Sweep completeness audits also use `sweep_status.json`. A fresh run creates new evidence; it does not recreate the original study evidence.
 
-## Citation
+## Repository layout
 
-See [`CITATION.cff`](CITATION.cff), which GitHub renders as a "Cite this
-repository" button. A Zenodo DOI will be added to it for the archived release.
+| Path | Contents |
+| --- | --- |
+| `src/fedmaq/` | Flower simulation, methods, partitioning, evaluation, and byte accounting |
+| `conf/` | Dataset, algorithm, experiment, matrix, and protocol configuration |
+| `scripts/` | Single-run and matrix runners, analysis, and freeze/evidence checks |
+| `docs/adr/`, `docs/freeze/` | Design decisions, frozen configuration, and protocol evidence |
+| `tests/` | Unit and fixture tests |
+
+Run `just check` for freeze validation, formatting, lint, type checking, tests, generated-artifact checks, and assurance fixtures. The steps are defined in [`justfile`](justfile).
+
+## Citation, license, and help
+
+Cite the software using [`CITATION.cff`](CITATION.cff). The project code is licensed under the [Apache License 2.0](LICENSE); dataset licenses and terms remain separate. For project questions or issues, use the [GitHub issue tracker](https://github.com/FedMAQ/fedmaq-experiments/issues).
