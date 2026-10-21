@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "FedMAQ experiments: a federated-learning testbed with matched-budget byte accounting"
+abstract: >-
+  Code, frozen configuration, and run machinery for evaluating memory-bounded
+  adaptive quantization and ensemble distillation (FedMAQ) against FedAvg,
+  FedPAQ, DAdaQuant, FedKD and other baselines in simulated federated learning
+  on CIFAR-10, CIFAR-100, and FEMNIST, with shared byte accounting across
+  methods.
+authors:
+  - family-names: Bunyi
+    given-names: Christian Joseph
+    orcid: "https://orcid.org/0009-0009-6703-0144"
+    affiliation: "De La Salle University, Manila, Philippines"
+  - family-names: Flores
+    given-names: Fritz Kevin
+    orcid: "https://orcid.org/0009-0005-9897-3226"
+    affiliation: "De La Salle University, Manila, Philippines"
+repository-code: "https://github.com/FedMAQ/fedmaq-experiments"
+license: Apache-2.0
+keywords:
+  - federated learning
+  - adaptive quantization
+  - communication efficiency
+  - knowledge distillation
+  - non-IID data
