@@ -36,8 +36,9 @@ verifies that the working tree still matches it.
 
 ## Setup and checks
 
-Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are required. Training
-runs need a CUDA GPU; the test suite does not.
+Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are required. Full
+training runs are practical only on a CUDA GPU; the test suite and small smoke
+runs do not need one.
 
 ```sh
 uv sync
@@ -53,8 +54,8 @@ How runs are dispatched and polled is described in
 
 Datasets are downloaded by the loaders on first use and are not stored in this
 repository. The full run evidence behind the reported results (per-run logs,
-metrics, and sweep status files, with SHA-256 checksums) is archived on Zenodo.
-DOI: to be added once the archive is published.
+metrics, and sweep status files, with SHA-256 checksums) will be archived on
+Zenodo. DOI: to be added once the archive is published.
 
 ## License
 
