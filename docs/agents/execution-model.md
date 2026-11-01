@@ -218,9 +218,11 @@ are recorded separately and are not part of this scientific total.
 - **Push notifications on JupyterHub dispatch.** Wrap long-running allocation dispatches
   with `bash ./scripts/notify_run.sh`:
   `bash ./scripts/notify_run.sh ./.venv/bin/python scripts/run_matrix.py --matrix <name> --run_timeout_seconds 7200 -o ...`
-  The wrapper streams console output live, emits periodic hourly progress heartbeats,
-  and sends start, completion, or urgent failure alerts. On public `ntfy.sh`, set
-  `NTFY_TOPIC` to an unguessable high-entropy secret name to ensure topic privacy.
+  The wrapper streams console output live, emits periodic hourly duration heartbeats,
+  and sends status/duration alerts only. An unreserved `ntfy.sh` topic is public to
+  anyone who learns its name; the topic name is the access capability, not a private
+  channel. Keep notifications non-sensitive and follow
+  `docs/agents/ntfy-notifications.md` for topic and token handling.
   To prevent silent Ray or GPU deadlocks from hanging indefinitely, always pass
   `--run_timeout_seconds` (e.g. 7200) to `run_matrix.py` so wedged cells get killed
   and alerted. Verify connectivity with `bash ./scripts/notify_run.sh --test` before long runs.
