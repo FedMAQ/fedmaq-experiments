@@ -314,3 +314,67 @@ def test_notify_run_returns_with_the_wrapped_command(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert time.monotonic() - started < 10
+
+
+def test_notify_run_keeps_host_command_and_failure_output_local(tmp_path):
+    bash = _posix_bash()
+    if bash is None:
+        pytest.skip("needs a POSIX bash, not the WSL launcher")
+    (tmp_path / "scripts").mkdir()
+    shutil.copy(REPO_ROOT / "scripts" / "notify_run.sh", tmp_path / "scripts")
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    curl = stub_bin / "curl"
+    curl.write_text(
+        '#!/usr/bin/env bash\nprintf \'%s\\0\' "$@" >> "$NTFY_CAPTURE"\n'
+        "printf '\\n' >> \"$NTFY_CAPTURE\"\n"
+        "while (($#)); do\n"
+        '  if [[ $1 == --config ]]; then cat "$2" >> "$NTFY_CONFIG_CAPTURE"; fi\n'
+        "  shift\n"
+        "done\n"
+        "printf '200'\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    curl.chmod(curl.stat().st_mode | stat.S_IEXEC)
+    env = {
+        **os.environ,
+        "NTFY_TOPIC": "stub-topic",
+        "NTFY_TOKEN": "stub-token",
+        "NTFY_SERVER": "http://127.0.0.1:9",
+        "NTFY_HEARTBEAT_SEC": "0",
+        "NTFY_CAPTURE": "requests.bin",
+        "NTFY_CONFIG_CAPTURE": "configs.bin",
+        "TMPDIR": ".",
+    }
+    run_command = 'PATH="$(cd bin && pwd):$PATH" bash scripts/notify_run.sh "$@"'
+    failing_command = "printf 'COMMAND_SENTINEL\\n'; printf 'ERROR_SENTINEL\\n' >&2; exit 7"
+
+    result = subprocess.run(
+        [bash, "-c", run_command, "notify-test", bash, "-c", failing_command],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 7
+    requests = (tmp_path / "requests.bin").read_bytes()
+    configs = (tmp_path / "configs.bin").read_bytes()
+    for private_detail in (
+        b"Host:",
+        b"Command:",
+        b"Error tail",
+        b"COMMAND_SENTINEL",
+        b"ERROR_SENTINEL",
+    ):
+        assert private_detail not in requests
+        assert private_detail not in configs
+    assert b"FedMAQ: Run Started" in configs
+    assert b"FedMAQ: Run Failed" in configs
+    assert b"Duration:" in configs
+    assert b"stub-topic" not in requests
+    assert b"stub-token" not in requests
+    assert b"Authorization: Bearer stub-token" in configs
+    assert list(tmp_path.glob("tmp.*")) == []

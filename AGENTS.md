@@ -12,6 +12,7 @@
 - Read `.agents/skills/jupyterhub-golden-gate/SKILL.md` for exact-commit golden assurance work.
 - Read `.agents/skills/sweep-recovery/SKILL.md` for failed runs or status recovery.
 - Read `.agents/rules/experiment-design.md` for method, baseline, metric, or frozen-config work; read `engineering.md` for code, config, tests, or runners.
+- For ntfy topic setup or notification payload changes, read `docs/agents/ntfy-notifications.md`.
 - Read `.agents/rules/comment-hygiene.md` for source/test comments; use its skill for repository-wide pruning.
 - Keep `AGENTS.md` import-free. For instruction edits, consult
   `.agents/rules/agentic-context.md`.

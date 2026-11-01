@@ -202,7 +202,7 @@
     "tests/test_protocol.py": "e719f69cf1e902a86c035696134fb66caf261ffe0d8ef9879d55d1c518e0fb38",
     "tests/test_refinement_features.py": "42a238db6349004d9eb3b8c729b491a6372c9aa74f40b481cc7fb2cb2235a570",
     "tests/test_report_schema.py": "051db69f1f25e9d9c2db464673bdbea8791180b84d77222cdb9059aa2d8908ea",
-    "tests/test_run_guard.py": "a58d25652db9c48f7598196cdb7059b15f42c21b29b1b94e6089f7ff9a669685",
+    "tests/test_run_guard.py": "56fff31db56ce338b1f3f446f460115e12cb0439ccb02e270cabcd48f990cf32",
     "tests/test_run_identity.py": "c414aad0dd842811e7aea0d249e06614c9fcd3bd5b81550255e09fd568e7a89b",
     "tests/test_simulation_lifecycle.py": "f90f4010ff0d00ebebc5c11de2e9d4e4f0522b51f078cf3d7fec6d74f6102460",
     "tests/test_stage_contracts.py": "fd2d2eb7ac09a6c74fe5b2d0383e4323127f74a1ce385bd6bf1b665e21f79ae1",
