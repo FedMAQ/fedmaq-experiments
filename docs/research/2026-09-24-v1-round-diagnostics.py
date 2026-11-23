@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-EVIDENCE = REPO.parent / "campaign-evidence-2026-09-22"
+EVIDENCE = REPO.parent / "local" / "evidence" / "campaign-evidence-2026-09-22"
 LADDER = (2, 3, 4, 5, 6, 7, 8, 16)
 
 
